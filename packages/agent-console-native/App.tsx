@@ -18,7 +18,6 @@ import {
 } from "./src/settings";
 import { primeDefaultPermissionMode, primeSessionPermissionModes } from "./src/sessionPermissions";
 import { registerForPush } from "./src/push";
-import { WallpaperProvider } from "./src/WallpaperProvider";
 
 /** Only the one-time async bootstrap (resolve a server address, connect,
  * resolve a root folder) lives in this hand-rolled state machine — once
@@ -189,19 +188,15 @@ const AppInner = (): React.ReactElement => {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <WallpaperProvider>
-        <AppInner />
-      </WallpaperProvider>
+      <AppInner />
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    // Transparent so the WallpaperProvider's ground (colors.background, or the
-    // wallpaper) shows through.
     flex: 1,
-    backgroundColor: "transparent",
+    backgroundColor: colors.background,
   },
   center: {
     flex: 1,

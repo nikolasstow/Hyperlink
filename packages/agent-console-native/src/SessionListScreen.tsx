@@ -102,7 +102,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "transparent",
+    backgroundColor: colors.background,
   },
   fill: {
     flex: 1,
