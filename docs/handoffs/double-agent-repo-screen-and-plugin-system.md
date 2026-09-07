@@ -252,6 +252,32 @@ Per-session **indicator dots** map a kind → color (`unread`→themeSecondary b
 - **Top blur feather** (`EdgeBlurBars variant="top"`): any header over scrolling content gets the feathered top blur (Home, Chat, repo screen, session list).
 - Colors from **theme tokens** (`colors.ts`), destined to be VS-Code-theme-driven — see [[reference-theme-colors]].
 
-## 13. Background wallpapers (PLANNED — not built)
+## 13. Background wallpapers (BUILT — app-wide; tiers ready)
 
-Upload a background image that sits **behind everything** (instead of the flat light/dark ground), scoped in three tiers: **app-wide default**, **per-repo**, and **per-worktree**, resolved worktree → repo → app → none. Prerequisites the owner must weigh: (1) needs native deps (`expo-image-picker` + `expo-file-system`) → a dev-client **rebuild**, not just Fast-Refresh; (2) screen backgrounds are currently the opaque `colors.background` in ~7 places — they'd need to go **translucent** so the wallpaper shows through, a real design shift (cards/glass over wallpaper). Plan: a store `wallpapers.ts` (tier → file URI, images copied into the app's document dir), a root background `<Image>` behind the navigator, and a resolver keyed by the current repo/worktree.
+A background image sits **behind everything**, three scope tiers (**app / repo / worktree**) resolved most-specific-first, **override not inherit** (a repo/worktree wallpaper replaces the app's, doesn't blend). Each wallpaper has **surface toggles** — Home background / All pages / Chat sessions — and paints a surface only if toggled. `wallpapers.ts` (tier→{uri,surfaces}, image copied into the document dir), `WallpaperProvider` paints it + tracks the current scope+surface (screens call `setContext` on focus), screen/navigator backgrounds went transparent so it shows. Native deps: `expo-image-picker` + `expo-file-system` (dev-client build finished 2026-09-04). BUILT: app-wide wallpaper + toggles in Settings → Appearance. TODO: per-repo/worktree *set* UI (repo 3-dot), per-repo/session chat scope (needs session→repo).
+
+## 14. Voice / audio agent — screen-off "phone call" (PLANNED)
+
+A hands-free, screen-off audio conversation with an agent. STT/TTS is the easy part; the hard parts:
+- **iOS background/call:** `CallKit` (+ `react-native-callkeep`) for real call treatment (lock-screen, screen-off, routing, priority) driving `AVAudioSession` (`playAndRecord`/`voiceChat`, which also gives system **AEC**). **PushKit/VoIP push** so the agent can *ring you* when a long task finishes or a permission is needed — inverts poll→push.
+- **Turn-taking:** endpointing/VAD, **barge-in** (interrupt TTS), echo cancellation, streaming STT→LLM→TTS pipeline for <1s feel.
+- **Coding-agent adaptation:** working **audio cues** during long tool-runs — configurable cadence via a **slider** (constant/looping ↔ ~2s…60s) + sound choice, tied to the busy state; a speakable-summary layer (don't read diffs aloud); spoken **permission** confirmations mapped to the existing `ask` prompts.
+- **Voice commands:** mute / unmute / "summarize what I missed during mute" (buffer the muted span → summarize) / "full transcript" (recap + offer to open on screen) / approve / abort — intent parsing over the STT stream.
+- **On-device preferred:** TTS = `AVSpeechSynthesizer` (`expo-speech`); STT = `SFSpeechRecognizer` with `requiresOnDeviceRecognition` (`expo-speech-recognition`). Private/offline/free; weaker on code identifiers → optional cloud engine later. Needs a native rebuild (batch all voice native bits).
+- **Settings restructure:** a real iOS-Settings-style **root list → sub-pages** (Appearance→Wallpaper, Voice & Audio, Workspace, Permissions, Connection). Pure JS, buildable now; rides the current build.
+
+## 15. Effect observability integration — telemetry as an agent tool (PLANNED)
+
+Turn Effect's built-in observability (spans/traces/metrics) into a tool the *agent* uses for a self-healing loop (reproduce → query telemetry → hypothesize → fix → re-run → watch prod). Two forms: a **CLI** the agent runs (**Inspeffct** = debugger-protocol capture to a local SQLite trace store, survives crash/shutdown where batched export loses events; and Grafana **`gcx`** over an LGTM container for steady-state) and a **structured MCP tool**. Slots into our stack:
+1. **opencode agent env + a debug skill** (cheapest, works today): put Inspeffct in the agent's env, add a skill encoding the loop. No app code.
+2. **Scripts & Commands page (§5):** a **"run under Inspeffct"** toggle on the serve/restart hook — any dev/serve run captures traces.
+3. **Effect Observability page** (the plugin/page system, §4): a repo-scoped **span-tree** view over the SQLite store; a **Metrics** view fed by the owner's already-shipped observability tap ([[project-telemetry-shipped]]). Effect-repo only.
+4. **MCP server over the trace store** (biggest multiplier): `list_traces`/`get_trace_tree`/`query_metrics` — one telemetry interface for **opencode on phone AND Cursor on desktop** and the future IDE.
+5. Reuse the owner's tap for live/steady-state; **Inspeffct closes the crash/shutdown gap**; expose both behind the same MCP/CLI.
+6. **VS Code-extension compat** (future IDE goal) means **Effect DevTools** (a VS Code extension over the debugger protocol) runs on-device later — live traces in the phone IDE.
+7. Production watch = a **scheduled/routine agent** querying prod telemetry over days; pings via the §14 voice call on regression.
+Order: (1) agent skill → now; (4) MCP wrapper → phone+desktop; (3) Observability page → rides the plugin work.
+
+## 16. Execution — parallel agents
+
+The roadmap can be fanned across agents (Claude Code agents, or **DoubleAgent driving opencode** — dogfooding). Good parallel splits: Settings-restructure, voice native layer, observability MCP, per-repo wallpaper UI are largely independent. Caveat (owner pref): inline/visible work is easier to follow in the app than backgrounded subagents — parallelize deliberately, per opted-in task, not by default.
