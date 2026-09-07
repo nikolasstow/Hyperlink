@@ -283,3 +283,7 @@ Order: (1) agent skill → now; (4) MCP wrapper → phone+desktop; (3) Observabi
 ## 16. Execution — parallel agents
 
 The roadmap can be fanned across agents (Claude Code agents, or **DoubleAgent driving opencode** — dogfooding). Good parallel splits: Settings-restructure, voice native layer, observability MCP, per-repo wallpaper UI are largely independent. Caveat (owner pref): inline/visible work is easier to follow in the app than backgrounded subagents — parallelize deliberately, per opted-in task, not by default.
+
+## 17. Backend split (DECISION, 2026-09-07)
+
+**IDE/feature surface = our own vite backend (`:5195`), not opencode's file API.** opencode (`:4096`) is the *agent* runtime (sessions, prompts, its own edits) and is constrained to its SDK. Everything the IDE needs — files, processes/scripts, github, docs, and later git status/diffs, LSP, twoslash hovers, file-watch — goes through the vite server's plugins (`src/server/*.ts` in `packages/agent-console`), which we own and can extend arbitrarily. Already there: `filesPlugin` (`/files`, fs read — add a JSON directory-listing endpoint for the explorer), `processesPlugin` (`/processes` spawn/stream/stop — the Scripts page backend), `githubPlugin`, `notificationsPlugin`. Reason: control. opencode's API won't give us git/LSP/watch/custom shapes; our backend will. Caveat: it's the vite *dev* server today; productizing = extract these plugins into a standalone server (same trajectory they're already on). Files explorer (§3.1) and Scripts page (§5) both build here.
