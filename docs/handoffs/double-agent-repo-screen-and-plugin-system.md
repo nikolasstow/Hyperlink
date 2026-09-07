@@ -295,3 +295,14 @@ Make notifications a hands-free channel to the agent. Today `push.ts` only regis
 2. **Reply via Siri (the big win, JS only):** register a category with a `textInput` "Reply" action (`setNotificationCategoryAsync`); in the response listener, on the reply action + `sessionID`, send `userText` via `client.session.promptAsync` (same call Home uses). `notificationsPlugin` tags the push with the `categoryId`. Flow: Siri reads it → "reply" → dictate → lands in the session as a prompt. The 80/20 of the §14 voice vision — Siri does STT/TTS, no CallKit.
 3. **Best-quality (rebuild):** communication notifications (`INSendMessageIntent`) for avatar + message-style Siri UX. Batch with a future native build.
 Verify on-device: `expo-notifications` delivering the text reply to JS while backgrounded/killed (iOS launches briefly for text-input actions); if not, handle natively.
+
+## 19. Live Activity — live thinking/pending while suspended (PLANNED)
+
+Problem: the Live Activity is started/updated/ended by the APP (`SessionChatScreen` busy→false → `endLiveActivity`), but while the agent works the phone is locked/app suspended, so it never updates or ends — stuck on "thinking," even though the completion NOTIFICATION arrives (server-driven, independent). The only way to update a Live Activity while suspended is **ActivityKit push updates from the server**. This one mechanism both fixes the stuck state and shows live thinking/action/pending.
+- **Native module (`modules/live-activity`) — REBUILD:** start with `pushType: .token`; add a function returning the activity push token (`activity.pushTokenUpdates`). Currently exposes only start/update/end/endAll (the `pushToken` is just a TODO comment). `ContentState` already has `status`/`action`/`messageCount` — content model is ready. `NSSupportsLiveActivitiesFrequentUpdates` already set.
+- **App (JS):** register `sessionID → activityPushToken` with the server (mirror the push-token flow in push.ts).
+- **Server (`notificationsPlugin`):** already watches the events (message update = thinking, tool call = action, `permission.asked` = pending, `session.idle` = done). Send ActivityKit **update** pushes (THROTTLED — iOS frequent-update budget, coalesce ~1/few-seconds) and an **end** on idle.
+- **Delivery = raw APNs** (`api.push.apple.com`, header `apns-push-type: liveactivity`, topic `<bundleid>.push-type.liveactivity`), JWT-signed with an **APNs `.p8` key** (owner provides; team `669Y72A3D7`). Expo push can't do ActivityKit.
+- **Cheap stopgap (no rebuild):** on app-foreground, end activities for sessions now idle — clears the phantom "thinking" on next open, not live.
+
+Notification robustness (done 2026-09-07): the push event-stream watcher had a silent-stall bug (socket open, no data/error → hung forever → no notifications until restart). Fixed with an AbortController stall watchdog in `notificationsPlugin` (`STALL_MS`).
