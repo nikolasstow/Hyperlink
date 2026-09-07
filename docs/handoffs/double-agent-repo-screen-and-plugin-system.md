@@ -252,9 +252,11 @@ Per-session **indicator dots** map a kind → color (`unread`→themeSecondary b
 - **Top blur feather** (`EdgeBlurBars variant="top"`): any header over scrolling content gets the feathered top blur (Home, Chat, repo screen, session list).
 - Colors from **theme tokens** (`colors.ts`), destined to be VS-Code-theme-driven — see [[reference-theme-colors]].
 
-## 13. Background wallpapers (BUILT — app-wide; tiers ready)
+## 13. Background wallpapers (SHELVED — archived on `archive/wallpaper`)
 
-A background image sits **behind everything**, three scope tiers (**app / repo / worktree**) resolved most-specific-first, **override not inherit** (a repo/worktree wallpaper replaces the app's, doesn't blend). Each wallpaper has **surface toggles** — Home background / All pages / Chat sessions — and paints a surface only if toggled. `wallpapers.ts` (tier→{uri,surfaces}, image copied into the document dir), `WallpaperProvider` paints it + tracks the current scope+surface (screens call `setContext` on focus), screen/navigator backgrounds went transparent so it shows. Native deps: `expo-image-picker` + `expo-file-system` (dev-client build finished 2026-09-04). BUILT: app-wide wallpaper + toggles in Settings → Appearance. TODO: per-repo/worktree *set* UI (repo 3-dot), per-repo/session chat scope (needs session→repo).
+Built (app-wide + surface toggles) then **reverted 2026-09-07** and preserved on branch **`archive/wallpaper`** (reverts of `ef32c5470`, `e04c89ba6` on the working branch). Shelved because it was wonky on-device: stale image on re-pick (same document-dir filename → RN `Image` caches the old uri), delete/button-state bugs, and — the real cost — **transparent screen backgrounds hurt text/color legibility** over a photo. `GlassHeader` (the single do-it-all header) rode in the same commit, so it went to the archive too — pull it from there when we do the header unification.
+
+Design still valid for a later, more careful pass (all in the archived branch): tiers **app / repo / worktree**, override-not-inherit, per-surface toggles (home / pages / chat). If revisited, fix first: a unique filename per pick (cache-bust) and a **legibility layer** (a scrim/blur behind text rather than fully transparent grounds).
 
 ## 14. Voice / audio agent — screen-off "phone call" (PLANNED)
 
