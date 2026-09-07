@@ -35,6 +35,13 @@ const RECEIPT_DELAY_MS = 6000;
 const OPENCODE_URL = process.env.AGENT_CONSOLE_OPENCODE_URL ?? "http://127.0.0.1:4096";
 const TOKENS_FILE = ".agent-console/push-tokens.json";
 
+/** Notification category the app registers a "Reply" text action under, so the
+ * push shows an inline reply field (which Siri / Announce Notifications can
+ * dictate into). Must match `AGENT_CATEGORY` in the app's push.ts. */
+const AGENT_CATEGORY = "agent";
+/** Max chars of the agent's message shown in the notification body. */
+const BODY_MAX = 200;
+
 /** Sessions the app creates for its own `git worktree` plumbing. They run and
  * go idle like any other session, and notifying about them is pure noise — the
  * client already hides them from its lists. */
@@ -55,6 +62,8 @@ type PushMessage = {
   readonly body: string;
   readonly sound: "default";
   readonly data: Record<string, unknown>;
+  /** APNs category — drives the inline reply action on the device. */
+  readonly categoryId?: string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -223,6 +232,31 @@ export const notificationsPlugin = (): Plugin => {
     return "Session";
   };
 
+  /** The agent's most recent message text, truncated for a notification body,
+   * so the push (and Siri reading it) says WHAT happened rather than just
+   * "Finished.". Defensive: the message shape crosses the opencode boundary. */
+  const lastAssistantText = async (sessionID: string): Promise<string | undefined> => {
+    const response = await fetch(`${OPENCODE_URL}/session/${sessionID}/message`).catch(() => undefined);
+    if (response === undefined || !response.ok) return undefined;
+    const body: unknown = await response.json().catch(() => undefined);
+    if (!Array.isArray(body)) return undefined;
+    for (let i = body.length - 1; i >= 0; i -= 1) {
+      const message = body[i];
+      if (!isRecord(message)) continue;
+      const info = isRecord(message.info) ? message.info : message;
+      if (info.role !== "assistant") continue;
+      const parts = Array.isArray(message.parts) ? message.parts : Array.isArray(info.parts) ? info.parts : [];
+      const texts: string[] = [];
+      for (const part of parts) {
+        if (isRecord(part) && part.type === "text" && typeof part.text === "string") texts.push(part.text);
+      }
+      const text = texts.join(" ").replace(/\s+/g, " ").trim();
+      if (text.length === 0) return undefined;
+      return text.length > BODY_MAX ? `${text.slice(0, BODY_MAX - 1)}…` : text;
+    }
+    return undefined;
+  };
+
   const watch = async (): Promise<void> => {
     let delay = 1000;
     for (;;) {
@@ -276,6 +310,7 @@ export const notificationsPlugin = (): Plugin => {
                 title: await titleOf(sessionID),
                 body: `Waiting for approval: ${action}`,
                 sound: "default",
+                categoryId: AGENT_CATEGORY,
                 data: { kind: "permission", sessionID },
               });
               continue;
@@ -289,8 +324,9 @@ export const notificationsPlugin = (): Plugin => {
               if (await isHidden(sessionID)) continue;
               await send({
                 title: await titleOf(sessionID),
-                body: "Finished.",
+                body: (await lastAssistantText(sessionID)) ?? "Finished.",
                 sound: "default",
+                categoryId: AGENT_CATEGORY,
                 data: { kind: "idle", sessionID },
               });
             }

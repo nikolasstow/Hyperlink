@@ -31,7 +31,15 @@ export type NotificationsApi = {
   readonly setNotificationHandler: (handler: unknown) => void;
   readonly addNotificationResponseReceivedListener: (listener: (response: unknown) => void) => { remove: () => void };
   readonly getLastNotificationResponseAsync: () => Promise<unknown>;
+  /** Optional: registers action categories (the reply button). Absent on older
+   * binaries, so it's not required for the module to be usable. */
+  readonly setNotificationCategoryAsync?: (identifier: string, actions: ReadonlyArray<Record<string, unknown>>, options?: Record<string, unknown>) => Promise<unknown>;
 };
+
+/** Category id the backend tags a push with to show the reply action. */
+export const AGENT_CATEGORY = "agent";
+/** Action id for the inline "Reply" text field. */
+export const REPLY_ACTION = "reply";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -65,6 +73,25 @@ let attempted = false;
 let loadError: string | undefined;
 
 export const getLoadError = (): string | undefined => loadError;
+
+/** Registers the "Reply" text-input action so pushes tagged with AGENT_CATEGORY
+ * get an inline reply field (which Announce Notifications can dictate into).
+ * Best-effort: absent on older binaries, and a failure must not block loading. */
+const registerReplyCategory = (api: NotificationsApi): void => {
+  if (typeof api.setNotificationCategoryAsync !== "function") return;
+  void api
+    .setNotificationCategoryAsync(AGENT_CATEGORY, [
+      {
+        identifier: REPLY_ACTION,
+        buttonTitle: "Reply",
+        textInput: { submitButtonTitle: "Send", placeholder: "Reply to the agent…" },
+        // Handle in the background so a dictated reply doesn't yank you into
+        // the app.
+        options: { opensAppToForeground: false },
+      },
+    ])
+    .catch(() => undefined);
+};
 
 export const loadNotifications = (): NotificationsApi | undefined => {
   if (attempted) return cached;
@@ -111,6 +138,8 @@ export const loadNotifications = (): NotificationsApi | undefined => {
     loadError = `handler setup failed (non-fatal): ${String(error)}`;
   }
 
+  registerReplyCategory(loaded);
+
   cached = loaded;
   return cached;
 };
@@ -149,6 +178,21 @@ export const payloadOfResponse = (response: unknown): PushPayload | undefined =>
   const content = request.content;
   if (!isRecord(content)) return undefined;
   return asPushPayload(content.data);
+};
+
+/**
+ * A dictated/typed reply to a notification: the session it targets and the
+ * text. Returns undefined for a plain tap (no reply action / empty text), so
+ * the caller falls through to opening the session.
+ */
+export const replyFromResponse = (response: unknown): { readonly sessionID: string; readonly text: string } | undefined => {
+  if (!isRecord(response)) return undefined;
+  if (response.actionIdentifier !== REPLY_ACTION) return undefined;
+  const text = typeof response.userText === "string" ? response.userText.trim() : "";
+  if (text.length === 0) return undefined;
+  const payload = payloadOfResponse(response);
+  if (payload?.sessionID === undefined) return undefined;
+  return { sessionID: payload.sessionID, text };
 };
 
 export type PushResult =

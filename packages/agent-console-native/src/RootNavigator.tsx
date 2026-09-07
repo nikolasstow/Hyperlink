@@ -11,8 +11,10 @@ import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
 import { useColorScheme } from "react-native";
+import { useAppContext } from "./AppContext";
+import { AGENT } from "./client";
 import { colors } from "./colors";
-import { loadNotifications, payloadOfResponse } from "./push";
+import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
@@ -49,6 +51,7 @@ const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "#
 export const RootNavigator = (): React.ReactElement => {
   const scheme = useColorScheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const { client } = useAppContext();
 
   // Establish the unread "setup date" on first launch, so pre-existing sessions
   // are treated as already-read rather than flooding Unread.
@@ -68,6 +71,15 @@ export const RootNavigator = (): React.ReactElement => {
 
     let cancelled = false;
     const open = (response: unknown): void => {
+      // A dictated/typed reply goes straight to the session as a prompt — no
+      // need to open the app. A plain tap falls through to opening the chat.
+      const reply = replyFromResponse(response);
+      if (reply !== undefined) {
+        void client.session
+          .promptAsync({ path: { id: reply.sessionID }, body: { agent: AGENT, parts: [{ type: "text", text: reply.text }] } })
+          .catch(() => undefined);
+        return;
+      }
       const payload = payloadOfResponse(response);
       if (payload?.sessionID === undefined) return;
       navigationRef.navigate("Chat", { sessionID: payload.sessionID });
@@ -88,7 +100,7 @@ export const RootNavigator = (): React.ReactElement => {
       cancelled = true;
       subscription.remove();
     };
-  }, [navigationRef]);
+  }, [navigationRef, client]);
 
   return (
     <NavigationContainer ref={navigationRef} theme={scheme === "dark" ? DARK_THEME : LIGHT_THEME}>
