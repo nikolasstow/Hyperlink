@@ -86,6 +86,24 @@ export const busyFromHistory = (transcript: Transcript): boolean => {
   return false;
 };
 
+/**
+ * Whether the newest assistant message is one the server has marked complete
+ * (`time.completed` set). This is what a `session.idle` should clear busy on —
+ * NOT the idle event itself, because opencode emits an early/spurious idle while
+ * a thinking model is still spinning up, before it has produced its answer.
+ * Distinct from `!busyFromHistory`: this stays false in the optimistic pre-run
+ * window (no assistant message yet), so an early idle can't finish the run the
+ * instant it starts.
+ */
+export const latestAssistantCompleted = (transcript: Transcript): boolean => {
+  for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
+    const message = transcript.messages.get(transcript.order[i]);
+    if (message === undefined || message.role !== "assistant") continue;
+    return message.time !== undefined && message.time.completed !== undefined;
+  }
+  return false;
+};
+
 /** When the in-flight run started, for the elapsed clock. Taken from the
  * server's own timestamp so reopening the chat does not restart it. */
 export const runStartedAt = (transcript: Transcript): number | undefined => {
@@ -227,15 +245,6 @@ export const useSessionStream = (
     [apply],
   );
 
-  // True once the current run has produced real output (a streamed message or
-  // part). A `session.idle` only counts as "done" after this — otherwise an
-  // early/spurious idle (which opencode can emit before the model produces
-  // anything, e.g. while a thinking model spins up) would clear the optimistic
-  // busy and make the run read as finished the instant it starts. This mirrors
-  // the server's `busySessions` gate, which is why the *notification* is
-  // correctly timed while the in-app indicator was not.
-  const sawRunOutputRef = React.useRef(false);
-
   React.useEffect(() => {
     setConnected(false);
     if (sessionID === undefined || !enabled) {
@@ -246,7 +255,6 @@ export const useSessionStream = (
     const seeded = transcriptCache.get(sessionID) ?? EMPTY;
     currentRef.current = seeded;
     setTranscript(seeded);
-    sawRunOutputRef.current = false;
 
     const controller = new AbortController();
     let cancelled = false;
@@ -271,13 +279,10 @@ export const useSessionStream = (
           }
         }
         // Reconciled against the server on every load and reconnect, rather
-        // than trusting whatever `busy` the cache carried in.
-        const busy = busyFromHistory(next);
-        // Returning to a run already in flight means its output exists (we just
-        // loaded it), so a later idle is a real completion — otherwise the
-        // sawRunOutput gate would ignore it and wedge busy on forever.
-        if (busy) sawRunOutputRef.current = true;
-        return { ...next, busy };
+        // than trusting whatever `busy` the cache carried in. `busyFromHistory`
+        // reads the same `time.completed` the live idle handler keys off, so a
+        // run in flight when you return stays busy and a finished one clears.
+        return { ...next, busy: busyFromHistory(next) };
       });
     };
 
@@ -308,11 +313,9 @@ export const useSessionStream = (
               }
             } else if (isPartDeltaEvent(raw) && raw.properties.sessionID === sessionID) {
               const deltaEvent = raw;
-              sawRunOutputRef.current = true;
               apply((t) => withPartDelta(t, deltaEvent));
             } else if (event.type === "message.updated" && event.properties.info.sessionID === sessionID) {
               const info = event.properties.info;
-              if (info.role === "assistant") sawRunOutputRef.current = true;
               apply((t) =>
                 withRole(
                   t,
@@ -321,17 +324,23 @@ export const useSessionStream = (
                   info.role === "assistant"
                     ? { providerID: info.providerID, modelID: info.modelID }
                     : undefined,
+                  // Capture the server's own run timing — its `time.completed`
+                  // is the authoritative "run finished" signal the idle handler
+                  // below keys off, rather than the idle event itself.
+                  info.role === "assistant" ? info.time : undefined,
                 ),
               );
             } else if (event.type === "message.part.updated" && isRenderablePart(event.properties.part) && event.properties.part.sessionID === sessionID) {
               const part = event.properties.part;
-              sawRunOutputRef.current = true;
               apply((t) => withPart(t, part));
             } else if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
-              // Ignore an idle that arrives before the run produced anything —
-              // it's spurious (see sawRunOutputRef). A real completion always
-              // follows output.
-              if (sawRunOutputRef.current) apply((t) => ({ ...t, busy: false }));
+              // Clear busy only when the server has marked the latest assistant
+              // run complete — NOT on the idle event alone. opencode emits an
+              // early/spurious idle while a thinking model spins up (before any
+              // answer), and clearing on that made the run read as finished the
+              // instant it started. The completed record precedes idle, so this
+              // stays correct while ignoring the spurious one.
+              apply((t) => (latestAssistantCompleted(t) ? { ...t, busy: false } : t));
             }
           }
         } catch (error: unknown) {
@@ -354,7 +363,6 @@ export const useSessionStream = (
   }, [sessionID, apply, client, enabled, address]);
 
   const markBusy = React.useCallback(() => {
-    sawRunOutputRef.current = false;
     apply((t) => ({ ...t, busy: true }));
   }, [apply]);
 

@@ -245,13 +245,15 @@ export const notificationsPlugin = (): Plugin => {
   };
 
   /** The agent's most recent message: its id (to dedupe notifications by the
-   * message rather than by the idle event) and its text, truncated for a
-   * notification body so the push (and Siri reading it) says WHAT happened
+   * message rather than by the idle event), whether the server has marked the
+   * run complete (`time.completed` — the real "done" signal, which opencode
+   * emits BEFORE an early/spurious `session.idle`), and its text, truncated for
+   * a notification body so the push (and Siri reading it) says WHAT happened
    * rather than just "Finished.". Defensive: the shape crosses the opencode
    * boundary. */
   const lastAssistant = async (
     sessionID: string,
-  ): Promise<{ readonly id: string | undefined; readonly text: string | undefined } | undefined> => {
+  ): Promise<{ readonly id: string | undefined; readonly completed: boolean; readonly text: string | undefined } | undefined> => {
     const response = await fetch(`${OPENCODE_URL}/session/${sessionID}/message`).catch(() => undefined);
     if (response === undefined || !response.ok) return undefined;
     const body: unknown = await response.json().catch(() => undefined);
@@ -262,6 +264,7 @@ export const notificationsPlugin = (): Plugin => {
       const info = isRecord(message.info) ? message.info : message;
       if (info.role !== "assistant") continue;
       const id = typeof info.id === "string" ? info.id : undefined;
+      const completed = isRecord(info.time) && typeof info.time.completed === "number";
       const parts = Array.isArray(message.parts) ? message.parts : Array.isArray(info.parts) ? info.parts : [];
       const texts: string[] = [];
       for (const part of parts) {
@@ -269,7 +272,7 @@ export const notificationsPlugin = (): Plugin => {
       }
       const joined = texts.join(" ").replace(/\s+/g, " ").trim();
       const text = joined.length === 0 ? undefined : joined.length > BODY_MAX ? `${joined.slice(0, BODY_MAX - 1)}…` : joined;
-      return { id, text };
+      return { id, completed, text };
     }
     return undefined;
   };
@@ -350,9 +353,16 @@ export const notificationsPlugin = (): Plugin => {
             }
 
             if (event.type === "session.idle" && sessionID !== undefined) {
+              const last = await lastAssistant(sessionID);
+              // Ignore an early/spurious idle: opencode emits one while a
+              // thinking model is still spinning up, before the run is done.
+              // The server's own `time.completed` record is the real signal (it
+              // precedes idle), so nothing ends or notifies until it's set —
+              // this is what stops a run reading as "finished" the instant it
+              // starts. Leaves busySessions intact so the real idle still fires.
+              if (last?.completed !== true) continue;
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
-              const last = await lastAssistant(sessionID);
               // End the Live Activity regardless of the notification gate — the
               // app can't do it while suspended, which is the whole point.
               // (`sendActivityEnd` forgets the token, so a replayed idle's end
@@ -366,13 +376,13 @@ export const notificationsPlugin = (): Plugin => {
               if (startedAt === undefined) continue;
               // Already notified about this exact completed message — a repeated
               // or replayed idle, not a new response.
-              if (last?.id !== undefined && idleNotifiedFor.get(sessionID) === last.id) continue;
+              if (last.id !== undefined && idleNotifiedFor.get(sessionID) === last.id) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
               if (await isHidden(sessionID)) continue;
-              if (last?.id !== undefined) idleNotifiedFor.set(sessionID, last.id);
+              if (last.id !== undefined) idleNotifiedFor.set(sessionID, last.id);
               await send({
                 title: await titleOf(sessionID),
-                body: last?.text ?? "Finished.",
+                body: last.text ?? "Finished.",
                 sound: "default",
                 categoryId: AGENT_CATEGORY,
                 data: { kind: "idle", sessionID },
