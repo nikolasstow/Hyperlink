@@ -11,11 +11,13 @@ import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
 import { useColorScheme } from "react-native";
+import { subscribeActivityPushTokens } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
+import { getBackendAddress } from "./settings";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
@@ -51,13 +53,29 @@ const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "#
 export const RootNavigator = (): React.ReactElement => {
   const scheme = useColorScheme();
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
-  const { client } = useAppContext();
+  const { client, address } = useAppContext();
 
   // Establish the unread "setup date" on first launch, so pre-existing sessions
   // are treated as already-read rather than flooding Unread.
   React.useEffect(() => {
     void getSetupDate();
   }, []);
+
+  // Forward each Live Activity's ActivityKit push token to the backend, which
+  // then updates/ends the activity via raw APNs while the app is suspended.
+  React.useEffect(() => {
+    let unsubscribe = (): void => {};
+    void getBackendAddress(address).then((backend) => {
+      unsubscribe = subscribeActivityPushTokens((sessionID, token) => {
+        void fetch(`${backend}/push/activity`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionID, token }),
+        }).catch(() => undefined);
+      });
+    });
+    return () => unsubscribe();
+  }, [address]);
 
   // Tapping a notification opens the session it is about. Handled here rather
   // than in a screen because the tap usually arrives with no screen mounted —

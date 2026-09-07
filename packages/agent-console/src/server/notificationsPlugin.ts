@@ -27,6 +27,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Connect, Plugin } from "vite";
+import { registerActivityToken, sendActivityEnd, sendActivityUpdate } from "./activityPush";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
@@ -328,12 +329,26 @@ export const notificationsPlugin = (): Plugin => {
                 categoryId: AGENT_CATEGORY,
                 data: { kind: "permission", sessionID },
               });
+              void sendActivityUpdate(sessionID, {
+                status: "working",
+                action: `Waiting for approval: ${action}`,
+                messageCount: 0,
+                startedAtMs: busySessions.get(sessionID) ?? Date.now(),
+              });
               continue;
             }
 
             if (event.type === "session.idle" && sessionID !== undefined) {
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
+              // End the Live Activity regardless of the notification gate — the
+              // app can't do it while suspended, which is the whole point.
+              void sendActivityEnd(sessionID, {
+                status: "done",
+                action: "Finished",
+                messageCount: 0,
+                startedAtMs: startedAt ?? Date.now(),
+              });
               if (startedAt === undefined) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
               if (await isHidden(sessionID)) continue;
@@ -386,6 +401,19 @@ export const notificationsPlugin = (): Plugin => {
         });
         await persist();
         json(200, { registered: registrations.size });
+        return;
+      }
+
+      if (path === "/push/activity" && req.method === "POST") {
+        // A Live Activity's ActivityKit push token, so the server can update /
+        // end it via raw APNs while the app is suspended.
+        const body = await readJson(req);
+        if (!isRecord(body) || typeof body.sessionID !== "string" || typeof body.token !== "string" || body.token === "") {
+          json(400, { error: "Expected { sessionID: string, token: string }" });
+          return;
+        }
+        registerActivityToken(body.sessionID, body.token);
+        json(200, { ok: true });
         return;
       }
 
