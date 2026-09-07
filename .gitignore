@@ -72,3 +72,7 @@ examples/resource-tui/.bundle.mjs
 # Agent debris — screenshots / test runner residue
 .cursor/artifacts/
 test-results/
+
+# Local server data (device push tokens) and the APNs auth key — never commit
+**/.agent-console/
+*.p8
