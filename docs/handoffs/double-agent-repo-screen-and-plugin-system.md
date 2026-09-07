@@ -306,3 +306,7 @@ Problem: the Live Activity is started/updated/ended by the APP (`SessionChatScre
 - **Cheap stopgap (no rebuild):** on app-foreground, end activities for sessions now idle — clears the phantom "thinking" on next open, not live.
 
 Notification robustness (done 2026-09-07): the push event-stream watcher had a silent-stall bug (socket open, no data/error → hung forever → no notifications until restart). Fixed with an AbortController stall watchdog in `notificationsPlugin` (`STALL_MS`).
+
+## 20. Framework direction — DoubleAgent on Last.ts (PLANNED, not top priority)
+
+The plan is to build DoubleAgent (and native apps generally) on **Last.ts** (the Effect+React framework, `packages/last-ts`) rather than hand-rolled React Native — maximizing Effect usage per the "what would Effect do" rule. Last.ts's spine is platform-agnostic: `View` (View DI), `Last` (provider/runtime + Layer DI edge), `AtomReact` (Atom↔React reactivity), `Route`/`Page`/`Router` (typed routes + file-router codegen). Only the **host** is web-bound: `Waku` (RSC), `Document`, `History`, `Link` (DOM). So the work is a **native host adapter**: map `Route`/`Page` → React Navigation, `View`/`Last` → RN + the Effect dual-runtime, keep `AtomReact` for state; the current `packages/agent-console-native` screens migrate onto it over time. Endgame: one Effect framework spanning web + native (see [[reference-effect-react-rsc-template]], [[project-ui-framework]]). Not a top priority — do it deliberately, likely once the app's feature surface stabilizes, so the migration is onto settled screens.
