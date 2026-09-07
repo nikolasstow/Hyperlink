@@ -28,7 +28,19 @@ import { resolve } from "node:path";
 
 const TEAM_ID = "669Y72A3D7";
 const BUNDLE = "com.nikolasstow.agentconsolenative";
-const APNS_HOST = process.env.AGENT_CONSOLE_APNS_HOST ?? "api.sandbox.push.apple.com";
+const SANDBOX_HOST = "api.sandbox.push.apple.com";
+const PROD_HOST = "api.push.apple.com";
+/** A dev build usually registers against the APNs sandbox, but the ActivityKit
+ * push token's environment follows the app's `aps-environment` entitlement,
+ * which EAS can stamp as `production` even for a development build. Rather than
+ * guess, we try one environment and, on the `BadDeviceToken` that a wrong
+ * environment produces, fall back to the other — then remember which one the
+ * device's tokens actually belong to. Pin explicitly with
+ * `AGENT_CONSOLE_APNS_HOST` to skip the probe. */
+const HOST_OVERRIDE = process.env.AGENT_CONSOLE_APNS_HOST;
+let workingHost: string | undefined = HOST_OVERRIDE;
+const hostsToTry = (): ReadonlyArray<string> =>
+  workingHost !== undefined ? [workingHost] : [SANDBOX_HOST, PROD_HOST];
 const APNS_TOPIC = `${BUNDLE}.push-type.liveactivity`;
 /** Foundation reference date (2001-01-01) in unix seconds — Swift `Date`s in the
  * content-state are encoded relative to this. */
@@ -104,15 +116,14 @@ const contentState = (state: ActivityState): Record<string, unknown> => ({
   startedAt: state.startedAtMs / 1000 - REFERENCE_DATE,
 });
 
-const post = async (token: string, payload: Record<string, unknown>): Promise<void> => {
-  const key = loadAuthKey();
-  if (key === null) return;
-  const body = JSON.stringify(payload);
-  await new Promise<void>((resolvePromise) => {
-    const clientSession = http2Connect(`https://${APNS_HOST}`);
+type PostResult = { readonly status: number; readonly body: string };
+
+const postToHost = (host: string, key: AuthKey, token: string, body: string): Promise<PostResult> =>
+  new Promise<PostResult>((resolvePromise) => {
+    const clientSession = http2Connect(`https://${host}`);
     clientSession.on("error", () => {
       clientSession.close();
-      resolvePromise();
+      resolvePromise({ status: 0, body: "connection error" });
     });
     const req = clientSession.request({
       ":method": "POST",
@@ -133,22 +144,48 @@ const post = async (token: string, payload: Record<string, unknown>): Promise<vo
       responseBody += chunk;
     });
     req.on("end", () => {
-      if (status !== 200) {
-        console.warn("[activity-push]", status, responseBody);
-        // A dead activity token must be dropped or it fails on every send.
-        if (status === 410 || responseBody.includes("BadDeviceToken")) {
-          for (const [sid, tok] of activityTokens) if (tok === token) activityTokens.delete(sid);
-        }
-      }
       clientSession.close();
-      resolvePromise();
+      resolvePromise({ status, body: responseBody });
     });
     req.on("error", () => {
       clientSession.close();
-      resolvePromise();
+      resolvePromise({ status: 0, body: "request error" });
     });
     req.end(body);
   });
+
+/** Drops a token that APNs has rejected as dead, from every session holding it. */
+const dropToken = (token: string): void => {
+  for (const [sid, tok] of activityTokens) if (tok === token) activityTokens.delete(sid);
+};
+
+const post = async (token: string, payload: Record<string, unknown>): Promise<void> => {
+  const key = loadAuthKey();
+  if (key === null) return;
+  const body = JSON.stringify(payload);
+
+  const hosts = hostsToTry();
+  for (let i = 0; i < hosts.length; i += 1) {
+    const host = hosts[i];
+    const { status, body: responseBody } = await postToHost(host, key, token, body);
+    if (status === 200) {
+      // Lock onto the environment this device's tokens actually belong to, so
+      // subsequent sends skip the probe.
+      workingHost = host;
+      return;
+    }
+    // A `BadDeviceToken` on one environment just means the token belongs to the
+    // other — try it before giving up.
+    const wrongEnv = status === 400 && responseBody.includes("BadDeviceToken");
+    if (wrongEnv && i < hosts.length - 1) {
+      console.warn("[activity-push]", status, responseBody, `(${host}) — retrying other environment`);
+      continue;
+    }
+    console.warn("[activity-push]", status, responseBody, `(${host})`);
+    // Genuinely dead (gone, or rejected by every environment): stop retrying it.
+    if (status === 410 || responseBody.includes("BadDeviceToken")) dropToken(token);
+    return;
+  }
 };
 
 /** Update a session's Live Activity (no-op if it has no registered token). */

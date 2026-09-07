@@ -100,6 +100,12 @@ export const notificationsPlugin = (): Plugin => {
    * re-blocks quickly. */
   const lastNotifiedAt = new Map<string, number>();
 
+  /** The last completed assistant message a session was notified about. A run
+   * can emit `session.idle` several times (tool round-trips, or a reconnect
+   * that replays the last events), and every one points at the SAME final
+   * message — so notify once per distinct message id, not once per idle event. */
+  const idleNotifiedFor = new Map<string, string>();
+
   const load = async (): Promise<void> => {
     const raw = await readFile(tokensPath, "utf8").catch(() => undefined);
     if (raw === undefined) return;
@@ -238,10 +244,14 @@ export const notificationsPlugin = (): Plugin => {
     return "Session";
   };
 
-  /** The agent's most recent message text, truncated for a notification body,
-   * so the push (and Siri reading it) says WHAT happened rather than just
-   * "Finished.". Defensive: the message shape crosses the opencode boundary. */
-  const lastAssistantText = async (sessionID: string): Promise<string | undefined> => {
+  /** The agent's most recent message: its id (to dedupe notifications by the
+   * message rather than by the idle event) and its text, truncated for a
+   * notification body so the push (and Siri reading it) says WHAT happened
+   * rather than just "Finished.". Defensive: the shape crosses the opencode
+   * boundary. */
+  const lastAssistant = async (
+    sessionID: string,
+  ): Promise<{ readonly id: string | undefined; readonly text: string | undefined } | undefined> => {
     const response = await fetch(`${OPENCODE_URL}/session/${sessionID}/message`).catch(() => undefined);
     if (response === undefined || !response.ok) return undefined;
     const body: unknown = await response.json().catch(() => undefined);
@@ -251,14 +261,15 @@ export const notificationsPlugin = (): Plugin => {
       if (!isRecord(message)) continue;
       const info = isRecord(message.info) ? message.info : message;
       if (info.role !== "assistant") continue;
+      const id = typeof info.id === "string" ? info.id : undefined;
       const parts = Array.isArray(message.parts) ? message.parts : Array.isArray(info.parts) ? info.parts : [];
       const texts: string[] = [];
       for (const part of parts) {
         if (isRecord(part) && part.type === "text" && typeof part.text === "string") texts.push(part.text);
       }
-      const text = texts.join(" ").replace(/\s+/g, " ").trim();
-      if (text.length === 0) return undefined;
-      return text.length > BODY_MAX ? `${text.slice(0, BODY_MAX - 1)}…` : text;
+      const joined = texts.join(" ").replace(/\s+/g, " ").trim();
+      const text = joined.length === 0 ? undefined : joined.length > BODY_MAX ? `${joined.slice(0, BODY_MAX - 1)}…` : joined;
+      return { id, text };
     }
     return undefined;
   };
@@ -341,8 +352,11 @@ export const notificationsPlugin = (): Plugin => {
             if (event.type === "session.idle" && sessionID !== undefined) {
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
+              const last = await lastAssistant(sessionID);
               // End the Live Activity regardless of the notification gate — the
               // app can't do it while suspended, which is the whole point.
+              // (`sendActivityEnd` forgets the token, so a replayed idle's end
+              // is a no-op — no duplicate end push.)
               void sendActivityEnd(sessionID, {
                 status: "done",
                 action: "Finished",
@@ -350,11 +364,15 @@ export const notificationsPlugin = (): Plugin => {
                 startedAtMs: startedAt ?? Date.now(),
               });
               if (startedAt === undefined) continue;
+              // Already notified about this exact completed message — a repeated
+              // or replayed idle, not a new response.
+              if (last?.id !== undefined && idleNotifiedFor.get(sessionID) === last.id) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
               if (await isHidden(sessionID)) continue;
+              if (last?.id !== undefined) idleNotifiedFor.set(sessionID, last.id);
               await send({
                 title: await titleOf(sessionID),
-                body: (await lastAssistantText(sessionID)) ?? "Finished.",
+                body: last?.text ?? "Finished.",
                 sound: "default",
                 categoryId: AGENT_CATEGORY,
                 data: { kind: "idle", sessionID },
