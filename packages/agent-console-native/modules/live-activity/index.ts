@@ -28,6 +28,10 @@ type LiveActivityNative = {
   readonly update: (sessionID: string, status: string, action: string, messageCount: number) => Promise<boolean>;
   readonly end: (sessionID: string, status: string) => Promise<boolean>;
   readonly endAll: () => Promise<number>;
+  readonly addListener: (
+    event: "onLiveActivityPushToken",
+    listener: (payload: { readonly sessionID: string; readonly token: string }) => void,
+  ) => { readonly remove: () => void };
 };
 
 const native =
@@ -73,4 +77,15 @@ export const endLiveActivity = async (sessionID: string, status: "done" | "error
 export const endAllLiveActivities = async (): Promise<void> => {
   if (native === null) return;
   await native.endAll().catch(() => 0);
+};
+
+/**
+ * Subscribe to ActivityKit push tokens (fired when a Live Activity starts, and
+ * on rotation). The app forwards these to the server, which then updates/ends
+ * the activity via raw APNs while the phone is locked. Returns an unsubscribe.
+ */
+export const subscribeActivityPushTokens = (handler: (sessionID: string, token: string) => void): (() => void) => {
+  if (native === null) return () => {};
+  const subscription = native.addListener("onLiveActivityPushToken", (payload) => handler(payload.sessionID, payload.token));
+  return () => subscription.remove();
 };

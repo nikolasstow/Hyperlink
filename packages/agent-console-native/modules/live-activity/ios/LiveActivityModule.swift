@@ -26,6 +26,11 @@ public class LiveActivityModule: Module {
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
 
+    // Emitted with { sessionID, token } whenever iOS issues (or rotates) an
+    // activity's ActivityKit push token, so the server can update/end it via
+    // raw APNs while the app is suspended.
+    Events("onLiveActivityPushToken")
+
     Function("isSupported") { () -> Bool in
       guard #available(iOS 16.2, *) else { return false }
       return ActivityAuthorizationInfo().areActivitiesEnabled
@@ -58,8 +63,16 @@ public class LiveActivityModule: Module {
         let activity = try Activity.request(
           attributes: attributes,
           content: ActivityContent(state: state, staleDate: Date().addingTimeInterval(Self.staleAfter)),
-          pushType: nil
+          pushType: .token
         )
+        // Forward the push token (and any rotation) to JS so the server can
+        // drive this activity while the app is suspended.
+        Task { [weak self] in
+          for await tokenData in activity.pushTokenUpdates {
+            let hex = tokenData.map { String(format: "%02x", $0) }.joined()
+            self?.sendEvent("onLiveActivityPushToken", ["sessionID": sessionID, "token": hex])
+          }
+        }
         return activity.id
       } catch {
         throw Exception(name: "LiveActivityStartFailed", description: String(describing: error))
