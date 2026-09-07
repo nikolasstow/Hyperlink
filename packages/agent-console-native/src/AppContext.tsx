@@ -14,6 +14,10 @@ import type { OpencodeClient } from "./client";
 type AppContextValue = {
   readonly client: OpencodeClient;
   readonly address: string;
+  /** Base URL of OUR vite backend (the `/fs`, `/push`, … endpoints), derived
+   * from `address`. Where the file/repo data layer talks — opencode is only the
+   * agent. */
+  readonly backend: string;
   readonly rootDir: string;
   /** Persist and apply a new discovery root without tearing down the
    * connected session (unlike `onChangeServer`). */

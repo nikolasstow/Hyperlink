@@ -1,21 +1,21 @@
 /**
  * Real repo/worktree discovery — driven entirely by git's own on-disk
- * metadata, not folder location or shelling out to `git`. A checkout is
- * anything under `rootDir` (or one level deeper — confirmed hands-on this
- * matters: real repos here live at `rootDir/packages/effect-pm`, not
- * `rootDir/effect-pm`) with a `.git` entry.
+ * metadata, not folder location. A checkout is anything under `rootDir` (or one
+ * level deeper — confirmed hands-on this matters: real repos here live at
+ * `rootDir/packages/effect-pm`, not `rootDir/effect-pm`) with a `.git` entry.
  *
- * Ported from packages/agent-console/src/opencode/repoScan.ts — pure logic,
- * no platform-specific dependencies beyond the SDK client itself, so this
- * is a verbatim copy (modulo taking `client` as a parameter — the web app
- * has one fixed client instance for the whole app; native's is built at
- * runtime from a user-configured server address, so there's no module-level
- * singleton to import here). See that file's own history for the full story
- * on *why* it's shaped this way.
+ * An Effect over OUR vite backend's `/fs` endpoints (fsClient.ts), NOT
+ * opencode's file API: file access is a backend concern, and the backend
+ * expands `~` and confines paths itself, so this walks by real absolute (or
+ * `~/...`) paths with no `$HOME` round-trip. Run it through `runFs` at the React
+ * boundary. Only the top-level root listing surfaces a `RepoScanError`;
+ * everything below tolerates a missing/​unreadable path as "nothing there".
  *
  * @internal
  */
-import type { OpencodeClient } from "./client";
+import { Data, Effect } from "effect";
+import type { HttpClient } from "effect/unstable/http";
+import { type FsEntry, fsList, fsReadText } from "./fsClient";
 
 export type ScannedWorktree = {
   readonly name: string;
@@ -28,35 +28,23 @@ export type ScannedRepo = {
   readonly worktrees: ReadonlyArray<ScannedWorktree>;
 };
 
-type DirEntry = { readonly name: string; readonly type: "file" | "directory" };
+export class RepoScanError extends Data.TaggedError("RepoScanError")<{
+  readonly rootDir: string;
+}> {}
 
-const listDirectoryEntries = async (
-  client: OpencodeClient,
-  directory: string,
-  path: string,
-): Promise<ReadonlyArray<DirEntry>> => {
-  try {
-    const { data } = await client.file.list({ query: { directory, path } });
-    return data ?? [];
-  } catch {
-    return [];
-  }
-};
+type GitEntry = { readonly checkoutDir: string; readonly gitType: "file" | "directory" };
 
-const readFileText = async (
-  client: OpencodeClient,
-  directory: string,
-  path: string,
-): Promise<string | undefined> => {
-  try {
-    const { data } = await client.file.read({ query: { directory, path } });
-    return data?.type === "text" ? data.content : undefined;
-  } catch {
-    return undefined;
-  }
-};
+/** Joins a checkout directory and a repo-relative path into one absolute path
+ * the `/fs` endpoints understand; `.` is the directory itself. */
+const at = (directory: string, path: string): string => (path === "." ? directory : `${directory}/${path}`);
 
-export class RepoScanError extends Error {}
+/** Text read that tolerates a missing/unreadable file as `undefined`. */
+const readFileText = (base: string, directory: string, path: string): Effect.Effect<string | undefined, never, HttpClient.HttpClient> =>
+  fsReadText(base, at(directory, path)).pipe(Effect.orElseSucceed(() => undefined));
+
+/** Directory listing that tolerates a missing/unreadable directory as empty. */
+const listDir = (base: string, directory: string, path: string): Effect.Effect<ReadonlyArray<FsEntry>, never, HttpClient.HttpClient> =>
+  fsList(base, at(directory, path)).pipe(Effect.orElseSucceed((): ReadonlyArray<FsEntry> => []));
 
 const basename = (path: string): string => {
   const segments = path.split("/").filter((s) => s.length > 0);
@@ -66,107 +54,98 @@ const basename = (path: string): string => {
 const stripTrailingDotGit = (path: string): string =>
   path.endsWith("/.git") ? path.slice(0, -"/.git".length) : path;
 
-type GitEntry = { readonly checkoutDir: string; readonly gitType: "file" | "directory" };
+const findGitEntries = (base: string, rootDir: string): Effect.Effect<ReadonlyArray<GitEntry>, RepoScanError, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    // The root listing goes through fsList directly (not the tolerant helper),
+    // so a broken root surfaces as a real error rather than an empty workspace.
+    const rootEntries = yield* fsList(base, rootDir).pipe(Effect.mapError(() => new RepoScanError({ rootDir })));
 
-const findGitEntries = async (
-  client: OpencodeClient,
-  rootDir: string,
-): Promise<ReadonlyArray<GitEntry>> => {
-  let rootEntries: ReadonlyArray<DirEntry>;
-  try {
-    const { data, error } = await client.file.list({ query: { directory: rootDir, path: "." } });
-    if (error !== undefined) {
-      const message =
-        typeof error === "object" && error !== null && "data" in error
-          ? (error as { data?: { message?: string } }).data?.message
-          : undefined;
-      throw new Error(message ?? "unreachable");
-    }
-    rootEntries = data ?? [];
-  } catch (cause) {
-    throw new RepoScanError(`Couldn't list "${rootDir}" — check the root folder path in Settings.`, {
-      cause,
-    });
-  }
+    const rootDotGit = rootEntries.find((e) => e.name === ".git");
+    const ownRoot: ReadonlyArray<GitEntry> =
+      rootDotGit === undefined ? [] : [{ checkoutDir: rootDir, gitType: rootDotGit.type }];
 
-  const rootDotGit = rootEntries.find((e) => e.name === ".git");
-  const ownRoot: ReadonlyArray<GitEntry> =
-    rootDotGit === undefined ? [] : [{ checkoutDir: rootDir, gitType: rootDotGit.type }];
+    const level1 = rootEntries.filter((e) => e.type === "directory");
 
-  const level1 = rootEntries.filter((e) => e.type === "directory");
+    const found = yield* Effect.forEach(
+      level1,
+      (entry) =>
+        Effect.gen(function* () {
+          const ownEntries = yield* listDir(base, rootDir, entry.name);
+          const dotGit = ownEntries.find((e) => e.name === ".git");
+          if (dotGit !== undefined) {
+            const gitEntry: GitEntry = { checkoutDir: `${rootDir}/${entry.name}`, gitType: dotGit.type };
+            return [gitEntry];
+          }
 
-  const found = await Promise.all(
-    level1.map(async (entry): Promise<ReadonlyArray<GitEntry>> => {
-      const ownEntries = await listDirectoryEntries(client, rootDir, entry.name);
-      const dotGit = ownEntries.find((e) => e.name === ".git");
-      if (dotGit !== undefined) {
-        return [{ checkoutDir: `${rootDir}/${entry.name}`, gitType: dotGit.type }];
-      }
-
-      const level2 = ownEntries.filter((e) => e.type === "directory");
-      const nested = await Promise.all(
-        level2.map(async (sub): Promise<GitEntry | undefined> => {
-          const subPath = `${entry.name}/${sub.name}`;
-          const subEntries = await listDirectoryEntries(client, rootDir, subPath);
-          const nestedDotGit = subEntries.find((e) => e.name === ".git");
-          return nestedDotGit === undefined
-            ? undefined
-            : { checkoutDir: `${rootDir}/${subPath}`, gitType: nestedDotGit.type };
+          const level2 = ownEntries.filter((e) => e.type === "directory");
+          const nested = yield* Effect.forEach(
+            level2,
+            (sub) =>
+              Effect.gen(function* () {
+                const subPath = `${entry.name}/${sub.name}`;
+                const subEntries = yield* listDir(base, rootDir, subPath);
+                const nestedDotGit = subEntries.find((e) => e.name === ".git");
+                const result: GitEntry | undefined =
+                  nestedDotGit === undefined
+                    ? undefined
+                    : { checkoutDir: `${rootDir}/${subPath}`, gitType: nestedDotGit.type };
+                return result;
+              }),
+            { concurrency: 8 },
+          );
+          return nested.filter((e): e is GitEntry => e !== undefined);
         }),
-      );
-      return nested.filter((e): e is GitEntry => e !== undefined);
-    }),
-  );
+      { concurrency: 8 },
+    );
 
-  return [...ownRoot, ...found.flat()];
-};
+    return [...ownRoot, ...found.flat()];
+  });
 
-const resolveMainFromWorktreeGitFile = async (
-  client: OpencodeClient,
-  checkoutDir: string,
-): Promise<string | undefined> => {
-  const content = await readFileText(client, checkoutDir, ".git");
-  if (content === undefined) return undefined;
-
-  const match = content.trim().match(/^gitdir:\s*(.+)$/);
-  if (match === null || match[1] === undefined) return undefined;
-
-  const gitdirPath = match[1].trim();
-  if (!gitdirPath.startsWith("/")) return undefined;
-
-  const marker = "/.git/worktrees/";
-  const markerIndex = gitdirPath.indexOf(marker);
-  if (markerIndex === -1) return undefined;
-
-  const afterMarker = gitdirPath.slice(markerIndex + marker.length);
-  if (afterMarker.length === 0 || afterMarker.includes("/")) return undefined;
-
-  return gitdirPath.slice(0, markerIndex);
-};
-
-const listLinkedWorktrees = async (
-  client: OpencodeClient,
-  mainCheckoutDir: string,
-): Promise<ReadonlyArray<ScannedWorktree>> => {
-  const entries = await listDirectoryEntries(client, mainCheckoutDir, ".git/worktrees");
-  const names = entries.filter((e) => e.type === "directory").map((e) => e.name);
-
-  const worktrees = await Promise.all(
-    names.map(async (name): Promise<ScannedWorktree | undefined> => {
-      const content = await readFileText(client, mainCheckoutDir, `.git/worktrees/${name}/gitdir`);
+const resolveMainFromWorktreeGitFile = (base: string, checkoutDir: string): Effect.Effect<string | undefined, never, HttpClient.HttpClient> =>
+  readFileText(base, checkoutDir, ".git").pipe(
+    Effect.map((content) => {
       if (content === undefined) return undefined;
-      return { name, path: stripTrailingDotGit(content.trim()), isMain: false };
+
+      const match = content.trim().match(/^gitdir:\s*(.+)$/);
+      if (match === null || match[1] === undefined) return undefined;
+
+      const gitdirPath = match[1].trim();
+      if (!gitdirPath.startsWith("/")) return undefined;
+
+      const marker = "/.git/worktrees/";
+      const markerIndex = gitdirPath.indexOf(marker);
+      if (markerIndex === -1) return undefined;
+
+      const afterMarker = gitdirPath.slice(markerIndex + marker.length);
+      if (afterMarker.length === 0 || afterMarker.includes("/")) return undefined;
+
+      return gitdirPath.slice(0, markerIndex);
     }),
   );
 
-  return worktrees.filter((w): w is ScannedWorktree => w !== undefined);
-};
+const listLinkedWorktrees = (base: string, mainCheckoutDir: string): Effect.Effect<ReadonlyArray<ScannedWorktree>, never, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const entries = yield* listDir(base, mainCheckoutDir, ".git/worktrees");
+    const names = entries.filter((e) => e.type === "directory").map((e) => e.name);
 
-const resolveRepoName = async (client: OpencodeClient, mainCheckoutDir: string): Promise<string> => {
-  const config = await readFileText(client, mainCheckoutDir, ".git/config");
-  const fromRemote = config === undefined ? undefined : repoNameFromConfig(config);
-  return fromRemote ?? basename(mainCheckoutDir);
-};
+    const worktrees = yield* Effect.forEach(
+      names,
+      (name) =>
+        readFileText(base, mainCheckoutDir, `.git/worktrees/${name}/gitdir`).pipe(
+          Effect.map((content): ScannedWorktree | undefined =>
+            content === undefined ? undefined : { name, path: stripTrailingDotGit(content.trim()), isMain: false },
+          ),
+        ),
+      { concurrency: 8 },
+    );
+
+    return worktrees.filter((w): w is ScannedWorktree => w !== undefined);
+  });
+
+const resolveRepoName = (base: string, mainCheckoutDir: string): Effect.Effect<string, never, HttpClient.HttpClient> =>
+  readFileText(base, mainCheckoutDir, ".git/config").pipe(
+    Effect.map((config) => (config === undefined ? undefined : repoNameFromConfig(config)) ?? basename(mainCheckoutDir)),
+  );
 
 const repoNameFromConfig = (config: string): string | undefined => {
   const originSection = config.match(/\[remote "origin"\][^[]*/);
@@ -185,32 +164,32 @@ const repoNameFromRemoteUrl = (url: string): string | undefined => {
   return segments[segments.length - 1];
 };
 
-export const scanRepos = async (
-  client: OpencodeClient,
-  rootDir: string,
-): Promise<ReadonlyArray<ScannedRepo>> => {
-  const entries = await findGitEntries(client, rootDir);
+export const scanRepos = (base: string, rootDir: string): Effect.Effect<ReadonlyArray<ScannedRepo>, RepoScanError, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const entries = yield* findGitEntries(base, rootDir);
 
-  const mains = new Set<string>();
-  for (const entry of entries) {
-    if (entry.gitType === "directory") {
-      mains.add(entry.checkoutDir);
-    } else {
-      const main = await resolveMainFromWorktreeGitFile(client, entry.checkoutDir);
-      if (main !== undefined) mains.add(main);
+    const mains = new Set<string>();
+    for (const entry of entries) {
+      if (entry.gitType === "directory") {
+        mains.add(entry.checkoutDir);
+      } else {
+        const main = yield* resolveMainFromWorktreeGitFile(base, entry.checkoutDir);
+        if (main !== undefined) mains.add(main);
+      }
     }
-  }
 
-  return Promise.all(
-    Array.from(mains).map(async (mainCheckoutDir): Promise<ScannedRepo> => {
-      const [linked, repo] = await Promise.all([
-        listLinkedWorktrees(client, mainCheckoutDir),
-        resolveRepoName(client, mainCheckoutDir),
-      ]);
-      return {
-        repo,
-        worktrees: [{ name: "(main)", path: mainCheckoutDir, isMain: true }, ...linked],
-      };
-    }),
-  );
-};
+    return yield* Effect.forEach(
+      Array.from(mains),
+      (mainCheckoutDir) =>
+        Effect.gen(function* () {
+          const [linked, repo] = yield* Effect.all([
+            listLinkedWorktrees(base, mainCheckoutDir),
+            resolveRepoName(base, mainCheckoutDir),
+          ]);
+          const main: ScannedWorktree = { name: "(main)", path: mainCheckoutDir, isMain: true };
+          const scanned: ScannedRepo = { repo, worktrees: [main, ...linked] };
+          return scanned;
+        }),
+      { concurrency: 8 },
+    );
+  });

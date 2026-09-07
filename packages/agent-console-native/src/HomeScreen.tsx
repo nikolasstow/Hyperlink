@@ -45,7 +45,7 @@ type Row =
   | { readonly kind: "repo"; readonly group: RepoGroup };
 
 export const HomeScreen = (props: Props): React.ReactElement => {
-  const { client, rootDir } = useAppContext();
+  const { client, backend, rootDir } = useAppContext();
   const groupSize = useGroupSize();
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
@@ -75,22 +75,22 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         return;
       }
       try {
-        setScanned(await refreshWorkspace(client, rootDir));
+        setScanned(await refreshWorkspace(backend, rootDir));
         setError(undefined);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
       }
     },
-    [client, rootDir],
+    [backend, rootDir],
   );
 
   const refreshWorktrees = React.useCallback(async (): Promise<void> => {
     try {
-      setScanned(await refreshWorkspace(client, rootDir));
+      setScanned(await refreshWorkspace(backend, rootDir));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't scan for repos.");
     }
-  }, [client, rootDir]);
+  }, [backend, rootDir]);
 
   React.useEffect(() => {
     (async () => {

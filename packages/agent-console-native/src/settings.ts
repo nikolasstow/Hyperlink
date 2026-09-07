@@ -193,17 +193,23 @@ export const getSessionPermissionModes = async (): Promise<Record<string, Permis
 export const setSessionPermissionModes = (value: Record<string, PermissionMode>): Promise<void> =>
   AsyncStorage.setItem(SESSION_PERMISSION_MODES_KEY, JSON.stringify(value));
 
-/** Backend base URL: an explicit override if set, otherwise the opencode
- * host with the dev server's port. */
-export const getBackendAddress = async (serverAddress: string): Promise<string> => {
-  const override = await AsyncStorage.getItem(BACKEND_ADDRESS_KEY);
-  if (override !== null && override !== "") return override;
+/** The backend base URL derived from the opencode server address: same host,
+ * the dev server's port. Pure — the single source both the sync context value
+ * and the async override-aware `getBackendAddress` build on. */
+export const deriveBackendAddress = (serverAddress: string): string => {
   try {
     const url = new URL(serverAddress);
     return `${url.protocol}//${url.hostname}:${DEFAULT_BACKEND_PORT}`;
   } catch {
     return serverAddress;
   }
+};
+
+/** Backend base URL: an explicit override if set, otherwise the derived host. */
+export const getBackendAddress = async (serverAddress: string): Promise<string> => {
+  const override = await AsyncStorage.getItem(BACKEND_ADDRESS_KEY);
+  if (override !== null && override !== "") return override;
+  return deriveBackendAddress(serverAddress);
 };
 
 export const setBackendAddress = (value: string): Promise<void> =>

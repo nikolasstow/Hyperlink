@@ -8,6 +8,7 @@ import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
 import {
   clearServerAddress,
+  deriveBackendAddress,
   getDefaultPermissionMode,
   getRootDir,
   getServerAddress,
@@ -173,6 +174,7 @@ const AppInner = (): React.ReactElement => {
           value={{
             client: screen.client,
             address: screen.address,
+            backend: deriveBackendAddress(screen.address),
             rootDir: screen.rootDir,
             onChangeRootDir,
             onChangeServer,

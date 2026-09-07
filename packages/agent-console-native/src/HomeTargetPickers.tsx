@@ -28,6 +28,7 @@ import * as React from "react";
 import { Alert, DynamicColorIOS, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { useAppContext } from "./AppContext";
 import { listLocalBranches, readCurrentBranch } from "./branchScan";
+import { runFs } from "./effect/runtime";
 import type { ScannedRepo, ScannedWorktree } from "./repoScan";
 import { randomSlug } from "./slug";
 import { createWorkspaceFolder } from "./repoCreate";
@@ -112,7 +113,7 @@ const PillLabel = (props: { readonly text: string; readonly dimmed?: boolean }):
 };
 
 export const HomeTargetPickers = (props: Props): React.ReactElement => {
-  const { client, rootDir } = useAppContext();
+  const { client, backend, rootDir } = useAppContext();
   const [branches, setBranches] = React.useState<ReadonlyArray<string>>([]);
   const [newRepoOpen, setNewRepoOpen] = React.useState(false);
   const [sort, setSort] = React.useState<RepoMenuSort>("recent");
@@ -162,10 +163,10 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
       const chosen = fromLast ?? main;
       if (chosen === undefined) return;
-      const branch = (await readCurrentBranch(client, chosen.path)) ?? "main";
+      const branch = (await runFs(readCurrentBranch(backend, chosen.path))) ?? "main";
       props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
-  }, [sortedRepos, props.target, props.onChange, client]);
+  }, [sortedRepos, props.target, props.onChange, backend]);
 
   // Keep branch label in sync when the worktree changes.
   React.useEffect(() => {
@@ -173,14 +174,14 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     const snapshot = props.target;
     let cancelled = false;
     void (async () => {
-      const current = await readCurrentBranch(client, snapshot.worktree.path);
+      const current = await runFs(readCurrentBranch(backend, snapshot.worktree.path));
       if (cancelled || current === undefined || current === snapshot.branch) return;
       props.onChange({ ...snapshot, branch: current });
     })();
     return () => {
       cancelled = true;
     };
-  }, [props.target?.kind === "repo" ? props.target.worktree.path : "", client]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [props.target?.kind === "repo" ? props.target.worktree.path : "", backend]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Prefetch branches for the active repo so the menu opens ready.
   React.useEffect(() => {
@@ -193,7 +194,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       props.scanned.find((r) => r.repo === target.repo)?.worktrees.find((w) => w.isMain) ??
       target.worktree;
     let cancelled = false;
-    void listLocalBranches(client, main.path).then((names) => {
+    void runFs(listLocalBranches(backend, main.path)).then((names) => {
       if (cancelled) return;
       const ordered =
         target.branch.length > 0 && !names.includes(target.branch)
@@ -204,7 +205,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     return () => {
       cancelled = true;
     };
-  }, [props.target, props.scanned, client]);
+  }, [props.target, props.scanned, backend]);
 
   const pickRepo = (repo: ScannedRepo): void => {
     void (async () => {
@@ -218,7 +219,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
       const chosen = fromLast ?? main;
       if (chosen === undefined) return;
-      const branch = (await readCurrentBranch(client, chosen.path)) ?? "main";
+      const branch = (await runFs(readCurrentBranch(backend, chosen.path))) ?? "main";
       props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
   };
@@ -232,7 +233,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     const previous = props.target;
     void setLastWorktreeForRepo(previous.repo, worktreeLabel(wt));
     void (async () => {
-      const branch = (await readCurrentBranch(client, wt.path)) ?? previous.branch;
+      const branch = (await runFs(readCurrentBranch(backend, wt.path))) ?? previous.branch;
       props.onChange({ kind: "repo", repo: previous.repo, worktree: wt, branch });
     })();
   };
@@ -309,7 +310,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   const onRepoCreated = (repoName: string, mainPath: string): void => {
     void (async () => {
       await props.onWorkspaceChanged();
-      const branch = (await readCurrentBranch(client, mainPath)) ?? "main";
+      const branch = (await runFs(readCurrentBranch(backend, mainPath))) ?? "main";
       props.onChange({
         kind: "repo",
         repo: repoName,

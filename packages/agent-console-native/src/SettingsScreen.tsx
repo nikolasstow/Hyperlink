@@ -60,7 +60,7 @@ const timeAgo = (ms: number): string => {
 
 export const SettingsScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
-  const { client, address, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
+  const { client, address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
   const [rootDirDraft, setRootDirDraft] = React.useState(rootDir);
   const [repoTemplateDraft, setRepoTemplateDraft] = React.useState(DEFAULT_REPO_TEMPLATE);
@@ -153,7 +153,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
     setScanning(true);
     setScanError(undefined);
     try {
-      await rescan(client, rootDir);
+      await rescan(backend, rootDir);
       setLastScanAt(await getLastScanAt());
     } catch (err) {
       setScanError(err instanceof Error ? err.message : "Rescan failed.");

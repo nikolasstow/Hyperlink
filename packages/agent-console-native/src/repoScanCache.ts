@@ -12,8 +12,7 @@
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { OpencodeClient } from "./client";
-import { expandHome } from "./homeDir";
+import { runFs } from "./effect/runtime";
 import { type ScannedRepo, scanRepos } from "./repoScan";
 
 const STORAGE_KEY = "agent-console-native:repoScan";
@@ -58,10 +57,12 @@ export const isStale = async (): Promise<boolean> => {
   return at === undefined || Date.now() - at > STALE_AFTER_MS;
 };
 
-export const rescan = (client: OpencodeClient, rootDir: string): Promise<ReadonlyArray<ScannedRepo>> => {
+export const rescan = (backend: string, rootDir: string): Promise<ReadonlyArray<ScannedRepo>> => {
   if (inFlight !== undefined) return inFlight;
-  inFlight = expandHome(client, rootDir)
-    .then((expanded) => scanRepos(client, expanded))
+  // The backend expands a leading `~` itself, so `rootDir` is passed straight
+  // through — no `$HOME` round-trip. `runFs` runs the Effect scan and hands its
+  // result back as a Promise for the React callers.
+  inFlight = runFs(scanRepos(backend, rootDir))
     .then(async (repos) => {
       inMemory = repos;
       const toStore: Persisted = { version: SCAN_VERSION, repos };
@@ -81,6 +82,6 @@ export const readWorkspace = async (): Promise<ReadonlyArray<ScannedRepo> | unde
 
 /** Fresh scan — single source for Home + composer picker repos. */
 export const refreshWorkspace = async (
-  client: OpencodeClient,
+  backend: string,
   rootDir: string,
-): Promise<ReadonlyArray<ScannedRepo>> => rescan(client, rootDir);
+): Promise<ReadonlyArray<ScannedRepo>> => rescan(backend, rootDir);
