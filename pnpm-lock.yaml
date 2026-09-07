@@ -242,6 +242,9 @@ importers:
 
   packages/agent-console:
     dependencies:
+      '@effect/platform-node':
+        specifier: 4.0.0-beta.102
+        version: 4.0.0-beta.102(effect@4.0.0-beta.102)(ioredis@5.11.1)
       '@opencode-ai/sdk':
         specifier: ^1.18.23
         version: 1.18.23
