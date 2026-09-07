@@ -49,6 +49,11 @@ const HIDDEN_TITLE_PREFIX = "[worktree-setup]";
 
 /** Reconnect backoff for the event stream, capped. */
 const MAX_RECONNECT_MS = 30_000;
+/** If the event stream delivers nothing for this long, treat it as a silent
+ * stall (socket open but dead) and force a reconnect. Without this, a stalled
+ * connection hangs `reader.read()` forever — no error, no events, no
+ * notifications — until the server is restarted. */
+const STALL_MS = 90_000;
 
 type Registration = {
   readonly token: string;
@@ -260,10 +265,17 @@ export const notificationsPlugin = (): Plugin => {
   const watch = async (): Promise<void> => {
     let delay = 1000;
     for (;;) {
+      const controller = new AbortController();
+      let stall: ReturnType<typeof setTimeout> | undefined;
+      const armStall = (): void => {
+        if (stall !== undefined) clearTimeout(stall);
+        stall = setTimeout(() => controller.abort(), STALL_MS);
+      };
       try {
-        const response = await fetch(`${OPENCODE_URL}/global/event`);
+        const response = await fetch(`${OPENCODE_URL}/global/event`, { signal: controller.signal });
         if (response.body === null) throw new Error("no body");
         delay = 1000;
+        armStall();
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -272,6 +284,9 @@ export const notificationsPlugin = (): Plugin => {
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
+          // Fresh data — reset the stall watchdog. A connection that goes
+          // silent (no data, no close) gets aborted and reconnected.
+          armStall();
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";
@@ -333,7 +348,10 @@ export const notificationsPlugin = (): Plugin => {
           }
         }
       } catch {
-        // opencode restarts frequently in development; reconnect quietly.
+        // opencode restarts frequently in development, and a silent stall is
+        // aborted by the watchdog — either way, reconnect quietly.
+      } finally {
+        if (stall !== undefined) clearTimeout(stall);
       }
       await new Promise((r) => setTimeout(r, delay));
       delay = Math.min(delay * 2, MAX_RECONNECT_MS);
