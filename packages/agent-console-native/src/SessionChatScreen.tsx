@@ -247,6 +247,20 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     sendOptimistic(text);
     markBusy();
+    // Start the Live Activity synchronously at the tap, while the app is
+    // definitely foreground. ActivityKit refuses to START an activity from the
+    // background, so deferring to the reactive busy effect (which runs a render
+    // tick later) loses the race when you send and immediately background to
+    // watch it — the start would only land when you reopened. The effect still
+    // covers opening a session mid-run; startLiveActivity no-ops if one is
+    // already live for this session.
+    void startLiveActivity({
+      sessionID,
+      repo: "",
+      worktree: "",
+      title: title ?? "Session",
+      action: "Working…",
+    });
     try {
       // `prompt` (not `promptAsync`) resolves when the whole run — every turn and
       // tool call — is done, so its completion drives `busy` deterministically.
