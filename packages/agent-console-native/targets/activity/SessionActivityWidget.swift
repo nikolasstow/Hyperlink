@@ -116,35 +116,41 @@ private struct LockScreenView: View {
   let context: ActivityViewContext<SessionActivityAttributes>
 
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
-      Image(systemName: context.state.symbol)
-        .font(.title3)
-        .foregroundStyle(context.state.tint)
+    // Vertical layout so the action line gets its OWN full-width row rather than
+    // sharing the row with the timer/Stop column (which squeezed it to ~60%).
+    VStack(alignment: .leading, spacing: 6) {
+      // Header: symbol · title · elapsed timer.
+      HStack(spacing: 8) {
+        Image(systemName: context.state.symbol)
+          .font(.subheadline)
+          .foregroundStyle(context.state.tint)
 
-      VStack(alignment: .leading, spacing: 3) {
         Text(context.attributes.title)
           .font(.headline)
           .lineLimit(1)
 
-        Text(context.state.action)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .lineLimit(2)
+        Spacer(minLength: 8)
 
+        ElapsedView(state: context.state)
+          .font(.caption.monospacedDigit())
+          .foregroundStyle(.secondary)
+      }
+
+      // The agent's live activity — full width, wraps at the edge.
+      Text(context.state.action)
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .lineLimit(3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      // Footer: location · Stop.
+      HStack(spacing: 8) {
         Text("\(context.attributes.repo) · \(context.attributes.worktree)")
           .font(.caption2)
           .foregroundStyle(.tertiary)
           .lineLimit(1)
-      }
-      // Claim the full available width so the action text wraps at the edge
-      // rather than at its intrinsic (short) width — a SwiftUI Text-in-HStack
-      // quirk. `Spacer` still keeps the timer/Stop column pinned right.
-      .frame(maxWidth: .infinity, alignment: .leading)
 
-      VStack(alignment: .trailing, spacing: 8) {
-        ElapsedView(state: context.state)
-          .font(.caption.monospacedDigit())
-          .foregroundStyle(.secondary)
+        Spacer(minLength: 8)
 
         if context.state.isWorking, #available(iOS 17.0, *) {
           Button(intent: StopAgentIntent(sessionID: context.attributes.sessionID)) {
