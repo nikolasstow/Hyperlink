@@ -265,6 +265,15 @@ export const useSessionStream = (
     [apply],
   );
 
+  // [LA3] temporary — identify which effect dep flaps (causes the stream storm).
+  const depsRef = React.useRef<{ sessionID: unknown; apply: unknown; client: unknown; enabled: unknown; address: unknown; refreshNonce: unknown } | undefined>(undefined);
+  const depsNow = { sessionID, apply, client, enabled, address, refreshNonce };
+  if (depsRef.current !== undefined) {
+    const changed = (Object.keys(depsNow) as Array<keyof typeof depsNow>).filter((k) => depsNow[k] !== depsRef.current?.[k]);
+    if (changed.length > 0) console.log("[LA3] stream deps changed:", changed.join(","));
+  }
+  depsRef.current = depsNow;
+
   React.useEffect(() => {
     setConnected(false);
     if (sessionID === undefined || !enabled) {
@@ -307,10 +316,14 @@ export const useSessionStream = (
             if (isRenderablePart(part)) next = withPart(next, part);
           }
         }
-        // `withRole`/`withPart` preserve `busy`, so on a reconnect `next` already
-        // carries the live busy — leave it. Only the first load reconciles it
-        // from history (best-effort; `session.status` corrects it at run end).
-        return isFirst ? { ...next, busy: busyFromHistory(next) } : next;
+        // `withRole`/`withPart` preserve `busy`, so `next` already carries the
+        // live busy — leave it, EXCEPT on a genuine first load with no local run
+        // in flight, where it's reconciled from history. Never touch busy while
+        // this screen is running a prompt: `prompt()` owns completion, and the
+        // stream effect can re-run (a flapping dep) mid-send, which would
+        // otherwise reset `firstLoad` and clear busy from history before the
+        // assistant message exists — ending the Live Activity early.
+        return isFirst && !runInFlightRef.current ? { ...next, busy: busyFromHistory(next) } : next;
       });
     };
 
