@@ -86,7 +86,8 @@ struct SessionActivityWidget: Widget {
         ElapsedView(state: context.state)
           .font(.caption2.monospacedDigit())
           .foregroundStyle(context.state.tint)
-          .frame(maxWidth: 44)
+          .multilineTextAlignment(.center)
+          .frame(maxWidth: 44, alignment: .center)
       } minimal: {
         Image(systemName: context.state.symbol)
           .foregroundStyle(context.state.tint)
