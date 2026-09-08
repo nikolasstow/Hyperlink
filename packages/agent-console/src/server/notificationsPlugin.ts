@@ -82,27 +82,104 @@ type PushMessage = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const clipText = (value: unknown): string => {
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  return text.length > ACTION_MAX ? `${text.slice(0, ACTION_MAX - 1)}…` : text;
+};
+
+/** Keep a path readable and short: drop the leading directories but keep the
+ * filename (and one parent), since the tail is what identifies it. */
+const shortenPath = (path: string): string => {
+  const trimmed = path.trim();
+  if (trimmed.length <= 48) return trimmed;
+  const segments = trimmed.split("/").filter((s) => s.length > 0);
+  return segments.length <= 2 ? trimmed : `…/${segments.slice(-2).join("/")}`;
+};
+
+/** A quality, Apple-style label for a tool call — "Editing App.tsx", "Running
+ * npm test" — from the tool name and its input, rather than the raw tool id. */
+const toolLabel = (tool: string, input: Record<string, unknown> | undefined): string => {
+  const arg = (key: string): string | undefined => {
+    const value = input?.[key];
+    return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  };
+  const file = arg("filePath") ?? arg("path") ?? arg("file");
+  const named = (verb: string, fallback: string): string => (file !== undefined ? `${verb} ${shortenPath(file)}` : fallback);
+  switch (tool) {
+    case "edit":
+    case "patch":
+    case "multiedit":
+      return named("Editing", "Editing a file");
+    case "write":
+      return named("Writing", "Writing a file");
+    case "read":
+      return named("Reading", "Reading a file");
+    case "list":
+      return named("Listing", "Listing files");
+    case "bash": {
+      const command = arg("command");
+      return command !== undefined ? `Running ${clipText(command)}` : "Running a command";
+    }
+    case "grep": {
+      const pattern = arg("pattern");
+      return pattern !== undefined ? `Searching for “${clipText(pattern)}”` : "Searching the code";
+    }
+    case "glob": {
+      const pattern = arg("pattern");
+      return pattern !== undefined ? `Finding ${clipText(pattern)}` : "Finding files";
+    }
+    case "webfetch": {
+      const url = arg("url");
+      if (url === undefined) return "Fetching a page";
+      try {
+        return `Fetching ${new URL(url).hostname}`;
+      } catch {
+        return "Fetching a page";
+      }
+    }
+    case "todowrite":
+    case "todoread":
+      return "Updating the plan";
+    case "task":
+      return "Delegating to a subagent";
+    default:
+      return clipText(tool).length > 0 ? `Running ${clipText(tool)}` : "Working…";
+  }
+};
+
+/** A human, Apple-style run duration: "less than a minute", "2 minutes",
+ * "1 hour 5 minutes". */
+const humanDuration = (ms: number): string => {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  if (totalSeconds < 60) return "less than a minute";
+  const minutes = Math.round(totalSeconds / 60);
+  if (minutes < 60) return minutes === 1 ? "1 minute" : `${minutes} minutes`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  const hourLabel = hours === 1 ? "1 hour" : `${hours} hours`;
+  if (remainder === 0) return hourLabel;
+  return `${hourLabel} ${remainder} ${remainder === 1 ? "minute" : "minutes"}`;
+};
+
 /** The one-line "what the agent is doing right now" for the Live Activity, from
  * a message part. Reasoning → its thought; text → the message so far; tool →
- * what's running. Undefined for parts with nothing worth showing. Defensive:
+ * a quality label. Undefined for parts with nothing worth showing. Defensive:
  * the part shape crosses the opencode boundary. */
 const actionFromPart = (part: unknown): string | undefined => {
   if (!isRecord(part)) return undefined;
-  const clip = (value: unknown): string => {
-    const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
-    return text.length > ACTION_MAX ? `${text.slice(0, ACTION_MAX - 1)}…` : text;
-  };
   if (part.type === "reasoning") {
-    const thought = clip(part.text);
+    const thought = clipText(part.text);
     return thought.length === 0 ? "Thinking…" : `Thinking… ${thought}`;
   }
   if (part.type === "text") {
-    const message = clip(part.text);
+    const message = clipText(part.text);
     return message.length === 0 ? undefined : message;
   }
   if (part.type === "tool") {
-    const tool = typeof part.tool === "string" ? part.tool : "a tool";
-    return `Running ${tool}`;
+    const tool = typeof part.tool === "string" ? part.tool : "";
+    const state = isRecord(part.state) ? part.state : undefined;
+    const input = state !== undefined && isRecord(state.input) ? state.input : undefined;
+    return toolLabel(tool, input);
   }
   return undefined;
 };
@@ -473,7 +550,7 @@ export const notificationsPlugin = (): Plugin => {
               // gate — the app can't do it while suspended, which is the point.
               const finishedState: ActivityState = {
                 status: "done",
-                action: "Finished",
+                action: startedAt !== undefined ? `Finished in ${humanDuration(Date.now() - startedAt)}` : "Finished",
                 messageCount: 0,
                 startedAtMs: startedAt ?? Date.now(),
               };
