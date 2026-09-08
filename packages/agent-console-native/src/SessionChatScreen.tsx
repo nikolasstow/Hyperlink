@@ -140,6 +140,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       });
     }
     if (wasBusy.current && !transcript.busy) {
+      console.log("[LA3] activity END (busy true->false)"); // [LA3] temporary
       Vibration.vibrate();
       void endLiveActivity(sessionID, "done");
     }
@@ -269,6 +270,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     sendOptimistic(text);
     markBusy();
+    console.log("[LA3] prompt START (build=prompt-await)"); // [LA3] temporary
     try {
       // `prompt` (not `promptAsync`) resolves when the whole run — every turn and
       // tool call — is done, so its completion drives `busy` deterministically.
@@ -287,7 +289,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               : { providerID: model.providerID, modelID: model.modelID },
         },
       });
+      console.log("[LA3] prompt RESOLVED"); // [LA3] temporary
+    } catch (err) {
+      console.log("[LA3] prompt THREW:", err instanceof Error ? err.message : String(err)); // [LA3] temporary
     } finally {
+      console.log("[LA3] clearBusy (finally)"); // [LA3] temporary
       clearBusy();
     }
   };
