@@ -276,9 +276,19 @@ export const useSessionStream = (
 
   React.useEffect(() => {
     setConnected(false);
-    if (sessionID === undefined || !enabled) {
+    if (sessionID === undefined) {
       currentRef.current = EMPTY;
       setTranscript(EMPTY);
+      return;
+    }
+    if (!enabled) {
+      // Backgrounded (or navigated away): tear the live stream down, but KEEP
+      // the transcript and its `busy`. The Live Activity is meant to run while
+      // the app is backgrounded — the server updates and ends it via push — and
+      // this app runs on the same device as everything else, so the user
+      // constantly switches away mid-run. Clearing state here (the old
+      // `setTranscript(EMPTY)`) flipped busy false the instant the app lost
+      // foreground, which ended the Live Activity the moment you switched away.
       return;
     }
     const seeded = transcriptCache.get(sessionID) ?? EMPTY;
