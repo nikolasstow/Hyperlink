@@ -21,10 +21,7 @@ import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scro
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { BusyRow } from "./BusyRow";
-import {
-  startLiveActivity,
-  updateLiveActivity,
-} from "../modules/live-activity";
+import { startLiveActivity } from "../modules/live-activity";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
@@ -148,32 +145,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     wasBusy.current = transcript.busy;
   }, [transcript.busy, sessionID, title]);
 
-  // Mirror the newest tool call into the activity, so the island says what the
-  // agent is doing rather than just that it is busy. Only while running: an
-  // update after the run ends would revive a finished activity.
-  const latestAction = React.useMemo(() => {
-    for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
-      const message = transcript.messages.get(transcript.order[i]);
-      if (message === undefined) continue;
-      const parts = Array.from(message.parts.values());
-      for (let j = parts.length - 1; j >= 0; j -= 1) {
-        const part = parts[j];
-        if (part.type === "tool") return part.tool;
-        if (part.type === "reasoning") return "Thinking…";
-      }
-    }
-    return "Working…";
-  }, [transcript]);
-
-  React.useEffect(() => {
-    if (!transcript.busy) return;
-    void updateLiveActivity({
-      sessionID,
-      status: "working",
-      action: latestAction,
-      messageCount: transcript.order.length,
-    });
-  }, [latestAction, transcript.busy, transcript.order.length, sessionID]);
+  // The activity's live content (the streamed thoughts / messages / tool labels)
+  // is driven entirely by the SERVER, which watches opencode and pushes quality,
+  // Apple-style labels — so it's identical whether the app is open or closed,
+  // and there's no client/server race writing the same activity. The app only
+  // starts the activity (above); it doesn't push content.
 
   const applyPermissionMode = React.useCallback(
     (next: PermissionMode) => {
