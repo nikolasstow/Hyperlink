@@ -121,12 +121,16 @@ later enhancement, not v1.
 
 ## Branch / integration
 
-- Branch from **`main`** (not the current app branch): `app/double-agent/providers`.
+- The native app (`packages/agent-console-native`) exists **only on
+  `app/double-agent/ios`, not on `main`** — branching from main would give you a
+  tree with no app to build against. Branch from **`app/double-agent/ios`** →
+  `app/double-agent/providers`.
 - Keep all work on that one branch; commit at sensible points and push.
-- The other workstream (Communication Notifications) is on
+- The other workstream (Communication Notifications) also lives on
   `app/double-agent/ios` and touches different files; conflicts should be
   minimal. If you must touch `SettingsScreen.tsx` / `RootNavigator.tsx`, keep
-  the diffs additive and localized so integration is a clean merge.
+  the diffs additive and localized so integration is a clean merge back into
+  `app/double-agent/ios`.
 - Final report: list the new files, the endpoints wired, the exact flows
   implemented (api / oauth-code / oauth-auto), what's verified vs pending
   on-device, and any open decisions.
