@@ -30,17 +30,21 @@ const TEAM_ID = "669Y72A3D7";
 const BUNDLE = "com.nikolasstow.agentconsolenative";
 const SANDBOX_HOST = "api.sandbox.push.apple.com";
 const PROD_HOST = "api.push.apple.com";
-/** A dev build usually registers against the APNs sandbox, but the ActivityKit
- * push token's environment follows the app's `aps-environment` entitlement,
- * which EAS can stamp as `production` even for a development build. Rather than
- * guess, we try one environment and, on the `BadDeviceToken` that a wrong
- * environment produces, fall back to the other — then remember which one the
- * device's tokens actually belong to. Pin explicitly with
- * `AGENT_CONSOLE_APNS_HOST` to skip the probe. */
+/** The ActivityKit push token's environment follows the app's `aps-environment`
+ * entitlement. EAS internal/ad-hoc builds sign with a distribution profile, so
+ * the token is a PRODUCTION token — hence production is tried first. A wrong
+ * environment surfaces two ways, depending on which side mismatches: a
+ * `400 BadDeviceToken` (token is for the other env) or a
+ * `403 BadEnvironmentKeyInToken` (the .p8 auth key is scoped to the other env);
+ * either makes us fall back to the other host, and the one that works is then
+ * remembered. Pin explicitly with `AGENT_CONSOLE_APNS_HOST` to skip the probe. */
 const HOST_OVERRIDE = process.env.AGENT_CONSOLE_APNS_HOST;
 let workingHost: string | undefined = HOST_OVERRIDE;
 const hostsToTry = (): ReadonlyArray<string> =>
-  workingHost !== undefined ? [workingHost] : [SANDBOX_HOST, PROD_HOST];
+  workingHost !== undefined ? [workingHost] : [PROD_HOST, SANDBOX_HOST];
+/** An APNs response that means "wrong environment", so try the other host. */
+const isWrongEnvironment = (status: number, body: string): boolean =>
+  (status === 400 && body.includes("BadDeviceToken")) || (status === 403 && body.includes("BadEnvironmentKeyInToken"));
 const APNS_TOPIC = `${BUNDLE}.push-type.liveactivity`;
 /** Foundation reference date (2001-01-01) in unix seconds — Swift `Date`s in the
  * content-state are encoded relative to this. */
@@ -172,17 +176,18 @@ const post = async (token: string, payload: Record<string, unknown>): Promise<vo
       // Lock onto the environment this device's tokens actually belong to, so
       // subsequent sends skip the probe.
       workingHost = host;
+      console.info("[activity-push] ok", host);
       return;
     }
-    // A `BadDeviceToken` on one environment just means the token belongs to the
-    // other — try it before giving up.
-    const wrongEnv = status === 400 && responseBody.includes("BadDeviceToken");
-    if (wrongEnv && i < hosts.length - 1) {
+    // A wrong-environment rejection (token OR key) just means the other host is
+    // the right one — try it before giving up.
+    if (isWrongEnvironment(status, responseBody) && i < hosts.length - 1) {
       console.warn("[activity-push]", status, responseBody, `(${host}) — retrying other environment`);
       continue;
     }
     console.warn("[activity-push]", status, responseBody, `(${host})`);
-    // Genuinely dead (gone, or rejected by every environment): stop retrying it.
+    // Drop only a genuinely dead TOKEN (gone / bad device token). A
+    // BadEnvironmentKeyInToken is a key problem, not a dead token, so keep it.
     if (status === 410 || responseBody.includes("BadDeviceToken")) dropToken(token);
     return;
   }
