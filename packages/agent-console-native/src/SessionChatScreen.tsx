@@ -22,7 +22,6 @@ import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { BusyRow } from "./BusyRow";
 import {
-  endLiveActivity,
   startLiveActivity,
   updateLiveActivity,
 } from "../modules/live-activity";
@@ -122,15 +121,19 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     if (reversedOrder.length > 0) listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [reversedOrder.length]);
 
-  // Buzz when the agent finishes replying, not on every streamed part —
-  // parts arrive continuously while it types, which would vibrate
-  // nonstop. `busy` going true -> false is the completion signal, and the
-  // same one the closed-app notification will use.
+  // Start the Live Activity when a run begins, and buzz once when it ends. The
+  // app NEVER ends the activity: the server owns that (it ends on the real
+  // server-side `session.idle`, reliably, even while the app is closed). Ending
+  // from here — off the app's stream-driven `busy`, which flaps on reconnects /
+  // replays when the chat is opened mid-run — is exactly what made the activity
+  // vanish when the app was foregrounded and re-backgrounded mid-stream.
   const wasBusy = React.useRef(false);
   React.useEffect(() => {
     if (transcript.busy && !wasBusy.current) {
       // Repo/worktree are not tracked on this screen yet, so the activity
       // carries the session title alone rather than inventing a location.
+      // `startLiveActivity` is a no-op if one is already running for the
+      // session, so opening a session mid-run won't stack a duplicate.
       void startLiveActivity({
         sessionID,
         repo: "",
@@ -140,9 +143,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       });
     }
     if (wasBusy.current && !transcript.busy) {
-      console.log("[LA3] activity END (busy true->false)"); // [LA3] temporary
       Vibration.vibrate();
-      void endLiveActivity(sessionID, "done");
     }
     wasBusy.current = transcript.busy;
   }, [transcript.busy, sessionID, title]);
@@ -270,14 +271,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     sendOptimistic(text);
     markBusy();
-    console.log("[LA3] prompt START (build=prompt-await)"); // [LA3] temporary
     try {
       // `prompt` (not `promptAsync`) resolves when the whole run — every turn and
       // tool call — is done, so its completion drives `busy` deterministically.
       // The live transcript still streams in over the event bus meanwhile; this
-      // just owns the busy/Live-Activity lifecycle, immune to the event stream's
-      // constant reconnects and event replays. `markBusy` set the run-in-flight
-      // guard, so a replayed `session.idle` can't end it early.
+      // just owns the busy lifecycle, immune to the event stream's constant
+      // reconnects and event replays. `markBusy` set the run-in-flight guard, so
+      // a replayed `session.idle` can't clear busy early.
       await client.session.prompt({
         path: { id: sessionID },
         body: {
@@ -289,11 +289,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               : { providerID: model.providerID, modelID: model.modelID },
         },
       });
-      console.log("[LA3] prompt RESOLVED"); // [LA3] temporary
-    } catch (err) {
-      console.log("[LA3] prompt THREW:", err instanceof Error ? err.message : String(err)); // [LA3] temporary
     } finally {
-      console.log("[LA3] clearBusy (finally)"); // [LA3] temporary
       clearBusy();
     }
   };

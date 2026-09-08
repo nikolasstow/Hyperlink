@@ -265,15 +265,6 @@ export const useSessionStream = (
     [apply],
   );
 
-  // [LA3] temporary — identify which effect dep flaps (causes the stream storm).
-  const depsRef = React.useRef<{ sessionID: unknown; apply: unknown; client: unknown; enabled: unknown; address: unknown; refreshNonce: unknown } | undefined>(undefined);
-  const depsNow = { sessionID, apply, client, enabled, address, refreshNonce };
-  if (depsRef.current !== undefined) {
-    const changed = (Object.keys(depsNow) as Array<keyof typeof depsNow>).filter((k) => depsNow[k] !== depsRef.current?.[k]);
-    if (changed.length > 0) console.log("[LA3] stream deps changed:", changed.join(","));
-  }
-  depsRef.current = depsNow;
-
   React.useEffect(() => {
     setConnected(false);
     if (sessionID === undefined) {
