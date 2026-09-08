@@ -367,7 +367,7 @@ export const notificationsPlugin = (): Plugin => {
               // activity removes it from the Dynamic Island immediately, so a
               // bare `sendActivityEnd` makes it vanish with no "done" frame. An
               // update to the done state keeps it live in the island; the end
-              // 3s later clears the island (the lock screen still lingers per
+              // 5s later clears the island (the lock screen still lingers per
               // the end's dismissal date). Done regardless of the notification
               // gate — the app can't do it while suspended, which is the point.
               const finishedState: ActivityState = {
@@ -379,7 +379,7 @@ export const notificationsPlugin = (): Plugin => {
               void sendActivityUpdate(sessionID, finishedState);
               setTimeout(() => {
                 void sendActivityEnd(sessionID, finishedState);
-              }, 3000);
+              }, 5000);
               if (startedAt === undefined) continue;
               // Already notified about this exact completed message — a repeated
               // or replayed idle, not a new response.
