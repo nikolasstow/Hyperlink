@@ -79,9 +79,14 @@ struct SessionActivityWidget: Widget {
         Image(systemName: context.state.symbol)
           .foregroundStyle(context.state.tint)
       } compactTrailing: {
+        // `Text(_, style: .timer)` reserves width for its widest possible value
+        // (hours), which stretches the compact pill to the max. A fixed,
+        // MM:SS-sized frame keeps the island hugging its content; a run long
+        // enough to need the hours field is well past when anyone's watching.
         ElapsedView(state: context.state)
           .font(.caption2.monospacedDigit())
           .foregroundStyle(context.state.tint)
+          .frame(maxWidth: 44)
       } minimal: {
         Image(systemName: context.state.symbol)
           .foregroundStyle(context.state.tint)
