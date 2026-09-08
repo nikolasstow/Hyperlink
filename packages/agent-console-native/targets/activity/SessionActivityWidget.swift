@@ -136,8 +136,10 @@ private struct LockScreenView: View {
           .foregroundStyle(.tertiary)
           .lineLimit(1)
       }
-
-      Spacer(minLength: 0)
+      // Claim the full available width so the action text wraps at the edge
+      // rather than at its intrinsic (short) width — a SwiftUI Text-in-HStack
+      // quirk. `Spacer` still keeps the timer/Stop column pinned right.
+      .frame(maxWidth: .infinity, alignment: .leading)
 
       VStack(alignment: .trailing, spacing: 8) {
         ElapsedView(state: context.state)
