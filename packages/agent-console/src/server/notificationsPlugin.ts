@@ -365,9 +365,19 @@ export const notificationsPlugin = (): Plugin => {
 
             if (event.type === "message.updated" || event.type === "message.part.delta") {
               if (sessionID !== undefined) {
-                if (!busySessions.has(sessionID)) busySessions.set(sessionID, Date.now());
+                const info = event.type === "message.updated" && isRecord(properties.info) ? properties.info : undefined;
+                if (info !== undefined && info.role === "user") {
+                  // A new user turn = a fresh run: reset the elapsed-timer start
+                  // (so the Live Activity timer counts from now, not from an
+                  // earlier run whose idle we may have missed) and clear stale
+                  // progress state.
+                  busySessions.set(sessionID, Date.now());
+                  activityActionLast.delete(sessionID);
+                  activityActionAt.delete(sessionID);
+                } else if (!busySessions.has(sessionID)) {
+                  busySessions.set(sessionID, Date.now());
+                }
                 // Record assistant message ids so `text` parts can be attributed.
-                const info = isRecord(properties.info) ? properties.info : undefined;
                 if (info !== undefined && info.role === "assistant" && typeof info.id === "string") {
                   const ids = assistantMessages.get(sessionID) ?? new Set<string>();
                   ids.add(info.id);
