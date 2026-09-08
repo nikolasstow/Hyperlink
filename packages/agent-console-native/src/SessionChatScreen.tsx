@@ -75,7 +75,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       void markSessionRead(sessionID, Date.now());
     };
   }, [streamEnabled, sessionID]);
-  const { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected } =
+  const { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected, refresh } =
     useSessionStream(client, sessionID, address, streamEnabled);
   // Mirrors the module-level store so the menu re-renders with the choice.
   const [permissionMode, setMode] = React.useState<PermissionMode>(() => getPermissionMode(sessionID));
@@ -211,8 +211,14 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           label: "More",
           icon: { type: "sfSymbol", name: "ellipsis" },
           menu: {
-            title: "Agent permissions",
             items: [
+              {
+                type: "action",
+                label: "Refresh",
+                description: "Reconnect and reload this session",
+                icon: { type: "sfSymbol", name: "arrow.clockwise" },
+                onPress: () => refresh(),
+              },
               {
                 type: "action",
                 label: "Allow all",
@@ -237,7 +243,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         },
       ],
     });
-  }, [props.navigation, title, sessionID, connected, permissionMode, confirmAllowAll, applyPermissionMode]);
+  }, [props.navigation, title, sessionID, connected, permissionMode, confirmAllowAll, applyPermissionMode, refresh]);
 
   React.useEffect(() => {
     setTitle(undefined);

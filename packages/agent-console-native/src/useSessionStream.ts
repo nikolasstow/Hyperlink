@@ -197,10 +197,18 @@ export const useSessionStream = (
    * a synthesized/always-on badge. False until the first successful
    * connect, and while a reconnect attempt is in flight after a drop. */
   readonly connected: boolean;
+  /** Force a full refresh: tears the live connection down and re-establishes
+   * it, reloading history from the server. For a manual "Refresh" action when a
+   * session looks out of sync. */
+  readonly refresh: () => void;
 } => {
   const [transcript, setTranscript] = React.useState<Transcript>(() => (sessionID !== undefined ? (transcriptCache.get(sessionID) ?? EMPTY) : EMPTY));
   const [connected, setConnected] = React.useState(false);
   const [pendingPermission, setPendingPermission] = React.useState<PendingPermission | undefined>(undefined);
+  // Bumped by `refresh()`; part of the stream effect's deps, so incrementing it
+  // tears the connection down and re-runs it (a fresh history load included).
+  const [refreshNonce, setRefreshNonce] = React.useState(0);
+  const refresh = React.useCallback(() => setRefreshNonce((n) => n + 1), []);
 
   const replyPermission = React.useCallback(
     async (reply: PermissionReply): Promise<void> => {
@@ -263,8 +271,17 @@ export const useSessionStream = (
 
     const controller = new AbortController();
     let cancelled = false;
+    // Only the FIRST load (opening / returning to the session) reconciles busy
+    // from history. A later load is a stream RECONNECT — the SSE can drop and
+    // re-open repeatedly mid-run — and must NOT touch busy, or every reconnect
+    // would clear it (history's per-message timing reads as "not busy" between a
+    // run's turns) and end the Live Activity mid-run. Busy is otherwise driven
+    // by the live run-level `session.status`.
+    let firstLoad = true;
 
     const loadHistory = async (): Promise<void> => {
+      const isFirst = firstLoad;
+      firstLoad = false;
       const { data: history } = await client.session.messages({ path: { id: sessionID } });
       if (cancelled) return;
       apply((t) => {
@@ -283,17 +300,17 @@ export const useSessionStream = (
             if (isRenderablePart(part)) next = withPart(next, part);
           }
         }
-        // Reconciled against the server when returning to a session: best-effort
-        // from message timing (the live run-level `session.status` isn't in
-        // history). A run in flight whose latest assistant message is streaming
-        // shows busy; the live `session.status` corrects it at the run's end.
-        return { ...next, busy: busyFromHistory(next) };
+        // `withRole`/`withPart` preserve `busy`, so on a reconnect `next` already
+        // carries the live busy — leave it. Only the first load reconciles it
+        // from history (best-effort; `session.status` corrects it at run end).
+        return isFirst ? { ...next, busy: busyFromHistory(next) } : next;
       });
     };
 
     const run = async (): Promise<void> => {
       let attempt = 0;
       while (!cancelled) {
+        let errored = false;
         try {
           await loadHistory();
           const { stream } = await client.global.event({ signal: controller.signal });
@@ -317,11 +334,18 @@ export const useSessionStream = (
               } else {
                 setPendingPermission(asked);
               }
+            } else if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
+              // The one authoritative "run is truly done" signal. Confirmed
+              // on-device: `session.idle` fires exactly once, after the last
+              // turn — unlike `session.status`, which flaps busy<->idle between
+              // a run's turns (thinking, then each tool round-trip). So busy is
+              // cleared ONLY here.
+              apply((t) => ({ ...t, busy: false }));
             } else if (status !== undefined && status.sessionID === sessionID) {
-              // The authoritative run-level signal: busy while a run (all its
-              // turns) is in flight, idle exactly once when it's truly done.
+              // Keeps busy true while a run is in flight (and re-affirms it when
+              // returning to an in-flight session). Its `idle` is deliberately
+              // ignored — see session.idle above.
               if (status.type === "busy") apply((t) => ({ ...t, busy: true }));
-              else if (status.type === "idle") apply((t) => ({ ...t, busy: false }));
             } else if (isPartDeltaEvent(raw) && raw.properties.sessionID === sessionID) {
               const deltaEvent = raw;
               apply((t) => withPartDelta(t, deltaEvent));
@@ -350,12 +374,20 @@ export const useSessionStream = (
           }
         } catch (error: unknown) {
           if (cancelled) return;
+          errored = true;
           setConnected(false);
           console.error("session event stream dropped, reconnecting", error);
         }
         if (cancelled) return;
-        attempt += 1;
-        await sleep(Math.min(1000 * 2 ** (attempt - 1), MAX_RECONNECT_DELAY_MS));
+        // expo/fetch closes the streaming response body every few seconds even
+        // though opencode keeps it open, so the stream "completes" normally and
+        // we must re-subscribe. Do that immediately — a backoff here would leave
+        // a gap in which live events (a `session.idle`, deltas) are missed.
+        // Backoff applies only to a real error, to avoid hammering a down server.
+        if (errored) {
+          attempt += 1;
+          await sleep(Math.min(1000 * 2 ** (attempt - 1), MAX_RECONNECT_DELAY_MS));
+        }
       }
     };
 
@@ -365,7 +397,7 @@ export const useSessionStream = (
       cancelled = true;
       controller.abort();
     };
-  }, [sessionID, apply, client, enabled, address]);
+  }, [sessionID, apply, client, enabled, address, refreshNonce]);
 
   const markBusy = React.useCallback(() => {
     apply((t) => ({ ...t, busy: true }));
@@ -375,5 +407,5 @@ export const useSessionStream = (
     apply((t) => ({ ...t, busy: false }));
   }, [apply]);
 
-  return { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected };
+  return { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected, refresh };
 };
