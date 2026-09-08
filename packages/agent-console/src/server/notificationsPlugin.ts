@@ -42,6 +42,13 @@ const TOKENS_FILE = ".agent-console/push-tokens.json";
 const AGENT_CATEGORY = "agent";
 /** Max chars of the agent's message shown in the notification body. */
 const BODY_MAX = 200;
+/** Max chars of the agent's current activity shown as the Live Activity's
+ * `action` line (its live thoughts / message / tool). */
+const ACTION_MAX = 90;
+/** Minimum gap between Live Activity progress pushes. ActivityKit has an update
+ * budget, and the run streams far faster than a person reads — so progress is
+ * coalesced to at most one push per this window, always carrying the latest. */
+const ACTIVITY_UPDATE_MS = 2000;
 
 /** Sessions the app creates for its own `git worktree` plumbing. They run and
  * go idle like any other session, and notifying about them is pure noise — the
@@ -75,6 +82,31 @@ type PushMessage = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+/** The one-line "what the agent is doing right now" for the Live Activity, from
+ * a message part. Reasoning → its thought; text → the message so far; tool →
+ * what's running. Undefined for parts with nothing worth showing. Defensive:
+ * the part shape crosses the opencode boundary. */
+const actionFromPart = (part: unknown): string | undefined => {
+  if (!isRecord(part)) return undefined;
+  const clip = (value: unknown): string => {
+    const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+    return text.length > ACTION_MAX ? `${text.slice(0, ACTION_MAX - 1)}…` : text;
+  };
+  if (part.type === "reasoning") {
+    const thought = clip(part.text);
+    return thought.length === 0 ? "Thinking…" : `Thinking… ${thought}`;
+  }
+  if (part.type === "text") {
+    const message = clip(part.text);
+    return message.length === 0 ? undefined : message;
+  }
+  if (part.type === "tool") {
+    const tool = typeof part.tool === "string" ? part.tool : "a tool";
+    return `Running ${tool}`;
+  }
+  return undefined;
+};
+
 const readJson = async (req: Connect.IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
@@ -105,6 +137,17 @@ export const notificationsPlugin = (): Plugin => {
    * that replays the last events), and every one points at the SAME final
    * message — so notify once per distinct message id, not once per idle event. */
   const idleNotifiedFor = new Map<string, string>();
+
+  /** Live Activity progress throttle: the last `action` pushed to a session and
+   * when, so streamed thoughts/messages/tool calls are coalesced (see
+   * ACTIVITY_UPDATE_MS) and no-op repeats are skipped. */
+  const activityActionLast = new Map<string, string>();
+  const activityActionAt = new Map<string, number>();
+
+  /** Assistant message ids per session, so a `text` part from the USER's own
+   * prompt isn't streamed into the activity as the agent's activity. Reasoning
+   * and tool parts are always the agent's; only ambiguous `text` needs this. */
+  const assistantMessages = new Map<string, Set<string>>();
 
   const load = async (): Promise<void> => {
     const raw = await readFile(tokensPath, "utf8").catch(() => undefined);
@@ -321,8 +364,53 @@ export const notificationsPlugin = (): Plugin => {
             const sessionID = typeof properties.sessionID === "string" ? properties.sessionID : undefined;
 
             if (event.type === "message.updated" || event.type === "message.part.delta") {
-              if (sessionID !== undefined && !busySessions.has(sessionID)) {
-                busySessions.set(sessionID, Date.now());
+              if (sessionID !== undefined) {
+                if (!busySessions.has(sessionID)) busySessions.set(sessionID, Date.now());
+                // Record assistant message ids so `text` parts can be attributed.
+                const info = isRecord(properties.info) ? properties.info : undefined;
+                if (info !== undefined && info.role === "assistant" && typeof info.id === "string") {
+                  const ids = assistantMessages.get(sessionID) ?? new Set<string>();
+                  ids.add(info.id);
+                  assistantMessages.set(sessionID, ids);
+                }
+              }
+              continue;
+            }
+
+            // Stream the agent's live activity (thoughts / message / tool) into
+            // the Live Activity's action line while the app is closed. Coalesced
+            // to ACTIVITY_UPDATE_MS and skipped when unchanged. `sendActivityUpdate`
+            // no-ops without a registered activity token, so this is free when
+            // there's no activity to drive.
+            if (event.type === "message.part.updated") {
+              if (sessionID !== undefined) {
+                if (!busySessions.has(sessionID)) busySessions.set(sessionID, Date.now());
+                const part = properties.part;
+                const partType = isRecord(part) ? part.type : undefined;
+                // Reasoning and tool parts are always the agent's; a `text` part
+                // is only the agent's if it belongs to an assistant message (not
+                // the user's own prompt echoing back).
+                const messageID = isRecord(part) && typeof part.messageID === "string" ? part.messageID : undefined;
+                const fromAssistant =
+                  partType === "reasoning" ||
+                  partType === "tool" ||
+                  (partType === "text" && messageID !== undefined && (assistantMessages.get(sessionID)?.has(messageID) ?? false));
+                const action = fromAssistant ? actionFromPart(part) : undefined;
+                const now = Date.now();
+                if (
+                  action !== undefined &&
+                  action !== activityActionLast.get(sessionID) &&
+                  now - (activityActionAt.get(sessionID) ?? 0) >= ACTIVITY_UPDATE_MS
+                ) {
+                  activityActionLast.set(sessionID, action);
+                  activityActionAt.set(sessionID, now);
+                  void sendActivityUpdate(sessionID, {
+                    status: "working",
+                    action,
+                    messageCount: 0,
+                    startedAtMs: busySessions.get(sessionID) ?? now,
+                  });
+                }
               }
               continue;
             }
@@ -363,6 +451,9 @@ export const notificationsPlugin = (): Plugin => {
               if (last?.completed !== true) continue;
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
+              activityActionLast.delete(sessionID);
+              activityActionAt.delete(sessionID);
+              assistantMessages.delete(sessionID);
               // Show the run as finished, THEN end it a moment later. Ending an
               // activity removes it from the Dynamic Island immediately, so a
               // bare `sendActivityEnd` makes it vanish with no "done" frame. An
