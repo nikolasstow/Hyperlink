@@ -43,7 +43,8 @@
     },
     "plugins": [
       "expo-status-bar",
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-web-browser"
     ],
     "experiments": {
       "autolinkingModuleResolution": true
