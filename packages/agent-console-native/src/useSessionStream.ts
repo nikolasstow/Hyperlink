@@ -222,6 +222,13 @@ export const useSessionStream = (
   const sessionIdRef = React.useRef(sessionID);
   sessionIdRef.current = sessionID;
   const pendingOptimisticIdRef = React.useRef<string | undefined>(undefined);
+  // True while THIS screen is running a prompt (markBusy → clearBusy around an
+  // awaited `session.prompt()`). While set, the prompt's completion is the
+  // authoritative busy signal, so the event stream's `session.idle` is ignored —
+  // the stream reconnects constantly (expo/fetch closes it every few seconds)
+  // and opencode replays recent events on each re-subscribe, so a *stale*
+  // `session.idle` can arrive mid-run and would otherwise end the run early. */
+  const runInFlightRef = React.useRef(false);
 
   const apply = React.useCallback((updater: (t: Transcript) => Transcript): void => {
     const previous = currentRef.current;
@@ -335,12 +342,11 @@ export const useSessionStream = (
                 setPendingPermission(asked);
               }
             } else if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
-              // The one authoritative "run is truly done" signal. Confirmed
-              // on-device: `session.idle` fires exactly once, after the last
-              // turn — unlike `session.status`, which flaps busy<->idle between
-              // a run's turns (thinking, then each tool round-trip). So busy is
-              // cleared ONLY here.
-              apply((t) => ({ ...t, busy: false }));
+              // opencode's true "run done" signal for a run this screen did NOT
+              // itself start (e.g. returning to an in-flight session). For a
+              // local send, the awaited `prompt()` owns completion and this is
+              // ignored — a reconnect can replay a stale idle mid-run.
+              if (!runInFlightRef.current) apply((t) => ({ ...t, busy: false }));
             } else if (status !== undefined && status.sessionID === sessionID) {
               // Keeps busy true while a run is in flight (and re-affirms it when
               // returning to an in-flight session). Its `idle` is deliberately
@@ -400,10 +406,12 @@ export const useSessionStream = (
   }, [sessionID, apply, client, enabled, address, refreshNonce]);
 
   const markBusy = React.useCallback(() => {
+    runInFlightRef.current = true;
     apply((t) => ({ ...t, busy: true }));
   }, [apply]);
 
   const clearBusy = React.useCallback(() => {
+    runInFlightRef.current = false;
     apply((t) => ({ ...t, busy: false }));
   }, [apply]);
 

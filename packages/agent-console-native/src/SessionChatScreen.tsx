@@ -216,7 +216,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
                 type: "action",
                 label: "Refresh",
                 description: "Reconnect and reload this session",
-                icon: { type: "sfSymbol", name: "arrow.clockwise" },
                 onPress: () => refresh(),
               },
               {
@@ -271,7 +270,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     sendOptimistic(text);
     markBusy();
     try {
-      await client.session.promptAsync({
+      // `prompt` (not `promptAsync`) resolves when the whole run — every turn and
+      // tool call — is done, so its completion drives `busy` deterministically.
+      // The live transcript still streams in over the event bus meanwhile; this
+      // just owns the busy/Live-Activity lifecycle, immune to the event stream's
+      // constant reconnects and event replays. `markBusy` set the run-in-flight
+      // guard, so a replayed `session.idle` can't end it early.
+      await client.session.prompt({
         path: { id: sessionID },
         body: {
           agent: AGENT,
@@ -282,9 +287,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               : { providerID: model.providerID, modelID: model.modelID },
         },
       });
-    } catch (err) {
+    } finally {
       clearBusy();
-      throw err;
     }
   };
 
