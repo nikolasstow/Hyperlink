@@ -27,7 +27,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Connect, Plugin } from "vite";
-import { registerActivityToken, sendActivityEnd, sendActivityUpdate } from "./activityPush";
+import { type ActivityState, registerActivityToken, sendActivityEnd, sendActivityUpdate } from "./activityPush";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
@@ -363,16 +363,23 @@ export const notificationsPlugin = (): Plugin => {
               if (last?.completed !== true) continue;
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
-              // End the Live Activity regardless of the notification gate — the
-              // app can't do it while suspended, which is the whole point.
-              // (`sendActivityEnd` forgets the token, so a replayed idle's end
-              // is a no-op — no duplicate end push.)
-              void sendActivityEnd(sessionID, {
+              // Show the run as finished, THEN end it a moment later. Ending an
+              // activity removes it from the Dynamic Island immediately, so a
+              // bare `sendActivityEnd` makes it vanish with no "done" frame. An
+              // update to the done state keeps it live in the island; the end
+              // 3s later clears the island (the lock screen still lingers per
+              // the end's dismissal date). Done regardless of the notification
+              // gate — the app can't do it while suspended, which is the point.
+              const finishedState: ActivityState = {
                 status: "done",
                 action: "Finished",
                 messageCount: 0,
                 startedAtMs: startedAt ?? Date.now(),
-              });
+              };
+              void sendActivityUpdate(sessionID, finishedState);
+              setTimeout(() => {
+                void sendActivityEnd(sessionID, finishedState);
+              }, 3000);
               if (startedAt === undefined) continue;
               // Already notified about this exact completed message — a repeated
               // or replayed idle, not a new response.
@@ -455,6 +462,27 @@ export const notificationsPlugin = (): Plugin => {
           body: "Test notification.",
           sound: "default",
           data: { kind: "test" },
+        });
+        json(200, { attempted, remaining: registrations.size });
+        return;
+      }
+
+      if (path === "/push/notify" && req.method === "POST") {
+        // A caller-supplied notification — used by Claude Code (via the
+        // notify-phone skill) to ping the phone when a turn/task finishes, since
+        // the user runs everything on one device and switches away from the
+        // terminal. Same delivery path as the agent notifications.
+        const body = await readJson(req);
+        if (!isRecord(body) || typeof body.body !== "string" || body.body.trim() === "") {
+          json(400, { error: "Expected { body: string, title?: string }" });
+          return;
+        }
+        const attempted = registrations.size;
+        await send({
+          title: typeof body.title === "string" && body.title.trim() !== "" ? body.title : "Claude Code",
+          body: body.body,
+          sound: "default",
+          data: { kind: "external" },
         });
         json(200, { attempted, remaining: registrations.size });
         return;
