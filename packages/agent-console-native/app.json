@@ -17,12 +17,16 @@
           "NSAllowsArbitraryLoads": true
         },
         "NSSupportsLiveActivities": true,
-        "NSSupportsLiveActivitiesFrequentUpdates": true
+        "NSSupportsLiveActivitiesFrequentUpdates": true,
+        "NSUserActivityTypes": [
+          "INSendMessageIntent"
+        ]
       },
       "entitlements": {
         "com.apple.security.application-groups": [
           "group.com.nikolasstow.agentconsolenative"
-        ]
+        ],
+        "com.apple.developer.usernotifications.communication": true
       }
     },
     "android": {

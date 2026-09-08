@@ -77,6 +77,10 @@ type PushMessage = {
   readonly data: Record<string, unknown>;
   /** APNs category — drives the inline reply action on the device. */
   readonly categoryId?: string;
+  /** Sets `mutable-content: 1`, which fires the Notification Service Extension
+   * that rewrites the push as a Communication Notification (message from the
+   * agent), so Siri Announce reads it and offers a hands-free reply. */
+  readonly mutableContent?: boolean;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -513,6 +517,7 @@ export const notificationsPlugin = (): Plugin => {
                     : "an action";
               await send({
                 title: await titleOf(sessionID),
+                mutableContent: true,
                 body: `Waiting for approval: ${action}`,
                 sound: "default",
                 categoryId: AGENT_CATEGORY,
@@ -570,6 +575,7 @@ export const notificationsPlugin = (): Plugin => {
                 body: last.text ?? "Finished.",
                 sound: "default",
                 categoryId: AGENT_CATEGORY,
+                mutableContent: true,
                 data: { kind: "idle", sessionID },
               });
             }
@@ -660,6 +666,7 @@ export const notificationsPlugin = (): Plugin => {
           title: typeof body.title === "string" && body.title.trim() !== "" ? body.title : "Claude Code",
           body: body.body,
           sound: "default",
+          mutableContent: true,
           data: { kind: "external" },
         });
         json(200, { attempted, remaining: registrations.size });
