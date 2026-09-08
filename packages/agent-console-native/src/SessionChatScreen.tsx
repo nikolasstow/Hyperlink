@@ -128,11 +128,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // same one the closed-app notification will use.
   const wasBusy = React.useRef(false);
   React.useEffect(() => {
-    // [LA-DIAG] temporary: confirms whether this (new) JS is what's running and
-    // shows every busy transition that drives the Live Activity.
-    console.log("[LA-DIAG] busy effect build=completion-gate-v3", { busy: transcript.busy, wasBusy: wasBusy.current });
     if (transcript.busy && !wasBusy.current) {
-      console.log("[LA-DIAG] START activity");
       // Repo/worktree are not tracked on this screen yet, so the activity
       // carries the session title alone rather than inventing a location.
       void startLiveActivity({
@@ -144,7 +140,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       });
     }
     if (wasBusy.current && !transcript.busy) {
-      console.log("[LA-DIAG] END activity (busy went true->false)");
       Vibration.vibrate();
       void endLiveActivity(sessionID, "done");
     }

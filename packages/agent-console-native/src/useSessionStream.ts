@@ -86,22 +86,27 @@ export const busyFromHistory = (transcript: Transcript): boolean => {
   return false;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 /**
- * Whether the newest assistant message is one the server has marked complete
- * (`time.completed` set). This is what a `session.idle` should clear busy on —
- * NOT the idle event itself, because opencode emits an early/spurious idle while
- * a thinking model is still spinning up, before it has produced its answer.
- * Distinct from `!busyFromHistory`: this stays false in the optimistic pre-run
- * window (no assistant message yet), so an early idle can't finish the run the
- * instant it starts.
+ * The authoritative run-level busy signal. opencode emits `session.status` with
+ * `{ type: "busy" }` when a run starts and `{ type: "idle" }` exactly once when
+ * the WHOLE run is done — every turn, tool call and wrap-up included. This is
+ * the correct completion signal; per-message `time.completed` is not, because a
+ * run is many assistant messages (each tool-use turn is its own message that
+ * "completes" mid-run). `session.status` is not in the pinned SDK's Event union,
+ * so it's read defensively off the raw event.
  */
-export const latestAssistantCompleted = (transcript: Transcript): boolean => {
-  for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
-    const message = transcript.messages.get(transcript.order[i]);
-    if (message === undefined || message.role !== "assistant") continue;
-    return message.time !== undefined && message.time.completed !== undefined;
-  }
-  return false;
+const readSessionStatus = (raw: unknown): { readonly sessionID: string; readonly type: string } | undefined => {
+  if (!isRecord(raw) || raw.type !== "session.status") return undefined;
+  const props = isRecord(raw.properties) ? raw.properties : undefined;
+  if (props === undefined) return undefined;
+  const sessionID = typeof props.sessionID === "string" ? props.sessionID : undefined;
+  const status = isRecord(props.status) ? props.status : undefined;
+  const type = status !== undefined && typeof status.type === "string" ? status.type : undefined;
+  if (sessionID === undefined || type === undefined) return undefined;
+  return { sessionID, type };
 };
 
 /** When the in-flight run started, for the elapsed clock. Taken from the
@@ -278,10 +283,10 @@ export const useSessionStream = (
             if (isRenderablePart(part)) next = withPart(next, part);
           }
         }
-        // Reconciled against the server on every load and reconnect, rather
-        // than trusting whatever `busy` the cache carried in. `busyFromHistory`
-        // reads the same `time.completed` the live idle handler keys off, so a
-        // run in flight when you return stays busy and a finished one clears.
+        // Reconciled against the server when returning to a session: best-effort
+        // from message timing (the live run-level `session.status` isn't in
+        // history). A run in flight whose latest assistant message is streaming
+        // shows busy; the live `session.status` corrects it at the run's end.
         return { ...next, busy: busyFromHistory(next) };
       });
     };
@@ -305,22 +310,30 @@ export const useSessionStream = (
             // UI this app did not used to have. A failed auto-reply falls
             // through to the prompt rather than leaving the run wedged.
             const asked = asPendingPermission(raw);
+            const status = readSessionStatus(raw);
             if (asked !== undefined && asked.sessionID === sessionID) {
               if (getPermissionMode(sessionID) === "full") {
                 void replyToPermission(address, asked, "once").catch(() => setPendingPermission(asked));
               } else {
                 setPendingPermission(asked);
               }
+            } else if (status !== undefined && status.sessionID === sessionID) {
+              // The authoritative run-level signal: busy while a run (all its
+              // turns) is in flight, idle exactly once when it's truly done.
+              if (status.type === "busy") apply((t) => ({ ...t, busy: true }));
+              else if (status.type === "idle") apply((t) => ({ ...t, busy: false }));
             } else if (isPartDeltaEvent(raw) && raw.properties.sessionID === sessionID) {
               const deltaEvent = raw;
               apply((t) => withPartDelta(t, deltaEvent));
             } else if (event.type === "message.updated" && event.properties.info.sessionID === sessionID) {
               const info = event.properties.info;
-              apply((t) => {
-                // Capture the server's own run timing — `time.completed` is the
-                // authoritative "run finished" signal (not session.idle, which
-                // opencode emits early while a thinking model spins up).
-                const next = withRole(
+              // Capture role, model and the server's run timing (used when
+              // returning to a session — see loadHistory). Busy is NOT touched
+              // here: a run has many assistant messages and each one "completes"
+              // mid-run, so message-level timing is the wrong signal — busy is
+              // driven by session.status above.
+              apply((t) =>
+                withRole(
                   t,
                   info.id,
                   info.role,
@@ -328,24 +341,11 @@ export const useSessionStream = (
                     ? { providerID: info.providerID, modelID: info.modelID }
                     : undefined,
                   info.role === "assistant" ? info.time : undefined,
-                );
-                // Drive busy from that record on every assistant update: an
-                // in-flight run stays busy (re-arming if anything spuriously
-                // cleared it — a reconnect race, an early idle), and it clears
-                // the moment the run is marked complete. The optimistic
-                // markBusy() covers the window before the first assistant
-                // message exists.
-                return info.role === "assistant" ? { ...next, busy: busyFromHistory(next) } : next;
-              });
+                ),
+              );
             } else if (event.type === "message.part.updated" && isRenderablePart(event.properties.part) && event.properties.part.sessionID === sessionID) {
               const part = event.properties.part;
               apply((t) => withPart(t, part));
-            } else if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
-              // Backstop for the same completion signal the assistant
-              // message.updated above already drives busy from — clears busy
-              // only when the server has marked the run complete, so an early/
-              // spurious idle can't finish a run the instant it starts.
-              apply((t) => (latestAssistantCompleted(t) ? { ...t, busy: false } : t));
             }
           }
         } catch (error: unknown) {
