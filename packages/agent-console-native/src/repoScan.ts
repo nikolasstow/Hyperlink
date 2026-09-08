@@ -178,7 +178,7 @@ export const scanRepos = (base: string, rootDir: string): Effect.Effect<Readonly
       }
     }
 
-    return yield* Effect.forEach(
+    const perMain = yield* Effect.forEach(
       Array.from(mains),
       (mainCheckoutDir) =>
         Effect.gen(function* () {
@@ -192,4 +192,21 @@ export const scanRepos = (base: string, rootDir: string): Effect.Effect<Readonly
         }),
       { concurrency: 8 },
     );
+
+    // Two checkouts of the same remote resolve to the same repo NAME (the name
+    // comes from the remote URL, not the folder), so merge them into one entry —
+    // one repo, all its worktrees — deduped by path. Without this a name shared
+    // by two checkouts collides as a duplicate React key downstream.
+    const byName = new Map<string, ScannedWorktree[]>();
+    for (const scanned of perMain) {
+      const existing = byName.get(scanned.repo);
+      if (existing === undefined) {
+        byName.set(scanned.repo, [...scanned.worktrees]);
+      } else {
+        for (const wt of scanned.worktrees) {
+          if (!existing.some((e) => e.path === wt.path)) existing.push(wt);
+        }
+      }
+    }
+    return Array.from(byName, ([repo, worktrees]): ScannedRepo => ({ repo, worktrees }));
   });

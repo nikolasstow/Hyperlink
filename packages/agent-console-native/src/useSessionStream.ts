@@ -316,30 +316,35 @@ export const useSessionStream = (
               apply((t) => withPartDelta(t, deltaEvent));
             } else if (event.type === "message.updated" && event.properties.info.sessionID === sessionID) {
               const info = event.properties.info;
-              apply((t) =>
-                withRole(
+              apply((t) => {
+                // Capture the server's own run timing — `time.completed` is the
+                // authoritative "run finished" signal (not session.idle, which
+                // opencode emits early while a thinking model spins up).
+                const next = withRole(
                   t,
                   info.id,
                   info.role,
                   info.role === "assistant"
                     ? { providerID: info.providerID, modelID: info.modelID }
                     : undefined,
-                  // Capture the server's own run timing — its `time.completed`
-                  // is the authoritative "run finished" signal the idle handler
-                  // below keys off, rather than the idle event itself.
                   info.role === "assistant" ? info.time : undefined,
-                ),
-              );
+                );
+                // Drive busy from that record on every assistant update: an
+                // in-flight run stays busy (re-arming if anything spuriously
+                // cleared it — a reconnect race, an early idle), and it clears
+                // the moment the run is marked complete. The optimistic
+                // markBusy() covers the window before the first assistant
+                // message exists.
+                return info.role === "assistant" ? { ...next, busy: busyFromHistory(next) } : next;
+              });
             } else if (event.type === "message.part.updated" && isRenderablePart(event.properties.part) && event.properties.part.sessionID === sessionID) {
               const part = event.properties.part;
               apply((t) => withPart(t, part));
             } else if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
-              // Clear busy only when the server has marked the latest assistant
-              // run complete — NOT on the idle event alone. opencode emits an
-              // early/spurious idle while a thinking model spins up (before any
-              // answer), and clearing on that made the run read as finished the
-              // instant it started. The completed record precedes idle, so this
-              // stays correct while ignoring the spurious one.
+              // Backstop for the same completion signal the assistant
+              // message.updated above already drives busy from — clears busy
+              // only when the server has marked the run complete, so an early/
+              // spurious idle can't finish a run the instant it starts.
               apply((t) => (latestAssistantCompleted(t) ? { ...t, busy: false } : t));
             }
           }

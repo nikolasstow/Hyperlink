@@ -22,7 +22,7 @@ const LAST_SCAN_KEY = "agent-console-native:lastScanAt";
  * repoScanCache.ts for why this matters: an already-open client with a
  * scan cached under an older, buggier algorithm must not keep rendering it
  * past its staleness timer. */
-const SCAN_VERSION = 4;
+const SCAN_VERSION = 5;
 
 const STALE_AFTER_MS = 30 * 60 * 1000;
 
