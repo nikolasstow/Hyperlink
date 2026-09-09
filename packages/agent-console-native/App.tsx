@@ -3,7 +3,12 @@ import * as React from "react";
 import { Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
+import { GlassTest } from "./src/GlassTest";
 import { HomeSkeleton } from "./src/HomeSkeleton";
+
+/** TEMPORARY: render the glass diagnostic instead of the app. Delete with
+ * GlassTest.tsx once the glass hypothesis is verified. */
+const GLASS_TEST = true;
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
@@ -130,6 +135,16 @@ const AppInner = (): React.ReactElement => {
       current.step === "ready" ? { ...current, rootDir: trimmed } : current,
     );
   };
+
+  // TEMPORARY: flip to false (or delete) after verifying the glass test.
+  if (GLASS_TEST) {
+    return (
+      <View style={styles.root}>
+        <StatusBar style="auto" />
+        <GlassTest />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
