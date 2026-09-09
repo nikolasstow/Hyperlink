@@ -44,20 +44,7 @@
     "plugins": [
       "expo-status-bar",
       "@bacons/apple-targets",
-      "expo-web-browser",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/splash-icon.png",
-          "imageWidth": 180,
-          "resizeMode": "contain",
-          "backgroundColor": "#1A1B26",
-          "dark": {
-            "image": "./assets/splash-icon.png",
-            "backgroundColor": "#1A1B26"
-          }
-        }
-      ]
+      "expo-web-browser"
     ],
     "experiments": {
       "autolinkingModuleResolution": true

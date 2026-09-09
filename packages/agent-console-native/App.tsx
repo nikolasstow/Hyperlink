@@ -1,10 +1,9 @@
-import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
 import { Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
-import { SplashView } from "./src/SplashView";
+import { HomeSkeleton } from "./src/HomeSkeleton";
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
@@ -36,11 +35,6 @@ type Screen =
   | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly address: string; readonly error?: string }
   | { readonly step: "ready"; readonly client: OpencodeClient; readonly address: string; readonly rootDir: string };
 
-// Hold the native launch screen up until the app has actually resolved what to
-// show, instead of letting it auto-hide onto a bare spinner. Fired at module
-// load (and again on a Metro reload, which re-evaluates this module).
-void SplashScreen.preventAutoHideAsync().catch(() => undefined);
-
 const connectToServer = async (address: string): Promise<OpencodeClient> => {
   const client = makeClient(address);
   const { data, error } = await client.session.list();
@@ -60,15 +54,6 @@ const AppInner = (): React.ReactElement => {
   const [addressInput, setAddressInput] = React.useState("");
   const [rootDirInput, setRootDirInput] = React.useState("");
   const insets = useSafeAreaInsets();
-
-  // Hide the native splash the moment there's something real to show — the
-  // auto-bootstrap states (loading, connecting) are covered by the splash; a
-  // form, an error, or content is the handoff point.
-  React.useEffect(() => {
-    if (screen.step !== "loading" && screen.step !== "connecting") {
-      void SplashScreen.hideAsync().catch(() => undefined);
-    }
-  }, [screen.step]);
 
   React.useEffect(() => {
     (async () => {
@@ -146,9 +131,12 @@ const AppInner = (): React.ReactElement => {
     <View style={styles.root}>
       <StatusBar style="auto" />
       {screen.step === "loading" || screen.step === "connecting" ? (
-        // Matches the native launch screen, so the handoff from it is seamless
-        // (and covers a Metro reload, where the native splash isn't involved).
-        <SplashView />
+        // The launch/bootstrap state is the Home skeleton — the app looks like
+        // it's loading its real content, not sitting on a spinner. `insets.top`
+        // stands in for the nav header that isn't mounted yet.
+        <View style={{ flex: 1, paddingTop: insets.top }}>
+          <HomeSkeleton />
+        </View>
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
           <Text style={styles.title}>Where's your OpenCode server?</Text>
