@@ -36,6 +36,13 @@ Pre-1.0: breaking changes land as minor bumps.
 - **Metrics downsampling** — roll windows 1s → 1m → 1h for long retention.
 - **Multi-worker visibility-timeout / lease refresh** — v1 is single-host with a generous lease; add lease-refresh + `SKIP LOCKED` multi-worker semantics.
 
+## Agent tooling
+
+- **Second-opinion panel** ("this agent is being a moron" button) — owner-triggered escalation
+  that fans out to 3–4 fresh sessions on *different* models, each asked what the stuck agent is
+  missing. Idea + prior-art survey + the anchoring failure mode that decides whether it works:
+  [second-opinion-panel.md](./second-opinion-panel.md).
+
 ## Hygiene
 
 - Parked erase debt (`toLayer` / wire `provideContext` / D1 factory retypes) — see archived
