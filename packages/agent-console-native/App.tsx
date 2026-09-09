@@ -3,7 +3,7 @@ import * as React from "react";
 import { Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
-import { HomeSkeleton } from "./src/HomeSkeleton";
+import { LaunchSkeleton } from "./src/LaunchSkeleton";
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
@@ -34,10 +34,6 @@ type Screen =
   | { readonly step: "connecting"; readonly address: string }
   | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly address: string; readonly error?: string }
   | { readonly step: "ready"; readonly client: OpencodeClient; readonly address: string; readonly rootDir: string };
-
-/** The transparent nav bar Home sits under; the launch skeleton pads by it so
- * its cards line up with Home's content and don't jump when Home takes over. */
-const NAV_BAR_HEIGHT = 44;
 
 const connectToServer = async (address: string): Promise<OpencodeClient> => {
   const client = makeClient(address);
@@ -135,13 +131,10 @@ const AppInner = (): React.ReactElement => {
     <View style={styles.root}>
       <StatusBar style="auto" />
       {screen.step === "loading" || screen.step === "connecting" ? (
-        // Skeleton at launch, not a spinner. This only renders the skeleton in
-        // a plain View (no navigation, no glass) — the safe part — so it can't
-        // hit the blank-glass bug that mounting Home early caused. The real
-        // header buttons + composer come in when Home takes over.
-        <View style={{ flex: 1, paddingTop: insets.top + NAV_BAR_HEIGHT }}>
-          <HomeSkeleton />
-        </View>
+        // The launch loading view: the skeleton WITH glass chrome (header
+        // buttons + composer), rendered directly — no navigation, no Home mount,
+        // no client — so it can't hit the blank the early Home-mount caused.
+        <LaunchSkeleton />
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
           <Text style={styles.title}>Where's your OpenCode server?</Text>
