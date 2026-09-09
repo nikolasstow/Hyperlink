@@ -1,67 +1,97 @@
 /**
- * TEMPORARY on-device test to confirm whether the native glass (`GlassView`
- * from expo-glass-effect — the same primitive Home's composer/header use)
- * renders blank when it mounts during a LayoutAnimation, which is the launch
- * condition that turned the screen blank.
+ * TEMPORARY on-device test: reproduce the real launch condition — a non-nav
+ * splash that then transitions (LayoutAnimation) into a freshly-mounted
+ * NavigationContainer + native-stack screen containing the native glass
+ * (`GlassView` from expo-glass-effect, the same primitive Home's composer/header
+ * use). That is exactly the path that went blank: bootstrap → mount Home (glass).
  *
- * Read the three boxes:
- *  - "Static glass": mounts on first render. If this is blank, glass is broken
- *    outright.
- *  - "Plain (control)": always renders — proves the screen itself is fine.
- *  - "Animated-mount glass": appears after the button, which fires a
- *    LayoutAnimation then mounts a GlassView. If THIS one is blank while the
- *    static one shows, the glass breaks specifically when mounted mid-animation.
+ * What to read on the glass page:
+ *  - GLASS box blank/invisible, PLAIN box shows → the glass is the culprit
+ *    (it renders empty when mounted through this navigation transition).
+ *  - Both show → the glass is NOT the cause; look elsewhere.
  *
+ * "Restart" re-runs the splash → navigate transition without a full reload.
  * Delete this file and the `GLASS_TEST` gate in App.tsx once verified.
  */
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Button, LayoutAnimation, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
 
+const Stack = createNativeStackNavigator();
+
 export const GlassTest = (): React.ReactElement => {
   const insets = useSafeAreaInsets();
-  const [animatedMounted, setAnimatedMounted] = React.useState(false);
+  const [phase, setPhase] = React.useState<"splash" | "app">("splash");
+
+  const goToApp = React.useCallback((): void => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setPhase("app");
+  }, []);
+
+  // Mimic the app auto-proceeding from bootstrap to Home.
+  React.useEffect(() => {
+    if (phase !== "splash") return;
+    const timer = setTimeout(goToApp, 500);
+    return () => clearTimeout(timer);
+  }, [phase, goToApp]);
+
+  const GlassPage = React.useCallback(
+    (): React.ReactElement => (
+      <View style={[styles.page, { paddingTop: insets.top + 24 }]}>
+        <Text style={styles.heading}>Glass page (stands in for Home)</Text>
+        <Text style={styles.sub}>If GLASS is blank but PLAIN shows, the glass broke on this navigation.</Text>
+
+        <Text style={styles.label}>GLASS — should be frosted glass</Text>
+        <GlassView style={styles.box}>
+          <Text style={styles.boxText}>glass</Text>
+        </GlassView>
+
+        <Text style={styles.label}>PLAIN — control</Text>
+        <View style={[styles.box, styles.plain]}>
+          <Text style={styles.boxText}>plain</Text>
+        </View>
+
+        <View style={styles.buttonWrap}>
+          <Button title="Restart (splash → navigate again)" onPress={() => setPhase("splash")} />
+        </View>
+      </View>
+    ),
+    [insets.top],
+  );
+
+  if (phase === "splash") {
+    return (
+      <View style={[styles.splash, { paddingTop: insets.top + 40 }]}>
+        <Text style={styles.heading}>Splash</Text>
+        <Text style={styles.sub}>Navigating to the glass page… (like bootstrap → Home)</Text>
+        <View style={styles.buttonWrap}>
+          <Button title="Go now" onPress={goToApp} />
+        </View>
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 32 }]}>
-      <Text style={styles.heading}>Glass test</Text>
-      <Text style={styles.sub}>
-        If a GLASS box is blank/invisible but PLAIN shows, the glass is the culprit. The button mounts a glass box during
-        a layout animation — the launch condition.
-      </Text>
-
-      <Text style={styles.label}>1 · Static glass (mounts on first render)</Text>
-      <GlassView style={styles.box}>
-        <Text style={styles.boxText}>glass</Text>
-      </GlassView>
-
-      <Text style={styles.label}>2 · Plain look-alike (control)</Text>
-      <View style={[styles.box, styles.plain]}>
-        <Text style={styles.boxText}>plain</Text>
-      </View>
-
-      <View style={styles.buttonWrap}>
-        <Button title="Mount glass during a layout animation" onPress={() => {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setAnimatedMounted(true);
-        }} />
-      </View>
-      {animatedMounted ? (
-        <>
-          <Text style={styles.label}>3 · Animated-mount glass</Text>
-          <GlassView style={styles.box}>
-            <Text style={styles.boxText}>glass (animated)</Text>
-          </GlassView>
-        </>
-      ) : null}
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="GlassPage" component={GlassPage} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  root: {
+  splash: {
+    flex: 1,
+    paddingHorizontal: 20,
+    gap: 10,
+    backgroundColor: colors.background,
+  },
+  page: {
     flex: 1,
     paddingHorizontal: 20,
     gap: 8,
@@ -83,9 +113,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   box: {
-    width: 140,
-    height: 90,
-    borderRadius: 20,
+    width: 160,
+    height: 96,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
@@ -99,6 +129,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   buttonWrap: {
-    marginTop: 12,
+    marginTop: 14,
   },
 });
