@@ -56,19 +56,11 @@ const AppInner = (): React.ReactElement => {
 
   React.useEffect(() => {
     (async () => {
-      // Read everything the first screen depends on up front and in parallel,
-      // so the pre-Home window is a single storage round-trip rather than four
-      // in series — serial reads are what kept a spinner on screen. Permission
-      // modes are still primed before Home mounts (a session can't open before
-      // then), so the first permission ask still honors the user's default.
-      const [defaultMode, sessionModes, savedAddress, savedRootDir] = await Promise.all([
-        getDefaultPermissionMode(),
-        getSessionPermissionModes(),
-        getServerAddress(),
-        getRootDir(),
-      ]);
-      primeDefaultPermissionMode(defaultMode);
-      primeSessionPermissionModes(sessionModes);
+      // Primed before any session can open, so the first permission ask is
+      // answered by the user's chosen default rather than the built-in one.
+      primeDefaultPermissionMode(await getDefaultPermissionMode());
+      primeSessionPermissionModes(await getSessionPermissionModes());
+      const savedAddress = await getServerAddress();
       if (savedAddress === undefined) {
         setScreen({ step: "server-setup" });
         return;
@@ -77,26 +69,19 @@ const AppInner = (): React.ReactElement => {
       // Fire and forget: the backend may be down, permission may be denied,
       // and neither should delay or block getting to the session list.
       void getBackendAddress(savedAddress).then((backend) => registerForPush(backend));
-      if (savedRootDir === undefined) {
-        // No chosen root yet (first run): verify the connection so the root
-        // picker — which needs a live client — can open.
-        setScreen({ step: "connecting", address: savedAddress });
-        try {
-          const client = await connectToServer(savedAddress);
+      setScreen({ step: "connecting", address: savedAddress });
+      try {
+        const client = await connectToServer(savedAddress);
+        const savedRootDir = await getRootDir();
+        if (savedRootDir === undefined) {
           setScreen({ step: "root-setup", client, address: savedAddress });
-        } catch (err) {
-          setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) });
+        } else {
+          setRootDirInput(savedRootDir);
+          setScreen({ step: "ready", client, address: savedAddress, rootDir: savedRootDir });
         }
-        return;
+      } catch (err) {
+        setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) });
       }
-      // The common returning launch: mount Home straight away with a client
-      // built from the saved address, so its real chrome (header buttons,
-      // composer) and skeleton show immediately instead of a blank connecting
-      // screen. HomeScreen's own session load is the connection check and
-      // surfaces any failure in its error state (recoverable via Settings →
-      // change server).
-      setRootDirInput(savedRootDir);
-      setScreen({ step: "ready", client: makeClient(savedAddress), address: savedAddress, rootDir: savedRootDir });
     })();
   }, []);
 
@@ -144,16 +129,10 @@ const AppInner = (): React.ReactElement => {
   return (
     <View style={styles.root}>
       <StatusBar style="auto" />
-      {screen.step === "loading" ? (
-        // A single storage round-trip before Home mounts — a plain background,
-        // not a spinner, so the launch reads as background → Home skeleton.
-        <View style={{ flex: 1 }} />
-      ) : screen.step === "connecting" ? (
-        // Only a first-run (no saved root) or an explicit Connect waits on the
-        // network here; a spinner is the right feedback for that.
+      {screen.step === "loading" || screen.step === "connecting" ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.label} />
-          <Text style={styles.dimText}>Connecting to {screen.address}…</Text>
+          {screen.step === "connecting" ? <Text style={styles.dimText}>Connecting to {screen.address}…</Text> : null}
         </View>
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
