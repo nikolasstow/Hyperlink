@@ -8,8 +8,8 @@ Add one or more **rival** agents to a session. They follow along, reading what t
 does, and **stay silent unless they disagree**. No summaries, no "looks good", no presence at
 all until there is an actual objection.
 
-Sibling to the [second-opinion panel](./second-opinion-panel.md), but the opposite shape:
-the panel is expensive, on-demand, and triggered by the owner's frustration. The rival is
+Sibling to [outside-opinion](./outside-opinion.md), but the opposite shape:
+outside-opinion is expensive, on-demand, and triggered by the owner's frustration. The rival is
 cheap, continuous, and triggered by the *work*.
 
 ## The closest working precedent is a linter
@@ -70,23 +70,24 @@ other first. **N rivals on different models, and an objection only surfaces when
 independently.** That converts the precision problem into a cheap voting mechanic, and the
 cross-model requirement means agreement is meaningful rather than correlated.
 
-Note this is the *opposite* of the panel's consolidation rule, and correctly so. The panel
+Note this is the *opposite* of outside-opinion's consolidation rule, and correctly so. That feature
 prizes the lone dissenting voice because the owner is already engaged and paying attention. The
 rival interrupts unbidden, so it must clear a higher bar. Same family, inverted economics,
 inverted aggregation.
 
 ## Who does it talk to?
 
-Probably the **owner, not the main agent** — same reasoning as the panel's owner gate, plus one
+Probably the **owner, not the main agent** — same reasoning as outside-opinion's owner gate, plus one
 more: if the main agent can see the rival, the likely outcomes are capitulation (sycophancy
 toward the objection) or defensive argument. Both burn tokens, neither is thinking. A rival that
 addresses the owner keeps the main agent's trajectory clean and leaves the routing decision with
 the person who can actually judge.
 
-## Composition with the panel
+## Composition with outside-opinion
 
-The natural escalation path: *"I've objected three times and been overruled — want the panel?"*
-The rival is the cheap always-on detector; the panel is the expensive on-demand investigation.
+The natural escalation path: *"I've objected three times and been overruled — want an outside
+opinion?"* The rival is the cheap always-on detector; outside-opinion is the expensive
+on-demand investigation.
 A rival that has been repeatedly overruled is a strong, and currently unavailable, signal that
 the session has gone wrong.
 

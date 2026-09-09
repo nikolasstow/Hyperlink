@@ -31,7 +31,7 @@ These are load-bearing, not incidental, and each is documented at its point of u
 
 ## Open work
 
-1. **Attachment ("+") button** — currently a rendered `Pressable` with no `onPress`. Needs real wiring once a design for what it attaches (files? images?) exists. No design decision has been made yet — this is not just a missing handler.
+1. **Attachment ("+") button** — currently a rendered `Pressable` with no `onPress`. Needs real wiring once a design for what it attaches (files? images?) exists. No design decision has been made yet — this is not just a missing handler. *(2026-09-09: a design sketch now exists — [`../plans/chat-surface-and-attachments.md`](../plans/chat-surface-and-attachments.md) — pills by type, images as tiles, stacked horizontally within a type and vertically across types. Still an idea, not a locked design.)*
 2. **"Auto" model picker** — currently a rendered stub with no `onPress`. Real wiring is `client.provider.list()`, matching the pattern web's `NewSessionPicker` already uses in `packages/agent-console`.
 3. **`SessionTopBar`'s "More" button** — rendered, not wired. What belongs in that menu hasn't been decided.
 4. **Delete-tool for the `console` agent** — separate from the composer itself. Direction decided in a prior session: a safe, controlled delete capability, not a blanket permission-config change. Requires a real OpenCode plugin with path validation (deny anything outside the session's own directory scope), not started.
