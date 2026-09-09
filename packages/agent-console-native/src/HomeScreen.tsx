@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
@@ -195,7 +196,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
         ListHeaderComponent={
           loading ? (
-            <Text style={styles.hint}>Loading…</Text>
+            <HomeSkeleton />
           ) : sessions.length === 0 && error === undefined ? (
             <Text style={styles.hint}>No sessions yet.</Text>
           ) : error !== undefined ? (
