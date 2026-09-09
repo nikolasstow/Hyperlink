@@ -28,6 +28,7 @@ type LiveActivityNative = {
   readonly update: (sessionID: string, status: string, action: string, messageCount: number) => Promise<boolean>;
   readonly end: (sessionID: string, status: string) => Promise<boolean>;
   readonly endAll: () => Promise<number>;
+  readonly setServerConfig: (url: string, password: string | null) => boolean;
   readonly addListener: (
     event: "onLiveActivityPushToken",
     listener: (payload: { readonly sessionID: string; readonly token: string }) => void,
@@ -43,6 +44,22 @@ export const liveActivitySupported = (): boolean => {
     return native.isSupported();
   } catch {
     return false;
+  }
+};
+
+/**
+ * Publishes the opencode server address to the app group so the app's
+ * extensions — the Live Activity's Stop button and the Intents reply handler —
+ * can reach it without launching the app. Best-effort and a no-op on a binary
+ * without the native module. `url` must be the opencode base (what
+ * `/session/{id}/…` is relative to).
+ */
+export const setExtensionServerConfig = (url: string): void => {
+  if (native === null) return;
+  try {
+    native.setServerConfig(url, null);
+  } catch {
+    // Extensions degrade to no-ops without it; not worth surfacing.
   }
 };
 

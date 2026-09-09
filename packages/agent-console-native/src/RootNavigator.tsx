@@ -11,9 +11,9 @@ import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
 import { useColorScheme } from "react-native";
-import { subscribeActivityPushTokens } from "../modules/live-activity";
+import { setExtensionServerConfig, subscribeActivityPushTokens } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
-import { AGENT } from "./client";
+import { AGENT, normalizeServerAddress } from "./client";
 import { colors } from "./colors";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
@@ -60,6 +60,14 @@ export const RootNavigator = (): React.ReactElement => {
   React.useEffect(() => {
     void getSetupDate();
   }, []);
+
+  // Publish the opencode base to the app group so the extensions (Live
+  // Activity Stop button, Intents reply handler) can reach it while the app is
+  // suspended. The extensions build `/session/{id}/…` against this, so it's the
+  // normalized opencode base — the same URL the client talks to.
+  React.useEffect(() => {
+    setExtensionServerConfig(normalizeServerAddress(address));
+  }, [address]);
 
   // Forward each Live Activity's ActivityKit push token to the backend, which
   // then updates/ends the activity via raw APNs while the app is suspended.

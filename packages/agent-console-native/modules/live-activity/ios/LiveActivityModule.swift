@@ -36,6 +36,24 @@ public class LiveActivityModule: Module {
       return ActivityAuthorizationInfo().areActivitiesEnabled
     }
 
+    // Shares the server address with the app's extensions (the Live Activity's
+    // Stop button and the Intents reply handler) through the app group, so they
+    // can reach opencode without launching the app. Nothing else wrote these
+    // keys, so the Stop button read a value that was never set and quietly did
+    // nothing until this was added. Called whenever the app knows its address.
+    Function("setServerConfig") { (url: String, password: String?) -> Bool in
+      guard let defaults = UserDefaults(suiteName: "group.com.nikolasstow.agentconsolenative") else {
+        return false
+      }
+      defaults.set(url, forKey: "serverURL")
+      if let password, !password.isEmpty {
+        defaults.set(password, forKey: "serverPassword")
+      } else {
+        defaults.removeObject(forKey: "serverPassword")
+      }
+      return true
+    }
+
     AsyncFunction("start") { (sessionID: String, repo: String, worktree: String, title: String, action: String) -> String? in
       guard #available(iOS 16.2, *) else { return nil }
       guard ActivityAuthorizationInfo().areActivitiesEnabled else { return nil }
