@@ -6,7 +6,8 @@ own row so this file doesn't become a merge conflict between agents.
 | Workstream | Branch | Docs | State | Tip | Gate | Open / blocking | Updated |
 |---|---|---|---|---|---|---|---|
 | **Communication Notifications + Siri + build notify + hosted previews** | `app/double-agent/ios` | [comms research](./communication-notifications-research.md) · [Siri survey](./siri-app-intents-survey.md) | **code complete / needs one native rebuild** | `029847a7` | tsc exit 0 (server + native); preview endpoint smoke-tested; prebuild wires all 3 extensions | On-device unverified pending rebuild: comm-notification styling, hands-free voice reply, Stop-button fix, Safari-view preview. Build-complete push is live server-side. | 2026-09-09 |
-| **Providers UI** | `app/double-agent/providers` | [report](./reports/2026-09-09-provider-settings-ui.md) · [handoff](./provider-settings-ui-handoff.md) | **code complete / on-device unverified** | `92e37f9` | tsc exit 0; 33/33 vitest | On-device OAuth `auto` flow unconfirmed (does opencode return `200 false` while pending, or an error?); search field + lockfile change are owner calls — ruled below | 2026-09-09 |
+| **Providers UI** | `app/double-agent/providers` → **merged** into `app/double-agent/ios` | [report](./reports/2026-09-09-provider-settings-ui.md) · [handoff](./provider-settings-ui-handoff.md) | **merged; on-device unverified** | `92e37f9` | tsc exit 0; 33/33 vitest (green post-merge) | On-device OAuth `auto` flow unconfirmed (does opencode return `200 false` while pending, or an error?); search field is an owner call — ruled below | 2026-09-09 |
+| **In-app Builds page** | _(to be cut)_ `app/double-agent/builds` | [handoff](./builds-page-handoff.md) | **handoff ready / not started** | — | — | Server `/builds` + `/builds/:id` + `/builds/:id/logs` API is live on `app/double-agent/ios`; native page consumes it. For an additional agent. | 2026-09-09 |
 
 ## Rulings on the Providers UI open decisions (2026-09-09)
 
