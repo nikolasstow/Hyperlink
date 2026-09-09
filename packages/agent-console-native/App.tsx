@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
-import { Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
 import { type OpencodeClient, makeClient } from "./src/client";
@@ -69,19 +69,27 @@ const AppInner = (): React.ReactElement => {
       // Fire and forget: the backend may be down, permission may be denied,
       // and neither should delay or block getting to the session list.
       void getBackendAddress(savedAddress).then((backend) => registerForPush(backend));
-      setScreen({ step: "connecting", address: savedAddress });
-      try {
-        const client = await connectToServer(savedAddress);
-        const savedRootDir = await getRootDir();
-        if (savedRootDir === undefined) {
+      const savedRootDir = await getRootDir();
+      if (savedRootDir === undefined) {
+        // No chosen root yet (first run): verify the connection so the root
+        // picker — which needs a live client — can open.
+        setScreen({ step: "connecting", address: savedAddress });
+        try {
+          const client = await connectToServer(savedAddress);
           setScreen({ step: "root-setup", client, address: savedAddress });
-        } else {
-          setRootDirInput(savedRootDir);
-          setScreen({ step: "ready", client, address: savedAddress, rootDir: savedRootDir });
+        } catch (err) {
+          setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) });
         }
-      } catch (err) {
-        setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) });
+        return;
       }
+      // The common returning launch: mount Home straight away with a client
+      // built from the saved address, so its real chrome (header buttons,
+      // composer) and skeleton show immediately instead of a blank connecting
+      // screen. HomeScreen's own session load is the connection check and
+      // surfaces any failure in its error state (recoverable via Settings →
+      // change server).
+      setRootDirInput(savedRootDir);
+      setScreen({ step: "ready", client: makeClient(savedAddress), address: savedAddress, rootDir: savedRootDir });
     })();
   }, []);
 
@@ -130,12 +138,13 @@ const AppInner = (): React.ReactElement => {
     <View style={styles.root}>
       <StatusBar style="auto" />
       {screen.step === "loading" || screen.step === "connecting" ? (
-        // Bootstrap (resolve address + connect) is sub-second and has no
-        // navigation chrome yet — a chrome-less skeleton here would be missing
-        // the header buttons and composer. So it's just the brand background;
-        // the real skeleton lives in HomeScreen, which renders WITH its header
-        // buttons and composer, so it reads as complete.
-        <View style={{ flex: 1 }} />
+        // Only reached now for first-run (no saved root) or an explicit Connect;
+        // the common returning launch goes straight to Home + its skeleton. A
+        // spinner is the right feedback for a user-initiated connect.
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.label} />
+          {screen.step === "connecting" ? <Text style={styles.dimText}>Connecting to {screen.address}…</Text> : null}
+        </View>
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
           <Text style={styles.title}>Where's your OpenCode server?</Text>
