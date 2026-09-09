@@ -3,7 +3,6 @@ import * as React from "react";
 import { Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
-import { HomeSkeleton } from "./src/HomeSkeleton";
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
@@ -34,11 +33,6 @@ type Screen =
   | { readonly step: "connecting"; readonly address: string }
   | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly address: string; readonly error?: string }
   | { readonly step: "ready"; readonly client: OpencodeClient; readonly address: string; readonly rootDir: string };
-
-/** Standard iOS nav-bar height (the transparent bar Home sits under). Used to
- * pad the bootstrap skeleton so it lines up with Home's `useHeaderHeight()`
- * content inset and doesn't jump when Home mounts. */
-const NAV_BAR_HEIGHT = 44;
 
 const connectToServer = async (address: string): Promise<OpencodeClient> => {
   const client = makeClient(address);
@@ -136,14 +130,12 @@ const AppInner = (): React.ReactElement => {
     <View style={styles.root}>
       <StatusBar style="auto" />
       {screen.step === "loading" || screen.step === "connecting" ? (
-        // The launch/bootstrap state is the Home skeleton — the app looks like
-        // it's loading its real content, not sitting on a spinner. The nav
-        // header isn't mounted yet, so pad by the safe-area top PLUS a standard
-        // nav-bar height, matching where Home puts its content (useHeaderHeight)
-        // so nothing shifts when the real screen takes over.
-        <View style={{ flex: 1, paddingTop: insets.top + NAV_BAR_HEIGHT }}>
-          <HomeSkeleton />
-        </View>
+        // Bootstrap (resolve address + connect) is sub-second and has no
+        // navigation chrome yet — a chrome-less skeleton here would be missing
+        // the header buttons and composer. So it's just the brand background;
+        // the real skeleton lives in HomeScreen, which renders WITH its header
+        // buttons and composer, so it reads as complete.
+        <View style={{ flex: 1 }} />
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
           <Text style={styles.title}>Where's your OpenCode server?</Text>
