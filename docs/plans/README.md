@@ -43,6 +43,10 @@ Pre-1.0: breaking changes land as minor bumps.
   missing, with a small model consolidating and the owner gating what reaches the stuck agent.
   Idea + prior-art survey + the three failure modes that decide whether it works (anchoring,
   consensus-ranking, over-applied doubt): [second-opinion-panel.md](./second-opinion-panel.md).
+- **Rival agents** — one or more agents that follow a session and speak *only* when they
+  disagree. Sibling to the panel with inverted economics (cheap + continuous vs. expensive +
+  on-demand); the closest precedent is a linter, and the lesson is tune for precision, not
+  recall: [rival-agent.md](./rival-agent.md).
 
 ## Hygiene
 
