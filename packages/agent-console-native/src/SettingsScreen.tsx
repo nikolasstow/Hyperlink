@@ -349,6 +349,21 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           </TouchableOpacity>
         </View>
 
+        <Text style={styles.sectionLabel}>Builds</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.optionRow}
+            activeOpacity={0.6}
+            onPress={() => props.navigation.navigate("Builds")}
+          >
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>EAS builds</Text>
+              <Text style={styles.hint}>Status, full detail and the phased build log.</Text>
+            </View>
+            <SystemIcon name="chevron.right" size={14} color={colors.secondaryLabel} />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sectionLabel}>Server</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Address</Text>

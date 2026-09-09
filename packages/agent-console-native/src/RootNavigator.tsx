@@ -18,6 +18,8 @@ import { colors } from "./colors";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
+import { BuildDetailScreen } from "./BuildDetailScreen";
+import { BuildsScreen } from "./BuildsScreen";
 import { homeHeaderOptions } from "./homeHeader";
 import { HomeScreen } from "./HomeScreen";
 import { ProvidersScreen } from "./ProvidersScreen";
@@ -33,6 +35,10 @@ export type RootStackParamList = {
   Settings: undefined;
   // Model-provider sign-in, reached from Settings.
   Providers: undefined;
+  // EAS builds, reached from Settings.
+  Builds: undefined;
+  // One build's metadata, install link and phased log.
+  BuildDetail: { id: string };
   // A repo (git checkout) or workspace (non-git session folder). `isRepo`
   // selects the menu variant; `dir` is the primary directory shown in the
   // header info.
@@ -198,6 +204,9 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="Settings" component={SettingsScreen} />
         {/* Draws its own header, like Settings — no native bar. */}
         <Stack.Screen name="Providers" component={ProvidersScreen} />
+        {/* Same — both Builds screens draw their own header. */}
+        <Stack.Screen name="Builds" component={BuildsScreen} />
+        <Stack.Screen name="BuildDetail" component={BuildDetailScreen} />
         {/* Repo/workspace screen draws its own fully custom collapsing glass
          * header, so the native bar is hidden. */}
         <Stack.Screen
