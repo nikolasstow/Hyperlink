@@ -1,96 +1,63 @@
 /**
  * TEMPORARY on-device test: does the native glass (`GlassView` from
- * expo-glass-effect — the same primitive Home's composer/header use) render on
- * the SPLASH?
+ * expo-glass-effect — the same primitive Home's composer/header use) survive on
+ * the SPLASH (the loading view that renders while the app boots)?
  *
- * The splash is the LOADING view: it shows automatically while the app boots and
- * is replaced by Home once loading finishes. So this simulates that — on mount
- * it shows the splash (blue) with the glass for ~4s, then AUTO-transitions to
- * Home (green), exactly like the real launch. No tapping.
+ * Faithful, minimal reproduction — nothing artificial:
+ *  - On mount the SPLASH (blue) paints, with the glass on it.
+ *  - Immediately (no delay), the same LayoutAnimation the real app uses mounts
+ *    Home (green). No hold, no buttons, no restart.
  *
- * Glass is translucent, so each box has a bright orange "BEHIND" panel under it:
- *  - GLASS box: working glass shows the orange FROSTED/blurred. Broken glass
- *    shows it SHARP or the box blank.
- *  - PLAIN box: flat translucent white control — always renders.
+ * Read the result:
+ *  - Ends on a BLANK screen (not green Home) → the glass on the splash broke it.
+ *  - Blue flash → green Home → glass on the splash is fine; the blank is elsewhere.
  *
- * Watch the GLASS box on the blue splash, and whether anything changes at the
- * auto-transition to green Home. "Restart" re-runs it.
- * Delete this file and the `GLASS_TEST` gate in App.tsx once verified.
+ * Glass is translucent, so the glass box has a bright orange "BEHIND" panel under
+ * it; working glass frosts it. Reload to re-run. Delete this file and the
+ * `GLASS_TEST` gate in App.tsx once verified.
  */
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Button, LayoutAnimation, StyleSheet, Text, View } from "react-native";
+import { LayoutAnimation, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors } from "./colors";
-
-/** ms the simulated loading (splash) stays up before Home takes over. */
-const LOADING_MS = 4000;
 
 const Stack = createNativeStackNavigator();
 
-/** A bright panel + text that a real glass overlay on top should blur. */
-const Behind = (): React.ReactElement => (
-  <View style={styles.behind}>
-    <Text style={styles.behindText}>BEHIND</Text>
-  </View>
-);
+const HomePage = (): React.ReactElement => {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.page, styles.homeBg, { paddingTop: insets.top + 24 }]}>
+      <Text style={styles.heading}>Home — loaded (green)</Text>
+      <Text style={styles.sub}>The app finished loading. If you got here, the splash glass didn't break it.</Text>
+    </View>
+  );
+};
 
 export const GlassTest = (): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const [phase, setPhase] = React.useState<"loading" | "loaded">("loading");
 
-  // Simulate the app loading: splash (with glass) shows, then auto-finishes.
+  // Natural transition on mount — no timer. The splash paints once, then Home
+  // mounts through the same LayoutAnimation the real app uses.
   React.useEffect(() => {
     if (phase !== "loading") return;
-    const timer = setTimeout(() => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setPhase("loaded");
-    }, LOADING_MS);
-    return () => clearTimeout(timer);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setPhase("loaded");
   }, [phase]);
 
-  const HomePage = React.useCallback(
-    (): React.ReactElement => (
-      <View style={[styles.page, styles.homeBg, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.heading}>Home — loaded (green)</Text>
-        <Text style={styles.sub}>The splash is gone; the app finished loading.</Text>
-        <View style={styles.buttonWrap}>
-          <Button title="Restart (show splash again)" onPress={() => setPhase("loading")} />
-        </View>
-      </View>
-    ),
-    [insets.top],
-  );
-
-  // SPLASH: the loading view (blue), auto-shown while "loading". Glass is here.
   if (phase === "loading") {
     return (
       <View style={[styles.page, styles.splashBg, { paddingTop: insets.top + 24 }]}>
         <Text style={styles.heading}>Splash — loading (blue)</Text>
-        <Text style={styles.sub}>Shows for {LOADING_MS / 1000}s, then Home takes over automatically.</Text>
-
-        <Text style={styles.label}>GLASS — orange should look FROSTED through it</Text>
-        <View style={styles.box}>
-          <Behind />
-          <GlassView style={styles.overlay}>
-            <Text style={styles.tag}>glass</Text>
-          </GlassView>
-        </View>
-
-        <Text style={styles.label}>PLAIN — control</Text>
-        <View style={styles.box}>
-          <Behind />
-          <View style={[styles.overlay, styles.plainOverlay]}>
-            <Text style={styles.tag}>plain</Text>
-          </View>
-        </View>
+        <GlassView style={styles.box}>
+          <Text style={styles.tag}>glass</Text>
+        </GlassView>
       </View>
     );
   }
 
-  // LOADED: the app has finished — mount navigation and show Home.
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -122,51 +89,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
   },
-  label: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
-    marginTop: 10,
-  },
   box: {
     width: 220,
     height: 110,
     borderRadius: 22,
     overflow: "hidden",
-  },
-  behind: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#FF9F0A",
+    marginTop: 12,
     alignItems: "center",
     justifyContent: "center",
-  },
-  behindText: {
-    color: "#1A1B26",
-    fontSize: 34,
-    fontWeight: "800",
-    letterSpacing: 2,
-  },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  plainOverlay: {
-    backgroundColor: "rgba(255,255,255,0.35)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.5)",
   },
   tag: {
-    color: "#1A1B26",
+    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "700",
-  },
-  buttonWrap: {
-    marginTop: 16,
   },
 });
