@@ -10,7 +10,7 @@
 import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
-import { useColorScheme } from "react-native";
+import { Linking, useColorScheme } from "react-native";
 import { setExtensionServerConfig, subscribeActivityPushTokens } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
 import { AGENT, normalizeServerAddress } from "./client";
@@ -107,6 +107,12 @@ export const RootNavigator = (): React.ReactElement => {
         return;
       }
       const payload = payloadOfResponse(response);
+      // A notification carrying a URL (e.g. an EAS build page) opens it rather
+      // than a session — this is how the build-complete push links out.
+      if (payload?.url !== undefined) {
+        void Linking.openURL(payload.url).catch(() => undefined);
+        return;
+      }
       if (payload?.sessionID === undefined) return;
       navigationRef.navigate("Chat", { sessionID: payload.sessionID });
     };

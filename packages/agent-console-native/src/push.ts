@@ -145,8 +145,10 @@ export const loadNotifications = (): NotificationsApi | undefined => {
 };
 
 export type PushPayload = {
-  readonly kind: "idle" | "permission" | "test";
+  readonly kind: "idle" | "permission" | "test" | "external" | "build";
   readonly sessionID?: string;
+  /** A page to open when the notification is tapped (e.g. an EAS build page). */
+  readonly url?: string;
 };
 
 /** Reads a notification's data defensively — it crosses a network boundary
@@ -154,8 +156,14 @@ export type PushPayload = {
 export const asPushPayload = (data: unknown): PushPayload | undefined => {
   if (!isRecord(data)) return undefined;
   const kind = data.kind;
-  if (kind !== "idle" && kind !== "permission" && kind !== "test") return undefined;
-  return { kind, sessionID: typeof data.sessionID === "string" ? data.sessionID : undefined };
+  if (kind !== "idle" && kind !== "permission" && kind !== "test" && kind !== "external" && kind !== "build") {
+    return undefined;
+  }
+  return {
+    kind,
+    sessionID: typeof data.sessionID === "string" ? data.sessionID : undefined,
+    url: typeof data.url === "string" ? data.url : undefined,
+  };
 };
 
 /** Digs the payload out of a notification without assuming its shape. */

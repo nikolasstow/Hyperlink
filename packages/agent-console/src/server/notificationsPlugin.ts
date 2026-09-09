@@ -658,16 +658,21 @@ export const notificationsPlugin = (): Plugin => {
         // terminal. Same delivery path as the agent notifications.
         const body = await readJson(req);
         if (!isRecord(body) || typeof body.body !== "string" || body.body.trim() === "") {
-          json(400, { error: "Expected { body: string, title?: string }" });
+          json(400, { error: "Expected { body: string, title?: string, url?: string, data?: object }" });
           return;
         }
+        // A caller may pass a `url` (opened when the notification is tapped) and
+        // extra `data` (e.g. a build id / install link). They ride in the push's
+        // data payload; the app decides what to do with them.
+        const extraData = isRecord(body.data) ? body.data : {};
+        const url = typeof body.url === "string" && body.url.trim() !== "" ? body.url : undefined;
         const attempted = registrations.size;
         await send({
           title: typeof body.title === "string" && body.title.trim() !== "" ? body.title : "Claude Code",
           body: body.body,
           sound: "default",
           mutableContent: true,
-          data: { kind: "external" },
+          data: { kind: "external", ...extraData, ...(url === undefined ? {} : { url }) },
         });
         json(200, { attempted, remaining: registrations.size });
         return;
