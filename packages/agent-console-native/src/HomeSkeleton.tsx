@@ -1,16 +1,17 @@
 /**
- * The Home screen's loading state: placeholder cards that mirror the real
- * session/repo card layout (title, badges, meta), pulsing softly, rather than a
- * bare "Loading…" line. It reads as "content is coming" instead of "nothing is
- * here", so the launch feels immediate.
+ * The Home screen's loading state: the real "Recent" section label with
+ * placeholder cards under it, mirroring the actual session/repo layout so the
+ * transition is seamless — the label stays put and the cards just fill in,
+ * rather than the whole column shifting.
  *
- * Fills use `tertiarySystemFill` (via `colors.fillBackground`), so it's
- * theme-aware for free. `useNativeDriver` keeps the pulse off the JS thread.
+ * The label is real (not skeletonized) and doesn't pulse; only the cards pulse.
+ * Fills use `tertiarySystemFill` (via `colors.fillBackground`) so it's
+ * theme-aware, and the pulse runs on the native driver.
  *
  * @internal
  */
 import * as React from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import type { DimensionValue } from "react-native";
 import { colors } from "./colors";
 
@@ -51,12 +52,14 @@ export const HomeSkeleton = (): React.ReactElement => {
   }, [pulse]);
 
   return (
-    <Animated.View style={{ opacity: pulse }} accessibilityLabel="Loading sessions">
-      <View style={[styles.bar, styles.heading]} />
-      {CARDS.map((card, index) => (
-        <SkeletonCard key={index} titleWidth={card.titleWidth} secondLine={card.secondLine} />
-      ))}
-    </Animated.View>
+    <View accessibilityLabel="Loading sessions">
+      <Text style={styles.heading}>Recent</Text>
+      <Animated.View style={{ opacity: pulse }}>
+        {CARDS.map((card, index) => (
+          <SkeletonCard key={index} titleWidth={card.titleWidth} secondLine={card.secondLine} />
+        ))}
+      </Animated.View>
+    </View>
   );
 };
 
@@ -66,10 +69,13 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     overflow: "hidden",
   },
+  // Matches HomeScreen's `heading` + `headingFirst` exactly, so the real
+  // "Recent" heading lands in the same spot when data replaces the skeleton.
   heading: {
-    width: 96,
-    height: 13,
-    marginTop: 22,
+    color: colors.secondaryLabel,
+    fontSize: 15,
+    fontWeight: "400",
+    marginTop: 4,
     marginBottom: 10,
     marginHorizontal: 16,
   },

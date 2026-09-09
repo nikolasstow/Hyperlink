@@ -35,6 +35,11 @@ type Screen =
   | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly address: string; readonly error?: string }
   | { readonly step: "ready"; readonly client: OpencodeClient; readonly address: string; readonly rootDir: string };
 
+/** Standard iOS nav-bar height (the transparent bar Home sits under). Used to
+ * pad the bootstrap skeleton so it lines up with Home's `useHeaderHeight()`
+ * content inset and doesn't jump when Home mounts. */
+const NAV_BAR_HEIGHT = 44;
+
 const connectToServer = async (address: string): Promise<OpencodeClient> => {
   const client = makeClient(address);
   const { data, error } = await client.session.list();
@@ -132,9 +137,11 @@ const AppInner = (): React.ReactElement => {
       <StatusBar style="auto" />
       {screen.step === "loading" || screen.step === "connecting" ? (
         // The launch/bootstrap state is the Home skeleton — the app looks like
-        // it's loading its real content, not sitting on a spinner. `insets.top`
-        // stands in for the nav header that isn't mounted yet.
-        <View style={{ flex: 1, paddingTop: insets.top }}>
+        // it's loading its real content, not sitting on a spinner. The nav
+        // header isn't mounted yet, so pad by the safe-area top PLUS a standard
+        // nav-bar height, matching where Home puts its content (useHeaderHeight)
+        // so nothing shifts when the real screen takes over.
+        <View style={{ flex: 1, paddingTop: insets.top + NAV_BAR_HEIGHT }}>
           <HomeSkeleton />
         </View>
       ) : screen.step === "server-setup" ? (
