@@ -32,7 +32,7 @@ const Behind = (): React.ReactElement => (
 const HomePage = (): React.ReactElement => {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.page, { paddingTop: insets.top + 24 }]}>
+    <View style={[styles.page, styles.homeBg, { paddingTop: insets.top + 24 }]}>
       <Text style={styles.heading}>Home (navigation mounted)</Text>
       <Text style={styles.sub}>You navigated off the splash. This is the second page.</Text>
     </View>
@@ -45,8 +45,8 @@ export const GlassTest = (): React.ReactElement => {
 
   if (phase === "splash") {
     return (
-      <View style={[styles.page, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.heading}>Splash</Text>
+      <View style={[styles.page, styles.splashBg, { paddingTop: insets.top + 24 }]}>
+        <Text style={styles.heading}>Splash (blue background)</Text>
         <Text style={styles.sub}>
           The launch view (no navigation yet). Each box has a bright orange “BEHIND” panel under it.
         </Text>
@@ -92,6 +92,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 8,
     backgroundColor: colors.background,
+  },
+  // Distinct page backgrounds so it's obvious which screen is showing.
+  splashBg: {
+    backgroundColor: "#0A2A6B", // blue = splash
+  },
+  homeBg: {
+    backgroundColor: "#0A5C2A", // green = Home
   },
   heading: {
     color: colors.label,
