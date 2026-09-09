@@ -56,11 +56,19 @@ const AppInner = (): React.ReactElement => {
 
   React.useEffect(() => {
     (async () => {
-      // Primed before any session can open, so the first permission ask is
-      // answered by the user's chosen default rather than the built-in one.
-      primeDefaultPermissionMode(await getDefaultPermissionMode());
-      primeSessionPermissionModes(await getSessionPermissionModes());
-      const savedAddress = await getServerAddress();
+      // Read everything the first screen depends on up front and in parallel,
+      // so the pre-Home window is a single storage round-trip rather than four
+      // in series — serial reads are what kept a spinner on screen. Permission
+      // modes are still primed before Home mounts (a session can't open before
+      // then), so the first permission ask still honors the user's default.
+      const [defaultMode, sessionModes, savedAddress, savedRootDir] = await Promise.all([
+        getDefaultPermissionMode(),
+        getSessionPermissionModes(),
+        getServerAddress(),
+        getRootDir(),
+      ]);
+      primeDefaultPermissionMode(defaultMode);
+      primeSessionPermissionModes(sessionModes);
       if (savedAddress === undefined) {
         setScreen({ step: "server-setup" });
         return;
@@ -69,7 +77,6 @@ const AppInner = (): React.ReactElement => {
       // Fire and forget: the backend may be down, permission may be denied,
       // and neither should delay or block getting to the session list.
       void getBackendAddress(savedAddress).then((backend) => registerForPush(backend));
-      const savedRootDir = await getRootDir();
       if (savedRootDir === undefined) {
         // No chosen root yet (first run): verify the connection so the root
         // picker — which needs a live client — can open.
@@ -137,13 +144,16 @@ const AppInner = (): React.ReactElement => {
   return (
     <View style={styles.root}>
       <StatusBar style="auto" />
-      {screen.step === "loading" || screen.step === "connecting" ? (
-        // Only reached now for first-run (no saved root) or an explicit Connect;
-        // the common returning launch goes straight to Home + its skeleton. A
-        // spinner is the right feedback for a user-initiated connect.
+      {screen.step === "loading" ? (
+        // A single storage round-trip before Home mounts — a plain background,
+        // not a spinner, so the launch reads as background → Home skeleton.
+        <View style={{ flex: 1 }} />
+      ) : screen.step === "connecting" ? (
+        // Only a first-run (no saved root) or an explicit Connect waits on the
+        // network here; a spinner is the right feedback for that.
         <View style={styles.center}>
           <ActivityIndicator color={colors.label} />
-          {screen.step === "connecting" ? <Text style={styles.dimText}>Connecting to {screen.address}…</Text> : null}
+          <Text style={styles.dimText}>Connecting to {screen.address}…</Text>
         </View>
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
