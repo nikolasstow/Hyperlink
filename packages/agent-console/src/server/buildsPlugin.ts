@@ -20,7 +20,8 @@
  */
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
-import type { Plugin } from "vite";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
+import type { Connect, Plugin } from "vite";
 
 const POLL_MS = 90_000;
 const LIST_LIMIT = 20;
@@ -93,6 +94,73 @@ const listBuilds = (): Promise<ReadonlyArray<BuildRow>> =>
       }
     });
   });
+
+/** Full detail for one build, straight from `eas build:view --json`. Returned
+ * verbatim (the app reads what it needs) — this is the metadata the site shows. */
+const viewBuild = (id: string): Promise<unknown> =>
+  new Promise((resolvePromise) => {
+    // `build:view` accepts only `--json` (no `--non-interactive`); an unknown
+    // flag makes it error out with non-JSON output.
+    const child = spawn("npx", ["eas-cli", "build:view", id, "--json"], { cwd: projectDir });
+    let out = "";
+    child.stdout.on("data", (chunk) => (out += chunk));
+    child.on("error", () => resolvePromise(undefined));
+    child.on("close", () => {
+      try {
+        resolvePromise(JSON.parse(out));
+      } catch {
+        resolvePromise(undefined);
+      }
+    });
+  });
+
+type LogLine = {
+  readonly phase: string;
+  readonly level: number;
+  readonly msg: string;
+  readonly time?: string;
+};
+
+/** Fetches a build's log files and parses the bunyan JSON-lines into ordered
+ * entries. This is what lets the app reconstruct the site's phased log view
+ * (group by `phase`, colour by `level`). The EAS log URLs are brotli/gzip on the
+ * wire; global fetch (undici) decompresses by content-encoding, with a manual
+ * fallback for a raw body. */
+const fetchLogLines = async (url: string): Promise<ReadonlyArray<LogLine>> => {
+  const response = await fetch(url).catch(() => undefined);
+  if (response === undefined || !response.ok) return [];
+  let text = await response.text().catch(() => "");
+  // If decompression didn't happen, the text is binary garbage — recover the
+  // raw bytes and decode by the declared encoding.
+  if (text.includes("�")) {
+    const encoding = response.headers.get("content-encoding");
+    const buffer = Buffer.from(await response.arrayBuffer().catch(() => new ArrayBuffer(0)));
+    try {
+      text = (encoding === "br" ? brotliDecompressSync(buffer) : encoding === "gzip" ? gunzipSync(buffer) : buffer).toString("utf8");
+    } catch {
+      return [];
+    }
+  }
+  const lines: LogLine[] = [];
+  for (const raw of text.split("\n")) {
+    if (raw.trim() === "") continue;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!isRecord(parsed)) continue;
+      lines.push({
+        phase: typeof parsed.phase === "string" ? parsed.phase : "UNKNOWN",
+        level: typeof parsed.level === "number" ? parsed.level : 30,
+        msg: typeof parsed.msg === "string" ? parsed.msg : "",
+        time: typeof parsed.time === "string" ? parsed.time : undefined,
+      });
+    } catch {
+      // A non-JSON line (e.g. the xcode log) is passed through as a plain msg
+      // so nothing is silently dropped.
+      lines.push({ phase: "XCODE", level: 30, msg: raw });
+    }
+  }
+  return lines;
+};
 
 const buildPageUrl = (build: BuildRow): string | undefined => {
   const owner = build.app?.ownerAccount?.name;
@@ -169,9 +237,74 @@ export const buildsPlugin = (): Plugin => {
     }
   };
 
+  // GET /builds, /builds/:id, /builds/:id/logs — the data the app's Builds page
+  // renders (list, full detail, phase-grouped logs). Read-only.
+  const handler: Connect.NextHandleFunction = (req, res, next) => {
+    const url = req.url ?? "";
+    if (url !== "/builds" && !url.startsWith("/builds/") && !url.startsWith("/builds?")) {
+      next();
+      return;
+    }
+    const path = (url.split("?")[0] ?? "").replace(/\/+$/, "");
+    const json = (status: number, body: unknown): void => {
+      res.statusCode = status;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(body));
+    };
+
+    void (async () => {
+      if (req.method === "GET" && (path === "/builds" || path === "")) {
+        json(200, { data: await listBuilds() });
+        return;
+      }
+
+      const logsMatch = /^\/builds\/([^/]+)\/logs$/.exec(path);
+      if (req.method === "GET" && logsMatch !== null) {
+        const detail = await viewBuild(logsMatch[1]);
+        const urls: string[] = [];
+        if (isRecord(detail)) {
+          if (Array.isArray(detail.logFiles)) {
+            for (const entry of detail.logFiles) if (typeof entry === "string") urls.push(entry);
+          }
+          const artifacts = isRecord(detail.artifacts) ? detail.artifacts : undefined;
+          if (artifacts !== undefined && typeof artifacts.xcodeBuildLogsUrl === "string") urls.push(artifacts.xcodeBuildLogsUrl);
+        }
+        const all = (await Promise.all(urls.map(fetchLogLines))).flat();
+        // Group by phase, preserving first-seen order — the site's phased view.
+        const order: string[] = [];
+        const byPhase = new Map<string, LogLine[]>();
+        for (const line of all) {
+          let bucket = byPhase.get(line.phase);
+          if (bucket === undefined) {
+            bucket = [];
+            byPhase.set(line.phase, bucket);
+            order.push(line.phase);
+          }
+          bucket.push(line);
+        }
+        json(200, { phases: order.map((phase) => ({ phase, lines: byPhase.get(phase) ?? [] })) });
+        return;
+      }
+
+      const idMatch = /^\/builds\/([^/]+)$/.exec(path);
+      if (req.method === "GET" && idMatch !== null) {
+        const detail = await viewBuild(idMatch[1]);
+        if (detail === undefined) {
+          json(404, { error: "Build not found" });
+          return;
+        }
+        json(200, { data: detail });
+        return;
+      }
+
+      next();
+    })();
+  };
+
   return {
     name: "agent-console-builds",
-    configureServer() {
+    configureServer(server) {
+      server.middlewares.use(handler);
       // Kick off shortly after boot, then on an interval. `unref` so the timer
       // never keeps the process alive on its own.
       const timer = setInterval(() => void tick(), POLL_MS);
