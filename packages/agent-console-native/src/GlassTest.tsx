@@ -51,8 +51,15 @@ export const GlassTest = (): React.ReactElement => {
     return (
       <View style={[styles.page, styles.splashBg, { paddingTop: insets.top + 24 }]}>
         <Text style={styles.heading}>Splash — loading (blue)</Text>
+
+        <Text style={styles.label}>Plain glass (frosted)</Text>
         <GlassView style={styles.box}>
           <Text style={styles.tag}>glass</Text>
+        </GlassView>
+
+        <Text style={styles.label}>Glass filled solid neon yellow</Text>
+        <GlassView style={[styles.box, styles.neon]}>
+          <Text style={styles.tagDark}>glass · yellow</Text>
         </GlassView>
       </View>
     );
@@ -100,8 +107,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.5)",
   },
+  neon: {
+    backgroundColor: "#E5FF00", // solid neon yellow — impossible to miss if glass renders
+  },
+  label: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 13,
+    marginTop: 12,
+  },
   tag: {
     color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  tagDark: {
+    color: "#1A1B26",
     fontSize: 15,
     fontWeight: "700",
   },
