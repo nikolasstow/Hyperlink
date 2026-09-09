@@ -1,15 +1,20 @@
 /**
  * TEMPORARY on-device test: does the native glass (`GlassView` from
  * expo-glass-effect — the same primitive Home's composer/header use) render on
- * the SPLASH (the plain launch view, before any NavigationContainer mounts)?
+ * the SPLASH?
  *
- * Glass is TRANSLUCENT — it blurs whatever is behind it — so each test box has a
- * bright orange panel with text BEHIND it, and the overlay on top:
- *  - GLASS box: working glass shows the orange + text FROSTED/blurred. Broken
- *    glass shows the orange + text SHARP (no glass) or the box blank.
- *  - PLAIN box (control): a flat translucent white overlay — always renders.
+ * The splash is the LOADING view: it shows automatically while the app boots and
+ * is replaced by Home once loading finishes. So this simulates that — on mount
+ * it shows the splash (blue) with the glass for ~4s, then AUTO-transitions to
+ * Home (green), exactly like the real launch. No tapping.
  *
- * A button then mounts navigation and goes to a Home page (splash → Home).
+ * Glass is translucent, so each box has a bright orange "BEHIND" panel under it:
+ *  - GLASS box: working glass shows the orange FROSTED/blurred. Broken glass
+ *    shows it SHARP or the box blank.
+ *  - PLAIN box: flat translucent white control — always renders.
+ *
+ * Watch the GLASS box on the blue splash, and whether anything changes at the
+ * auto-transition to green Home. "Restart" re-runs it.
  * Delete this file and the `GLASS_TEST` gate in App.tsx once verified.
  */
 import { NavigationContainer } from "@react-navigation/native";
@@ -20,38 +25,53 @@ import { Button, LayoutAnimation, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
 
+/** ms the simulated loading (splash) stays up before Home takes over. */
+const LOADING_MS = 4000;
+
 const Stack = createNativeStackNavigator();
 
-/** A bright panel + text that the overlay on top should blur (if it's glass). */
+/** A bright panel + text that a real glass overlay on top should blur. */
 const Behind = (): React.ReactElement => (
   <View style={styles.behind}>
     <Text style={styles.behindText}>BEHIND</Text>
   </View>
 );
 
-const HomePage = (): React.ReactElement => {
-  const insets = useSafeAreaInsets();
-  return (
-    <View style={[styles.page, styles.homeBg, { paddingTop: insets.top + 24 }]}>
-      <Text style={styles.heading}>Home (navigation mounted)</Text>
-      <Text style={styles.sub}>You navigated off the splash. This is the second page.</Text>
-    </View>
-  );
-};
-
 export const GlassTest = (): React.ReactElement => {
   const insets = useSafeAreaInsets();
-  const [phase, setPhase] = React.useState<"splash" | "app">("splash");
+  const [phase, setPhase] = React.useState<"loading" | "loaded">("loading");
 
-  if (phase === "splash") {
+  // Simulate the app loading: splash (with glass) shows, then auto-finishes.
+  React.useEffect(() => {
+    if (phase !== "loading") return;
+    const timer = setTimeout(() => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setPhase("loaded");
+    }, LOADING_MS);
+    return () => clearTimeout(timer);
+  }, [phase]);
+
+  const HomePage = React.useCallback(
+    (): React.ReactElement => (
+      <View style={[styles.page, styles.homeBg, { paddingTop: insets.top + 24 }]}>
+        <Text style={styles.heading}>Home — loaded (green)</Text>
+        <Text style={styles.sub}>The splash is gone; the app finished loading.</Text>
+        <View style={styles.buttonWrap}>
+          <Button title="Restart (show splash again)" onPress={() => setPhase("loading")} />
+        </View>
+      </View>
+    ),
+    [insets.top],
+  );
+
+  // SPLASH: the loading view (blue), auto-shown while "loading". Glass is here.
+  if (phase === "loading") {
     return (
       <View style={[styles.page, styles.splashBg, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.heading}>Splash (blue background)</Text>
-        <Text style={styles.sub}>
-          The launch view (no navigation yet). Each box has a bright orange “BEHIND” panel under it.
-        </Text>
+        <Text style={styles.heading}>Splash — loading (blue)</Text>
+        <Text style={styles.sub}>Shows for {LOADING_MS / 1000}s, then Home takes over automatically.</Text>
 
-        <Text style={styles.label}>GLASS — orange should look FROSTED/blurred through it</Text>
+        <Text style={styles.label}>GLASS — orange should look FROSTED through it</Text>
         <View style={styles.box}>
           <Behind />
           <GlassView style={styles.overlay}>
@@ -59,24 +79,18 @@ export const GlassTest = (): React.ReactElement => {
           </GlassView>
         </View>
 
-        <Text style={styles.label}>PLAIN — control (flat translucent white)</Text>
+        <Text style={styles.label}>PLAIN — control</Text>
         <View style={styles.box}>
           <Behind />
           <View style={[styles.overlay, styles.plainOverlay]}>
             <Text style={styles.tag}>plain</Text>
           </View>
         </View>
-
-        <View style={styles.buttonWrap}>
-          <Button title="Go to Home (mount navigation)" onPress={() => {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            setPhase("app");
-          }} />
-        </View>
       </View>
     );
   }
 
+  // LOADED: the app has finished — mount navigation and show Home.
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -91,27 +105,25 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     gap: 8,
-    backgroundColor: colors.background,
   },
-  // Distinct page backgrounds so it's obvious which screen is showing.
   splashBg: {
-    backgroundColor: "#0A2A6B", // blue = splash
+    backgroundColor: "#0A2A6B", // blue = splash / loading
   },
   homeBg: {
-    backgroundColor: "#0A5C2A", // green = Home
+    backgroundColor: "#0A5C2A", // green = Home / loaded
   },
   heading: {
-    color: colors.label,
+    color: "#FFFFFF",
     fontSize: 22,
     fontWeight: "700",
   },
   sub: {
-    color: colors.secondaryLabel,
+    color: "rgba(255,255,255,0.7)",
     fontSize: 14,
     marginBottom: 8,
   },
   label: {
-    color: colors.secondaryLabel,
+    color: "rgba(255,255,255,0.7)",
     fontSize: 13,
     marginTop: 10,
   },
