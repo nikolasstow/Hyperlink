@@ -39,9 +39,10 @@ Pre-1.0: breaking changes land as minor bumps.
 ## Agent tooling
 
 - **Second-opinion panel** ("this agent is being a moron" button) — owner-triggered escalation
-  that fans out to 3–4 fresh sessions on *different* models, each asked what the stuck agent is
-  missing. Idea + prior-art survey + the anchoring failure mode that decides whether it works:
-  [second-opinion-panel.md](./second-opinion-panel.md).
+  that fans out to 4+ fresh sessions on *different* models, each asked what the stuck agent is
+  missing, with a small model consolidating and the owner gating what reaches the stuck agent.
+  Idea + prior-art survey + the three failure modes that decide whether it works (anchoring,
+  consensus-ranking, over-applied doubt): [second-opinion-panel.md](./second-opinion-panel.md).
 
 ## Hygiene
 
