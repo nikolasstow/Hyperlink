@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
-import { Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
+import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
 import { ErrorBoundary } from "./src/ErrorBoundary";
@@ -47,11 +47,10 @@ const connectToServer = async (address: string): Promise<OpencodeClient> => {
 };
 
 const AppInner = (): React.ReactElement => {
-  const [screen, setScreenRaw] = React.useState<Screen>({ step: "loading" });
-  const setScreen = (next: Screen): void => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setScreenRaw(next);
-  };
+  // No LayoutAnimation on bootstrap transitions: the launch→ready swap changes
+  // the whole tree (LaunchNavigator → RootNavigator), and animating that made
+  // the content slide down-and-up a few pixels. Swap instantly instead.
+  const [screen, setScreen] = React.useState<Screen>({ step: "loading" });
   const [addressInput, setAddressInput] = React.useState("");
   const [rootDirInput, setRootDirInput] = React.useState("");
   const insets = useSafeAreaInsets();
@@ -123,7 +122,7 @@ const AppInner = (): React.ReactElement => {
     if (trimmed.length === 0) return;
     void setRootDir(trimmed);
     setRootDirInput(trimmed);
-    setScreenRaw((current) =>
+    setScreen((current) =>
       current.step === "ready" ? { ...current, rootDir: trimmed } : current,
     );
   };

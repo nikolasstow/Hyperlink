@@ -22,7 +22,7 @@ const noop = (): void => {};
 
 export const LaunchNavigator = (): React.ReactElement => (
   <NavigationContainer>
-    <Stack.Navigator screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
+    <Stack.Navigator screenOptions={{ animation: "none", contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen
         name="Launch"
         component={LaunchScreen}
