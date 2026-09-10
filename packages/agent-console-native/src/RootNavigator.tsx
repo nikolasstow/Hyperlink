@@ -20,7 +20,6 @@ import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
 import { homeHeaderOptions } from "./homeHeader";
 import { HomeScreen } from "./HomeScreen";
-import { ProvidersScreen } from "./ProvidersScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { HeaderTitlePill } from "./HeaderTitlePill";
@@ -31,8 +30,6 @@ export type RootStackParamList = {
   Home: undefined;
   Chat: { sessionID: string };
   Settings: undefined;
-  // Model-provider sign-in, reached from Settings.
-  Providers: undefined;
   // A repo (git checkout) or workspace (non-git session folder). `isRepo`
   // selects the menu variant; `dir` is the primary directory shown in the
   // header info.
@@ -196,8 +193,6 @@ export const RootNavigator = (): React.ReactElement => {
           }}
         />
         <Stack.Screen name="Settings" component={SettingsScreen} />
-        {/* Draws its own header, like Settings — no native bar. */}
-        <Stack.Screen name="Providers" component={ProvidersScreen} />
         {/* Repo/workspace screen draws its own fully custom collapsing glass
          * header, so the native bar is hidden. */}
         <Stack.Screen

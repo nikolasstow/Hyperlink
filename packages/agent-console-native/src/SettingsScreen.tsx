@@ -334,21 +334,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           </Text>
         </View>
 
-        <Text style={styles.sectionLabel}>Model providers</Text>
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.optionRow}
-            activeOpacity={0.6}
-            onPress={() => props.navigation.navigate("Providers")}
-          >
-            <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Providers</Text>
-              <Text style={styles.hint}>Sign in to Anthropic, OpenAI and the rest, with an API key or OAuth.</Text>
-            </View>
-            <SystemIcon name="chevron.right" size={14} color={colors.secondaryLabel} />
-          </TouchableOpacity>
-        </View>
-
         <Text style={styles.sectionLabel}>Server</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Address</Text>

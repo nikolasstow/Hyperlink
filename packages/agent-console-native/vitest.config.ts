@@ -9,5 +9,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // The suite is empty whenever no prototype carrying tests is merged in.
+    // That is a real state, not a failure — a prototype branch brings its own
+    // tests with it and they run then.
+    passWithNoTests: true,
   },
 });
