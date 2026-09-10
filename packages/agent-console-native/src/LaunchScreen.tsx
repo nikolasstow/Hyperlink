@@ -15,20 +15,17 @@ import * as React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
+import { HOME_HEADER_HEIGHT } from "./homeHeader";
 import { HomeSkeleton } from "./HomeSkeleton";
-
-/** Standard portrait nav-bar content height under the safe-area top. A fixed
- * value on purpose: `useHeaderHeight()` arrives provisional then corrects on the
- * first frames, which made the skeleton jump down-and-up while the (native)
- * header itself stayed put. A constant can't settle, so nothing jitters. */
-const NAV_BAR_HEIGHT = 44;
 
 export const LaunchScreen = (): React.ReactElement => {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.root}>
-      <View style={{ paddingTop: insets.top + NAV_BAR_HEIGHT }}>
+      {/* Same padding Home uses (HOME_HEADER_HEIGHT), so "Recent" lands in the
+       * exact same spot when Home takes over. */}
+      <View style={{ paddingTop: insets.top + HOME_HEADER_HEIGHT }}>
         <HomeSkeleton />
       </View>
       <GlassView style={[styles.composer, { bottom: insets.bottom + 8 }]}>

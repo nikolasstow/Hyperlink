@@ -12,6 +12,12 @@
  */
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 
+/** Height of the transparent nav bar's content (standard portrait bar). Content
+ * pads its top by `insets.top + this`. Shared by Home and the launch screen so
+ * they pad IDENTICALLY — nothing shifts at the hand-off — and it's a fixed value
+ * so it can't settle like `useHeaderHeight()` does on the first frames. */
+export const HOME_HEADER_HEIGHT = 44;
+
 export type HomeHeaderHandlers = {
   readonly onSettings: () => void;
   readonly onSearch: () => void;
