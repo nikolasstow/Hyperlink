@@ -22,6 +22,13 @@ Pre-1.0: breaking changes land as minor bumps.
 - **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
 - **Lifecycle kernel** — Effect-native Lifecycle (FiberHandle/Latch + Participating duals); tools via `start(lc|jobs|Tag)` without kind switches. **L0–L7 Eng’d** (P10 Gate + P12 Rejected). Plan: [lifecycle-kernel.md](./lifecycle-kernel.md) · locks: [lifecycle-kernel-decisions.md](../handoffs/lifecycle-kernel-decisions.md).
 
+## DoubleAgent app (iOS / watchOS)
+
+- **Apple Watch app** — DoubleAgent on the wrist, built on the Messages app's grammar: session
+  list, thread, dictation-first reply, and permission answers from the wrist. Mockups + the
+  three design calls + the Tailscale question (resolved: it reaches the server directly over the
+  paired phone's tunnel): [watch-app.md](./watch-app.md).
+
 ## Persistence & storage
 
 - **Storage correctness Soft stack** — **shipped** [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) (bake+override + untyped WorkPool Soft parity). Living plan: [storage-correctness.md](./storage-correctness.md). Remaining: fail-loud Soft / Phase C–D / Postgres (owner-gated).
@@ -35,6 +42,22 @@ Pre-1.0: breaking changes land as minor bumps.
 
 - **Metrics downsampling** — roll windows 1s → 1m → 1h for long retention.
 - **Multi-worker visibility-timeout / lease refresh** — v1 is single-host with a generous lease; add lease-refresh + `SKIP LOCKED` multi-worker semantics.
+
+## Agent tooling
+
+- **`outside-opinion`** ("this agent is being a moron" button) — owner-triggered escalation that
+  fans out to 4+ fresh sessions on *different* models, each asked what the stuck agent is
+  missing, with a small model consolidating and the owner gating what reaches the stuck agent.
+  Idea + prior-art survey + the three failure modes that decide whether it works (anchoring,
+  consensus-ranking, over-applied doubt): [outside-opinion.md](./outside-opinion.md).
+- **Rival agents** — one or more agents that follow a session and speak *only* when they
+  disagree. Sibling to the panel with inverted economics (cheap + continuous vs. expensive +
+  on-demand); the closest precedent is a linter, and the lesson is tune for precision, not
+  recall: [rival-agent.md](./rival-agent.md).
+- **Chat surface + attachment tray** — left-aligned bubbles as a third voice (you / main agent /
+  outside agents), the composer states `outside-opinion` needs, and a general attachment tray
+  (pills by type, images as tiles). Closes the open "what does `+` attach?" question in the
+  composer handoff: [chat-surface-and-attachments.md](./chat-surface-and-attachments.md).
 
 ## Hygiene
 
