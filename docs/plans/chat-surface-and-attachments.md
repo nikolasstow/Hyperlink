@@ -40,16 +40,53 @@ left-aligned bubbles.
 > a whole family of bugs — the glass material and `@expo/ui`'s `Host` only reliably initialise
 > on a component's genuine first mount, with no supported "you got reused, redo setup" hook.
 >
-> So every state below — the start form, the two-button state, the reply-to-feature state — has
-> to be **another arrangement of the same tree**, clipped or laid out differently. The moment
-> one of them is implemented as "render a different component in the bottom bar", the bug class
-> that rewrite fixed comes straight back.
+> So no state below may be implemented as "unmount the composer, render something else in the
+> bottom bar". That is the two-tree design by another name.
+
+### The move: drop it off screen, still mounted (owner's, and better)
+
+Rather than folding every state into one mega-tree of conditional layout, **animate the input
+glass down past the bottom edge and leave it mounted.** The other bottom-bar surfaces — the
+start form, the two buttons — are then free to be their own ordinary components, rising into the
+space it vacated.
+
+This respects the invariant for the right reason: the invariant is about **unmounting**, not
+about visibility. A parked-off-screen `GlassView` never loses its initialised material, so
+coming back is a transform, not a re-init. And it keeps the code honest — each surface stays a
+small component instead of a conditional branch inside a tree nobody wants to touch.
+
+Two properties make it better than "arrangements of one tree", not merely equivalent:
+
+- **It is a transform, not a layout change.** `translateY` does not trigger a layout pass, so it
+  sidesteps the `Host` measurement race behind invariant 6 and can run on Reanimated's UI thread
+  (`react-native-reanimated` 4.5.1 is already a dependency). The drop should therefore be a
+  transform and *never* an animated height.
+- **The draft survives.** Because the `TextInput` is still mounted, a half-typed message is
+  still there when the composer comes back — through a whole outside-opinion round trip. Folding
+  the states into one tree gets that too, but this gets it without the tree.
+
+Four things it needs, none of them hard:
+
+1. **Blur before the drop, and ride the keyboard curve.** A focused off-screen `TextInput` keeps
+   the keyboard up with nothing visible attached to it. The drop has to be coordinated with
+   dismissal, on iOS's own ~250ms curve — the same reasoning as invariant 4, and
+   `useKeyboardHeight.ts` already tracks the offset. Note the composer will be carrying *two*
+   translations at once (keyboard offset and drop offset); they compose, they must not fight.
+2. **Hide it from accessibility while parked.** Off-screen but mounted is still in the
+   accessibility tree — VoiceOver will happily land on an invisible text field.
+   `accessibilityElementsHidden` / `importantForAccessibility="no-hide-descendants"` plus
+   `pointerEvents="none"`.
+3. **Clear the safe area.** Translate by height + bottom inset + slop, or a sliver of glass
+   peeks out under the home indicator.
+4. **Retarget the scroll inset.** The transcript's bottom inset follows whatever currently
+   occupies the bar; if it does not, the last message hides behind the new surface.
 
 ## Composer states
 
 | State | Bottom bar shows |
 |---|---|
 | Idle / editing | The composer as it is today |
+| *(transition)* | Composer drops off screen — mounted, parked, draft intact |
 | Starting outside-opinion | The start form, rendered inside the same bubble |
 | Run in flight | (undecided — progress? a cancel? nothing?) |
 | Consolidated reply arrived | **Two buttons** replacing the input: *Respond* and *Ready to send* |
