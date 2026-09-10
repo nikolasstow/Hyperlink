@@ -3,7 +3,8 @@ import * as React from "react";
 import { Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
-import { LaunchSkeleton } from "./src/LaunchSkeleton";
+import { ErrorBoundary } from "./src/ErrorBoundary";
+import { LaunchNavigator } from "./src/LaunchNavigator";
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
@@ -131,10 +132,11 @@ const AppInner = (): React.ReactElement => {
     <View style={styles.root}>
       <StatusBar style="auto" />
       {screen.step === "loading" || screen.step === "connecting" ? (
-        // The launch loading view: the skeleton WITH glass chrome (header
-        // buttons + composer), rendered directly — no navigation, no Home mount,
-        // no client — so it can't hit the blank the early Home-mount caused.
-        <LaunchSkeleton />
+        // The launch loading view: a minimal navigator whose screen uses Home's
+        // SAME shared native header (homeHeader.ts) over the skeleton body, so
+        // the header buttons and cards line up exactly with Home. No client, no
+        // Home data — so it can't hit the blank the early Home-mount caused.
+        <LaunchNavigator />
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
           <Text style={styles.title}>Where's your OpenCode server?</Text>
@@ -191,7 +193,9 @@ const AppInner = (): React.ReactElement => {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppInner />
+      <ErrorBoundary>
+        <AppInner />
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }
