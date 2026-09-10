@@ -26,6 +26,10 @@ export const colors = {
   destructive: PlatformColor("systemRed"),
   /** Attention/needs-input accent (e.g. a session waiting on a question). */
   warning: PlatformColor("systemOrange"),
+  /** Semantic success — a finished build, a passing check. Deliberately not
+   * `brand`: that is the app's identity colour and is documented to change
+   * when real brand colours land, which would silently repaint status. */
+  success: PlatformColor("systemGreen"),
   accentTint: DynamicColorIOS({ light: "rgba(0,122,255,0.14)", dark: "rgba(10,132,255,0.2)" }),
   /** Placeholder for the real logo/brand color (a green, per the chat-bubble
    * icon) — using systemGreen until real theme/brand color work happens.
