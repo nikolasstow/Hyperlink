@@ -1,0 +1,219 @@
+/**
+ * Real native push/pop navigation — `@react-navigation/native-stack` wraps
+ * the actual `UINavigationController`, giving the exact same slide
+ * transition (and swipe-back gesture) iOS itself uses, not a hand-rolled
+ * approximation. Mounted once app-wide dependencies (client/rootDir) are
+ * resolved — see App.tsx's own bootstrap flow for everything before that.
+ *
+ * @internal
+ */
+import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import * as React from "react";
+import { Linking, useColorScheme } from "react-native";
+import { setExtensionServerConfig, subscribeActivityPushTokens } from "../modules/live-activity";
+import { useAppContext } from "./AppContext";
+import { AGENT, normalizeServerAddress } from "./client";
+import { colors } from "./colors";
+import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
+import { getSetupDate } from "./sessionReads";
+import { getBackendAddress } from "./settings";
+import { homeHeaderOptions } from "./homeHeader";
+import { HomeScreen } from "./HomeScreen";
+import { SessionChatScreen } from "./SessionChatScreen";
+import { SettingsScreen } from "./SettingsScreen";
+import { HeaderTitlePill } from "./HeaderTitlePill";
+import { RepoScreen } from "./RepoScreen";
+import { SessionListScreen } from "./SessionListScreen";
+
+export type RootStackParamList = {
+  Home: undefined;
+  Chat: { sessionID: string };
+  Settings: undefined;
+  // A repo (git checkout) or workspace (non-git session folder). `isRepo`
+  // selects the menu variant; `dir` is the primary directory shown in the
+  // header info.
+  Repo: { name: string; dir: string; isRepo: boolean };
+  // The full session list for a repo's worktree (`worktree` = null → the whole
+  // repo). `title` is the nav-bar title.
+  SessionList: { repo: string; worktree: string | null; title: string };
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+/** react-navigation's `Theme` type requires plain string colors (it can't
+ * accept `PlatformColor`, unlike a real RN `ViewStyle`), so this can't just
+ * reuse colors.ts — these are Apple's own documented systemGroupedBackground/
+ * secondarySystemGroupedBackground hex values, matched by mode. Needed so
+ * the navigator's own background (visible during the swipe-back gesture,
+ * separately from each screen's own `contentStyle`) doesn't show through as
+ * a mismatched "second background" under our content. */
+const LIGHT_THEME = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: "#F2F2F7", card: "#FFFFFF" } };
+const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "#000000", card: "#1C1C1E" } };
+
+export const RootNavigator = (): React.ReactElement => {
+  const scheme = useColorScheme();
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const { client, address } = useAppContext();
+
+  // Establish the unread "setup date" on first launch, so pre-existing sessions
+  // are treated as already-read rather than flooding Unread.
+  React.useEffect(() => {
+    void getSetupDate();
+  }, []);
+
+  // Publish the opencode base to the app group so the extensions (Live
+  // Activity Stop button, Intents reply handler) can reach it while the app is
+  // suspended. The extensions build `/session/{id}/…` against this, so it's the
+  // normalized opencode base — the same URL the client talks to.
+  React.useEffect(() => {
+    setExtensionServerConfig(normalizeServerAddress(address));
+  }, [address]);
+
+  // Forward each Live Activity's ActivityKit push token to the backend, which
+  // then updates/ends the activity via raw APNs while the app is suspended.
+  React.useEffect(() => {
+    let unsubscribe = (): void => {};
+    void getBackendAddress(address).then((backend) => {
+      unsubscribe = subscribeActivityPushTokens((sessionID, token) => {
+        void fetch(`${backend}/push/activity`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionID, token }),
+        }).catch(() => undefined);
+      });
+    });
+    return () => unsubscribe();
+  }, [address]);
+
+  // Tapping a notification opens the session it is about. Handled here rather
+  // than in a screen because the tap usually arrives with no screen mounted —
+  // the app was closed, which is the case the notification exists for.
+  React.useEffect(() => {
+    // Loaded with require, not import(): a dynamic import in React Native
+    // fetches an async chunk through the dev server and fails with
+    // "Expected HMRClient.setup() call at startup".
+    const notifications = loadNotifications();
+    if (notifications === undefined) return;
+
+    let cancelled = false;
+    const open = (response: unknown): void => {
+      // A dictated/typed reply goes straight to the session as a prompt — no
+      // need to open the app. A plain tap falls through to opening the chat.
+      const reply = replyFromResponse(response);
+      if (reply !== undefined) {
+        void client.session
+          .promptAsync({ path: { id: reply.sessionID }, body: { agent: AGENT, parts: [{ type: "text", text: reply.text }] } })
+          .catch(() => undefined);
+        return;
+      }
+      const payload = payloadOfResponse(response);
+      // A notification carrying a URL (e.g. an EAS build page) opens it rather
+      // than a session — this is how the build-complete push links out.
+      if (payload?.url !== undefined) {
+        void Linking.openURL(payload.url).catch(() => undefined);
+        return;
+      }
+      if (payload?.sessionID === undefined) return;
+      navigationRef.navigate("Chat", { sessionID: payload.sessionID });
+    };
+
+    // A cold launch from a tap delivers its response before any listener can
+    // attach — the app was closed, which is the case notifications exist for —
+    // so the last response is replayed explicitly.
+    void notifications
+      .getLastNotificationResponseAsync()
+      .then((last) => {
+        if (last !== null && last !== undefined && !cancelled) open(last);
+      })
+      .catch(() => undefined);
+
+    const subscription = notifications.addNotificationResponseReceivedListener(open);
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [navigationRef, client]);
+
+  return (
+    <NavigationContainer ref={navigationRef} theme={scheme === "dark" ? DARK_THEME : LIGHT_THEME}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+        {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
+         * applies it via `useScrollEdgeEffects` after mount instead. See
+         * that hook for why a static option silently does nothing. */}
+        {/* Native prop delivery is confirmed working — a `statusBarStyle`
+         * probe reached RNSScreen's native side and came back with its own
+         * Info.plist warning, so silent no-ops from `scrollEdgeEffects`
+         * are that feature's own problem, not a stale binary.
+         *
+         * `UIScrollEdgeEffect` draws into the scroll view's safe-area inset
+         * region, so the list also needs `contentInsetAdjustmentBehavior`
+         * set — see HomeScreen's own note. */}
+        {/* An empty, fully transparent real UINavigationBar — no title, no
+         * back button, nothing drawn. It exists only so iOS 26's scroll
+         * edge effect has a bar edge to anchor against: that effect renders
+         * where scrolling content meets a bar, and with `headerShown: false`
+         * there is no bar, which fits every no-op result so far (the props
+         * demonstrably reach native and ScrollViewMarker resolves the scroll
+         * view without assertion). headerStyle's explicit transparent
+         * background matters — headerTransparent alone let the theme's
+         * `card` color paint it opaque white. */}
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          // Header comes from the shared config so the launch skeleton and Home
+          // render the exact same native header — see homeHeader.ts.
+          options={({ navigation }) =>
+            homeHeaderOptions({
+              onSettings: () => navigation.navigate("Settings"),
+              onSearch: () => {},
+              onNewRepo: () => {},
+            })
+          }
+        />
+        {/* Same treatment as Home — a real but invisible header, so iOS
+         * 26's scroll edge effect has a bar to anchor to. Back is the
+         * system's own (free swipe-back), "more" is a native item, and the
+         * title/connection dot is set from the screen itself via
+         * setOptions, since both are screen state. */}
+        <Stack.Screen
+          name="Chat"
+          component={SessionChatScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            headerTitle: "",
+            // No headerBlurEffect: the nav bar's own material is uniform
+            // with a hard bottom edge, which would paint over the feathered
+            // VariableBlur this screen renders itself.
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          }}
+        />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
+        {/* Repo/workspace screen draws its own fully custom collapsing glass
+         * header, so the native bar is hidden. */}
+        <Stack.Screen
+          name="Repo"
+          component={RepoScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="SessionList"
+          component={SessionListScreen}
+          options={({ route }) => ({
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            headerTitle: () => <HeaderTitlePill title={route.params.title} />,
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          })}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
