@@ -1,7 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
@@ -191,7 +191,10 @@ const AppInner = (): React.ReactElement => {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
+    // initialMetrics so safe-area insets are correct on the FIRST render instead
+    // of arriving as 0 then settling — that settle was moving the space between
+    // the nav bar and the content.
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <ErrorBoundary>
         <AppInner />
       </ErrorBoundary>
