@@ -1,8 +1,10 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
-import { ActivityIndicator, Button, LayoutAnimation, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
+import { ErrorBoundary } from "./src/ErrorBoundary";
+import { LaunchNavigator } from "./src/LaunchNavigator";
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
@@ -45,11 +47,10 @@ const connectToServer = async (address: string): Promise<OpencodeClient> => {
 };
 
 const AppInner = (): React.ReactElement => {
-  const [screen, setScreenRaw] = React.useState<Screen>({ step: "loading" });
-  const setScreen = (next: Screen): void => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setScreenRaw(next);
-  };
+  // No LayoutAnimation on bootstrap transitions: the launch→ready swap changes
+  // the whole tree (LaunchNavigator → RootNavigator), and animating that made
+  // the content slide down-and-up a few pixels. Swap instantly instead.
+  const [screen, setScreen] = React.useState<Screen>({ step: "loading" });
   const [addressInput, setAddressInput] = React.useState("");
   const [rootDirInput, setRootDirInput] = React.useState("");
   const insets = useSafeAreaInsets();
@@ -121,7 +122,7 @@ const AppInner = (): React.ReactElement => {
     if (trimmed.length === 0) return;
     void setRootDir(trimmed);
     setRootDirInput(trimmed);
-    setScreenRaw((current) =>
+    setScreen((current) =>
       current.step === "ready" ? { ...current, rootDir: trimmed } : current,
     );
   };
@@ -130,10 +131,11 @@ const AppInner = (): React.ReactElement => {
     <View style={styles.root}>
       <StatusBar style="auto" />
       {screen.step === "loading" || screen.step === "connecting" ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.label} />
-          {screen.step === "connecting" ? <Text style={styles.dimText}>Connecting to {screen.address}…</Text> : null}
-        </View>
+        // The launch loading view: a minimal navigator whose screen uses Home's
+        // SAME shared native header (homeHeader.ts) over the skeleton body, so
+        // the header buttons and cards line up exactly with Home. No client, no
+        // Home data — so it can't hit the blank the early Home-mount caused.
+        <LaunchNavigator />
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
           <Text style={styles.title}>Where's your OpenCode server?</Text>
@@ -189,8 +191,13 @@ const AppInner = (): React.ReactElement => {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AppInner />
+    // initialMetrics so safe-area insets are correct on the FIRST render instead
+    // of arriving as 0 then settling — that settle was moving the space between
+    // the nav bar and the content.
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      <ErrorBoundary>
+        <AppInner />
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

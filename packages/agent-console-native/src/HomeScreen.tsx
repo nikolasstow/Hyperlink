@@ -11,11 +11,12 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useHeaderHeight } from "@react-navigation/elements";
+import { HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
@@ -168,10 +169,13 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     ...otherGroups.map((group) => ({ kind: "repo", group }) as const),
   ];
 
-  // The header is transparent, so content sits under it and has to pad
-  // itself by the header's real height rather than a hand-rolled constant.
-  const navBarHeight = useHeaderHeight();
+  // The header is transparent, so content pads itself below it. A fixed
+  // `insets.top + HOME_HEADER_HEIGHT` (shared with the launch screen) rather
+  // than the live `useHeaderHeight()`: the live value arrives provisional then
+  // corrects on the first frames, and the launch skeleton must pad IDENTICALLY
+  // so "Recent" doesn't shift when Home takes over.
   const insets = useSafeAreaInsets();
+  const navBarHeight = insets.top + HOME_HEADER_HEIGHT;
   const keyboardHeight = useKeyboardHeight();
   // Measured, not a fixed height — the composer grows with multi-line
   // input, and it floats over the list (absolute) so the glass has
@@ -195,7 +199,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
         ListHeaderComponent={
           loading ? (
-            <Text style={styles.hint}>Loading…</Text>
+            <HomeSkeleton />
           ) : sessions.length === 0 && error === undefined ? (
             <Text style={styles.hint}>No sessions yet.</Text>
           ) : error !== undefined ? (

@@ -18,6 +18,7 @@ import { colors } from "./colors";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
+import { homeHeaderOptions } from "./homeHeader";
 import { HomeScreen } from "./HomeScreen";
 import { ProvidersScreen } from "./ProvidersScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
@@ -163,46 +164,15 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={({ navigation }) => ({
-            headerShown: true,
-            headerTransparent: true,
-            headerStyle: { backgroundColor: "transparent" },
-            headerTitle: "",
-            headerBackVisible: false,
-            headerShadowVisible: false,
-            // Real native header items rather than @expo/ui Hosts dropped
-            // into headerLeft/headerRight. The nav bar then owns their
-            // glass, grouping and spacing — rendering our own glassEffect
-            // inside a slot nested a second capsule in the system's, and
-            // packing two buttons into one slot grouped them wrongly.
-            unstable_headerLeftItems: () => [
-              {
-                type: "button",
-                label: "Settings",
-                icon: { type: "sfSymbol", name: "gearshape" },
-                onPress: () => navigation.navigate("Settings"),
-              },
-            ],
-            unstable_headerRightItems: () => [
-              {
-                type: "button",
-                label: "Search",
-                icon: { type: "sfSymbol", name: "magnifyingglass" },
-                onPress: () => {},
-              },
-              // Adjacent items share one glass capsule; a spacing item
-              // between them breaks that grouping so each gets its own
-              // circle, matching the single left-hand button.
-              { type: "spacing", spacing: 24 },
-              {
-                type: "button",
-                label: "New repo or empty project",
-                icon: { type: "sfSymbol", name: "folder.badge.plus" },
-                onPress: () => {},
-              },
-            ],
-            scrollEdgeEffects: { top: "soft", bottom: "soft" },
-          })}
+          // Header comes from the shared config so the launch skeleton and Home
+          // render the exact same native header — see homeHeader.ts.
+          options={({ navigation }) =>
+            homeHeaderOptions({
+              onSettings: () => navigation.navigate("Settings"),
+              onSearch: () => {},
+              onNewRepo: () => {},
+            })
+          }
         />
         {/* Same treatment as Home — a real but invisible header, so iOS
          * 26's scroll edge effect has a bar to anchor to. Back is the
