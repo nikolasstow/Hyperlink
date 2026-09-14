@@ -1,17 +1,19 @@
 /**
- * The file explorer — an iOS Files-style outline of a directory, served by OUR
- * backend (`/fs`), never opencode.
+ * The file explorer — an iOS Files-style inset list of a directory, served by
+ * OUR backend (`/fs`), never opencode.
  *
- * Each folder row has two tap targets, matching the behaviour asked for:
- *   - the disclosure chevron toggles inline expansion (the folder's children
- *     load lazily and appear indented below), and
+ * Proper grouped-list chrome (a rounded card, hairline row separators inset under
+ * the text, comfortable rows) with expanding subitems: each folder row has two
+ * tap targets, matching the behaviour asked for —
+ *   - the disclosure chevron toggles inline expansion (children load lazily and
+ *     appear indented below, animated), and
  *   - tapping the rest of the row opens the folder into its own pushed view.
  * A file row opens a viewer.
  *
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -25,9 +27,61 @@ import { SystemIcon } from "./SystemIcon";
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 
 /** Indentation per nesting level. */
-const INDENT = 18;
-/** Fixed width for the chevron column, so names align across depths. */
-const CHEVRON_COL = 24;
+const INDENT = 16;
+/** Fixed width for the leading chevron column, so icons align across depths. */
+const CHEVRON_COL = 22;
+/** Left edge of a depth-0 row's icon; separators inset to the text after it. */
+const ROW_INSET = 14;
+const ICON_COL = 22;
+const ICON_GAP = 10;
+
+const Row = (props: {
+  readonly row: FileRow;
+  readonly last: boolean;
+  readonly onToggle: (row: FileRow) => void;
+  readonly onOpen: (row: FileRow) => void;
+}): React.ReactElement => {
+  const { row } = props;
+  const isDir = row.type === "directory";
+  const indent = row.depth * INDENT;
+  // Separator starts under this row's own text (after its indent + icon).
+  const separatorInset = ROW_INSET + indent + CHEVRON_COL + ICON_COL + ICON_GAP;
+  return (
+    <View>
+      <View style={[styles.row, { paddingLeft: ROW_INSET + indent }]}>
+        {isDir ? (
+          <TouchableOpacity
+            style={styles.chevron}
+            onPress={() => props.onToggle(row)}
+            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+          >
+            {row.loading ? (
+              <ActivityIndicator size="small" color={colors.secondaryLabel} />
+            ) : (
+              <SystemIcon
+                name={row.failed ? "exclamationmark.triangle" : row.expanded ? "chevron.down" : "chevron.right"}
+                size={13}
+                color={row.failed ? colors.warning : colors.secondaryLabel}
+              />
+            )}
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.chevron} />
+        )}
+        <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
+          <View style={styles.iconCol}>
+            <SystemIcon name={isDir ? "folder.fill" : "doc.text.fill"} size={19} color={isDir ? colors.tint : colors.secondaryLabel} />
+          </View>
+          <Text style={styles.name} numberOfLines={1}>
+            {row.name}
+          </Text>
+          {isDir ? <SystemIcon name="chevron.forward" size={13} color={colors.separator} /> : null}
+        </TouchableOpacity>
+      </View>
+      {props.last ? null : <View style={[styles.separator, { marginLeft: separatorInset }]} />}
+    </View>
+  );
+};
 
 export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const { repo, dir } = props.route.params;
@@ -35,41 +89,17 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const headerHeight = useHeaderHeight();
   const tree = useFileTree(backend, dir);
 
+  const onToggle = (row: FileRow): void => {
+    LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
+    tree.toggle(row);
+  };
+
   const onOpen = (row: FileRow): void => {
     if (row.type === "directory") {
       props.navigation.push("FileExplorer", { repo, dir: row.path });
     } else {
       props.navigation.navigate("FileViewer", { path: row.path, name: row.name });
     }
-  };
-
-  const renderRow = ({ item }: { item: FileRow }): React.ReactElement => {
-    const isDir = item.type === "directory";
-    return (
-      <View style={[styles.row, { paddingLeft: 12 + item.depth * INDENT }]}>
-        {isDir ? (
-          <TouchableOpacity style={styles.chevron} onPress={() => tree.toggle(item)} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
-            {item.loading ? (
-              <ActivityIndicator size="small" color={colors.secondaryLabel} />
-            ) : (
-              <SystemIcon
-                name={item.failed ? "exclamationmark.triangle" : item.expanded ? "chevron.down" : "chevron.right"}
-                size={13}
-                color={item.failed ? colors.warning : colors.secondaryLabel}
-              />
-            )}
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.chevron} />
-        )}
-        <TouchableOpacity style={styles.body} activeOpacity={0.6} onPress={() => onOpen(item)}>
-          <SystemIcon name={isDir ? "folder.fill" : "doc.text"} size={18} color={isDir ? colors.tint : colors.secondaryLabel} />
-          <Text style={styles.name} numberOfLines={1}>
-            {item.name}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
   };
 
   return (
@@ -86,14 +116,16 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
               <Text style={styles.retry}>Try again</Text>
             </TouchableOpacity>
           </View>
+        ) : tree.rows.length === 0 ? (
+          <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
         ) : (
-          <FlatList
-            data={tree.rows}
-            keyExtractor={(row) => row.path}
-            renderItem={renderRow}
-            contentContainerStyle={{ paddingTop: headerHeight + 8, paddingBottom: 40 }}
-            ListEmptyComponent={<Text style={[styles.empty, { marginTop: headerHeight + 20 }]}>Empty folder.</Text>}
-          />
+          <ScrollView contentContainerStyle={{ paddingTop: headerHeight + 8, paddingHorizontal: 16, paddingBottom: 40 }}>
+            <View style={styles.card}>
+              {tree.rows.map((row, index) => (
+                <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
+              ))}
+            </View>
+          </ScrollView>
         )}
       </ScrollViewMarker>
       <EdgeBlurBars variant="top" />
@@ -113,10 +145,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
+  card: {
+    backgroundColor: colors.cardBackground,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    // Keeps the rows' corners clipped to the card radius.
+    overflow: "hidden",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: 16,
+    paddingRight: 12,
     minHeight: 44,
   },
   chevron: {
@@ -129,13 +169,21 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: ICON_GAP,
     paddingVertical: 11,
+  },
+  iconCol: {
+    width: ICON_COL,
+    alignItems: "center",
   },
   name: {
     flex: 1,
     color: colors.label,
     fontSize: 16,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
   },
   empty: {
     color: colors.secondaryLabel,
