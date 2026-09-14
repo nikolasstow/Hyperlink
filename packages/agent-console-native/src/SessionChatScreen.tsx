@@ -14,7 +14,7 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { ActionSheetIOS, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -178,6 +178,37 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     );
   }, [applyPermissionMode]);
 
+  // Rename the session via opencode (session.update). The new title is applied
+  // locally on success; a failure is surfaced rather than swallowed.
+  const renameSession = React.useCallback(() => {
+    Alert.prompt(
+      "Rename session",
+      "Enter a new name for this session.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Save",
+          onPress: (text?: string) => {
+            const next = (text ?? "").trim();
+            if (next === "") return;
+            void client.session
+              .update({ path: { id: sessionID }, body: { title: next } })
+              .then(({ error }) => {
+                if (error !== undefined) {
+                  Alert.alert("Couldn't rename", "The server rejected the new name.");
+                  return;
+                }
+                setTitle(next);
+              })
+              .catch(() => Alert.alert("Couldn't rename", "Couldn't reach the server."));
+          },
+        },
+      ],
+      "plain-text",
+      title ?? "",
+    );
+  }, [client, sessionID, title]);
+
   // Title and connection state are screen state, so they reach the header
   // through setOptions rather than static screen options.
   React.useEffect(() => {
@@ -190,6 +221,12 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           icon: { type: "sfSymbol", name: "ellipsis" },
           menu: {
             items: [
+              {
+                type: "action",
+                label: "Rename",
+                description: "Change this session's name",
+                onPress: () => renameSession(),
+              },
               {
                 type: "action",
                 label: "Refresh",
@@ -220,7 +257,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         },
       ],
     });
-  }, [props.navigation, title, sessionID, connected, permissionMode, confirmAllowAll, applyPermissionMode, refresh]);
+  }, [props.navigation, title, sessionID, connected, permissionMode, confirmAllowAll, applyPermissionMode, refresh, renameSession]);
 
   React.useEffect(() => {
     setTitle(undefined);
