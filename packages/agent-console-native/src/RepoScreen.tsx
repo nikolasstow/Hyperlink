@@ -340,7 +340,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
             <Pressable
               key={item.label}
               style={styles.menuRow}
-              onPress={() => {}}
+              onPress={() => {
+                if (item.label === "Files") props.navigation.navigate("FileExplorer", { repo: name, dir });
+              }}
             >
               {index > 0 ? <View style={styles.rowSeparator} /> : null}
               <SystemIcon

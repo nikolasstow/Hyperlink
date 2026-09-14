@@ -23,6 +23,8 @@ import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { HeaderTitlePill } from "./HeaderTitlePill";
+import { FileExplorerScreen } from "./FileExplorerScreen";
+import { FileViewerScreen } from "./FileViewerScreen";
 import { RepoScreen } from "./RepoScreen";
 import { SessionListScreen } from "./SessionListScreen";
 
@@ -37,6 +39,11 @@ export type RootStackParamList = {
   // The full session list for a repo's worktree (`worktree` = null → the whole
   // repo). `title` is the nav-bar title.
   SessionList: { repo: string; worktree: string | null; title: string };
+  // The file explorer rooted at `dir` (an absolute path); `repo` labels the
+  // context. Pushed again per folder when drilling in.
+  FileExplorer: { repo: string; dir: string };
+  // A minimal read-only view of the file at `path`; `name` is the nav-bar title.
+  FileViewer: { path: string; name: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -225,6 +232,32 @@ export const RootNavigator = (): React.ReactElement => {
             headerShadowVisible: false,
             headerBackButtonDisplayMode: "minimal",
             headerTitle: () => <HeaderTitlePill title={route.params.title} />,
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          })}
+        />
+        <Stack.Screen
+          name="FileExplorer"
+          component={FileExplorerScreen}
+          options={({ route }) => ({
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            headerTitle: () => <HeaderTitlePill title={route.params.dir.split("/").filter(Boolean).pop() ?? route.params.repo} />,
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          })}
+        />
+        <Stack.Screen
+          name="FileViewer"
+          component={FileViewerScreen}
+          options={({ route }) => ({
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            headerTitle: () => <HeaderTitlePill title={route.params.name} />,
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           })}
         />

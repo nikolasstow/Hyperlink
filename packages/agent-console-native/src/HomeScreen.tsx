@@ -291,6 +291,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
               lastActive={relativeTime(item.group.mostRecentUpdate)}
               meta={metaParts.join(" · ")}
               onOpen={() => props.navigation.navigate("Repo", { name: item.group.repo, dir: repoDir, isRepo: item.group.isKnownRepo })}
+              onSelect={(label) => {
+                if (label === "Files") props.navigation.navigate("FileExplorer", { repo: item.group.repo, dir: repoDir });
+              }}
             />
           );
         }}
