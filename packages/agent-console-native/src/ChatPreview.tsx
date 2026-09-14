@@ -9,15 +9,16 @@
  * flush to the bottom and overflow clips at the top, so the latest turn shows
  * the way it would if you'd just opened the session.
  *
- * The title sits on a real glass bar (the same Liquid Glass `GlassView` as the
- * composer) so content scrolling up passes under a defined header rather than
- * colliding with it and turning unreadable.
+ * The title sits on an opaque bar so content scrolling up passes under a defined
+ * header rather than colliding with it and turning unreadable. It is deliberately
+ * NOT glass: a context-menu preview is an isolated platter, so a translucent
+ * material (blur/Liquid Glass) has no live backdrop to sample and renders empty
+ * there — an opaque bar is the only header that reliably shows.
  *
  * @internal
  */
 import * as React from "react";
-import { StyleSheet, Text, useColorScheme, View } from "react-native";
-import { GlassView } from "expo-glass-effect";
+import { StyleSheet, Text, View } from "react-native";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
@@ -38,7 +39,6 @@ export const ChatPreview = (props: {
 }): React.ReactElement => {
   const order = props.transcript?.order ?? [];
   const tail = order.slice(-TAIL);
-  const scheme = useColorScheme();
 
   return (
     <View style={[styles.card, { width: props.width, height: props.height }]}>
@@ -54,13 +54,13 @@ export const ChatPreview = (props: {
           </CollapsiblePartsProvider>
         )}
       </View>
-      {/* Real glass bar (same Liquid Glass as the composer) so content scrolls
-        * under a defined header rather than a soft feather. */}
-      <GlassView style={styles.header} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"} pointerEvents="none">
+      {/* Opaque header bar — content scrolls under it and is hidden, so the
+        * newest turn stays legible. Not glass; see the note above. */}
+      <View style={styles.header} pointerEvents="none">
         <Text style={styles.title} numberOfLines={1}>
           {props.title}
         </Text>
-      </GlassView>
+      </View>
     </View>
   );
 };
@@ -91,6 +91,9 @@ const styles = StyleSheet.create({
     height: HEADER_HEIGHT,
     justifyContent: "center",
     paddingHorizontal: ROW_GUTTER,
+    backgroundColor: colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
   },
   title: {
     color: colors.label,
