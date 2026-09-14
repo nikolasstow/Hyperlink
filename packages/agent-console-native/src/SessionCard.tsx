@@ -14,14 +14,14 @@
  *
  * @internal
  */
-import { Button, ContextMenu, Host, HStack, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Button, Circle, ContextMenu, Host, HStack, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
-import { useSessionPreview } from "./sessionPreview";
+import { lastMessageSummary, useSessionPreview } from "./sessionPreview";
 
 /** Horizontal margin outside the card (matches the list gutter). */
 const CARD_GUTTER = 12;
@@ -39,29 +39,47 @@ export type SessionCardProps = {
   readonly meta: string;
   /** Whether the agent is running now — gates the destructive Stop action. */
   readonly running: boolean;
-  /** Whether to lazily load the preview (e.g. only while Home is focused). */
+  /** Whether the session has activity since it was last opened. */
+  readonly unread: boolean;
+  /** Whether to lazily load the preview/summary (e.g. only while Home is focused). */
   readonly previewEnabled: boolean;
   readonly onOpen: () => void;
   readonly onRename: () => void;
   readonly onStop: () => void;
 };
 
+const summaryLabel = (role: "user" | "assistant", text: string): string => (role === "user" ? `You: ${text}` : text);
+
 // An exact `frame` width (row width = screen minus the gutters), left-aligned,
 // sits between the padding and the background so the rounded fill spans the row
 // (SwiftUI hugs content otherwise) while the text stays left-aligned.
-const CardBody = (props: { readonly width: number; readonly title: string; readonly repo: string; readonly worktree?: string; readonly meta: string }): React.ReactElement => (
+const CardBody = (props: {
+  readonly width: number;
+  readonly title: string;
+  readonly repo: string;
+  readonly worktree?: string;
+  readonly meta: string;
+  readonly unread: boolean;
+  readonly summary?: string;
+}): React.ReactElement => (
   <VStack
     alignment="leading"
     spacing={8}
     modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), background(colors.cardBackground), cornerRadius(14)]}
   >
-    <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
+    <HStack spacing={7} alignment="center">
+      {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(colors.themeSecondary)]} /> : null}
+      <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
+    </HStack>
     <HStack spacing={6} alignment="center">
       <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.secondaryLabel), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.repo}</UIText>
       {props.worktree !== undefined ? (
         <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.worktree}</UIText>
       ) : null}
     </HStack>
+    {props.summary !== undefined ? (
+      <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel), lineLimit(2)]}>{props.summary}</UIText>
+    ) : null}
     <UIText modifiers={[font({ size: 11 }), foregroundStyle(colors.secondaryLabel)]}>{props.meta}</UIText>
   </VStack>
 );
@@ -71,6 +89,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const cardWidth = screenWidth - CARD_GUTTER * 2;
   const previewHeight = Math.round(screenHeight * PREVIEW_HEIGHT_FRACTION);
   const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
+  const summary = lastMessageSummary(transcript);
 
   return (
     <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
@@ -91,7 +110,15 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         </ContextMenu.Preview>
         <ContextMenu.Trigger>
           <VStack modifiers={[onTapGesture(props.onOpen)]}>
-            <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
+            <CardBody
+              width={cardWidth}
+              title={props.title}
+              repo={props.repo}
+              worktree={props.worktree}
+              meta={props.meta}
+              unread={props.unread}
+              summary={summary === undefined ? undefined : summaryLabel(summary.role, summary.text)}
+            />
           </VStack>
         </ContextMenu.Trigger>
       </ContextMenu>

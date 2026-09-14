@@ -18,15 +18,16 @@ import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import type { ColorValue } from "react-native";
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
+import { SessionRow } from "./SessionRow";
+import { useSessionActivity } from "./useSessionActivity";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
@@ -73,26 +74,13 @@ const WORKSPACE_MENU: ReadonlyArray<MenuItem> = [
   { label: "Docs", icon: "book" },
 ];
 
-/**
- * Per-session indicator dot. `unread` is the plain secondary-colored dot; the
- * rest light up once a status source is wired (push notification `kind`:
- * idle → response, permission → question; `failure` has no source yet). Colors
- * kept in one place so the whole set stays coherent.
- */
-export type SessionIndicatorKind = "unread" | "response" | "question" | "failure";
-const INDICATOR_COLORS: Record<SessionIndicatorKind, ColorValue> = {
-  unread: colors.themeSecondary,
-  response: colors.brand,
-  question: colors.warning,
-  failure: colors.destructive,
-};
-
-
 export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
   const { client } = useAppContext();
   const insets = useSafeAreaInsets();
   const perGroup = useGroupSize();
+  const isFocused = useIsFocused();
+  const { activityAt } = useSessionActivity(client, isFocused);
 
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
@@ -145,7 +133,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
   // Unread = updated since you last opened it AND since app setup (so a fresh
   // install doesn't treat every pre-existing session as unread).
-  const isUnread = (session: Session): boolean => session.time.updated > Math.max(reads.get(session.id) ?? 0, setupDate);
+  const isUnread = (session: Session): boolean =>
+    Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
   const recent = repoSessions.slice(0, perGroup);
   const unread = repoSessions.filter(isUnread).slice(0, perGroup);
   const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<Session>]> = group ? [...group.worktrees.entries()] : [];
@@ -169,22 +158,15 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const sessionCard = (session: Session, showWorktree: boolean, keyPrefix: string): React.ReactElement => {
     const wt = showWorktree ? displayWorktree(matchSession(session.directory, scanned).worktree) : undefined;
     return (
-      <TouchableOpacity
+      <SessionRow
         key={`${keyPrefix}-${session.id}`}
-        style={styles.card}
-        activeOpacity={0.7}
-        onPress={() => props.navigation.navigate("Chat", { sessionID: session.id })}
-      >
-        {isUnread(session) ? <View style={[styles.cardIndicator, { backgroundColor: INDICATOR_COLORS.unread }]} /> : null}
-        <Text
-          style={[styles.cardTitle, isUnread(session) && styles.cardTitleUnread]}
-          numberOfLines={2}
-        >
-          {session.title}
-        </Text>
-        {wt !== undefined ? <Text style={styles.badge}>{wt}</Text> : null}
-        <Text style={styles.cardMeta}>{relativeTime(session.time.updated)}</Text>
-      </TouchableOpacity>
+        client={client}
+        session={session}
+        worktree={wt}
+        unread={isUnread(session)}
+        previewEnabled={isFocused}
+        onOpen={() => props.navigation.navigate("Chat", { sessionID: session.id })}
+      />
     );
   };
 
@@ -592,46 +574,5 @@ const styles = StyleSheet.create({
   empty: {
     color: colors.secondaryLabel,
     paddingHorizontal: 16,
-  },
-  card: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 12,
-    padding: 14,
-    marginHorizontal: 16,
-    marginBottom: 10,
-    gap: 6,
-  },
-  cardIndicator: {
-    position: "absolute",
-    top: 16,
-    right: 14,
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    // color set inline from INDICATOR_COLORS by kind
-  },
-  cardTitle: {
-    color: colors.label,
-    fontSize: 16,
-    fontWeight: "500",
-    paddingRight: 16,
-  },
-  cardTitleUnread: {
-    fontWeight: "700",
-  },
-  badge: {
-    alignSelf: "flex-start",
-    color: colors.tint,
-    backgroundColor: colors.accentTint,
-    fontSize: 12,
-    fontWeight: "600",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-  cardMeta: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
   },
 });

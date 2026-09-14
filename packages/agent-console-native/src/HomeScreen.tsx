@@ -16,10 +16,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
-import { useIsFocused } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { abortSession, promptRenameSession } from "./sessionActions";
+import { getSetupDate, loadReads } from "./sessionReads";
 import { SessionCard } from "./SessionCard";
-import { useBusySessions } from "./useBusySessions";
+import { useSessionActivity } from "./useSessionActivity";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
@@ -55,7 +56,12 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // Only stream / lazily load previews while Home is on screen — the chat holds
   // its own stream when open.
   const isFocused = useIsFocused();
-  const busySessions = useBusySessions(client, isFocused);
+  const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
+  // Read state for the unread dots. Reloaded on focus (e.g. back from a chat
+  // that just marked itself read); live activity from `activityAt` above then
+  // flips a session unread the instant a message lands, without a refresh.
+  const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
+  const [setupDate, setSetupDate] = React.useState<number>(() => Date.now());
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
@@ -141,6 +147,23 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     Promise.all([loadSessions(), loadScan(true)]).finally(() => setRefreshing(false));
   };
 
+
+  // Reload read state whenever Home refocuses (e.g. back from a chat that just
+  // marked itself read); live `activityAt` handles new arrivals while focused.
+  useFocusEffect(
+    React.useCallback(() => {
+      void Promise.all([loadReads(), getSetupDate()]).then(([nextReads, date]) => {
+        setReads(nextReads);
+        setSetupDate(date);
+      });
+    }, []),
+  );
+
+  // A session is unread when its latest activity is newer than both the last
+  // time it was opened and the app's setup date. Latest activity is the live
+  // `activityAt` when the stream has seen something, else the REST update time.
+  const isUnread = (session: Session): boolean =>
+    Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
 
   const sortedByRecent = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
   const recent = sortedByRecent.slice(0, groupSize);
@@ -240,6 +263,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 worktree={item.worktree}
                 meta={relativeTime(item.session.time.updated)}
                 running={busySessions.has(item.session.id)}
+                unread={isUnread(item.session)}
                 previewEnabled={isFocused}
                 onOpen={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}
                 onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}

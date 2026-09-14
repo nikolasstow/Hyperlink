@@ -23,7 +23,31 @@ import { transcriptCache } from "./transcriptCache";
 import { EMPTY, isRenderablePart, withPart, withRole, type Transcript } from "./useSessionStream";
 
 /** Trailing messages to pull — enough to fill roughly half a screen. */
-const TAIL_LIMIT = 30;
+const TAIL_LIMIT = 20;
+
+/** How long a card summary may run before it's clipped. */
+const SUMMARY_MAX = 160;
+
+/**
+ * A one-line gist of the newest message with text, for a card's summary row.
+ * Tool-only / reasoning-only messages are skipped in favor of the last readable
+ * text — the same thing you'd glance at to recall where a session left off.
+ */
+export const lastMessageSummary = (transcript: Transcript | undefined): { readonly role: "user" | "assistant"; readonly text: string } | undefined => {
+  if (transcript === undefined) return undefined;
+  for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
+    const message = transcript.messages.get(transcript.order[i]);
+    if (message === undefined) continue;
+    const text = Array.from(message.parts.values())
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join(" ")
+      .trim()
+      .replace(/\s+/g, " ");
+    if (text !== "") return { role: message.role, text: text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX - 1)}…` : text };
+  }
+  return undefined;
+};
 
 const cache = new Map<string, Transcript>();
 const inFlight = new Set<string>();
