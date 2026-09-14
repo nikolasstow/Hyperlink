@@ -16,8 +16,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
-import { promptRenameSession } from "./sessionActions";
-import { SessionContextMenu, type SessionMenuAction } from "./SessionContextMenu";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
@@ -135,22 +133,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     Promise.all([loadSessions(), loadScan(true)]).finally(() => setRefreshing(false));
   };
 
-  // Long-press context-menu actions on a session card.
-  const sessionMenuAction = React.useCallback(
-    (action: SessionMenuAction, sessionID: string, currentTitle: string): void => {
-      if (action === "open") {
-        props.navigation.navigate("Chat", { sessionID });
-        return;
-      }
-      if (action === "stop") {
-        void client.session.abort({ path: { id: sessionID } }).catch(() => undefined);
-        return;
-      }
-      // rename — shared with the chat menu; refresh the list on success.
-      promptRenameSession(client, sessionID, currentTitle, () => void loadSessions());
-    },
-    [client, props.navigation, loadSessions],
-  );
 
   const sortedByRecent = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
   const recent = sortedByRecent.slice(0, groupSize);
@@ -241,18 +223,16 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           }
           if (item.kind === "session") {
             return (
-              <SessionContextMenu onAction={(action) => sessionMenuAction(action, item.session.id, item.session.title)}>
-                <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}>
-                  <Text style={styles.cardTitle} numberOfLines={2}>
-                    {item.session.title}
-                  </Text>
-                  <View style={styles.badgeRow}>
-                    <Text style={styles.badge}>{item.repo}</Text>
-                    {item.worktree !== undefined ? <Text style={[styles.badge, styles.badgeAccent]}>{item.worktree}</Text> : null}
-                  </View>
-                  <Text style={styles.cardMeta}>{relativeTime(item.session.time.updated)}</Text>
-                </TouchableOpacity>
-              </SessionContextMenu>
+              <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}>
+                <Text style={styles.cardTitle} numberOfLines={2}>
+                  {item.session.title}
+                </Text>
+                <View style={styles.badgeRow}>
+                  <Text style={styles.badge}>{item.repo}</Text>
+                  {item.worktree !== undefined ? <Text style={[styles.badge, styles.badgeAccent]}>{item.worktree}</Text> : null}
+                </View>
+                <Text style={styles.cardMeta}>{relativeTime(item.session.time.updated)}</Text>
+              </TouchableOpacity>
             );
           }
           const sessionCount = item.group.sessions.length;
