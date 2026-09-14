@@ -21,7 +21,7 @@ import { ReasoningBlock } from "./ReasoningBlock";
 import { ToolCallBubble } from "./ToolCallBubble";
 import type { TranscriptMessage } from "./useSessionStream";
 
-const MessageBubbleImpl = (props: { readonly message: TranscriptMessage }): React.ReactElement => {
+const MessageBubbleImpl = (props: { readonly message: TranscriptMessage; readonly hideActions?: boolean }): React.ReactElement => {
   const isUser = props.message.role === "user";
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
@@ -38,7 +38,7 @@ const MessageBubbleImpl = (props: { readonly message: TranscriptMessage }): Reac
         })}
         {/* Assistant only: there is nothing to copy back out of your own
           * message, and a row of controls under every sent line is noise. */}
-        {isUser ? null : <MessageActions message={props.message} />}
+        {isUser || props.hideActions === true ? null : <MessageActions message={props.message} />}
       </View>
     </View>
   );

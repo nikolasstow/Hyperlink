@@ -7,27 +7,31 @@
  * needs no new dependency and links on Xcode 26 — unlike the third-party context
  * menu library, which drags in SwiftUICore and fails to link.
  *
- * Tap opens the session (`onTapGesture`); long-press opens the menu. The trigger
- * shows the compact card; the preview shows the same card plus the session's last
- * message, loaded cache-first and filled in lazily (see sessionSnippet.ts).
+ * The trigger is the compact SwiftUI card. The preview embeds the REAL chat via
+ * `@expo/ui`'s `RNHostView` — a React Native view hosted inside the SwiftUI
+ * preview — so it renders with the chat's own markdown/bubbles (see ChatPreview),
+ * loaded cache-first and filled in lazily (see sessionPreview.ts).
  *
  * @internal
  */
-import { Button, ContextMenu, HStack, Host, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Button, ContextMenu, Host, HStack, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
-import { colors } from "./colors";
+import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
-import { useSessionSnippet, type SessionSnippet } from "./sessionSnippet";
+import { colors } from "./colors";
+import { useSessionPreview } from "./sessionPreview";
 
 /** Horizontal margin outside the card (matches the list gutter). */
 const CARD_GUTTER = 12;
+/** Preview height — "nearly half a page". */
+const PREVIEW_HEIGHT_FRACTION = 0.5;
 
 export type SessionCardProps = {
   readonly client: OpencodeClient;
   readonly sessionId: string;
-  /** Server-side last-updated time; keys the preview snippet cache. */
+  /** Server-side last-updated time; keys the preview transcript cache. */
   readonly updatedAt: number;
   readonly title: string;
   readonly repo: string;
@@ -35,29 +39,17 @@ export type SessionCardProps = {
   readonly meta: string;
   /** Whether the agent is running now — gates the destructive Stop action. */
   readonly running: boolean;
-  /** Whether to lazily load the preview snippet (e.g. only while Home is focused). */
+  /** Whether to lazily load the preview (e.g. only while Home is focused). */
   readonly previewEnabled: boolean;
   readonly onOpen: () => void;
   readonly onRename: () => void;
   readonly onStop: () => void;
 };
 
-const roleLabel = (role: "user" | "assistant"): string => (role === "assistant" ? "Agent" : "You");
-
 // An exact `frame` width (row width = screen minus the gutters), left-aligned,
-// sits between the padding and the background. SwiftUI hugs content otherwise —
-// which both shrank the fill below the row in the list AND let the context-menu
-// preview collapse to fit its text. A fixed width holds in both contexts, since
-// the preview offers only a content-sized space that a `maxWidth` alone can't
-// expand into.
-const CardBody = (props: {
-  readonly width: number;
-  readonly title: string;
-  readonly repo: string;
-  readonly worktree?: string;
-  readonly meta: string;
-  readonly snippet?: SessionSnippet | null;
-}): React.ReactElement => (
+// sits between the padding and the background so the rounded fill spans the row
+// (SwiftUI hugs content otherwise) while the text stays left-aligned.
+const CardBody = (props: { readonly width: number; readonly title: string; readonly repo: string; readonly worktree?: string; readonly meta: string }): React.ReactElement => (
   <VStack
     alignment="leading"
     spacing={8}
@@ -70,20 +62,15 @@ const CardBody = (props: {
         <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.worktree}</UIText>
       ) : null}
     </HStack>
-    {props.snippet !== undefined && props.snippet !== null ? (
-      <VStack alignment="leading" spacing={2} modifiers={[padding({ top: 2 })]}>
-        <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint)]}>{roleLabel(props.snippet.role)}</UIText>
-        <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.label), lineLimit(6)]}>{props.snippet.text}</UIText>
-      </VStack>
-    ) : null}
     <UIText modifiers={[font({ size: 11 }), foregroundStyle(colors.secondaryLabel)]}>{props.meta}</UIText>
   </VStack>
 );
 
 export const SessionCard = (props: SessionCardProps): React.ReactElement => {
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const cardWidth = screenWidth - CARD_GUTTER * 2;
-  const snippet = useSessionSnippet(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
+  const previewHeight = Math.round(screenHeight * PREVIEW_HEIGHT_FRACTION);
+  const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
 
   return (
     <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
@@ -98,7 +85,9 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
           ) : null}
         </ContextMenu.Items>
         <ContextMenu.Preview>
-          <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} snippet={snippet} />
+          <RNHostView matchContents>
+            <ChatPreview transcript={transcript} title={props.title} width={cardWidth} height={previewHeight} />
+          </RNHostView>
         </ContextMenu.Preview>
         <ContextMenu.Trigger>
           <VStack modifiers={[onTapGesture(props.onOpen)]}>
