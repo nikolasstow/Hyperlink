@@ -7,8 +7,9 @@
  * needs no new dependency and links on Xcode 26 — unlike the third-party context
  * menu library, which drags in SwiftUICore and fails to link.
  *
- * Tap opens the session (`onTapGesture`); long-press opens the menu. The card
- * body is shared between the trigger and the preview.
+ * Tap opens the session (`onTapGesture`); long-press opens the menu. The trigger
+ * shows the compact card; the preview shows the same card plus the session's last
+ * message, loaded cache-first and filled in lazily (see sessionSnippet.ts).
  *
  * @internal
  */
@@ -17,21 +18,31 @@ import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTa
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
+import type { OpencodeClient } from "./client";
+import { useSessionSnippet, type SessionSnippet } from "./sessionSnippet";
 
 /** Horizontal margin outside the card (matches the list gutter). */
 const CARD_GUTTER = 12;
 
 export type SessionCardProps = {
+  readonly client: OpencodeClient;
+  readonly sessionId: string;
+  /** Server-side last-updated time; keys the preview snippet cache. */
+  readonly updatedAt: number;
   readonly title: string;
   readonly repo: string;
   readonly worktree?: string;
   readonly meta: string;
   /** Whether the agent is running now — gates the destructive Stop action. */
   readonly running: boolean;
+  /** Whether to lazily load the preview snippet (e.g. only while Home is focused). */
+  readonly previewEnabled: boolean;
   readonly onOpen: () => void;
   readonly onRename: () => void;
   readonly onStop: () => void;
 };
+
+const roleLabel = (role: "user" | "assistant"): string => (role === "assistant" ? "Agent" : "You");
 
 // An exact `frame` width (row width = screen minus the gutters), left-aligned,
 // sits between the padding and the background. SwiftUI hugs content otherwise —
@@ -39,7 +50,14 @@ export type SessionCardProps = {
 // preview collapse to fit its text. A fixed width holds in both contexts, since
 // the preview offers only a content-sized space that a `maxWidth` alone can't
 // expand into.
-const CardBody = (props: { readonly width: number; readonly title: string; readonly repo: string; readonly worktree?: string; readonly meta: string }): React.ReactElement => (
+const CardBody = (props: {
+  readonly width: number;
+  readonly title: string;
+  readonly repo: string;
+  readonly worktree?: string;
+  readonly meta: string;
+  readonly snippet?: SessionSnippet | null;
+}): React.ReactElement => (
   <VStack
     alignment="leading"
     spacing={8}
@@ -52,6 +70,12 @@ const CardBody = (props: { readonly width: number; readonly title: string; reado
         <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.worktree}</UIText>
       ) : null}
     </HStack>
+    {props.snippet !== undefined && props.snippet !== null ? (
+      <VStack alignment="leading" spacing={2} modifiers={[padding({ top: 2 })]}>
+        <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint)]}>{roleLabel(props.snippet.role)}</UIText>
+        <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.label), lineLimit(6)]}>{props.snippet.text}</UIText>
+      </VStack>
+    ) : null}
     <UIText modifiers={[font({ size: 11 }), foregroundStyle(colors.secondaryLabel)]}>{props.meta}</UIText>
   </VStack>
 );
@@ -59,27 +83,29 @@ const CardBody = (props: { readonly width: number; readonly title: string; reado
 export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - CARD_GUTTER * 2;
+  const snippet = useSessionSnippet(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
+
   return (
-  <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
-    <ContextMenu>
-      <ContextMenu.Items>
-        <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
-        <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
-        {props.running ? (
-          <Section>
-            <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} />
-          </Section>
-        ) : null}
-      </ContextMenu.Items>
-      <ContextMenu.Preview>
-        <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
-      </ContextMenu.Preview>
-      <ContextMenu.Trigger>
-        <VStack modifiers={[onTapGesture(props.onOpen)]}>
-          <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
-        </VStack>
-      </ContextMenu.Trigger>
-    </ContextMenu>
-  </Host>
+    <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
+      <ContextMenu>
+        <ContextMenu.Items>
+          <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
+          <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
+          {props.running ? (
+            <Section>
+              <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} />
+            </Section>
+          ) : null}
+        </ContextMenu.Items>
+        <ContextMenu.Preview>
+          <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} snippet={snippet} />
+        </ContextMenu.Preview>
+        <ContextMenu.Trigger>
+          <VStack modifiers={[onTapGesture(props.onOpen)]}>
+            <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
+          </VStack>
+        </ContextMenu.Trigger>
+      </ContextMenu>
+    </Host>
   );
 };

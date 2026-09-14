@@ -52,8 +52,10 @@ type Row =
 export const HomeScreen = (props: Props): React.ReactElement => {
   const { client, backend, rootDir } = useAppContext();
   const groupSize = useGroupSize();
-  // Only stream while Home is on screen — the chat holds its own stream when open.
-  const busySessions = useBusySessions(client, useIsFocused());
+  // Only stream / lazily load previews while Home is on screen — the chat holds
+  // its own stream when open.
+  const isFocused = useIsFocused();
+  const busySessions = useBusySessions(client, isFocused);
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
@@ -230,11 +232,15 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           if (item.kind === "session") {
             return (
               <SessionCard
+                client={client}
+                sessionId={item.session.id}
+                updatedAt={item.session.time.updated}
                 title={item.session.title}
                 repo={item.repo}
                 worktree={item.worktree}
                 meta={relativeTime(item.session.time.updated)}
                 running={busySessions.has(item.session.id)}
+                previewEnabled={isFocused}
                 onOpen={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}
                 onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
                 onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
