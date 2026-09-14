@@ -33,16 +33,17 @@ export type SessionCardProps = {
   readonly onStop: () => void;
 };
 
-// A `frame` with `maxWidth` set to the screen width sits between the padding and
-// the background so the rounded fill spans the full row (SwiftUI hugs content
-// otherwise) while the text stays left-aligned. A concrete width ≥ the offered
-// space fills it just like `.infinity` would, without betting on `Infinity`
-// surviving the JS→Swift modifier bridge.
-const CardBody = (props: { readonly maxWidth: number; readonly title: string; readonly repo: string; readonly worktree?: string; readonly meta: string }): React.ReactElement => (
+// An exact `frame` width (row width = screen minus the gutters), left-aligned,
+// sits between the padding and the background. SwiftUI hugs content otherwise —
+// which both shrank the fill below the row in the list AND let the context-menu
+// preview collapse to fit its text. A fixed width holds in both contexts, since
+// the preview offers only a content-sized space that a `maxWidth` alone can't
+// expand into.
+const CardBody = (props: { readonly width: number; readonly title: string; readonly repo: string; readonly worktree?: string; readonly meta: string }): React.ReactElement => (
   <VStack
     alignment="leading"
     spacing={8}
-    modifiers={[padding({ all: 14 }), frame({ maxWidth: props.maxWidth, alignment: "leading" }), background(colors.cardBackground), cornerRadius(14)]}
+    modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), background(colors.cardBackground), cornerRadius(14)]}
   >
     <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
     <HStack spacing={6} alignment="center">
@@ -57,6 +58,7 @@ const CardBody = (props: { readonly maxWidth: number; readonly title: string; re
 
 export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - CARD_GUTTER * 2;
   return (
   <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
     <ContextMenu>
@@ -70,11 +72,11 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         ) : null}
       </ContextMenu.Items>
       <ContextMenu.Preview>
-        <CardBody maxWidth={screenWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
+        <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
       </ContextMenu.Preview>
       <ContextMenu.Trigger>
         <VStack modifiers={[onTapGesture(props.onOpen)]}>
-          <CardBody maxWidth={screenWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
+          <CardBody width={cardWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
         </VStack>
       </ContextMenu.Trigger>
     </ContextMenu>
