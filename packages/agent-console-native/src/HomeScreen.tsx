@@ -196,7 +196,17 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         style={styles.list}
         data={rows}
         keyExtractor={(row, i) => (row.kind === "heading" ? `h-${row.title}` : row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`)}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
+        refreshControl={
+          // `progressViewOffset` pushes the spinner below the transparent nav
+          // bar — without it the spinner renders at content-top, hidden behind
+          // the header, so the refresh works but you never see the loader.
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.secondaryLabel}
+            progressViewOffset={navBarHeight}
+          />
+        }
         ListHeaderComponent={
           loading ? (
             <HomeSkeleton />
