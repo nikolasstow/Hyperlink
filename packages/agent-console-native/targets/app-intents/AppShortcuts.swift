@@ -32,5 +32,13 @@ struct DoubleAgentShortcuts: AppShortcutsProvider {
       shortTitle: "Stop the Agent",
       systemImageName: "stop.fill"
     )
+    AppShortcut(
+      intent: OpenSessionIntent(),
+      phrases: [
+        "Open \(\.$session) in \(.applicationName)",
+      ],
+      shortTitle: "Open a Session",
+      systemImageName: "bubble.left.and.bubble.right"
+    )
   }
 }

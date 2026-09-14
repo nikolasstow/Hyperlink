@@ -29,6 +29,7 @@ type LiveActivityNative = {
   readonly end: (sessionID: string, status: string) => Promise<boolean>;
   readonly endAll: () => Promise<number>;
   readonly setServerConfig: (url: string, password: string | null) => boolean;
+  readonly takePendingOpenSession: () => string | null;
   readonly addListener: (
     event: "onLiveActivityPushToken",
     listener: (payload: { readonly sessionID: string; readonly token: string }) => void,
@@ -60,6 +61,20 @@ export const setExtensionServerConfig = (url: string): void => {
     native.setServerConfig(url, null);
   } catch {
     // Extensions degrade to no-ops without it; not worth surfacing.
+  }
+};
+
+/**
+ * The session id the Open-a-Session App Intent asked to open, or undefined.
+ * Read-and-clear: returns it once, then it's gone. No-op (undefined) on a binary
+ * without the native module.
+ */
+export const takePendingOpenSession = (): string | undefined => {
+  if (native === null) return undefined;
+  try {
+    return native.takePendingOpenSession() ?? undefined;
+  } catch {
+    return undefined;
   }
 };
 

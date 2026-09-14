@@ -6,6 +6,9 @@ enum AppGroup {
   static let identifier = "group.com.nikolasstow.agentconsolenative"
   static let serverURLKey = "serverURL"
   static let serverPasswordKey = "serverPassword"
+  /// Set by the Open-a-Session intent, read+cleared by the app on launch to
+  /// navigate to that session's chat.
+  static let pendingSessionKey = "pendingSessionID"
 
   static var serverURL: String? {
     UserDefaults(suiteName: identifier)?.string(forKey: serverURLKey)

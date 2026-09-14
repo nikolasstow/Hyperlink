@@ -54,6 +54,19 @@ public class LiveActivityModule: Module {
       return true
     }
 
+    // Reads and clears the session id the Open-a-Session App Intent stashed in
+    // the app group. Called by the app on launch/foreground to navigate there.
+    Function("takePendingOpenSession") { () -> String? in
+      guard let defaults = UserDefaults(suiteName: "group.com.nikolasstow.agentconsolenative") else {
+        return nil
+      }
+      let sessionID = defaults.string(forKey: "pendingSessionID")
+      if sessionID != nil {
+        defaults.removeObject(forKey: "pendingSessionID")
+      }
+      return sessionID
+    }
+
     AsyncFunction("start") { (sessionID: String, repo: String, worktree: String, title: String, action: String) -> String? in
       guard #available(iOS 16.2, *) else { return nil }
       guard ActivityAuthorizationInfo().areActivitiesEnabled else { return nil }

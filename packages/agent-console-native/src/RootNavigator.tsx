@@ -10,8 +10,8 @@
 import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
-import { Linking, useColorScheme } from "react-native";
-import { setExtensionServerConfig, subscribeActivityPushTokens } from "../modules/live-activity";
+import { AppState, Linking, useColorScheme } from "react-native";
+import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
 import { AGENT, normalizeServerAddress } from "./client";
 import { colors } from "./colors";
@@ -69,6 +69,21 @@ export const RootNavigator = (): React.ReactElement => {
   React.useEffect(() => {
     setExtensionServerConfig(normalizeServerAddress(address));
   }, [address]);
+
+  // The Open-a-Session App Intent stashes a session id in the app group and
+  // launches the app; pick it up on mount and on each return to the foreground,
+  // and open that chat.
+  React.useEffect(() => {
+    const openPending = (): void => {
+      const sessionID = takePendingOpenSession();
+      if (sessionID !== undefined) navigationRef.navigate("Chat", { sessionID });
+    };
+    openPending();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") openPending();
+    });
+    return () => subscription.remove();
+  }, [navigationRef]);
 
   // Forward each Live Activity's ActivityKit push token to the backend, which
   // then updates/ends the activity via raw APNs while the app is suspended.
