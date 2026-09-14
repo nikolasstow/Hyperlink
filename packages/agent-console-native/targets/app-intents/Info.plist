@@ -7,5 +7,12 @@
       <key>EXExtensionPointIdentifier</key>
       <string>com.apple.appintents-extension</string>
     </dict>
+    <!-- The intents talk to the local/Tailscale opencode server over http, so
+         this extension needs the same ATS exception the main app has. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsArbitraryLoads</key>
+      <true/>
+    </dict>
   </dict>
 </plist>

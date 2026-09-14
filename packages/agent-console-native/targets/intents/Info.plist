@@ -16,5 +16,11 @@
       <key>NSExtensionPrincipalClass</key>
       <string>$(PRODUCT_MODULE_NAME).IntentHandler</string>
     </dict>
+    <!-- Posts the reply to the http opencode server; needs the ATS exception. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+      <key>NSAllowsArbitraryLoads</key>
+      <true/>
+    </dict>
   </dict>
 </plist>
