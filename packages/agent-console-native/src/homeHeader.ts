@@ -18,6 +18,11 @@ import type { NativeStackNavigationOptions } from "@react-navigation/native-stac
  * so it can't settle like `useHeaderHeight()` does on the first frames. */
 export const HOME_HEADER_HEIGHT = 44;
 
+/** Extra breathing room below the nav bar so the first row ("Recent") clears the
+ * header's blur/scroll-edge effect instead of sitting under it. Shared by Home
+ * and the launch skeleton so they stay aligned. */
+export const HOME_CONTENT_TOP_GAP = 14;
+
 export type HomeHeaderHandlers = {
   readonly onSettings: () => void;
   readonly onSearch: () => void;

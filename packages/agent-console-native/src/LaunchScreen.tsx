@@ -15,7 +15,7 @@ import * as React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
-import { HOME_HEADER_HEIGHT } from "./homeHeader";
+import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { HomeSkeleton } from "./HomeSkeleton";
 
 export const LaunchScreen = (): React.ReactElement => {
@@ -23,9 +23,9 @@ export const LaunchScreen = (): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      {/* Same padding Home uses (HOME_HEADER_HEIGHT), so "Recent" lands in the
-       * exact same spot when Home takes over. */}
-      <View style={{ paddingTop: insets.top + HOME_HEADER_HEIGHT }}>
+      {/* Same padding Home uses, so "Recent" lands in the exact same spot when
+       * Home takes over. */}
+      <View style={{ paddingTop: insets.top + HOME_HEADER_HEIGHT + HOME_CONTENT_TOP_GAP }}>
         <HomeSkeleton />
       </View>
       <GlassView style={[styles.composer, { bottom: insets.bottom + 8 }]}>

@@ -11,7 +11,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { HOME_HEADER_HEIGHT } from "./homeHeader";
+import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
@@ -270,7 +270,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             </TouchableOpacity>
           );
         }}
-        contentContainerStyle={[styles.content, { paddingTop: navBarHeight, paddingBottom: composerHeight + keyboardHeight + 16 }]}
+        contentContainerStyle={[styles.content, { paddingTop: navBarHeight + HOME_CONTENT_TOP_GAP, paddingBottom: composerHeight + keyboardHeight + 16 }]}
       />
       </ScrollViewMarker>
       <EdgeBlurBars bottomInset={keyboardHeight} />
