@@ -10,12 +10,13 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { promptRenameSession } from "./sessionActions";
 import { SessionContextMenu, type SessionMenuAction } from "./SessionContextMenu";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
@@ -145,33 +146,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         void client.session.abort({ path: { id: sessionID } }).catch(() => undefined);
         return;
       }
-      // rename
-      Alert.prompt(
-        "Rename session",
-        undefined,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Save",
-            onPress: (text?: string) => {
-              const next = (text ?? "").trim();
-              if (next === "") return;
-              void client.session
-                .update({ path: { id: sessionID }, body: { title: next } })
-                .then(({ error }) => {
-                  if (error !== undefined) {
-                    Alert.alert("Couldn't rename", "The server rejected the new name.");
-                    return;
-                  }
-                  void loadSessions();
-                })
-                .catch(() => Alert.alert("Couldn't rename", "Couldn't reach the server."));
-            },
-          },
-        ],
-        "plain-text",
-        currentTitle,
-      );
+      // rename — shared with the chat menu; refresh the list on success.
+      promptRenameSession(client, sessionID, currentTitle, () => void loadSessions());
     },
     [client, props.navigation, loadSessions],
   );
