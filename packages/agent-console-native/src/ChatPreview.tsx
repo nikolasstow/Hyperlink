@@ -9,17 +9,17 @@
  * flush to the bottom and overflow clips at the top, so the latest turn shows
  * the way it would if you'd just opened the session.
  *
- * The title sits over the messages behind the same glass feather the chat/Home
- * use (`EdgeBlurBars`), so content scrolling up fades out under it rather than
- * colliding with the header and turning unreadable.
+ * The title sits on a real glass bar (the same Liquid Glass `GlassView` as the
+ * composer) so content scrolling up passes under a defined header rather than
+ * colliding with it and turning unreadable.
  *
  * @internal
  */
 import * as React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, useColorScheme, View } from "react-native";
+import { GlassView } from "expo-glass-effect";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
-import { EdgeBlurBars } from "./EdgeBlurBars";
 import { ROW_GUTTER } from "./layout";
 import { MessageBubble } from "./MessageBubble";
 import type { Transcript } from "./useSessionStream";
@@ -38,6 +38,7 @@ export const ChatPreview = (props: {
 }): React.ReactElement => {
   const order = props.transcript?.order ?? [];
   const tail = order.slice(-TAIL);
+  const scheme = useColorScheme();
 
   return (
     <View style={[styles.card, { width: props.width, height: props.height }]}>
@@ -53,14 +54,13 @@ export const ChatPreview = (props: {
           </CollapsiblePartsProvider>
         )}
       </View>
-      {/* Glass over the top so content fades under the header instead of
-        * colliding with it. */}
-      <EdgeBlurBars variant="top" />
-      <View style={styles.header} pointerEvents="none">
+      {/* Real glass bar (same Liquid Glass as the composer) so content scrolls
+        * under a defined header rather than a soft feather. */}
+      <GlassView style={styles.header} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"} pointerEvents="none">
         <Text style={styles.title} numberOfLines={1}>
           {props.title}
         </Text>
-      </View>
+      </GlassView>
     </View>
   );
 };
