@@ -98,7 +98,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * "completes" mid-run). `session.status` is not in the pinned SDK's Event union,
  * so it's read defensively off the raw event.
  */
-const readSessionStatus = (raw: unknown): { readonly sessionID: string; readonly type: string } | undefined => {
+export const readSessionStatus = (raw: unknown): { readonly sessionID: string; readonly type: string } | undefined => {
   if (!isRecord(raw) || raw.type !== "session.status") return undefined;
   const props = isRecord(raw.properties) ? raw.properties : undefined;
   if (props === undefined) return undefined;

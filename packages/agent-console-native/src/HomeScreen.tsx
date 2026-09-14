@@ -16,8 +16,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { useIsFocused } from "@react-navigation/native";
 import { abortSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
+import { useBusySessions } from "./useBusySessions";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
@@ -50,6 +52,8 @@ type Row =
 export const HomeScreen = (props: Props): React.ReactElement => {
   const { client, backend, rootDir } = useAppContext();
   const groupSize = useGroupSize();
+  // Only stream while Home is on screen — the chat holds its own stream when open.
+  const busySessions = useBusySessions(client, useIsFocused());
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
@@ -230,6 +234,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 repo={item.repo}
                 worktree={item.worktree}
                 meta={relativeTime(item.session.time.updated)}
+                running={busySessions.has(item.session.id)}
                 onOpen={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}
                 onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
                 onStop={() => abortSession(client, item.session.id, () => void loadSessions())}

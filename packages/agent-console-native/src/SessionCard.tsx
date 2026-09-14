@@ -13,7 +13,7 @@
  * @internal
  */
 import { Button, ContextMenu, HStack, Host, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, cornerRadius, font, foregroundStyle, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
@@ -26,16 +26,23 @@ export type SessionCardProps = {
   readonly repo: string;
   readonly worktree?: string;
   readonly meta: string;
+  /** Whether the agent is running now — gates the destructive Stop action. */
+  readonly running: boolean;
   readonly onOpen: () => void;
   readonly onRename: () => void;
   readonly onStop: () => void;
 };
 
-const CardBody = (props: { readonly title: string; readonly repo: string; readonly worktree?: string; readonly meta: string }): React.ReactElement => (
+// A `frame` with `maxWidth` set to the screen width sits between the padding and
+// the background so the rounded fill spans the full row (SwiftUI hugs content
+// otherwise) while the text stays left-aligned. A concrete width ≥ the offered
+// space fills it just like `.infinity` would, without betting on `Infinity`
+// surviving the JS→Swift modifier bridge.
+const CardBody = (props: { readonly maxWidth: number; readonly title: string; readonly repo: string; readonly worktree?: string; readonly meta: string }): React.ReactElement => (
   <VStack
     alignment="leading"
     spacing={8}
-    modifiers={[padding({ all: 14 }), background(colors.cardBackground), cornerRadius(14)]}
+    modifiers={[padding({ all: 14 }), frame({ maxWidth: props.maxWidth, alignment: "leading" }), background(colors.cardBackground), cornerRadius(14)]}
   >
     <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
     <HStack spacing={6} alignment="center">
@@ -50,27 +57,27 @@ const CardBody = (props: { readonly title: string; readonly repo: string; readon
 
 export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - CARD_GUTTER * 2;
-
   return (
-    <Host style={{ width: cardWidth, marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
-      <ContextMenu>
-        <ContextMenu.Items>
-          <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
-          <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
+  <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
+    <ContextMenu>
+      <ContextMenu.Items>
+        <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
+        <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
+        {props.running ? (
           <Section>
             <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} />
           </Section>
-        </ContextMenu.Items>
-        <ContextMenu.Preview>
-          <CardBody title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
-        </ContextMenu.Preview>
-        <ContextMenu.Trigger>
-          <VStack modifiers={[onTapGesture(props.onOpen)]}>
-            <CardBody title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
-          </VStack>
-        </ContextMenu.Trigger>
-      </ContextMenu>
-    </Host>
+        ) : null}
+      </ContextMenu.Items>
+      <ContextMenu.Preview>
+        <CardBody maxWidth={screenWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
+      </ContextMenu.Preview>
+      <ContextMenu.Trigger>
+        <VStack modifiers={[onTapGesture(props.onOpen)]}>
+          <CardBody maxWidth={screenWidth} title={props.title} repo={props.repo} worktree={props.worktree} meta={props.meta} />
+        </VStack>
+      </ContextMenu.Trigger>
+    </ContextMenu>
+  </Host>
   );
 };
