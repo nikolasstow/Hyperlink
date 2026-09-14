@@ -16,7 +16,6 @@ import * as React from "react";
 import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -104,30 +103,28 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      <ScrollViewMarker style={styles.fill} scrollEdgeEffects={{ top: "soft", bottom: "soft" }}>
-        {tree.rootLoading ? (
-          <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-            <ActivityIndicator color={colors.secondaryLabel} />
+      {tree.rootLoading ? (
+        <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
+          <ActivityIndicator color={colors.secondaryLabel} />
+        </View>
+      ) : tree.rootFailed ? (
+        <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
+          <Text style={styles.error}>Couldn't load this folder.</Text>
+          <TouchableOpacity onPress={tree.reloadRoot} activeOpacity={0.6}>
+            <Text style={styles.retry}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : tree.rows.length === 0 ? (
+        <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
+      ) : (
+        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 8, paddingHorizontal: 16, paddingBottom: 40 }}>
+          <View style={styles.card}>
+            {tree.rows.map((row, index) => (
+              <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
+            ))}
           </View>
-        ) : tree.rootFailed ? (
-          <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-            <Text style={styles.error}>Couldn't load this folder.</Text>
-            <TouchableOpacity onPress={tree.reloadRoot} activeOpacity={0.6}>
-              <Text style={styles.retry}>Try again</Text>
-            </TouchableOpacity>
-          </View>
-        ) : tree.rows.length === 0 ? (
-          <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
-        ) : (
-          <ScrollView contentContainerStyle={{ paddingTop: headerHeight + 8, paddingHorizontal: 16, paddingBottom: 40 }}>
-            <View style={styles.card}>
-              {tree.rows.map((row, index) => (
-                <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
-              ))}
-            </View>
-          </ScrollView>
-        )}
-      </ScrollViewMarker>
+        </ScrollView>
+      )}
       <EdgeBlurBars variant="top" />
     </View>
   );
