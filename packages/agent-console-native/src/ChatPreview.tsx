@@ -9,12 +9,17 @@
  * flush to the bottom and overflow clips at the top, so the latest turn shows
  * the way it would if you'd just opened the session.
  *
+ * The title sits over the messages behind the same glass feather the chat/Home
+ * use (`EdgeBlurBars`), so content scrolling up fades out under it rather than
+ * colliding with the header and turning unreadable.
+ *
  * @internal
  */
 import * as React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
+import { EdgeBlurBars } from "./EdgeBlurBars";
 import { ROW_GUTTER } from "./layout";
 import { MessageBubble } from "./MessageBubble";
 import type { Transcript } from "./useSessionStream";
@@ -22,6 +27,8 @@ import type { Transcript } from "./useSessionStream";
 /** Trailing messages to mount — bounded so a long history stays cheap; the
  * container clips whatever doesn't fit. */
 const TAIL = 12;
+/** Height reserved for the floating title so the newest content clears it. */
+const HEADER_HEIGHT = 44;
 
 export const ChatPreview = (props: {
   readonly transcript: Transcript | undefined;
@@ -34,12 +41,7 @@ export const ChatPreview = (props: {
 
   return (
     <View style={[styles.card, { width: props.width, height: props.height }]}>
-      <View style={styles.header}>
-        <Text style={styles.title} numberOfLines={1}>
-          {props.title}
-        </Text>
-      </View>
-      <View style={styles.body}>
+      <View style={[styles.body, { paddingTop: HEADER_HEIGHT + 8 }]}>
         {tail.length === 0 ? (
           <Text style={styles.empty}>{props.transcript === undefined ? "Loading preview…" : "No messages yet."}</Text>
         ) : (
@@ -51,32 +53,49 @@ export const ChatPreview = (props: {
           </CollapsiblePartsProvider>
         )}
       </View>
+      {/* Glass over the top so content fades under the header instead of
+        * colliding with it. */}
+      <EdgeBlurBars variant="top" />
+      <View style={styles.header} pointerEvents="none">
+        <Text style={styles.title} numberOfLines={1}>
+          {props.title}
+        </Text>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
+    position: "relative",
     backgroundColor: colors.cardBackground,
     borderRadius: 14,
     overflow: "hidden",
   },
+  body: {
+    // Newest message flush to the bottom; older content overflows and clips at
+    // the top (under the glass) — the "scrolled to bottom" view you'd land on.
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "flex-end",
+    paddingBottom: 10,
+  },
   header: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: HEADER_HEIGHT,
+    justifyContent: "center",
     paddingHorizontal: ROW_GUTTER,
-    paddingTop: 14,
-    paddingBottom: 8,
   },
   title: {
     color: colors.label,
     fontSize: 15,
     fontWeight: "600",
-  },
-  body: {
-    // Newest message flush to the bottom; older content overflows and clips at
-    // the top — the "scrolled to bottom" view you'd land on opening the chat.
-    flex: 1,
-    justifyContent: "flex-end",
-    paddingBottom: 10,
   },
   empty: {
     color: colors.secondaryLabel,
