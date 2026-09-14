@@ -10,7 +10,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
-import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -19,6 +19,7 @@ import { useAppContext } from "./AppContext";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { abortSession, promptRenameSession } from "./sessionActions";
 import { getSetupDate, loadReads } from "./sessionReads";
+import { RepoCard } from "./RepoCard";
 import { SessionCard } from "./SessionCard";
 import { useSessionActivity } from "./useSessionActivity";
 import { HomeSkeleton } from "./HomeSkeleton";
@@ -38,7 +39,6 @@ import type { RootStackParamList } from "./RootNavigator";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
-import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -282,29 +282,16 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           const mainPath = scanned.find((r) => r.repo === item.group.repo)?.worktrees.find((w) => w.isMain)?.path;
           const repoDir = mainPath ?? item.group.sessions[0]?.directory ?? "";
           return (
-            <TouchableOpacity
-              style={styles.card}
-              activeOpacity={0.7}
-              onPress={() => props.navigation.navigate("Repo", { name: item.group.repo, dir: repoDir, isRepo: item.group.isKnownRepo })}
-            >
-              <View style={styles.repoCardHeader}>
-                <SystemIcon
-                  name={item.group.isKnownRepo ? "shippingbox" : "folder"}
-                  size={16}
-                  color={colors.secondaryLabel}
-                />
-                <Text style={[styles.cardTitle, styles.repoCardTitle]} numberOfLines={1}>
-                  {item.group.repo}
-                </Text>
-                <SystemIcon name="chevron.right" size={14} color={colors.secondaryLabel} />
-              </View>
-              {mostRecentTitle !== undefined ? (
-                <Text style={styles.repoCardSubtitle} numberOfLines={1}>
-                  {mostRecentTitle}
-                </Text>
-              ) : null}
-              <Text style={styles.cardMeta}>{metaParts.join(" · ")}</Text>
-            </TouchableOpacity>
+            <RepoCard
+              repo={item.group.repo}
+              isKnownRepo={item.group.isKnownRepo}
+              sessionCount={sessionCount}
+              worktreeCount={worktreeCount}
+              mostRecentTitle={mostRecentTitle}
+              lastActive={relativeTime(item.group.mostRecentUpdate)}
+              meta={metaParts.join(" · ")}
+              onOpen={() => props.navigation.navigate("Repo", { name: item.group.repo, dir: repoDir, isRepo: item.group.isKnownRepo })}
+            />
           );
         }}
         contentContainerStyle={[styles.content, { paddingTop: navBarHeight + HOME_CONTENT_TOP_GAP, paddingBottom: composerHeight + keyboardHeight + 16 }]}
@@ -368,56 +355,5 @@ const styles = StyleSheet.create({
   },
   headingFirst: {
     marginTop: 4,
-  },
-  card: {
-    marginHorizontal: 12,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: colors.cardBackground,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-  },
-  cardTitle: {
-    color: colors.label,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  badgeRow: {
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 8,
-  },
-  badge: {
-    color: colors.secondaryLabel,
-    fontSize: 11,
-    fontWeight: "600",
-    backgroundColor: colors.fillBackground,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    overflow: "hidden",
-  },
-  badgeAccent: {
-    color: colors.tint,
-    backgroundColor: colors.accentTint,
-  },
-  cardMeta: {
-    color: colors.secondaryLabel,
-    fontSize: 11,
-    marginTop: 8,
-  },
-  repoCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  repoCardTitle: {
-    flex: 1,
-  },
-  repoCardSubtitle: {
-    color: colors.secondaryLabel,
-    fontSize: 14,
-    marginTop: 6,
   },
 });

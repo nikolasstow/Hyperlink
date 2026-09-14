@@ -34,7 +34,8 @@ export type SessionCardProps = {
   /** Server-side last-updated time; keys the preview transcript cache. */
   readonly updatedAt: number;
   readonly title: string;
-  readonly repo: string;
+  /** Repo badge — omitted on a repo's own page, where it's redundant. */
+  readonly repo?: string;
   readonly worktree?: string;
   readonly meta: string;
   /** Whether the agent is running now — gates the destructive Stop action. */
@@ -56,7 +57,7 @@ const summaryLabel = (role: "user" | "assistant", text: string): string => (role
 const CardBody = (props: {
   readonly width: number;
   readonly title: string;
-  readonly repo: string;
+  readonly repo?: string;
   readonly worktree?: string;
   readonly meta: string;
   readonly unread: boolean;
@@ -71,12 +72,16 @@ const CardBody = (props: {
       {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(colors.themeSecondary)]} /> : null}
       <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
     </HStack>
-    <HStack spacing={6} alignment="center">
-      <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.secondaryLabel), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.repo}</UIText>
-      {props.worktree !== undefined ? (
-        <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.worktree}</UIText>
-      ) : null}
-    </HStack>
+    {props.repo !== undefined || props.worktree !== undefined ? (
+      <HStack spacing={6} alignment="center">
+        {props.repo !== undefined ? (
+          <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.secondaryLabel), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.repo}</UIText>
+        ) : null}
+        {props.worktree !== undefined ? (
+          <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.worktree}</UIText>
+        ) : null}
+      </HStack>
+    ) : null}
     {props.summary !== undefined ? (
       <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel), lineLimit(2)]}>{props.summary}</UIText>
     ) : null}

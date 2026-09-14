@@ -22,7 +22,9 @@ import { readWorkspace } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
-import { SessionRow } from "./SessionRow";
+import { abortSession, promptRenameSession } from "./sessionActions";
+import { SessionCard } from "./SessionCard";
+import { relativeTime } from "./time";
 import { useSessionActivity } from "./useSessionActivity";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SessionList">;
@@ -32,7 +34,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   const { client } = useAppContext();
   const headerHeight = useHeaderHeight();
   const isFocused = useIsFocused();
-  const { activityAt } = useSessionActivity(client, isFocused);
+  const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
 
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
@@ -93,13 +95,19 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={{ paddingTop: headerHeight + 8, paddingBottom: 40 }}
         ListEmptyComponent={<Text style={styles.empty}>No sessions.</Text>}
         renderItem={({ item }) => (
-          <SessionRow
+          <SessionCard
             client={client}
-            session={item}
+            sessionId={item.id}
+            updatedAt={item.time.updated}
+            title={item.title}
             worktree={displayWorktree(matchSession(item.directory, scanned).worktree)}
+            meta={relativeTime(item.time.updated)}
+            running={busySessions.has(item.id)}
             unread={isUnread(item)}
             previewEnabled={isFocused}
             onOpen={() => props.navigation.navigate("Chat", { sessionID: item.id })}
+            onRename={() => promptRenameSession(client, item.id, item.title, () => void load())}
+            onStop={() => abortSession(client, item.id, () => void load())}
           />
         )}
       />

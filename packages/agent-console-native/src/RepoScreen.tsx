@@ -22,11 +22,12 @@ import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, use
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { SFSymbol } from "sf-symbols-typescript";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
-import { SessionRow } from "./SessionRow";
+import { repoMenuFor } from "./repoMenu";
+import { abortSession, promptRenameSession } from "./sessionActions";
+import { SessionCard } from "./SessionCard";
 import { useSessionActivity } from "./useSessionActivity";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
@@ -61,26 +62,13 @@ const GLASS_FADE_OUT = [1, 1, 1, 0.99, 0.97, 0.9, 0.6, 0.2, 0];
 /** false = fade the squircle wrapper's opacity; true = slide it out. */
 const SQUIRCLE_FADE_BY_TRANSLATE = false;
 
-type MenuItem = { readonly label: string; readonly icon: SFSymbol };
-const REPO_MENU: ReadonlyArray<MenuItem> = [
-  { label: "Files", icon: "folder" },
-  { label: "Docs", icon: "book" },
-  { label: "Commits", icon: "arrow.triangle.branch" },
-  { label: "Pull Requests", icon: "arrow.triangle.merge" },
-];
-/** A workspace isn't a git checkout, so no Commits / PRs. */
-const WORKSPACE_MENU: ReadonlyArray<MenuItem> = [
-  { label: "Files", icon: "folder" },
-  { label: "Docs", icon: "book" },
-];
-
 export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
   const { client } = useAppContext();
   const insets = useSafeAreaInsets();
   const perGroup = useGroupSize();
   const isFocused = useIsFocused();
-  const { activityAt } = useSessionActivity(client, isFocused);
+  const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
 
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
@@ -129,7 +117,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const group = React.useMemo(() => groupByRepo(sessions, scanned).find((g) => g.repo === name), [sessions, scanned, name]);
   const repoSessions = group?.sessions ?? [];
   const worktreeCount = group?.worktrees.size ?? 0;
-  const menu = isRepo ? REPO_MENU : WORKSPACE_MENU;
+  const menu = repoMenuFor(isRepo);
 
   // Unread = updated since you last opened it AND since app setup (so a fresh
   // install doesn't treat every pre-existing session as unread).
@@ -158,14 +146,20 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const sessionCard = (session: Session, showWorktree: boolean, keyPrefix: string): React.ReactElement => {
     const wt = showWorktree ? displayWorktree(matchSession(session.directory, scanned).worktree) : undefined;
     return (
-      <SessionRow
+      <SessionCard
         key={`${keyPrefix}-${session.id}`}
         client={client}
-        session={session}
+        sessionId={session.id}
+        updatedAt={session.time.updated}
+        title={session.title}
         worktree={wt}
+        meta={relativeTime(session.time.updated)}
+        running={busySessions.has(session.id)}
         unread={isUnread(session)}
         previewEnabled={isFocused}
         onOpen={() => props.navigation.navigate("Chat", { sessionID: session.id })}
+        onRename={() => promptRenameSession(client, session.id, session.title, () => void load())}
+        onStop={() => abortSession(client, session.id, () => void load())}
       />
     );
   };
