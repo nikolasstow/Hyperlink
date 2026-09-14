@@ -46,3 +46,25 @@ export const promptRenameSession = (
     currentTitle,
   );
 };
+
+/**
+ * Abort the running agent for a session. `onAborted` runs on success (refresh a
+ * list, …); failures are surfaced rather than swallowed — the SDK reports HTTP
+ * errors on `.error`, so a resolved-but-failed response is checked explicitly.
+ */
+export const abortSession = (
+  client: OpencodeClient,
+  sessionID: string,
+  onAborted?: () => void,
+): void => {
+  void client.session
+    .abort({ path: { id: sessionID } })
+    .then(({ error }) => {
+      if (error !== undefined) {
+        Alert.alert("Couldn't stop", "The server rejected the stop request.");
+        return;
+      }
+      onAborted?.();
+    })
+    .catch(() => Alert.alert("Couldn't stop", "Couldn't reach the server."));
+};

@@ -16,6 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { abortSession, promptRenameSession } from "./sessionActions";
+import { SessionCard } from "./SessionCard";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
@@ -223,16 +225,15 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           }
           if (item.kind === "session") {
             return (
-              <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}>
-                <Text style={styles.cardTitle} numberOfLines={2}>
-                  {item.session.title}
-                </Text>
-                <View style={styles.badgeRow}>
-                  <Text style={styles.badge}>{item.repo}</Text>
-                  {item.worktree !== undefined ? <Text style={[styles.badge, styles.badgeAccent]}>{item.worktree}</Text> : null}
-                </View>
-                <Text style={styles.cardMeta}>{relativeTime(item.session.time.updated)}</Text>
-              </TouchableOpacity>
+              <SessionCard
+                title={item.session.title}
+                repo={item.repo}
+                worktree={item.worktree}
+                meta={relativeTime(item.session.time.updated)}
+                onOpen={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}
+                onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
+                onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
+              />
             );
           }
           const sessionCount = item.group.sessions.length;
