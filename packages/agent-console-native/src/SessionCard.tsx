@@ -86,7 +86,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         </ContextMenu.Items>
         <ContextMenu.Preview>
           <RNHostView matchContents>
-            <ChatPreview transcript={transcript} title={props.title} width={cardWidth} height={previewHeight} />
+            <ChatPreview transcript={transcript} width={cardWidth} height={previewHeight} />
           </RNHostView>
         </ContextMenu.Preview>
         <ContextMenu.Trigger>
