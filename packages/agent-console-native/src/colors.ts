@@ -16,6 +16,9 @@ import { DynamicColorIOS, PlatformColor } from "react-native";
 
 export const colors = {
   background: PlatformColor("systemGroupedBackground"),
+  /** Plain (non-grouped) surface — the white/black behind a Files-style full-
+   * width list, as opposed to the grey `background` of grouped screens. */
+  systemBackground: PlatformColor("systemBackground"),
   cardBackground: PlatformColor("secondarySystemGroupedBackground"),
   fillBackground: PlatformColor("tertiarySystemFill"),
   separator: PlatformColor("separator"),

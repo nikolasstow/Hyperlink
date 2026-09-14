@@ -1,10 +1,11 @@
 /**
- * The file explorer — an iOS Files-style inset list of a directory, served by
- * OUR backend (`/fs`), never opencode.
+ * The file explorer — an iOS Files-style list of a directory, served by OUR
+ * backend (`/fs`), never opencode.
  *
- * Proper grouped-list chrome (a rounded card, hairline row separators inset under
- * the text, comfortable rows) with expanding subitems: each folder row has two
- * tap targets, matching the behaviour asked for —
+ * Matches the Files app's Browse list: a plain full-width list on the system
+ * background (no grouped card), a blue leading disclosure chevron, a big blue
+ * folder icon, the name, and hairline separators inset under the icon to the
+ * right edge. Expanding subitems, as asked, via two tap targets per folder row —
  *   - the disclosure chevron toggles inline expansion (children load lazily and
  *     appear indented below, animated), and
  *   - tapping the rest of the row opens the folder into its own pushed view.
@@ -25,13 +26,11 @@ import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 
-/** Indentation per nesting level. */
-const INDENT = 16;
-/** Fixed width for the leading chevron column, so icons align across depths. */
-const CHEVRON_COL = 22;
-/** Left edge of a depth-0 row's icon; separators inset to the text after it. */
-const ROW_INSET = 14;
-const ICON_COL = 22;
+/** Left screen inset, indentation per level, and the leading chevron column. */
+const EDGE = 16;
+const INDENT = 20;
+const CHEVRON_COL = 26;
+const ICON_COL = 34;
 const ICON_GAP = 12;
 
 const Row = (props: {
@@ -43,24 +42,24 @@ const Row = (props: {
   const { row } = props;
   const isDir = row.type === "directory";
   const indent = row.depth * INDENT;
-  // Separator starts under this row's own text (after its indent + icon).
-  const separatorInset = ROW_INSET + indent + CHEVRON_COL + ICON_COL + ICON_GAP;
+  // Separator starts under this row's icon and runs to the right edge.
+  const separatorInset = EDGE + indent + CHEVRON_COL;
   return (
     <View>
-      <View style={[styles.row, { paddingLeft: ROW_INSET + indent }]}>
+      <View style={[styles.row, { paddingLeft: EDGE + indent }]}>
         {isDir ? (
           <TouchableOpacity
             style={styles.chevron}
             onPress={() => props.onToggle(row)}
-            hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            hitSlop={{ top: 14, bottom: 14, left: 8, right: 10 }}
           >
             {row.loading ? (
-              <ActivityIndicator size="small" color={colors.secondaryLabel} />
+              <ActivityIndicator size="small" color={colors.tint} />
             ) : (
               <SystemIcon
-                name={row.failed ? "exclamationmark.triangle" : row.expanded ? "chevron.down" : "chevron.right"}
-                size={13}
-                color={row.failed ? colors.warning : colors.secondaryLabel}
+                name={row.failed ? "exclamationmark.triangle.fill" : row.expanded ? "chevron.down" : "chevron.right"}
+                size={16}
+                color={row.failed ? colors.warning : colors.tint}
               />
             )}
           </TouchableOpacity>
@@ -69,12 +68,11 @@ const Row = (props: {
         )}
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
           <View style={styles.iconCol}>
-            <SystemIcon name={isDir ? "folder.fill" : "doc.text.fill"} size={19} color={isDir ? colors.tint : colors.secondaryLabel} />
+            <SystemIcon name={isDir ? "folder.fill" : "doc.fill"} size={isDir ? 28 : 24} color={isDir ? colors.tint : colors.secondaryLabel} />
           </View>
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
           </Text>
-          {isDir ? <SystemIcon name="chevron.forward" size={13} color={colors.separator} /> : null}
         </TouchableOpacity>
       </View>
       {props.last ? null : <View style={[styles.separator, { marginLeft: separatorInset }]} />}
@@ -117,12 +115,10 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : tree.rows.length === 0 ? (
         <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
       ) : (
-        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 8, paddingHorizontal: 16, paddingBottom: 40 }}>
-          <View style={styles.card}>
-            {tree.rows.map((row, index) => (
-              <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
-            ))}
-          </View>
+        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40 }}>
+          {tree.rows.map((row, index) => (
+            <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
+          ))}
         </ScrollView>
       )}
       <EdgeBlurBars variant="top" />
@@ -133,7 +129,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.systemBackground,
   },
   fill: {
     flex: 1,
@@ -142,19 +138,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  card: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    // Keeps the rows' corners clipped to the card radius.
-    overflow: "hidden",
-  },
   row: {
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 14,
-    minHeight: 52,
+    minHeight: 58,
   },
   chevron: {
     width: CHEVRON_COL,
