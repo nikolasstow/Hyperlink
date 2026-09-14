@@ -23,7 +23,11 @@
  *
  * @type {import('@expo/config-plugins')}
  */
-const { withDangerousMod, withXcodeProject } = require("@expo/config-plugins");
+// Import via `expo/config-plugins` (re-exported by the `expo` package) rather
+// than `@expo/config-plugins` directly: `expo` is a direct dependency, so this
+// resolves under pnpm's non-hoisted node_modules on EAS, whereas the internal
+// package isn't declared here and fails to resolve there.
+const { withDangerousMod, withXcodeProject } = require("expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 
