@@ -20,17 +20,19 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { FolderIcon } from "./FolderIcon";
 import { useFileTree, type FileRow } from "./fileTree";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 
-/** Left screen inset, indentation per level, and the leading chevron column. */
-const EDGE = 16;
+/** Left screen inset, indentation per level, and the leading chevron column.
+ * Tuned to the Files reference: chevron ~14pt in, icon at ~36pt, name at ~78pt. */
+const EDGE = 14;
 const INDENT = 20;
-const CHEVRON_COL = 26;
-const ICON_COL = 34;
+const CHEVRON_COL = 22;
+const ICON_COL = 30;
 const ICON_GAP = 12;
 
 const Row = (props: {
@@ -68,7 +70,7 @@ const Row = (props: {
         )}
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
           <View style={styles.iconCol}>
-            <SystemIcon name={isDir ? "folder.fill" : "doc.fill"} size={isDir ? 28 : 24} color={isDir ? colors.tint : colors.secondaryLabel} />
+            {isDir ? <FolderIcon size={28} /> : <SystemIcon name="doc.fill" size={22} color={colors.secondaryLabel} />}
           </View>
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
@@ -142,7 +144,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 14,
-    minHeight: 58,
+    minHeight: 54,
   },
   chevron: {
     width: CHEVRON_COL,
@@ -155,7 +157,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: ICON_GAP,
-    paddingVertical: 15,
+    paddingVertical: 13,
   },
   iconCol: {
     width: ICON_COL,
@@ -165,6 +167,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.label,
     fontSize: 17,
+    fontWeight: "400",
   },
   separator: {
     height: StyleSheet.hairlineWidth,
