@@ -32,7 +32,7 @@ const CHEVRON_COL = 22;
 /** Left edge of a depth-0 row's icon; separators inset to the text after it. */
 const ROW_INSET = 14;
 const ICON_COL = 22;
-const ICON_GAP = 10;
+const ICON_GAP = 12;
 
 const Row = (props: {
   readonly row: FileRow;
@@ -153,8 +153,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: 12,
-    minHeight: 44,
+    paddingRight: 14,
+    minHeight: 52,
   },
   chevron: {
     width: CHEVRON_COL,
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: ICON_GAP,
-    paddingVertical: 11,
+    paddingVertical: 15,
   },
   iconCol: {
     width: ICON_COL,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   name: {
     flex: 1,
     color: colors.label,
-    fontSize: 16,
+    fontSize: 17,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
