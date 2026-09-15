@@ -31,15 +31,10 @@ export const getCachedListing = (path: string): ReadonlyArray<FsEntry> | undefin
  * merged; a directory whose listing wasn't returned (unchanged) keeps its cached
  * entries. Rejects so a caller can surface a failed open.
  */
-export const loadTree = (backend: string, dir: string): Promise<void> => {
-  console.log("[loadTree] fetching", dir, "| base:", backend, "| session:", sessionId ? "yes" : "none");
-  return runFs(fsTree(backend, dir, sessionId)).then((delta) => {
+export const loadTree = (backend: string, dir: string): Promise<void> =>
+  runFs(fsTree(backend, dir, sessionId)).then((delta) => {
     sessionId = delta.session;
-    let count = 0;
     for (const [path, data] of Object.entries(delta.dirs)) {
       listings.set(path, data.entries);
-      count += 1;
     }
-    console.log("[loadTree] ok", dir, "| changed dirs:", count, "| root entries:", listings.get(dir)?.length ?? "MISSING");
   });
-};

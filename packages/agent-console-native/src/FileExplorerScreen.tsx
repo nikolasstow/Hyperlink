@@ -29,10 +29,11 @@ import { SystemIcon } from "./SystemIcon";
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 
 /** Left screen inset, indentation per level, and the leading chevron column.
- * Tuned to the Files reference: chevron ~14pt in, icon at ~36pt, name at ~78pt. */
+ * Tuned to the Files reference: a small chevron with generous room around it,
+ * icon at ~40pt, name at ~80pt. */
 const EDGE = 14;
 const INDENT = 20;
-const CHEVRON_COL = 22;
+const CHEVRON_COL = 28;
 const ICON_COL = 30;
 const ICON_GAP = 12;
 
@@ -62,7 +63,7 @@ const Row = (props: {
             ) : (
               <SystemIcon
                 name={row.failed ? "exclamationmark.triangle.fill" : row.expanded ? "chevron.down" : "chevron.right"}
-                size={16}
+                size={13}
                 color={row.failed ? colors.warning : colors.tint}
               />
             )}
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
   name: {
     flex: 1,
     color: colors.label,
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "400",
   },
   separator: {

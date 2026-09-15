@@ -80,25 +80,15 @@ export const fsTree = (base: string, path: string, session: string | undefined):
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ path, session }),
         }),
-      catch: (error) => {
-        console.error("[fsTree] fetch failed", treeUrl(base), String(error));
-        return new FsError({ reason: "transport", path });
-      },
+      catch: () => new FsError({ reason: "transport", path }),
     });
     if (response.status === 404) return { session: session ?? "", root: path, dirs: {} };
-    if (response.status >= 400) {
-      console.error("[fsTree] http status", response.status, treeUrl(base));
-      return yield* new FsError({ reason: "http", path, status: response.status });
-    }
+    if (response.status >= 400) return yield* new FsError({ reason: "http", path, status: response.status });
     const body = yield* Effect.tryPromise({
       try: () => response.json(),
-      catch: (error) => {
-        console.error("[fsTree] json parse failed", String(error));
-        return new FsError({ reason: "decode", path });
-      },
+      catch: () => new FsError({ reason: "decode", path }),
     });
     return yield* Schema.decodeUnknownEffect(FsTreeDelta)(body).pipe(
-      Effect.tapError((issue) => Effect.sync(() => console.error("[fsTree] decode failed", String(issue)))),
       Effect.mapError(() => new FsError({ reason: "decode", path })),
     );
   });
