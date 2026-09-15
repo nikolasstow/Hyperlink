@@ -10,14 +10,15 @@
 import * as React from "react";
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 
-/** Folder glyph aspect ratio (width : height). */
-const RATIO = 20 / 26;
+/** Folder glyph aspect ratio (height ÷ width). Taller than the classic wide
+ * folder — closer to the Mac/Files proportions. */
+const RATIO = 23 / 26;
 
 export const FolderIcon = (props: { readonly size: number }): React.ReactElement => {
   const width = props.size;
   const height = Math.round(props.size * RATIO);
   return (
-    <Svg width={width} height={height} viewBox="0 0 26 20">
+    <Svg width={width} height={height} viewBox="0 0 26 23">
       <Defs>
         <LinearGradient id="folderBack" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor="#B6DAFB" />
@@ -31,10 +32,10 @@ export const FolderIcon = (props: { readonly size: number }): React.ReactElement
       {/* Back sheet + tab (its top edge shows above the front pocket). */}
       <Path
         fill="url(#folderBack)"
-        d="M3 2.4 h5.5 a1.8 1.8 0 0 1 1.3 0.56 l1.5 1.56 h9.9 a2.5 2.5 0 0 1 2.5 2.5 V15 a2.5 2.5 0 0 1 -2.5 2.5 H3 A2.5 2.5 0 0 1 0.5 15 V4.9 A2.5 2.5 0 0 1 3 2.4 Z"
+        d="M3 2.8 h5.6 a1.9 1.9 0 0 1 1.35 0.58 l1.45 1.5 h10 a2.6 2.6 0 0 1 2.6 2.6 V16.5 a2.6 2.6 0 0 1 -2.6 2.6 H3 A2.6 2.6 0 0 1 0.4 16.5 V5.4 A2.6 2.6 0 0 1 3 2.8 Z"
       />
       {/* Front pocket, gradient, slightly wider and rounded. */}
-      <Rect x="0.4" y="6.4" width="25.2" height="11.4" rx="2.7" fill="url(#folderFront)" />
+      <Rect x="0.4" y="7.4" width="25.2" height="13.4" rx="2.9" fill="url(#folderFront)" />
     </Svg>
   );
 };
