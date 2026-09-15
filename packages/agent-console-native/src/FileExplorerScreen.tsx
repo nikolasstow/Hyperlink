@@ -194,12 +194,18 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
     if (next !== undefined) navigation.push("FileExplorer", { repo, dir: next });
   }, [navigation, repo]);
 
-  // A native forward button beside the back button, disabled when there's
-  // nowhere forward to go. Left items supplement the back button (they sit to
-  // its right) because `headerBackVisible` is true.
+  // Back + forward as one paired glass capsule (the native back button is
+  // hidden — see RootNavigator). Adjacent header items with no `spacing` item
+  // between them share a single background, the way Safari pairs back/forward.
   React.useEffect(() => {
     navigation.setOptions({
       unstable_headerLeftItems: () => [
+        {
+          type: "button",
+          label: "Back",
+          icon: { type: "sfSymbol", name: "chevron.backward" },
+          onPress: () => navigation.goBack(),
+        },
         {
           type: "button",
           label: "Forward",
