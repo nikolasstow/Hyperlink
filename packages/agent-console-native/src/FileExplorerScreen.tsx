@@ -34,6 +34,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 const EDGE = 0;
 const INDENT = 20;
 const CHEVRON_COL = 20;
+const CHEVRON_ICON_GAP = 6;
 const ICON_COL = 30;
 const ICON_GAP = 12;
 
@@ -49,7 +50,7 @@ const Row = (props: {
   const indent = row.depth * INDENT;
   // Separator starts at the name and runs to the right edge — the icon lives in
   // the leading block (with the chevron), so the border never runs under it.
-  const separatorInset = EDGE + indent + CHEVRON_COL + ICON_COL + ICON_GAP;
+  const separatorInset = EDGE + indent + CHEVRON_COL + CHEVRON_ICON_GAP + ICON_COL + ICON_GAP;
   return (
     <View>
       <View style={[styles.row, { paddingLeft: EDGE + indent }]}>
@@ -168,6 +169,7 @@ const styles = StyleSheet.create({
   },
   iconCol: {
     width: ICON_COL,
+    marginLeft: CHEVRON_ICON_GAP,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "stretch",
@@ -177,7 +179,7 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "400",
-    paddingHorizontal: 4,
+    paddingRight: 4,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
