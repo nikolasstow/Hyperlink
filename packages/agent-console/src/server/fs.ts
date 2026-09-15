@@ -277,6 +277,14 @@ export const buildTree = (
     const info = yield* fs.stat(target).pipe(Effect.mapError(() => new FsError({ reason: "not-found", path: requested })));
     if (info.type !== "Directory") return yield* new FsError({ reason: "not-a-directory", path: requested });
 
+    // Echo paths back in the SAME form the client asked with (it may pass a
+    // `~/…` path, which `resolveWithin` expanded to a real one). The client keys
+    // its cache and builds child paths off what it sent, so returning resolved
+    // real paths would never match. `sent` (the session's dedup) stays keyed by
+    // the real path — stable across whatever form the client requests.
+    const requestedRoot = requested.replace(/\/+$/, "");
+    const asRequested = (real: string): string => requestedRoot + real.slice(target.length);
+
     const dirs: Record<string, FsDirData> = {};
 
     interface Task {
@@ -307,7 +315,7 @@ export const buildTree = (
       // Only send it if what the session last received is missing or stale;
       // either way record the version it now holds.
       if (sent.get(task.path) !== version) {
-        dirs[task.path] = { version, entries: meta.map((entry): FsDirEntry => ({ name: entry.name, type: entry.type })) };
+        dirs[asRequested(task.path)] = { version, entries: meta.map((entry): FsDirEntry => ({ name: entry.name, type: entry.type })) };
         sent.set(task.path, version);
       }
 
@@ -324,7 +332,7 @@ export const buildTree = (
       }
     }
 
-    return { root: target, dirs };
+    return { root: requestedRoot, dirs };
   });
 
 /** Text contents of `requested`, capped at MAX_READ_BYTES. */
