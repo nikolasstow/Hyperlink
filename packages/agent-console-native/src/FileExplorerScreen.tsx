@@ -112,6 +112,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : tree.rootFailed ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
           <Text style={styles.error}>Couldn't load this folder.</Text>
+          {tree.rootError !== undefined ? <Text style={styles.errorDetail}>{tree.rootError}</Text> : null}
           <TouchableOpacity onPress={tree.reloadRoot} activeOpacity={0.6}>
             <Text style={styles.retry}>Try again</Text>
           </TouchableOpacity>
@@ -182,6 +183,11 @@ const styles = StyleSheet.create({
   error: {
     color: colors.secondaryLabel,
     fontSize: 15,
+  },
+  errorDetail: {
+    color: colors.secondaryLabel,
+    fontSize: 12,
+    fontFamily: "Menlo",
   },
   retry: {
     color: colors.tint,

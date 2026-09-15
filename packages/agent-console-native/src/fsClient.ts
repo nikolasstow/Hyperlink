@@ -72,14 +72,18 @@ const treeUrl = (base: string): string => `${base.replace(/\/+$/, "")}/fs/tree`;
 export const fsTree = (base: string, path: string, session: string | undefined): Effect.Effect<FsTreeDelta, FsError> =>
   Effect.gen(function* () {
     const response = yield* Effect.tryPromise({
-      try: (signal) =>
+      // No AbortSignal: RN's fetch handles it inconsistently and this request is
+      // short-lived anyway.
+      try: () =>
         fetch(treeUrl(base), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ path, session }),
-          signal,
         }),
-      catch: () => new FsError({ reason: "transport", path }),
+      catch: (error) => {
+        console.warn("fs/tree request failed", treeUrl(base), error);
+        return new FsError({ reason: "transport", path });
+      },
     });
     if (response.status === 404) return { session: session ?? "", root: path, dirs: {} };
     if (response.status >= 400) return yield* new FsError({ reason: "http", path, status: response.status });

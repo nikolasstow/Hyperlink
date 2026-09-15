@@ -65,12 +65,25 @@ export type FileTree = {
   readonly rows: ReadonlyArray<FileRow>;
   readonly rootLoading: boolean;
   readonly rootFailed: boolean;
+  /** A short reason for a root load failure, for display (transport/http/decode). */
+  readonly rootError: string | undefined;
   readonly toggle: (row: FileRow) => void;
   readonly reloadRoot: () => void;
 };
 
+/** A short, displayable reason from a rejected load (an FsError value, or any thrown thing). */
+const describeError = (error: unknown): string => {
+  if (typeof error === "object" && error !== null && "reason" in error) {
+    const reason = String(error.reason);
+    const status = "status" in error ? error.status : undefined;
+    return status === undefined ? reason : `${reason} ${String(status)}`;
+  }
+  return String(error);
+};
+
 export const useFileTree = (backend: string, rootDir: string): FileTree => {
   const [state, setState] = React.useState<TreeState>(() => seedFromCache(rootDir));
+  const [rootError, setRootError] = React.useState<string | undefined>(undefined);
 
   const showChildren = React.useCallback((dir: string, entries: ReadonlyArray<FsEntry>): void => {
     setState((prev) => {
@@ -130,14 +143,18 @@ export const useFileTree = (backend: string, rootDir: string): FileTree => {
           if (fresh !== undefined) showChildren(dir, fresh);
           else markFailed(dir);
         })
-        .catch(() => markFailed(dir));
+        .catch((error: unknown) => {
+          if (dir === rootDir) setRootError(describeError(error));
+          markFailed(dir);
+        });
     },
-    [backend, showChildren, markFailed],
+    [backend, rootDir, showChildren, markFailed],
   );
 
   // Seed from cache and refresh on mount / when the rooted directory changes.
   React.useEffect(() => {
     setState(seedFromCache(rootDir));
+    setRootError(undefined);
     load(rootDir);
   }, [rootDir, load]);
 
@@ -186,7 +203,11 @@ export const useFileTree = (backend: string, rootDir: string): FileTree => {
     rows,
     rootLoading: state.loading.has(rootDir) && !state.children.has(rootDir),
     rootFailed: state.failed.has(rootDir),
+    rootError,
     toggle,
-    reloadRoot: () => load(rootDir),
+    reloadRoot: () => {
+      setRootError(undefined);
+      load(rootDir);
+    },
   };
 };
