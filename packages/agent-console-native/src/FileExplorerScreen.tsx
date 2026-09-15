@@ -40,6 +40,7 @@ import { clearForward, popForward, pushForward, useForwardTarget } from "./fileN
 import { FolderIcon } from "./FolderIcon";
 import { useFileTree, type FileRow } from "./fileTree";
 import type { RootStackParamList } from "./RootNavigator";
+import { SetiIcon } from "./SetiIcon";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
@@ -93,7 +94,7 @@ const Row = (props: {
           <View style={styles.chevron} />
         )}
         <TouchableOpacity style={styles.iconCol} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
-          {fileSpec === undefined ? <FolderIcon size={28} /> : <SystemIcon name={fileSpec.symbol} size={20} color={fileSpec.color} />}
+          {fileSpec === undefined ? <FolderIcon size={28} /> : <SetiIcon glyph={fileSpec.glyph} size={22} />}
         </TouchableOpacity>
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
           <Text style={styles.name} numberOfLines={1}>
