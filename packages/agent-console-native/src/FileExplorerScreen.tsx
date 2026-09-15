@@ -31,7 +31,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 /** Left screen inset, indentation per level, and the leading chevron column.
  * Tuned to the Files reference: a small chevron with generous room around it,
  * icon at ~40pt, name at ~80pt. */
-const EDGE = 6;
+const EDGE = 10;
 const INDENT = 20;
 const CHEVRON_COL = 28;
 const ICON_COL = 30;
@@ -47,8 +47,9 @@ const Row = (props: {
   const isDir = row.type === "directory";
   const fileSpec = isDir ? undefined : iconForFile(row.name);
   const indent = row.depth * INDENT;
-  // Separator starts under this row's icon and runs to the right edge.
-  const separatorInset = EDGE + indent + CHEVRON_COL;
+  // Separator starts at the name and runs to the right edge — the icon lives in
+  // the leading block (with the chevron), so the border never runs under it.
+  const separatorInset = EDGE + indent + CHEVRON_COL + ICON_COL + ICON_GAP;
   return (
     <View>
       <View style={[styles.row, { paddingLeft: EDGE + indent }]}>
@@ -72,10 +73,10 @@ const Row = (props: {
         ) : (
           <View style={styles.chevron} />
         )}
+        <TouchableOpacity style={styles.iconCol} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
+          {fileSpec === undefined ? <FolderIcon size={28} /> : <SystemIcon name={fileSpec.symbol} size={20} color={fileSpec.color} />}
+        </TouchableOpacity>
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
-          <View style={styles.iconCol}>
-            {fileSpec === undefined ? <FolderIcon size={28} /> : <SystemIcon name={fileSpec.symbol} size={20} color={fileSpec.color} />}
-          </View>
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
           </Text>
@@ -122,7 +123,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : tree.rows.length === 0 ? (
         <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
       ) : (
-        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 12 }}>
+        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 16 }}>
           {tree.rows.map((row, index) => (
             <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
           ))}
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: 6,
+    paddingRight: 10,
     minHeight: 54,
   },
   chevron: {
@@ -161,12 +162,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: ICON_GAP,
-    paddingVertical: 13,
+    paddingLeft: ICON_GAP,
+    paddingVertical: 12,
   },
   iconCol: {
     width: ICON_COL,
     alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "stretch",
   },
   name: {
     flex: 1,
