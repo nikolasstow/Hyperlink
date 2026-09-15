@@ -27,6 +27,10 @@ const POLL_MS = 90_000;
 const LIST_LIMIT = 20;
 const TERMINAL = new Set(["FINISHED", "ERRORED", "CANCELED"]);
 
+/** Process-wide guard (on `globalThis` so it survives plugin-module re-evaluation
+ * across dev-server restarts) ensuring only one build poller ever runs. */
+const POLLER_STARTED = Symbol.for("agent-console.buildsPoller.started");
+
 /** Where `eas` finds the project (app.json/eas.json). Defaults to the native app
  * package next to this one. */
 const projectDir = process.env.AGENT_CONSOLE_EAS_PROJECT_DIR ?? resolve(process.cwd(), "../agent-console-native");
@@ -305,6 +309,14 @@ export const buildsPlugin = (): Plugin => {
     name: "agent-console-builds",
     configureServer(server) {
       server.middlewares.use(handler);
+      // Start the poller at most ONCE per process. A vite dev-server restart (any
+      // config/plugin edit triggers one) re-runs `configureServer` in the same
+      // node process, and an `unref`'d interval keeps firing after a restart — so
+      // without this guard the pollers accumulate and one finished build fires a
+      // notification per leaked poller. The flag lives on `globalThis` so it
+      // survives the plugin module being re-evaluated across restarts too.
+      if (Reflect.get(globalThis, POLLER_STARTED) === true) return;
+      Reflect.set(globalThis, POLLER_STARTED, true);
       // Kick off shortly after boot, then on an interval. `unref` so the timer
       // never keeps the process alive on its own.
       const timer = setInterval(() => void tick(), POLL_MS);
