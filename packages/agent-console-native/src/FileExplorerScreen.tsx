@@ -33,7 +33,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
  * icon at ~40pt, name at ~80pt. */
 const EDGE = 10;
 const INDENT = 20;
-const CHEVRON_COL = 28;
+const CHEVRON_COL = 22;
 const ICON_COL = 30;
 const ICON_GAP = 12;
 
