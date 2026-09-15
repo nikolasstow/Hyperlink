@@ -31,7 +31,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 /** Left screen inset, indentation per level, and the leading chevron column.
  * Tuned to the Files reference: a small chevron with generous room around it,
  * icon at ~40pt, name at ~80pt. */
-const EDGE = 14;
+const EDGE = 6;
 const INDENT = 20;
 const CHEVRON_COL = 28;
 const ICON_COL = 30;
@@ -122,7 +122,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : tree.rows.length === 0 ? (
         <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
       ) : (
-        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 8 }}>
+        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 12 }}>
           {tree.rows.map((row, index) => (
             <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
           ))}
@@ -148,8 +148,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: 14,
-    minHeight: 44,
+    paddingRight: 6,
+    minHeight: 54,
   },
   chevron: {
     width: CHEVRON_COL,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: ICON_GAP,
-    paddingVertical: 9,
+    paddingVertical: 13,
   },
   iconCol: {
     width: ICON_COL,
