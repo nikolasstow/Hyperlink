@@ -20,6 +20,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { iconForFile } from "./fileIcon";
 import { FolderIcon } from "./FolderIcon";
 import { useFileTree, type FileRow } from "./fileTree";
 import type { RootStackParamList } from "./RootNavigator";
@@ -43,6 +44,7 @@ const Row = (props: {
 }): React.ReactElement => {
   const { row } = props;
   const isDir = row.type === "directory";
+  const fileSpec = isDir ? undefined : iconForFile(row.name);
   const indent = row.depth * INDENT;
   // Separator starts under this row's icon and runs to the right edge.
   const separatorInset = EDGE + indent + CHEVRON_COL;
@@ -70,7 +72,7 @@ const Row = (props: {
         )}
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
           <View style={styles.iconCol}>
-            {isDir ? <FolderIcon size={28} /> : <SystemIcon name="doc.fill" size={22} color={colors.secondaryLabel} />}
+            {fileSpec === undefined ? <FolderIcon size={28} /> : <SystemIcon name={fileSpec.symbol} size={20} color={fileSpec.color} />}
           </View>
           <Text style={styles.name} numberOfLines={1}>
             {row.name}
