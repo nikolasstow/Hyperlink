@@ -44,6 +44,37 @@ import {
   type DefaultWorktreePreference,
 } from "./settings";
 import { SystemIcon } from "./SystemIcon";
+import { useTheme } from "./theme";
+
+/** Preset accent colours offered in the theme pickers — a spread across the
+ * hue wheel, iOS system-colour values. */
+const THEME_PALETTE = [
+  "#34C759",
+  "#30B0C7",
+  "#007AFF",
+  "#5856D6",
+  "#AF52DE",
+  "#FF2D55",
+  "#FF3B30",
+  "#FF9500",
+  "#FFCC00",
+] as const;
+
+const ColorSwatches = (props: {
+  readonly value: string;
+  readonly onChange: (color: string) => void;
+}): React.ReactElement => (
+  <View style={styles.swatchRow}>
+    {THEME_PALETTE.map((color) => (
+      <TouchableOpacity
+        key={color}
+        accessibilityLabel={color}
+        onPress={() => props.onChange(color)}
+        style={[styles.swatch, { backgroundColor: color }, props.value.toLowerCase() === color.toLowerCase() ? styles.swatchSelected : null]}
+      />
+    ))}
+  </View>
+);
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
@@ -59,6 +90,7 @@ const timeAgo = (ms: number): string => {
 };
 
 export const SettingsScreen = (props: Props): React.ReactElement => {
+  const { theme, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { client, address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
@@ -191,7 +223,18 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Workspace</Text>
+        <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Appearance</Text>
+        <View style={styles.card}>
+          <Text style={styles.fieldLabel}>Primary color</Text>
+          <Text style={styles.hint}>The send button, and the shade of your chat bubbles.</Text>
+          <ColorSwatches value={theme.primary} onChange={(color) => setTheme({ ...theme, primary: color })} />
+          <View style={styles.themeDivider} />
+          <Text style={styles.fieldLabel}>Secondary color</Text>
+          <Text style={styles.hint}>Accents like the unread indicator.</Text>
+          <ColorSwatches value={theme.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
+        </View>
+
+        <Text style={styles.sectionLabel}>Workspace</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Root folder</Text>
           <Text style={styles.hint}>Base path for discovery, new clones, and new worktrees.</Text>
@@ -428,6 +471,28 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "600",
+  },
+  swatchRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    paddingTop: 4,
+  },
+  swatch: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+  },
+  swatchSelected: {
+    borderWidth: 3,
+    borderColor: colors.label,
+  },
+  themeDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
+    marginVertical: 4,
   },
   hint: {
     color: colors.secondaryLabel,

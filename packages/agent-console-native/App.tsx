@@ -8,6 +8,7 @@ import { LaunchNavigator } from "./src/LaunchNavigator";
 import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
+import { ThemeProvider } from "./src/theme";
 import {
   clearServerAddress,
   deriveBackendAddress,
@@ -195,9 +196,11 @@ export default function App() {
     // of arriving as 0 then settling — that settle was moving the space between
     // the nav bar and the content.
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <ErrorBoundary>
-        <AppInner />
-      </ErrorBoundary>
+      <ThemeProvider>
+        <ErrorBoundary>
+          <AppInner />
+        </ErrorBoundary>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

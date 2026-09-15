@@ -22,6 +22,7 @@ import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
 import { lastMessageSummary, useSessionPreview } from "./sessionPreview";
+import { useTheme } from "./theme";
 
 /** Horizontal margin outside the card (matches the list gutter). */
 const CARD_GUTTER = 12;
@@ -61,6 +62,7 @@ const CardBody = (props: {
   readonly worktree?: string;
   readonly meta: string;
   readonly unread: boolean;
+  readonly unreadColor: string;
   readonly summary?: string;
 }): React.ReactElement => (
   <VStack
@@ -69,7 +71,7 @@ const CardBody = (props: {
     modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), background(colors.cardBackground), cornerRadius(14)]}
   >
     <HStack spacing={7} alignment="center">
-      {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(colors.themeSecondary)]} /> : null}
+      {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(props.unreadColor)]} /> : null}
       <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
     </HStack>
     {props.repo !== undefined || props.worktree !== undefined ? (
@@ -90,6 +92,7 @@ const CardBody = (props: {
 );
 
 export const SessionCard = (props: SessionCardProps): React.ReactElement => {
+  const { colors: themeColors } = useTheme();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const cardWidth = screenWidth - CARD_GUTTER * 2;
   const previewHeight = Math.round(screenHeight * PREVIEW_HEIGHT_FRACTION);
@@ -122,6 +125,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
               worktree={props.worktree}
               meta={props.meta}
               unread={props.unread}
+              unreadColor={themeColors.secondary}
               summary={summary === undefined ? undefined : summaryLabel(summary.role, summary.text)}
             />
           </VStack>

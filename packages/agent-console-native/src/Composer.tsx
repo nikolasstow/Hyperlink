@@ -84,9 +84,10 @@ import { Button, Host } from "@expo/ui/swift-ui";
 import { buttonStyle, foregroundStyle, frame, glassEffect, imageScale, labelStyle } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { DynamicColorIOS, LayoutAnimation, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
+import { LayoutAnimation, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
+import { useTheme } from "./theme";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { findModel, getDefaultModel, listModels, type ModelOption } from "./models";
 import { ModelPicker } from "./ModelPicker";
@@ -148,14 +149,12 @@ const mixRgb = (
   return alpha === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alpha})`;
 };
 const SYSTEM_GRAY = { light: [142, 142, 147], dark: [142, 142, 147] } as const;
-const SYSTEM_GREEN = { light: [52, 199, 89], dark: [48, 209, 88] } as const;
 const WHITE: readonly [number, number, number] = [255, 255, 255];
 const BLACK: readonly [number, number, number] = [0, 0, 0];
 // + is a light gray fill with a dark gray icon (see CHIP_ICON below) —
 // both fixed, not theme-adaptive, so the pairing holds in either theme.
 const GRAY_LIGHTEN_FACTOR = 0.6;
 const GRAY_DARKEN_FACTOR = 0.25;
-const GREEN_MUTE_FACTOR = 0.32;
 // Slightly transparent fills, so the composer's own glass shows through a
 // little. Safe to do here: the delayed-alignment bug came from dropping
 // `glassEffect` for a flat `background()`, not from the tint's alpha —
@@ -164,18 +163,8 @@ const GREEN_MUTE_FACTOR = 0.32;
 const FILL_ALPHA = 0.85;
 const CHIP_FILL = mixRgb(SYSTEM_GRAY.light, WHITE, GRAY_LIGHTEN_FACTOR, FILL_ALPHA);
 const CHIP_ICON = mixRgb(SYSTEM_GRAY.light, BLACK, GRAY_DARKEN_FACTOR);
-const SEND_MUTED_FILL = DynamicColorIOS({
-  light: mixRgb(SYSTEM_GREEN.light, WHITE, GREEN_MUTE_FACTOR, FILL_ALPHA),
-  dark: mixRgb(SYSTEM_GREEN.dark, WHITE, GREEN_MUTE_FACTOR, FILL_ALPHA),
-});
-// systemGreen at the same alpha rather than colors.brand — PlatformColor
-// can't carry an alpha, and leaving send's armed state fully opaque while
-// everything around it is translucent looked inconsistent. Same hue as
-// colors.brand resolves to.
-const SEND_ACTIVE_FILL = DynamicColorIOS({
-  light: mixRgb(SYSTEM_GREEN.light, WHITE, 0, FILL_ALPHA),
-  dark: mixRgb(SYSTEM_GREEN.dark, WHITE, 0, FILL_ALPHA),
-});
+// Send button fills (armed / unarmed) are theme-derived now — see
+// theme.ts deriveColors and sendButtonModifiers' fill args.
 
 // +/send's own background, glass effect, and icon — one native element,
 // same recipe the session header's own buttons used before they became
@@ -214,13 +203,13 @@ const CHIP_BUTTON_MODIFIERS = [
 // armed yet" rather than going fully neutral. The icon itself stays white
 // in both states — deliberately not flipping to a lower-contrast color
 // when muted, unlike the fill.
-const sendButtonModifiers = (active: boolean) => [
+const sendButtonModifiers = (active: boolean, activeFill: string, mutedFill: string) => [
   buttonStyle("plain"),
   labelStyle("iconOnly"),
   imageScale("medium"),
   frame({ width: COMPOSER_SEND_CHIP_SIZE, height: COMPOSER_SEND_CHIP_SIZE }),
   glassEffect({
-    glass: { variant: "regular", interactive: true, tint: active ? SEND_ACTIVE_FILL : SEND_MUTED_FILL },
+    glass: { variant: "regular", interactive: true, tint: active ? activeFill : mutedFill },
     shape: "circle",
   }),
   // Last, after glassEffect — see CHIP_BUTTON_MODIFIERS's own note on why
@@ -246,6 +235,7 @@ export const Composer = (props: {
   readonly topSection?: React.ReactNode;
 }): React.ReactElement => {
   const { client } = useAppContext();
+  const { colors: themeColors } = useTheme();
   const scheme = useColorScheme();
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
@@ -432,7 +422,7 @@ export const Composer = (props: {
                   }
                   void send();
                 }}
-                modifiers={sendButtonModifiers(hasContent)}
+                modifiers={sendButtonModifiers(hasContent, themeColors.sendActiveFill, themeColors.sendMutedFill)}
               />
             </Host>
           </View>

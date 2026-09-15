@@ -18,14 +18,21 @@ import { ROW_GUTTER } from "./layout";
 import { Markdown } from "./Markdown";
 import { MessageActions } from "./MessageActions";
 import { ReasoningBlock } from "./ReasoningBlock";
+import { useTheme } from "./theme";
 import { ToolCallBubble } from "./ToolCallBubble";
 import type { TranscriptMessage } from "./useSessionStream";
 
 const MessageBubbleImpl = (props: { readonly message: TranscriptMessage; readonly hideActions?: boolean }): React.ReactElement => {
   const isUser = props.message.role === "user";
+  const { colors: themeColors } = useTheme();
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
+      <View
+        style={[
+          styles.bubble,
+          isUser ? [styles.bubbleUser, { backgroundColor: themeColors.primaryTint }] : styles.bubbleAssistant,
+        ]}
+      >
         {Array.from(props.message.parts.values()).map((part) => {
           switch (part.type) {
             case "text":

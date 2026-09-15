@@ -214,3 +214,39 @@ export const getBackendAddress = async (serverAddress: string): Promise<string> 
 
 export const setBackendAddress = (value: string): Promise<void> =>
   AsyncStorage.setItem(BACKEND_ADDRESS_KEY, value);
+
+const THEME_KEY = "agent-console-native:theme";
+
+/** The app's theme colours. `primary` drives the send button and (as a tint)
+ * the user's chat bubble; `secondary` drives accents like the unread dot. Hex
+ * strings so they can come from a picker or, later, an extracted VS Code theme.
+ * Persisted on-device here and mirrored to the server for multi-device sync. */
+export type Theme = {
+  readonly primary: string;
+  readonly secondary: string;
+};
+
+/** Placeholder defaults — systemGreen / systemBlue — until real theme work
+ * (or an installed VS Code theme) supplies colours. */
+export const DEFAULT_THEME: Theme = {
+  primary: "#34C759",
+  secondary: "#007AFF",
+};
+
+export const getStoredTheme = async (): Promise<Theme | undefined> => {
+  const raw = await AsyncStorage.getItem(THEME_KEY);
+  if (raw === null || raw === "") return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    if (!("primary" in parsed) || !("secondary" in parsed)) return undefined;
+    const { primary, secondary } = parsed;
+    if (typeof primary !== "string" || typeof secondary !== "string") return undefined;
+    return { primary, secondary };
+  } catch {
+    return undefined;
+  }
+};
+
+export const setStoredTheme = (value: Theme): Promise<void> =>
+  AsyncStorage.setItem(THEME_KEY, JSON.stringify(value));

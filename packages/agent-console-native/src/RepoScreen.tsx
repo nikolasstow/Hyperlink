@@ -26,6 +26,7 @@ import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { clearForward } from "./fileNavHistory";
+import { useTheme } from "./theme";
 import { repoMenuFor } from "./repoMenu";
 import { abortSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
@@ -67,6 +68,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
   const { client } = useAppContext();
   const insets = useSafeAreaInsets();
+  const { colors: themeColors } = useTheme();
   const perGroup = useGroupSize();
   const isFocused = useIsFocused();
   const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
@@ -135,7 +137,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionHeading}>{title}</Text>
       {unreadCount > 0 ? (
-        <View style={styles.unreadPill}>
+        <View style={[styles.unreadPill, { backgroundColor: themeColors.secondary }]}>
           <Text style={styles.unreadPillText}>{unreadCount}</Text>
         </View>
       ) : null}
