@@ -14,9 +14,11 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { GlassView } from "expo-glass-effect";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -38,6 +40,8 @@ const CHEVRON_COL = 20;
 const CHEVRON_ICON_GAP = 6;
 const ICON_COL = 30;
 const ICON_GAP = 12;
+/** Height of the floating glass search pill at the bottom. */
+const SEARCH_PILL_HEIGHT = 44;
 
 const Row = (props: {
   readonly row: FileRow;
@@ -96,6 +100,14 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const tree = useFileTree(backend, dir);
   const { navigation } = props;
   const forwardTarget = useForwardTarget();
+  const insets = useSafeAreaInsets();
+  const scheme = useColorScheme();
+  const [query, setQuery] = React.useState("");
+
+  // Filter the visible rows by name. A trimmed, case-insensitive substring
+  // match over what's loaded — expanded folders included.
+  const q = query.trim().toLowerCase();
+  const rows = q.length === 0 ? tree.rows : tree.rows.filter((row) => row.name.toLowerCase().includes(q));
 
   // When this folder is popped (back button or swipe-back), remember it so the
   // forward button can return here. Native stacks otherwise discard it.
@@ -126,11 +138,12 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
     if (next !== undefined) navigation.push("FileExplorer", { repo, dir: next });
   }, [navigation, repo]);
 
-  // A native forward button in the nav bar, disabled when there's nowhere
-  // forward to go (matches the system back button's own glass and grouping).
+  // A native forward button beside the back button, disabled when there's
+  // nowhere forward to go. Left items supplement the back button (they sit to
+  // its right) because `headerBackVisible` is true.
   React.useEffect(() => {
     navigation.setOptions({
-      unstable_headerRightItems: () => [
+      unstable_headerLeftItems: () => [
         {
           type: "button",
           label: "Forward",
@@ -159,13 +172,41 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : tree.rows.length === 0 ? (
         <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
       ) : (
-        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 14 }}>
-          {tree.rows.map((row, index) => (
-            <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
-          ))}
+        <ScrollView
+          style={styles.fill}
+          keyboardDismissMode="interactive"
+          contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: insets.bottom + SEARCH_PILL_HEIGHT + 28, paddingHorizontal: 14 }}
+        >
+          {rows.length === 0 ? (
+            <Text style={styles.noMatch}>No matches.</Text>
+          ) : (
+            rows.map((row, index) => (
+              <Row key={row.path} row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
+            ))
+          )}
         </ScrollView>
       )}
       <EdgeBlurBars variant="top" />
+      {!tree.rootLoading && !tree.rootFailed && tree.rows.length > 0 ? (
+        <View style={[styles.searchWrap, { paddingBottom: insets.bottom + 10 }]} pointerEvents="box-none">
+          <View style={styles.searchClip}>
+            <GlassView style={styles.searchPill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+              <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
+              <TextInput
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search"
+                placeholderTextColor={colors.placeholderText}
+                returnKeyType="search"
+                autoCorrect={false}
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+              />
+            </GlassView>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -218,11 +259,42 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.separator,
+    backgroundColor: colors.opaqueSeparator,
   },
   empty: {
     color: colors.secondaryLabel,
     textAlign: "center",
+  },
+  noMatch: {
+    color: colors.secondaryLabel,
+    fontSize: 15,
+    textAlign: "center",
+    marginTop: 24,
+  },
+  searchWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+  },
+  searchClip: {
+    borderRadius: SEARCH_PILL_HEIGHT / 2,
+    borderCurve: "continuous",
+    overflow: "hidden",
+  },
+  searchPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: SEARCH_PILL_HEIGHT,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.label,
+    fontSize: 16,
+    padding: 0,
   },
   error: {
     color: colors.secondaryLabel,

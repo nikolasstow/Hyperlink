@@ -22,6 +22,9 @@ export const colors = {
   cardBackground: PlatformColor("secondarySystemGroupedBackground"),
   fillBackground: PlatformColor("tertiarySystemFill"),
   separator: PlatformColor("separator"),
+  /** The stronger, fully-opaque hairline — darker than `separator` (which is
+   * translucent). For list rows that want a more defined divider. */
+  opaqueSeparator: PlatformColor("opaqueSeparator"),
   label: PlatformColor("label"),
   secondaryLabel: PlatformColor("secondaryLabel"),
   placeholderText: PlatformColor("placeholderText"),
