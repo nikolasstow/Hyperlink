@@ -244,6 +244,9 @@ export const RootNavigator = (): React.ReactElement => {
             headerStyle: { backgroundColor: "transparent" },
             headerShadowVisible: false,
             headerBackButtonDisplayMode: "minimal",
+            // Explicit so the forward button (a left item) supplements the back
+            // button instead of replacing it (leftItemsSupplementBackButton).
+            headerBackVisible: true,
             headerTitle: () => <HeaderTitlePill title={route.params.dir.split("/").filter(Boolean).pop() ?? route.params.repo} />,
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           })}

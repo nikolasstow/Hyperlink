@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Animated,
   DynamicColorIOS,
+  Easing,
   LayoutAnimation,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -141,7 +142,10 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       hidden.current = next;
       Animated.timing(pillOffset, {
         toValue: next ? hiddenDistance : 0,
-        duration: 200,
+        // Curved, not linear: accelerate away on hide, and ease it back in
+        // (decelerate into place) a touch slower on reveal.
+        duration: next ? 200 : 320,
+        easing: next ? Easing.in(Easing.cubic) : Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
     },
