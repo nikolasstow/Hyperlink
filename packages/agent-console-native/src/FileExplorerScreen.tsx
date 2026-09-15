@@ -33,7 +33,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
  * icon at ~40pt, name at ~80pt. */
 const EDGE = 0;
 const INDENT = 20;
-const CHEVRON_COL = 16;
+const CHEVRON_COL = 20;
 const ICON_COL = 30;
 const ICON_GAP = 12;
 
@@ -157,6 +157,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "center",
     alignSelf: "stretch",
+    paddingLeft: 4,
   },
   body: {
     flex: 1,
@@ -176,7 +177,7 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "400",
-    paddingRight: 10,
+    paddingHorizontal: 10,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
