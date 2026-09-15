@@ -38,11 +38,6 @@ const projectDir = process.env.AGENT_CONSOLE_EAS_PROJECT_DIR ?? resolve(process.
 /** Same origin the app already registered its push token against. */
 const notifyUrl = `http://127.0.0.1:${process.env.PORT ?? 5195}/push/notify`;
 
-/** Shared secret for the EAS build webhook. When set, EAS pushes build results
- * to `/builds/webhook` (via the cloudflared tunnel) and the CLI poller is
- * disabled — the webhook is instant and can't leak timers. When unset, we fall
- * back to polling. Set the SAME value in `eas webhook:create --secret`. */
-const webhookSecret = process.env.AGENT_CONSOLE_EAS_WEBHOOK_SECRET;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -215,9 +210,9 @@ const notify = async (build: BuildRow): Promise<void> => {
 
 /** Verify EAS's `expo-signature` header — an HMAC-SHA1 of the raw body with the
  * shared secret, as `sha1=<hex>`. Constant-time compare. */
-const verifyWebhook = (raw: string, signature: string | undefined): boolean => {
-  if (webhookSecret === undefined || signature === undefined) return false;
-  const expected = `sha1=${createHmac("sha1", webhookSecret).update(raw).digest("hex")}`;
+const verifyWebhook = (raw: string, signature: string | undefined, secret: string): boolean => {
+  if (signature === undefined) return false;
+  const expected = `sha1=${createHmac("sha1", secret).update(raw).digest("hex")}`;
   const got = Buffer.from(signature);
   const want = Buffer.from(expected);
   return got.length === want.length && timingSafeEqual(got, want);
@@ -246,6 +241,12 @@ const buildFromWebhook = (payload: unknown): BuildRow | undefined => {
 };
 
 export const buildsPlugin = (): Plugin => {
+  // Read at factory time (after vite.config loads .env into process.env), not at
+  // module load. When set, EAS pushes results to /builds/webhook (via the
+  // cloudflared tunnel) and the CLI poller is disabled — the webhook is instant
+  // and has no timers to leak; unset, we fall back to polling. Must match the
+  // value in `eas webhook:create --secret`.
+  const webhookSecret = process.env.AGENT_CONSOLE_EAS_WEBHOOK_SECRET;
   // id -> last-seen status. Seeded on the first poll so the existing backlog is
   // never announced; only later transitions notify.
   const seen = new Map<string, string>();
@@ -316,7 +317,7 @@ export const buildsPlugin = (): Plugin => {
         }
         const raw = await readBody(req);
         const signature = req.headers["expo-signature"];
-        if (!verifyWebhook(raw, typeof signature === "string" ? signature : undefined)) {
+        if (!verifyWebhook(raw, typeof signature === "string" ? signature : undefined, webhookSecret)) {
           json(401, { error: "bad signature" });
           return;
         }
