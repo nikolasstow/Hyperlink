@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "400",
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
