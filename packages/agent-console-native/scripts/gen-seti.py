@@ -112,6 +112,14 @@ for ext, lang in EXT_TO_LANG.items():
 default_def = theme["file"]
 
 # Collect the definitions we actually need, extract paths, drop any without one.
+def light_color(def_name, fallback):
+    """Light-theme colour: the `<name>_light` variant if present, else the
+    default colour. Seti's `_light` defs share the glyph, only the colour
+    differs (darker, for light backgrounds)."""
+    lc = defs.get(def_name + "_light")
+    return lc.get("fontColor", fallback) if lc else fallback
+
+
 needed = set(by_name.values()) | set(by_ext.values()) | {default_def}
 glyphs = {}
 for d in sorted(needed):
@@ -119,7 +127,8 @@ for d in sorted(needed):
     if pb is None:
         continue
     path, box = pb
-    glyphs[d] = {"path": path, "color": defs[d].get("fontColor", "#d4d7d6"), "box": box}
+    color = defs[d].get("fontColor", "#d4d7d6")
+    glyphs[d] = {"path": path, "color": color, "colorLight": light_color(d, color), "box": box}
 
 by_name = {k: v for k, v in by_name.items() if v in glyphs}
 by_ext = {k: v for k, v in by_ext.items() if v in glyphs}
@@ -128,6 +137,7 @@ by_ext = {k: v for k, v in by_ext.items() if v in glyphs}
 # it in by glyph name (not codepoint — it isn't in the cmap) under a synthetic
 # key so directories can use it. Neutral grey, since the theme gives no colour.
 FOLDER_COLOR = "#8a9499"
+FOLDER_COLOR_LIGHT = "#6f787d"
 folder_key = None
 if "folder" in font.getGlyphOrder():
     pen = SVGPathPen(glyph_set)
@@ -137,7 +147,12 @@ if "folder" in font.getGlyphOrder():
     glyph_set["folder"].draw(bp)
     if fpath and bp.bounds is not None:
         folder_key = "_folder"
-        glyphs[folder_key] = {"path": fpath, "color": FOLDER_COLOR, "box": [round(v) for v in bp.bounds]}
+        glyphs[folder_key] = {
+            "path": fpath,
+            "color": FOLDER_COLOR,
+            "colorLight": FOLDER_COLOR_LIGHT,
+            "box": [round(v) for v in bp.bounds],
+        }
 
 
 def ts_obj(d, indent):
@@ -154,7 +169,8 @@ for d in sorted(glyphs):
     g = glyphs[d]
     box = "[" + ", ".join(str(v) for v in g["box"]) + "]"
     glyph_lines.append(
-        f'  {json.dumps(d)}: {{ path: {json.dumps(g["path"])}, color: {json.dumps(g["color"])}, box: {box} }},'
+        f'  {json.dumps(d)}: {{ path: {json.dumps(g["path"])}, '
+        f'color: {json.dumps(g["color"])}, colorLight: {json.dumps(g["colorLight"])}, box: {box} }},'
     )
 
 out = f'''/**
@@ -176,7 +192,10 @@ export const SETI_UNITS_PER_EM = {upm};
 
 export interface SetiGlyph {{
   readonly path: string;
+  /** Colour for dark themes (Seti's default). */
   readonly color: string;
+  /** Colour for light themes (Seti's `_light` variant — darker for contrast). */
+  readonly colorLight: string;
   /** Tight glyph bounds in font units (y-up): [xMin, yMin, xMax, yMax]. Used
    * to frame each glyph so it fills the icon; SetiIcon flips y when drawing. */
   readonly box: readonly [number, number, number, number];

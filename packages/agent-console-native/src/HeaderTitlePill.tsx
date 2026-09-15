@@ -4,41 +4,33 @@
  * file explorer). The custom-header counterpart is `TitlePill` — both share the
  * design tokens in titlePillStyle.ts.
  *
- * The capsule fits its content. The title is always known up front, so the
- * width is computed synchronously from it (`titlePillWidth`) rather than via
- * `@expo/ui`'s content-sized `Host`, whose native round-trip this codebase has
- * repeatedly seen race with surrounding layout. It's clamped so it can never
- * reach the nav items; an over-long title truncates (`lineLimit(1)`).
+ * The capsule fits its content natively: `Host matchContents` sizes the Host to
+ * its SwiftUI content, and the HStack carries only a height `frame` (no width),
+ * so the capsule hugs the text (plus the optional dot). An over-long title
+ * truncates (`lineLimit(1)`) within whatever width the nav bar leaves between
+ * its items.
  *
  * @internal
  */
 import { HStack, Host, Image, Text as UIText } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame, glassEffect, lineLimit, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
-import { PILL_DOT_GAP, PILL_DOT_SIZE, PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H, titlePillWidth } from "./titlePillStyle";
-
-const MIN_WIDTH = 56;
-const MAX_WIDTH_RATIO = 0.6;
+import { PILL_DOT_GAP, PILL_DOT_SIZE, PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H } from "./titlePillStyle";
 
 export const HeaderTitlePill = (props: {
   readonly title: string;
   /** Trailing status dot: omit for no dot. */
   readonly dot?: "connected" | "disconnected";
 }): React.ReactElement => {
-  const { width: screenWidth } = useWindowDimensions();
   const hasDot = props.dot !== undefined;
-  const maxWidth = Math.round(screenWidth * MAX_WIDTH_RATIO);
-  const pillWidth = Math.min(Math.max(titlePillWidth(props.title, hasDot), MIN_WIDTH), maxWidth);
-
   return (
-    <Host style={{ width: pillWidth, height: PILL_HEIGHT }}>
+    <Host matchContents style={{ height: PILL_HEIGHT }}>
       <HStack
         alignment="center"
         spacing={PILL_DOT_GAP}
         modifiers={[
-          frame({ width: pillWidth, height: PILL_HEIGHT }),
+          frame({ height: PILL_HEIGHT }),
           padding({ horizontal: PILL_PAD_H }),
           glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
         ]}

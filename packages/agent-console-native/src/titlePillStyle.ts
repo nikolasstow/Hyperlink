@@ -23,18 +23,3 @@ export const PILL_DOT_GAP = 8;
 /** Capsule corner radius. */
 export const PILL_RADIUS = PILL_HEIGHT / 2;
 
-/** Average glyph advance as a fraction of font size for the system font at
- * semibold — deliberately generous so a synchronous estimate never truncates.
- * The title is always known up front, so the native pill sizes itself from this
- * rather than an async measure-and-resize (which flashes). */
-const AVG_GLYPH_RATIO = 0.62;
-
-/** Content-fitting pill width for a known title, computed synchronously (no
- * layout round-trip). Callers clamp to their own max so it can't reach the nav
- * items. */
-export const titlePillWidth = (title: string, hasDot: boolean): number => {
-  const text = Math.ceil(title.length * PILL_FONT_SIZE * AVG_GLYPH_RATIO);
-  const dot = hasDot ? PILL_DOT_SIZE + PILL_DOT_GAP : 0;
-  return text + PILL_PAD_H * 2 + dot;
-};
-
