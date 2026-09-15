@@ -123,7 +123,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : tree.rows.length === 0 ? (
         <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
       ) : (
-        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 16 }}>
+        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 14 }}>
           {tree.rows.map((row, index) => (
             <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
           ))}
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   chevron: {
     width: CHEVRON_COL,
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "center",
     alignSelf: "stretch",
   },
