@@ -38,10 +38,10 @@ import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { iconForFile } from "./fileIcon";
 import { clearForward, popForward, pushForward, useForwardTarget } from "./fileNavHistory";
-import { FolderIcon } from "./FolderIcon";
 import { useFileTree, type FileRow } from "./fileTree";
 import type { RootStackParamList } from "./RootNavigator";
 import { SetiIcon } from "./SetiIcon";
+import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
@@ -98,7 +98,7 @@ const Row = (props: {
           <View style={styles.chevron} />
         )}
         <TouchableOpacity style={styles.iconCol} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
-          {fileSpec === undefined ? <FolderIcon size={28} /> : <SetiIcon glyph={fileSpec.glyph} size={26} />}
+          <SetiIcon glyph={fileSpec === undefined ? setiFolderGlyph ?? setiDefaultGlyph : fileSpec.glyph} size={26} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
           <Text style={styles.name} numberOfLines={1}>

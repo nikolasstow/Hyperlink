@@ -124,6 +124,21 @@ for d in sorted(needed):
 by_name = {k: v for k, v in by_name.items() if v in glyphs}
 by_ext = {k: v for k, v in by_ext.items() if v in glyphs}
 
+# The Seti theme maps no folder icon, but the font ships a `folder` glyph. Pull
+# it in by glyph name (not codepoint — it isn't in the cmap) under a synthetic
+# key so directories can use it. Neutral grey, since the theme gives no colour.
+FOLDER_COLOR = "#8a9499"
+folder_key = None
+if "folder" in font.getGlyphOrder():
+    pen = SVGPathPen(glyph_set)
+    glyph_set["folder"].draw(pen)
+    fpath = pen.getCommands()
+    bp = BoundsPen(glyph_set)
+    glyph_set["folder"].draw(bp)
+    if fpath and bp.bounds is not None:
+        folder_key = "_folder"
+        glyphs[folder_key] = {"path": fpath, "color": FOLDER_COLOR, "box": [round(v) for v in bp.bounds]}
+
 
 def ts_obj(d, indent):
     pad = " " * indent
@@ -182,6 +197,9 @@ export const setiByExt: Record<string, string> = {{
 }};
 
 export const setiDefaultGlyph = {json.dumps(default_def)};
+
+/** The font's own folder glyph (unmapped by the theme), or undefined if absent. */
+export const setiFolderGlyph: string | undefined = {json.dumps(folder_key)};
 '''
 
 open(OUT, "w").write(out)
