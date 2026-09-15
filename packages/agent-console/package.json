@@ -8,6 +8,7 @@
   "author": "Nikolas Stow",
   "scripts": {
     "dev": "vite",
+    "serve": "tsx src/server/serve.ts",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",

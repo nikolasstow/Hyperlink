@@ -1,0 +1,66 @@
+/**
+ * The backend's HTTP surface as an Effect `HttpApi` — the off-vite API. Two
+ * groups over the server-agnostic cores: `extensions` (install / list / remove)
+ * and `config` (the device-synced app config). Served by serve.ts through
+ * `@effect/platform-node`'s `NodeHttpServer` — no vite, no dev-server
+ * middleware. As the other cores (fs.ts, …) migrate off their vite plugins,
+ * they become groups here.
+ *
+ * @internal
+ */
+import { Schema } from "effect";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { ExtensionError } from "./extensions";
+
+const ThemeContribution = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  uiTheme: Schema.optional(Schema.String),
+  file: Schema.String,
+});
+
+/** Wire shape of an installed extension's manifest (mirrors ExtensionManifest). */
+export const ExtensionManifestSchema = Schema.Struct({
+  id: Schema.String,
+  publisher: Schema.String,
+  name: Schema.String,
+  version: Schema.String,
+  displayName: Schema.String,
+  description: Schema.String,
+  iconThemes: Schema.Array(ThemeContribution),
+  colorThemes: Schema.Array(ThemeContribution),
+});
+
+/** The synced app config is free-form JSON — the client owns its shape. */
+export const AppConfigSchema = Schema.Record(Schema.String, Schema.Unknown);
+
+const extensionsGroup = HttpApiGroup.make("extensions").add(
+  HttpApiEndpoint.get("list", "/extensions", {
+    success: Schema.Array(ExtensionManifestSchema),
+    error: ExtensionError,
+  }),
+  HttpApiEndpoint.post("install", "/extensions/install", {
+    payload: Schema.Struct({ ref: Schema.String }),
+    success: ExtensionManifestSchema,
+    error: ExtensionError,
+  }),
+  HttpApiEndpoint.post("remove", "/extensions/remove", {
+    payload: Schema.Struct({ id: Schema.String }),
+    success: Schema.Struct({ ok: Schema.Boolean }),
+    error: ExtensionError,
+  }),
+);
+
+const configGroup = HttpApiGroup.make("config").add(
+  HttpApiEndpoint.get("configGet", "/config", {
+    success: AppConfigSchema,
+    error: ExtensionError,
+  }),
+  HttpApiEndpoint.post("configPut", "/config", {
+    payload: AppConfigSchema,
+    success: AppConfigSchema,
+    error: ExtensionError,
+  }),
+);
+
+export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup);

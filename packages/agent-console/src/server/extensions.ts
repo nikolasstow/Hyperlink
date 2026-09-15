@@ -21,7 +21,7 @@
  */
 import { unzipSync } from "fflate";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
-import { Data, Effect, FileSystem, Layer, ManagedRuntime, Path, Schema } from "effect";
+import { Effect, FileSystem, Layer, ManagedRuntime, Path, Schema } from "effect";
 
 /** A contribution we extracted from an installed extension. `file` is the
  * store-relative path (under the extension's `files/` dir) to the theme JSON. */
@@ -46,10 +46,11 @@ export interface ExtensionManifest {
   readonly colorThemes: ReadonlyArray<ThemeContribution>;
 }
 
-export class ExtensionError extends Data.TaggedError("ExtensionError")<{
-  readonly reason: "download" | "unzip" | "manifest" | "io" | "not-found";
-  readonly detail?: string;
-}> {}
+/** Schema-backed so it doubles as the HttpApi error channel. */
+export class ExtensionError extends Schema.TaggedErrorClass<ExtensionError>()("ExtensionError", {
+  reason: Schema.Literals(["download", "unzip", "manifest", "io", "not-found"]),
+  detail: Schema.optional(Schema.String),
+}) {}
 
 const Contribution = Schema.Struct({
   id: Schema.optional(Schema.String),
