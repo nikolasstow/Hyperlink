@@ -21,6 +21,7 @@ import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { iconForFile } from "./fileIcon";
+import { clearForward, popForward, pushForward, useForwardTarget } from "./fileNavHistory";
 import { FolderIcon } from "./FolderIcon";
 import { useFileTree, type FileRow } from "./fileTree";
 import type { RootStackParamList } from "./RootNavigator";
@@ -93,6 +94,15 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const { backend } = useAppContext();
   const headerHeight = useHeaderHeight();
   const tree = useFileTree(backend, dir);
+  const { navigation } = props;
+  const forwardTarget = useForwardTarget();
+
+  // When this folder is popped (back button or swipe-back), remember it so the
+  // forward button can return here. Native stacks otherwise discard it.
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", () => pushForward(dir));
+    return unsubscribe;
+  }, [navigation, dir]);
 
   const onToggle = (row: FileRow): void => {
     LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
@@ -101,11 +111,36 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
 
   const onOpen = (row: FileRow): void => {
     if (row.type === "directory") {
-      props.navigation.push("FileExplorer", { repo, dir: row.path });
+      // Drilling into a folder is a new branch — the forward trail is stale.
+      clearForward();
+      navigation.push("FileExplorer", { repo, dir: row.path });
     } else {
-      props.navigation.navigate("FileViewer", { path: row.path, name: row.name });
+      navigation.navigate("FileViewer", { path: row.path, name: row.name });
     }
   };
+
+  // Re-enter the most-recently-left folder. Consumes the forward stack rather
+  // than clearing it, so repeated presses walk back down the trail.
+  const onForward = React.useCallback((): void => {
+    const next = popForward();
+    if (next !== undefined) navigation.push("FileExplorer", { repo, dir: next });
+  }, [navigation, repo]);
+
+  // A native forward button in the nav bar, disabled when there's nowhere
+  // forward to go (matches the system back button's own glass and grouping).
+  React.useEffect(() => {
+    navigation.setOptions({
+      unstable_headerRightItems: () => [
+        {
+          type: "button",
+          label: "Forward",
+          icon: { type: "sfSymbol", name: "chevron.forward" },
+          disabled: forwardTarget === undefined,
+          onPress: onForward,
+        },
+      ],
+    });
+  }, [navigation, forwardTarget, onForward]);
 
   return (
     <View style={styles.root}>

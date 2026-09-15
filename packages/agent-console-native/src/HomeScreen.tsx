@@ -25,6 +25,7 @@ import { useSessionActivity } from "./useSessionActivity";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
+import { clearForward } from "./fileNavHistory";
 import { Composer } from "./Composer";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import {
@@ -292,7 +293,10 @@ export const HomeScreen = (props: Props): React.ReactElement => {
               meta={metaParts.join(" · ")}
               onOpen={() => props.navigation.navigate("Repo", { name: item.group.repo, dir: repoDir, isRepo: item.group.isKnownRepo })}
               onSelect={(label) => {
-                if (label === "Files") props.navigation.navigate("FileExplorer", { repo: item.group.repo, dir: repoDir });
+                if (label === "Files") {
+                  clearForward();
+                  props.navigation.navigate("FileExplorer", { repo: item.group.repo, dir: repoDir });
+                }
               }}
             />
           );

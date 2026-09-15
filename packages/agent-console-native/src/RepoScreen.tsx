@@ -25,6 +25,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
+import { clearForward } from "./fileNavHistory";
 import { repoMenuFor } from "./repoMenu";
 import { abortSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
@@ -341,7 +342,10 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               key={item.label}
               style={styles.menuRow}
               onPress={() => {
-                if (item.label === "Files") props.navigation.navigate("FileExplorer", { repo: name, dir });
+                if (item.label === "Files") {
+                  clearForward();
+                  props.navigation.navigate("FileExplorer", { repo: name, dir });
+                }
               }}
             >
               {index > 0 ? <View style={styles.rowSeparator} /> : null}
