@@ -80,10 +80,7 @@ export const fsTree = (base: string, path: string, session: string | undefined):
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ path, session }),
         }),
-      catch: (error) => {
-        console.warn("fs/tree request failed", treeUrl(base), error);
-        return new FsError({ reason: "transport", path });
-      },
+      catch: () => new FsError({ reason: "transport", path }),
     });
     if (response.status === 404) return { session: session ?? "", root: path, dirs: {} };
     if (response.status >= 400) return yield* new FsError({ reason: "http", path, status: response.status });
