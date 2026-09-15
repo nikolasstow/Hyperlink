@@ -9,6 +9,7 @@ import { type OpencodeClient, makeClient } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
 import { ThemeProvider } from "./src/theme";
+import { ThemeSync } from "./src/themeSync";
 import {
   clearServerAddress,
   deriveBackendAddress,
@@ -183,6 +184,7 @@ const AppInner = (): React.ReactElement => {
             onChangeServer,
           }}
         >
+          <ThemeSync />
           <RootNavigator />
         </AppContextProvider>
       )}

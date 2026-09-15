@@ -234,6 +234,17 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <ColorSwatches value={theme.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
         </View>
 
+        <Text style={styles.sectionLabel}>Extensions</Text>
+        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Extensions")} activeOpacity={0.6}>
+          <View style={styles.linkRow}>
+            <View style={styles.linkText}>
+              <Text style={styles.fieldLabel}>Manage extensions</Text>
+              <Text style={styles.hint}>Install VS Code themes and icons.</Text>
+            </View>
+            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+          </View>
+        </TouchableOpacity>
+
         <Text style={styles.sectionLabel}>Workspace</Text>
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Root folder</Text>
@@ -493,6 +504,16 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.separator,
     marginVertical: 4,
+  },
+  linkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  linkText: {
+    flex: 1,
+    gap: 2,
   },
   hint: {
     color: colors.secondaryLabel,

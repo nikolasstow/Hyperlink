@@ -212,6 +212,20 @@ export const getBackendAddress = async (serverAddress: string): Promise<string> 
   return deriveBackendAddress(serverAddress);
 };
 
+/** The off-vite Effect API server's port (`pnpm serve`), same host as opencode
+ * — where extensions + synced config live, distinct from the vite backend. */
+const DEFAULT_API_PORT = 5199;
+
+/** Base URL of the Effect API server, derived from the opencode server host. */
+export const getApiAddress = (serverAddress: string): string => {
+  try {
+    const url = new URL(serverAddress);
+    return `${url.protocol}//${url.hostname}:${DEFAULT_API_PORT}`;
+  } catch {
+    return serverAddress;
+  }
+};
+
 export const setBackendAddress = (value: string): Promise<void> =>
   AsyncStorage.setItem(BACKEND_ADDRESS_KEY, value);
 

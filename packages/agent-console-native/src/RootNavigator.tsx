@@ -23,6 +23,7 @@ import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { HeaderTitlePill } from "./HeaderTitlePill";
+import { ExtensionsScreen } from "./ExtensionsScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { RepoScreen } from "./RepoScreen";
@@ -32,6 +33,7 @@ export type RootStackParamList = {
   Home: undefined;
   Chat: { sessionID: string };
   Settings: undefined;
+  Extensions: undefined;
   // A repo (git checkout) or workspace (non-git session folder). `isRepo`
   // selects the menu variant; `dir` is the primary directory shown in the
   // header info.
@@ -215,6 +217,7 @@ export const RootNavigator = (): React.ReactElement => {
           }}
         />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: false }} />
         {/* Repo/workspace screen draws its own fully custom collapsing glass
          * header, so the native bar is hidden. */}
         <Stack.Screen
