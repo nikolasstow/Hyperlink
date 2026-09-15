@@ -28,7 +28,7 @@ import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { Effect } from "effect";
 import type { Connect, Plugin } from "vite";
-import { fsRootPath, fsRuntime, listDirectory, readTextFile, statusOfFsError } from "./fs";
+import { buildTree, fsRootPath, fsRuntime, listDirectory, noteAccess, readTextFile, resolveSession, statusOfFsError } from "./fs";
 
 const MIME_BY_EXT: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -91,12 +91,57 @@ export const filesPlugin = (): Plugin => {
       res.end(body);
     };
     const json = (status: number, body: unknown): void => respond(status, "application/json", JSON.stringify(body));
+
+    const parsed = new URL(url, "http://localhost");
+
+    // The tree bundle carries the client's known versions in its body, so it's a
+    // POST; the server returns only the directories that are new or changed.
+    if (parsed.pathname === "/fs/tree") {
+      if (req.method !== "POST") {
+        json(405, { error: "Method not allowed" });
+        return;
+      }
+      let raw = "";
+      req.on("data", (chunk) => {
+        raw += chunk;
+        if (raw.length > 8_000_000) req.destroy();
+      });
+      req.on("error", () => json(400, { error: "read error" }));
+      req.on("end", () => {
+        let parsedBody: { readonly path?: unknown; readonly session?: unknown };
+        try {
+          parsedBody = raw === "" ? {} : JSON.parse(raw);
+        } catch {
+          json(400, { error: "bad json" });
+          return;
+        }
+        const treePath = typeof parsedBody.path === "string" ? parsedBody.path : "";
+        if (treePath === "") {
+          json(400, { error: "path required" });
+          return;
+        }
+        const { id, sent } = resolveSession(typeof parsedBody.session === "string" ? parsedBody.session : undefined);
+        noteAccess(treePath);
+        void fsRuntime
+          .runPromise(
+            buildTree(treePath, sent).pipe(
+              Effect.match({
+                onSuccess: (delta) => ({ status: 200, body: JSON.stringify({ session: id, ...delta }) }),
+                onFailure: (error) => ({ status: statusOfFsError(error), body: JSON.stringify({ error: error.reason }) }),
+              }),
+            ),
+          )
+          .then(({ status, body }) => respond(status, "application/json", body))
+          .catch(() => json(500, { error: "internal" }));
+      });
+      return;
+    }
+
     if (req.method !== "GET") {
       json(405, { error: "Method not allowed" });
       return;
     }
 
-    const parsed = new URL(url, "http://localhost");
     const path = parsed.searchParams.get("path");
     if (path === null || path === "") {
       json(400, { error: "path required" });
@@ -104,6 +149,7 @@ export const filesPlugin = (): Plugin => {
     }
 
     if (parsed.pathname === "/fs/list") {
+      noteAccess(path);
       void fsRuntime
         .runPromise(
           listDirectory(path).pipe(
@@ -199,7 +245,7 @@ export const filesPlugin = (): Plugin => {
       server.middlewares.use(handler);
       server.middlewares.use(fsHandler);
       server.config.logger.info(`  ➜  files:   /files/* → ${root}`);
-      server.config.logger.info(`  ➜  fs:      /fs/list, /fs/read → ${fsRootPath()}`);
+      server.config.logger.info(`  ➜  fs:      /fs/list, /fs/read, /fs/tree → ${fsRootPath()}`);
     },
   };
 };

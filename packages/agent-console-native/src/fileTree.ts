@@ -18,9 +18,8 @@
  * @internal
  */
 import * as React from "react";
-import { runFs } from "./effect/runtime";
-import { getCachedListing, prefetchTree, setCachedListing } from "./fileListingCache";
-import { fsList, type FsEntry } from "./fsClient";
+import { getCachedListing, loadTree } from "./fileListingCache";
+import type { FsEntry } from "./fsClient";
 
 export type FileRow = {
   readonly path: string;
@@ -73,34 +72,45 @@ export type FileTree = {
 export const useFileTree = (backend: string, rootDir: string): FileTree => {
   const [state, setState] = React.useState<TreeState>(() => seedFromCache(rootDir));
 
-  const setChildren = React.useCallback(
-    (dir: string, entries: ReadonlyArray<FsEntry>): void => {
-      setCachedListing(dir, entries);
-      // Warm the subtree below this directory so browsing stays ahead of the
-      // cursor — several levels, not just one.
-      prefetchTree(backend, dir);
-      setState((prev) => {
-        const children = new Map(prev.children);
-        children.set(dir, entries.map((entry) => ({ name: entry.name, type: entry.type })));
-        const loading = new Set(prev.loading);
-        loading.delete(dir);
-        const failed = new Set(prev.failed);
-        failed.delete(dir);
-        return { ...prev, children, loading, failed };
-      });
-    },
-    [backend],
-  );
+  const showChildren = React.useCallback((dir: string, entries: ReadonlyArray<FsEntry>): void => {
+    setState((prev) => {
+      const children = new Map(prev.children);
+      children.set(dir, entries);
+      const loading = new Set(prev.loading);
+      loading.delete(dir);
+      const failed = new Set(prev.failed);
+      failed.delete(dir);
+      return { ...prev, children, loading, failed };
+    });
+  }, []);
+
+  const markFailed = React.useCallback((dir: string): void => {
+    setState((prev) => {
+      const loading = new Set(prev.loading);
+      loading.delete(dir);
+      const failed = new Set(prev.failed);
+      failed.add(dir);
+      // Collapse it back so it shows a retry affordance rather than an
+      // open-but-empty node; the next tap re-expands and reloads.
+      const expanded = new Set(prev.expanded);
+      expanded.delete(dir);
+      return { ...prev, loading, failed, expanded };
+    });
+  }, []);
 
   const load = React.useCallback(
     (dir: string): void => {
       const cached = getCachedListing(dir);
       if (cached !== undefined) {
-        // Paint from cache immediately (no spinner), then refresh in the
-        // background — a refresh failure leaves the cached listing in place.
-        setChildren(dir, cached);
-        void runFs(fsList(backend, dir))
-          .then((entries) => setChildren(dir, entries))
+        // Paint from cache immediately (no spinner), then refresh the subtree in
+        // the background — the session delta returns only what changed, so this
+        // is cheap and a failure leaves the cache in place.
+        showChildren(dir, cached);
+        void loadTree(backend, dir)
+          .then(() => {
+            const fresh = getCachedListing(dir);
+            if (fresh !== undefined) showChildren(dir, fresh);
+          })
           .catch(() => undefined);
         return;
       }
@@ -112,23 +122,17 @@ export const useFileTree = (backend: string, rootDir: string): FileTree => {
         failed.delete(dir);
         return { ...prev, loading, failed };
       });
-      void runFs(fsList(backend, dir))
-        .then((entries) => setChildren(dir, entries))
-        .catch(() => {
-          setState((prev) => {
-            const loading = new Set(prev.loading);
-            loading.delete(dir);
-            const failed = new Set(prev.failed);
-            failed.add(dir);
-            // Collapse it back so it shows a retry affordance rather than an
-            // open-but-empty node; the next tap re-expands and reloads.
-            const expanded = new Set(prev.expanded);
-            expanded.delete(dir);
-            return { ...prev, loading, failed, expanded };
-          });
-        });
+      // The bundle warms `dir` and its hot subtree at once, so expanding or
+      // drilling into those is instant off the cache with no further request.
+      void loadTree(backend, dir)
+        .then(() => {
+          const fresh = getCachedListing(dir);
+          if (fresh !== undefined) showChildren(dir, fresh);
+          else markFailed(dir);
+        })
+        .catch(() => markFailed(dir));
     },
-    [backend, setChildren],
+    [backend, showChildren, markFailed],
   );
 
   // Seed from cache and refresh on mount / when the rooted directory changes.

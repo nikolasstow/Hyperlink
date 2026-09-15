@@ -17,7 +17,7 @@
  * @internal
  */
 import { Data, Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 export const FsEntry = Schema.Struct({
   name: Schema.String,
@@ -30,6 +30,23 @@ const FsListing = Schema.Struct({
   entries: Schema.Array(FsEntry),
 });
 
+/** A directory's listing + content version, as returned in a tree delta. */
+const FsDirData = Schema.Struct({
+  version: Schema.String,
+  entries: Schema.Array(FsEntry),
+});
+export type FsDirData = typeof FsDirData.Type;
+
+/** A tree bundle: the session id to use going forward, plus a flat map of
+ * directory path → listing carrying only the directories new or changed since
+ * this session was last served. */
+const FsTreeDelta = Schema.Struct({
+  session: Schema.String,
+  root: Schema.String,
+  dirs: Schema.Record(Schema.String, FsDirData),
+});
+export type FsTreeDelta = typeof FsTreeDelta.Type;
+
 export class FsError extends Data.TaggedError("FsError")<{
   readonly reason: "transport" | "http" | "decode";
   readonly path: string;
@@ -40,6 +57,29 @@ const listUrl = (base: string, path: string): string =>
   `${base.replace(/\/+$/, "")}/fs/list?path=${encodeURIComponent(path)}`;
 const readUrl = (base: string, path: string): string =>
   `${base.replace(/\/+$/, "")}/fs/read?path=${encodeURIComponent(path)}`;
+const treeUrl = (base: string): string => `${base.replace(/\/+$/, "")}/fs/tree`;
+
+/**
+ * Fetch the hot tree bundle rooted at `path`. `session` is the opaque id from a
+ * previous response (omit on the first call); the server remembers what this
+ * session already has and returns only new/changed directories, plus the session
+ * id to use next. A 404 root yields an empty delta.
+ */
+export const fsTree = (
+  base: string,
+  path: string,
+  session: string | undefined,
+): Effect.Effect<FsTreeDelta, FsError, HttpClient.HttpClient> =>
+  Effect.gen(function* () {
+    const response = yield* HttpClient.post(treeUrl(base), { body: HttpBody.jsonUnsafe({ path, session }) }).pipe(
+      Effect.mapError(() => new FsError({ reason: "transport", path })),
+    );
+    if (response.status === 404) return { session: session ?? "", root: path, dirs: {} };
+    if (response.status >= 400) return yield* new FsError({ reason: "http", path, status: response.status });
+    return yield* HttpClientResponse.schemaBodyJson(FsTreeDelta)(response).pipe(
+      Effect.mapError(() => new FsError({ reason: "decode", path })),
+    );
+  });
 
 /** Directory entries at `path`. Empty for a path that doesn't exist (404);
  * fails with `FsError` on a transport/server/decode error. */
