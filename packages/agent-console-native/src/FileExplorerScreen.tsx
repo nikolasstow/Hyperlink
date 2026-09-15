@@ -31,9 +31,9 @@ type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 /** Left screen inset, indentation per level, and the leading chevron column.
  * Tuned to the Files reference: a small chevron with generous room around it,
  * icon at ~40pt, name at ~80pt. */
-const EDGE = 10;
+const EDGE = 0;
 const INDENT = 20;
-const CHEVRON_COL = 22;
+const CHEVRON_COL = 16;
 const ICON_COL = 30;
 const ICON_GAP = 12;
 
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingRight: 10,
+    paddingRight: 0,
     minHeight: 54,
   },
   chevron: {
@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "400",
+    paddingRight: 10,
   },
   separator: {
     height: StyleSheet.hairlineWidth,
