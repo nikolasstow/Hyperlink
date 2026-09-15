@@ -1,26 +1,26 @@
 /**
- * The app's standard header title: the title text in its own Liquid Glass
- * capsule, rendered into a nav bar's `headerTitle` slot. This is part of the
- * app's design language — every header title is this pill (chat, session list,
- * and any future one). An optional trailing status dot supports the chat
- * session's live-connection indicator.
+ * The app's standard header title for a NATIVE nav bar: the title text in a
+ * Liquid Glass capsule, rendered into a `headerTitle` slot (chat, session list,
+ * file explorer). The custom-header counterpart is `TitlePill` — both share the
+ * design tokens in titlePillStyle.ts.
  *
- * Width is a fixed fraction of the screen rather than content-sized: `@expo/ui`
- * content-sized `Host`s resolve asynchronously via a native round-trip that
- * this codebase has repeatedly seen race with surrounding layout, and the nav
- * bar centers the slot between its items so the pill only has to stay narrow
- * enough never to reach them.
+ * The capsule fits its content. The title is always known up front, so the
+ * width is computed synchronously from it (`titlePillWidth`) rather than via
+ * `@expo/ui`'s content-sized `Host`, whose native round-trip this codebase has
+ * repeatedly seen race with surrounding layout. It's clamped so it can never
+ * reach the nav items; an over-long title truncates (`lineLimit(1)`).
  *
  * @internal
  */
-import { HStack, Host, Image, Spacer, Text as UIText } from "@expo/ui/swift-ui";
+import { HStack, Host, Image, Text as UIText } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame, glassEffect, lineLimit, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
+import { PILL_DOT_GAP, PILL_DOT_SIZE, PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H, titlePillWidth } from "./titlePillStyle";
 
-const PILL_WIDTH_RATIO = 0.5;
-const PILL_HEIGHT = 44;
+const MIN_WIDTH = 56;
+const MAX_WIDTH_RATIO = 0.6;
 
 export const HeaderTitlePill = (props: {
   readonly title: string;
@@ -28,22 +28,31 @@ export const HeaderTitlePill = (props: {
   readonly dot?: "connected" | "disconnected";
 }): React.ReactElement => {
   const { width: screenWidth } = useWindowDimensions();
-  const pillWidth = Math.round(screenWidth * PILL_WIDTH_RATIO);
+  const hasDot = props.dot !== undefined;
+  const maxWidth = Math.round(screenWidth * MAX_WIDTH_RATIO);
+  const pillWidth = Math.min(Math.max(titlePillWidth(props.title, hasDot), MIN_WIDTH), maxWidth);
 
   return (
     <Host style={{ width: pillWidth, height: PILL_HEIGHT }}>
       <HStack
         alignment="center"
+        spacing={PILL_DOT_GAP}
         modifiers={[
           frame({ width: pillWidth, height: PILL_HEIGHT }),
-          padding({ horizontal: 14 }),
+          padding({ horizontal: PILL_PAD_H }),
           glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
         ]}
       >
-        <Spacer />
-        <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title}</UIText>
-        <Spacer />
-        {props.dot !== undefined ? <Image systemName="circle.fill" size={7} color={props.dot === "connected" ? colors.brand : colors.secondaryLabel} /> : null}
+        <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>
+          {props.title}
+        </UIText>
+        {hasDot ? (
+          <Image
+            systemName="circle.fill"
+            size={PILL_DOT_SIZE}
+            color={props.dot === "connected" ? colors.brand : colors.secondaryLabel}
+          />
+        ) : null}
       </HStack>
     </Host>
   );
