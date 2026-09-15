@@ -17,7 +17,7 @@
  * @internal
  */
 import { Data, Effect, Schema } from "effect";
-import { HttpBody, HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 
 export const FsEntry = Schema.Struct({
   name: Schema.String,
@@ -64,21 +64,30 @@ const treeUrl = (base: string): string => `${base.replace(/\/+$/, "")}/fs/tree`;
  * previous response (omit on the first call); the server remembers what this
  * session already has and returns only new/changed directories, plus the session
  * id to use next. A 404 root yields an empty delta.
+ *
+ * Uses `fetch` directly with a JSON string body rather than the Effect
+ * HttpClient: that client sends a `Uint8Array` body, which React Native's `fetch`
+ * doesn't accept (the GET helpers avoid it by having no body).
  */
-export const fsTree = (
-  base: string,
-  path: string,
-  session: string | undefined,
-): Effect.Effect<FsTreeDelta, FsError, HttpClient.HttpClient> =>
+export const fsTree = (base: string, path: string, session: string | undefined): Effect.Effect<FsTreeDelta, FsError> =>
   Effect.gen(function* () {
-    const response = yield* HttpClient.post(treeUrl(base), { body: HttpBody.jsonUnsafe({ path, session }) }).pipe(
-      Effect.mapError(() => new FsError({ reason: "transport", path })),
-    );
+    const response = yield* Effect.tryPromise({
+      try: (signal) =>
+        fetch(treeUrl(base), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path, session }),
+          signal,
+        }),
+      catch: () => new FsError({ reason: "transport", path }),
+    });
     if (response.status === 404) return { session: session ?? "", root: path, dirs: {} };
     if (response.status >= 400) return yield* new FsError({ reason: "http", path, status: response.status });
-    return yield* HttpClientResponse.schemaBodyJson(FsTreeDelta)(response).pipe(
-      Effect.mapError(() => new FsError({ reason: "decode", path })),
-    );
+    const body = yield* Effect.tryPromise({
+      try: () => response.json(),
+      catch: () => new FsError({ reason: "decode", path }),
+    });
+    return yield* Schema.decodeUnknownEffect(FsTreeDelta)(body).pipe(Effect.mapError(() => new FsError({ reason: "decode", path })));
   });
 
 /** Directory entries at `path`. Empty for a path that doesn't exist (404);
