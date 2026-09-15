@@ -19,6 +19,7 @@
  * @internal
  */
 import { spawn } from "node:child_process";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import type { Connect, Plugin } from "vite";
@@ -36,6 +37,12 @@ const POLLER_STARTED = Symbol.for("agent-console.buildsPoller.started");
 const projectDir = process.env.AGENT_CONSOLE_EAS_PROJECT_DIR ?? resolve(process.cwd(), "../agent-console-native");
 /** Same origin the app already registered its push token against. */
 const notifyUrl = `http://127.0.0.1:${process.env.PORT ?? 5195}/push/notify`;
+
+/** Shared secret for the EAS build webhook. When set, EAS pushes build results
+ * to `/builds/webhook` (via the cloudflared tunnel) and the CLI poller is
+ * disabled — the webhook is instant and can't leak timers. When unset, we fall
+ * back to polling. Set the SAME value in `eas webhook:create --secret`. */
+const webhookSecret = process.env.AGENT_CONSOLE_EAS_WEBHOOK_SECRET;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -206,6 +213,38 @@ const notify = async (build: BuildRow): Promise<void> => {
   }).catch(() => undefined);
 };
 
+/** Verify EAS's `expo-signature` header — an HMAC-SHA1 of the raw body with the
+ * shared secret, as `sha1=<hex>`. Constant-time compare. */
+const verifyWebhook = (raw: string, signature: string | undefined): boolean => {
+  if (webhookSecret === undefined || signature === undefined) return false;
+  const expected = `sha1=${createHmac("sha1", webhookSecret).update(raw).digest("hex")}`;
+  const got = Buffer.from(signature);
+  const want = Buffer.from(expected);
+  return got.length === want.length && timingSafeEqual(got, want);
+};
+
+/** Map an EAS BUILD webhook payload to a `BuildRow`. Status/platform come lower-
+ * case over the webhook (vs the CLI's upper-case), and profile/commit live under
+ * `metadata`. */
+const buildFromWebhook = (payload: unknown): BuildRow | undefined => {
+  if (!isRecord(payload) || typeof payload.id !== "string" || typeof payload.status !== "string") return undefined;
+  const artifacts = isRecord(payload.artifacts) ? payload.artifacts : undefined;
+  const metadata = isRecord(payload.metadata) ? payload.metadata : undefined;
+  const buildUrl = artifacts !== undefined && typeof artifacts.buildUrl === "string" ? artifacts.buildUrl : undefined;
+  return {
+    id: payload.id,
+    status: payload.status.toUpperCase(),
+    platform: typeof payload.platform === "string" ? payload.platform.toUpperCase() : undefined,
+    buildProfile: metadata !== undefined && typeof metadata.buildProfile === "string" ? metadata.buildProfile : undefined,
+    gitCommitMessage: metadata !== undefined && typeof metadata.gitCommitMessage === "string" ? metadata.gitCommitMessage : undefined,
+    artifacts: buildUrl === undefined ? undefined : { buildUrl },
+    app: {
+      slug: typeof payload.projectName === "string" ? payload.projectName : undefined,
+      ownerAccount: { name: typeof payload.accountName === "string" ? payload.accountName : undefined },
+    },
+  };
+};
+
 export const buildsPlugin = (): Plugin => {
   // id -> last-seen status. Seeded on the first poll so the existing backlog is
   // never announced; only later transitions notify.
@@ -243,6 +282,17 @@ export const buildsPlugin = (): Plugin => {
 
   // GET /builds, /builds/:id, /builds/:id/logs — the data the app's Builds page
   // renders (list, full detail, phase-grouped logs). Read-only.
+  const readBody = (req: Connect.IncomingMessage): Promise<string> =>
+    new Promise((resolveBody) => {
+      let raw = "";
+      req.on("data", (chunk) => {
+        raw += chunk;
+        if (raw.length > 2_000_000) req.destroy();
+      });
+      req.on("end", () => resolveBody(raw));
+      req.on("error", () => resolveBody(""));
+    });
+
   const handler: Connect.NextHandleFunction = (req, res, next) => {
     const url = req.url ?? "";
     if (url !== "/builds" && !url.startsWith("/builds/") && !url.startsWith("/builds?")) {
@@ -257,6 +307,32 @@ export const buildsPlugin = (): Plugin => {
     };
 
     void (async () => {
+      // EAS build webhook (instant, replaces polling). Only live when a secret is
+      // configured; the signature is verified before anything is trusted.
+      if (req.method === "POST" && path === "/builds/webhook") {
+        if (webhookSecret === undefined) {
+          json(404, { error: "Not found" });
+          return;
+        }
+        const raw = await readBody(req);
+        const signature = req.headers["expo-signature"];
+        if (!verifyWebhook(raw, typeof signature === "string" ? signature : undefined)) {
+          json(401, { error: "bad signature" });
+          return;
+        }
+        let payload: unknown;
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          json(400, { error: "bad json" });
+          return;
+        }
+        const build = buildFromWebhook(payload);
+        if (build !== undefined && TERMINAL.has(build.status)) await notify(build);
+        json(200, { ok: true });
+        return;
+      }
+
       if (req.method === "GET" && (path === "/builds" || path === "")) {
         json(200, { data: await listBuilds() });
         return;
@@ -309,6 +385,12 @@ export const buildsPlugin = (): Plugin => {
     name: "agent-console-builds",
     configureServer(server) {
       server.middlewares.use(handler);
+      // The webhook is the notification path when configured — instant, and no
+      // polling timers to leak. Only poll as a fallback when no secret is set.
+      if (webhookSecret !== undefined) {
+        server.config.logger.info(`  ➜  builds:  webhook at /builds/webhook (polling off)`);
+        return;
+      }
       // Start the poller at most ONCE per process. A vite dev-server restart (any
       // config/plugin edit triggers one) re-runs `configureServer` in the same
       // node process, and an `unref`'d interval keeps firing after a restart — so
