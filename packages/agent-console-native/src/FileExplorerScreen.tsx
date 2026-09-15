@@ -14,7 +14,20 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, LayoutAnimation, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native";
+import {
+  ActivityIndicator,
+  Animated,
+  LayoutAnimation,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+} from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { GlassView } from "expo-glass-effect";
@@ -109,6 +122,40 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const q = query.trim().toLowerCase();
   const rows = q.length === 0 ? tree.rows : tree.rows.filter((row) => row.name.toLowerCase().includes(q));
 
+  // Hide the bottom search pill on scroll-down, reveal it on scroll-up — the
+  // Files/Mail toolbar behavior. UIKit has no native hook for a custom bottom
+  // bar, so it's driven from the scroll direction here: `pillOffset` slides the
+  // pill down past the bottom edge (and back) via the native driver.
+  const pillOffset = React.useRef(new Animated.Value(0)).current;
+  const lastY = React.useRef(0);
+  const hidden = React.useRef(false);
+  const hiddenDistance = SEARCH_PILL_HEIGHT + insets.bottom + 18;
+  const setPillHidden = React.useCallback(
+    (next: boolean): void => {
+      if (hidden.current === next) return;
+      hidden.current = next;
+      Animated.timing(pillOffset, {
+        toValue: next ? hiddenDistance : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    },
+    [pillOffset, hiddenDistance],
+  );
+  const onScroll = React.useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
+      const y = event.nativeEvent.contentOffset.y;
+      const dy = y - lastY.current;
+      // Near the top the pill is always shown; otherwise follow the direction
+      // past a small threshold so tiny jitters don't toggle it.
+      if (y <= 4) setPillHidden(false);
+      else if (dy > 6) setPillHidden(true);
+      else if (dy < -6) setPillHidden(false);
+      lastY.current = y;
+    },
+    [setPillHidden],
+  );
+
   // When this folder is popped (back button or swipe-back), remember it so the
   // forward button can return here. Native stacks otherwise discard it.
   React.useEffect(() => {
@@ -175,6 +222,8 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
         <ScrollView
           style={styles.fill}
           keyboardDismissMode="interactive"
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: insets.bottom + SEARCH_PILL_HEIGHT + 28, paddingHorizontal: 14 }}
         >
           {rows.length === 0 ? (
@@ -188,7 +237,10 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       )}
       <EdgeBlurBars variant="top" />
       {!tree.rootLoading && !tree.rootFailed && tree.rows.length > 0 ? (
-        <View style={[styles.searchWrap, { paddingBottom: insets.bottom + 10 }]} pointerEvents="box-none">
+        <Animated.View
+          style={[styles.searchWrap, { paddingBottom: insets.bottom + 10, transform: [{ translateY: pillOffset }] }]}
+          pointerEvents="box-none"
+        >
           <View style={styles.searchClip}>
             <GlassView style={styles.searchPill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
               <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
@@ -205,7 +257,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
               />
             </GlassView>
           </View>
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
