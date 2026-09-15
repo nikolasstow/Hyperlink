@@ -41,13 +41,30 @@
  * @internal
  */
 import { Host, Image } from "@expo/ui/swift-ui";
-import { frame } from "@expo/ui/swift-ui/modifiers";
+import { font, frame } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import type { ColorValue } from "react-native";
 import type { SFSymbol } from "sf-symbols-typescript";
 
-export const SystemIcon = (props: { readonly name: SFSymbol; readonly size: number; readonly color: ColorValue }): React.ReactElement => (
+/** SF Symbol stroke weight — matches SwiftUI's `.fontWeight`. Chevrons in the
+ * Files list read semibold, not the default regular. */
+type SymbolWeight = "regular" | "medium" | "semibold" | "bold";
+
+export const SystemIcon = (props: {
+  readonly name: SFSymbol;
+  readonly size: number;
+  readonly color: ColorValue;
+  readonly weight?: SymbolWeight;
+}): React.ReactElement => (
   <Host matchContents style={{ width: props.size, height: props.size }}>
-    <Image systemName={props.name} size={props.size} color={props.color} modifiers={[frame({ width: props.size, height: props.size })]} />
+    <Image
+      systemName={props.name}
+      size={props.size}
+      color={props.color}
+      modifiers={[
+        ...(props.weight === undefined ? [] : [font({ size: props.size, weight: props.weight })]),
+        frame({ width: props.size, height: props.size }),
+      ]}
+    />
   </Host>
 );

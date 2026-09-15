@@ -64,6 +64,7 @@ const Row = (props: {
               <SystemIcon
                 name={row.failed ? "exclamationmark.triangle.fill" : row.expanded ? "chevron.down" : "chevron.right"}
                 size={13}
+                weight="semibold"
                 color={row.failed ? colors.warning : colors.tint}
               />
             )}
@@ -121,7 +122,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : tree.rows.length === 0 ? (
         <Text style={[styles.empty, { marginTop: headerHeight + 24 }]}>Empty folder.</Text>
       ) : (
-        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40 }}>
+        <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: 40, paddingHorizontal: 8 }}>
           {tree.rows.map((row, index) => (
             <Row key={row.path} row={row} last={index === tree.rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
           ))}
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 14,
-    minHeight: 54,
+    minHeight: 44,
   },
   chevron: {
     width: CHEVRON_COL,
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: ICON_GAP,
-    paddingVertical: 13,
+    paddingVertical: 9,
   },
   iconCol: {
     width: ICON_COL,
