@@ -16,7 +16,7 @@
  * @internal
  */
 import { runFs } from "./effect/runtime";
-import { fsTree, type FsEntry } from "./fsClient";
+import { fsList, fsTree, type FsEntry } from "./fsClient";
 
 const listings = new Map<string, ReadonlyArray<FsEntry>>();
 
@@ -26,15 +26,22 @@ let sessionId: string | undefined;
 export const getCachedListing = (path: string): ReadonlyArray<FsEntry> | undefined => listings.get(path);
 
 /**
- * Load the hot tree rooted at `dir` from the server and merge it into the cache,
- * carrying the session id so only changed directories come back. Resolves once
- * merged; a directory whose listing wasn't returned (unchanged) keeps its cached
- * entries. Errors reject so a caller can surface a failed open.
+ * Load the directory at `dir` and cache it. Prefers the hot tree bundle (which
+ * also warms the subtree and dedups via the session id), but falls back to a
+ * plain per-directory listing if the bundle request fails for any reason — so
+ * the explorer works even where `/fs/tree` doesn't, just without the prefetch.
+ * Resolves once merged; rejects only if the fallback listing also fails.
  */
 export const loadTree = (backend: string, dir: string): Promise<void> =>
-  runFs(fsTree(backend, dir, sessionId)).then((delta) => {
-    sessionId = delta.session;
-    for (const [path, data] of Object.entries(delta.dirs)) {
-      listings.set(path, data.entries);
-    }
-  });
+  runFs(fsTree(backend, dir, sessionId))
+    .then((delta) => {
+      sessionId = delta.session;
+      for (const [path, data] of Object.entries(delta.dirs)) {
+        listings.set(path, data.entries);
+      }
+    })
+    .catch(() =>
+      runFs(fsList(backend, dir)).then((entries) => {
+        listings.set(dir, entries);
+      }),
+    );
