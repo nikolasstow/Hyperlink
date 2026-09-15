@@ -17,6 +17,7 @@
     "@effect/platform-node": "4.0.0-beta.102",
     "@opencode-ai/sdk": "^1.18.23",
     "effect": "4.0.0-beta.102",
+    "fflate": "^0.8.3",
     "last-ts": "workspace:*",
     "lucide-react": "^1.17.0",
     "react": "^19.2.0",
