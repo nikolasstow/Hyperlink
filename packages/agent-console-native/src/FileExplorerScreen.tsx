@@ -53,11 +53,11 @@ const EDGE = 0;
 const INDENT = 20;
 const CHEVRON_COL = 20;
 const CHEVRON_ICON_GAP = 6;
-const ICON_COL = 34;
+const ICON_COL = 30;
 const ICON_GAP = 12;
-/** A hand-set row divider, noticeably darker than the system `separator`/
- * `opaqueSeparator` (both too faint here). Higher-alpha grey per theme. */
-const DIVIDER = DynamicColorIOS({ light: "rgba(60,60,67,0.52)", dark: "rgba(120,120,128,0.7)" });
+/** A hand-set row divider, a touch darker than the system `separator`/
+ * `opaqueSeparator` (both too faint here) without being heavy. */
+const DIVIDER = DynamicColorIOS({ light: "rgba(60,60,67,0.4)", dark: "rgba(120,120,128,0.5)" });
 /** Height of the floating glass search pill at the bottom. */
 const SEARCH_PILL_HEIGHT = 44;
 
@@ -98,7 +98,7 @@ const Row = (props: {
           <View style={styles.chevron} />
         )}
         <TouchableOpacity style={styles.iconCol} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
-          {fileSpec === undefined ? <FolderIcon size={31} /> : <SetiIcon glyph={fileSpec.glyph} size={26} />}
+          {fileSpec === undefined ? <FolderIcon size={28} /> : <SetiIcon glyph={fileSpec.glyph} size={26} />}
         </TouchableOpacity>
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
           <Text style={styles.name} numberOfLines={1}>

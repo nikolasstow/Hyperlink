@@ -11,6 +11,7 @@ import os
 
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
+from fontTools.pens.boundsPen import BoundsPen
 
 SETI = "/Applications/Cursor.app/Contents/Resources/app/extensions/theme-seti/icons"
 OUT = os.environ["OUT"]
@@ -78,14 +79,19 @@ def codepoint_of(def_name):
     return int(ch.lstrip("\\").lstrip("u"), 16)
 
 
-def path_of(def_name):
+def path_and_box(def_name):
     cp = codepoint_of(def_name)
     gname = cmap.get(cp)
     if gname is None:
         return None
     pen = SVGPathPen(glyph_set)
     glyph_set[gname].draw(pen)
-    return pen.getCommands()
+    path = pen.getCommands()
+    bp = BoundsPen(glyph_set)
+    glyph_set[gname].draw(bp)
+    if not path or bp.bounds is None:
+        return None
+    return path, [round(v) for v in bp.bounds]
 
 
 # Resolve which icon-definition each lookup key uses.
@@ -109,10 +115,11 @@ default_def = theme["file"]
 needed = set(by_name.values()) | set(by_ext.values()) | {default_def}
 glyphs = {}
 for d in sorted(needed):
-    p = path_of(d)
-    if not p:
+    pb = path_and_box(d)
+    if pb is None:
         continue
-    glyphs[d] = {"path": p, "color": defs[d].get("fontColor", "#d4d7d6")}
+    path, box = pb
+    glyphs[d] = {"path": path, "color": defs[d].get("fontColor", "#d4d7d6"), "box": box}
 
 by_name = {k: v for k, v in by_name.items() if v in glyphs}
 by_ext = {k: v for k, v in by_ext.items() if v in glyphs}
@@ -130,7 +137,10 @@ def ts_obj(d, indent):
 glyph_lines = []
 for d in sorted(glyphs):
     g = glyphs[d]
-    glyph_lines.append(f'  {json.dumps(d)}: {{ path: {json.dumps(g["path"])}, color: {json.dumps(g["color"])} }},')
+    box = "[" + ", ".join(str(v) for v in g["box"]) + "]"
+    glyph_lines.append(
+        f'  {json.dumps(d)}: {{ path: {json.dumps(g["path"])}, color: {json.dumps(g["color"])}, box: {box} }},'
+    )
 
 out = f'''/**
  * Seti (the VS Code default) file-icon glyphs, extracted to SVG paths.
@@ -152,6 +162,9 @@ export const SETI_UNITS_PER_EM = {upm};
 export interface SetiGlyph {{
   readonly path: string;
   readonly color: string;
+  /** Tight glyph bounds in font units (y-up): [xMin, yMin, xMax, yMax]. Used
+   * to frame each glyph so it fills the icon; SetiIcon flips y when drawing. */
+  readonly box: readonly [number, number, number, number];
 }}
 
 export const setiGlyphs: Record<string, SetiGlyph> = {{
