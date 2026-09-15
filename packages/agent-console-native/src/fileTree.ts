@@ -5,6 +5,12 @@
  * into a depth-tagged row list a `FlatList` renders. Collapsing keeps loaded
  * children cached, so re-expanding is instant.
  *
+ * Listings are cache-first (fileListingCache): a directory already fetched — by
+ * a previous visit, an earlier expand, or the one-level-ahead prefetch — paints
+ * instantly with no spinner, then refreshes in the background. When a directory
+ * loads, its immediate subdirectories are prefetched, so opening one is instant
+ * without loading the whole tree up front.
+ *
  * IO is our own backend (fsClient), never opencode; a failed load marks that
  * directory failed (surfaced in the row as a retry) rather than silently
  * dropping it.
@@ -13,7 +19,8 @@
  */
 import * as React from "react";
 import { runFs } from "./effect/runtime";
-import { fsList } from "./fsClient";
+import { getCachedListing, prefetchTree, setCachedListing } from "./fileListingCache";
+import { fsList, type FsEntry } from "./fsClient";
 
 export type FileRow = {
   readonly path: string;
@@ -42,6 +49,19 @@ const EMPTY: TreeState = {
   failed: new Set(),
 };
 
+/** Initial tree state for a root directory: its cached listing if we already
+ * have one (so a revisited/prefetched folder paints with no spinner), else empty. */
+const seedFromCache = (dir: string): TreeState => {
+  const cached = getCachedListing(dir);
+  if (cached === undefined) return EMPTY;
+  return {
+    children: new Map([[dir, cached.map((entry) => ({ name: entry.name, type: entry.type }))]]),
+    expanded: new Set(),
+    loading: new Set(),
+    failed: new Set(),
+  };
+};
+
 export type FileTree = {
   readonly rows: ReadonlyArray<FileRow>;
   readonly rootLoading: boolean;
@@ -51,10 +71,39 @@ export type FileTree = {
 };
 
 export const useFileTree = (backend: string, rootDir: string): FileTree => {
-  const [state, setState] = React.useState<TreeState>(EMPTY);
+  const [state, setState] = React.useState<TreeState>(() => seedFromCache(rootDir));
+
+  const setChildren = React.useCallback(
+    (dir: string, entries: ReadonlyArray<FsEntry>): void => {
+      setCachedListing(dir, entries);
+      // Warm the subtree below this directory so browsing stays ahead of the
+      // cursor — several levels, not just one.
+      prefetchTree(backend, dir);
+      setState((prev) => {
+        const children = new Map(prev.children);
+        children.set(dir, entries.map((entry) => ({ name: entry.name, type: entry.type })));
+        const loading = new Set(prev.loading);
+        loading.delete(dir);
+        const failed = new Set(prev.failed);
+        failed.delete(dir);
+        return { ...prev, children, loading, failed };
+      });
+    },
+    [backend],
+  );
 
   const load = React.useCallback(
     (dir: string): void => {
+      const cached = getCachedListing(dir);
+      if (cached !== undefined) {
+        // Paint from cache immediately (no spinner), then refresh in the
+        // background — a refresh failure leaves the cached listing in place.
+        setChildren(dir, cached);
+        void runFs(fsList(backend, dir))
+          .then((entries) => setChildren(dir, entries))
+          .catch(() => undefined);
+        return;
+      }
       setState((prev) => {
         if (prev.loading.has(dir)) return prev;
         const loading = new Set(prev.loading);
@@ -64,15 +113,7 @@ export const useFileTree = (backend: string, rootDir: string): FileTree => {
         return { ...prev, loading, failed };
       });
       void runFs(fsList(backend, dir))
-        .then((entries) => {
-          setState((prev) => {
-            const children = new Map(prev.children);
-            children.set(dir, entries.map((entry) => ({ name: entry.name, type: entry.type })));
-            const loading = new Set(prev.loading);
-            loading.delete(dir);
-            return { ...prev, children, loading };
-          });
-        })
+        .then((entries) => setChildren(dir, entries))
         .catch(() => {
           setState((prev) => {
             const loading = new Set(prev.loading);
@@ -87,12 +128,12 @@ export const useFileTree = (backend: string, rootDir: string): FileTree => {
           });
         });
     },
-    [backend],
+    [backend, setChildren],
   );
 
-  // Load the root on mount / when the rooted directory changes.
+  // Seed from cache and refresh on mount / when the rooted directory changes.
   React.useEffect(() => {
-    setState(EMPTY);
+    setState(seedFromCache(rootDir));
     load(rootDir);
   }, [rootDir, load]);
 
