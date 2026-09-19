@@ -115,3 +115,16 @@ current green/blue.
   Seti as SVG paths (converted offline). For arbitrary uploaded themes we'd need
   runtime WOFF→SVG/TTF — likely do the conversion server-side at install.
 - Version pinning / updates for marketplace extensions.
+
+## Follow-ups (requested, not yet built)
+
+- **Theme-driven code display.** Everywhere we render code — chat markdown code
+  blocks (`Markdown.tsx`) and the future file viewer/editor — should syntax-
+  highlight using the active theme's `tokenColors` (and editor background/
+  foreground), not a fixed scheme. This needs a tokenizer (a TextMate-grammar or
+  a lighter highlighter) fed the active color theme's `tokenColors`; the server
+  already stores the theme JSON, so expose the token colors (like it derives
+  primary/secondary) or serve the theme asset. Monokai etc. keep their vivid
+  colors in `tokenColors`, so this is where those actually show up.
+- **File upload of a `.vsix`** — multipart install endpoint + a build that
+  bundles `expo-document-picker`.
