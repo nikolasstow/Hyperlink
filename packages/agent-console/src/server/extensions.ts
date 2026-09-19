@@ -268,24 +268,32 @@ export const installFromMarketplace = (ref: string): Effect.Effect<ExtensionMani
     return yield* installFromVsix(bytes);
   });
 
-/** Local VS Code-family IDEs and where they keep unzipped user extensions
- * (relative to $HOME). Extensions there are already extracted — a folder with a
- * package.json — so we can read and import them directly. */
-const IDE_EXTENSION_DIRS: ReadonlyArray<{ readonly ide: string; readonly rel: string }> = [
-  { ide: "VS Code", rel: ".vscode/extensions" },
-  { ide: "VS Code Insiders", rel: ".vscode-insiders/extensions" },
-  { ide: "VS Code OSS", rel: ".vscode-oss/extensions" },
-  { ide: "Cursor", rel: ".cursor/extensions" },
-  { ide: "Windsurf", rel: ".windsurf/extensions" },
-  { ide: "VSCodium", rel: ".vscodium/extensions" },
-  { ide: "Positron", rel: ".positron/extensions" },
-  // Remote-SSH / server hosts keep their extensions under a `-server` dir — when
-  // this machine is the dev host (as it is here), that's where they live.
-  { ide: "VS Code (Remote)", rel: ".vscode-server/extensions" },
-  { ide: "VS Code Insiders (Remote)", rel: ".vscode-server-insiders/extensions" },
-  { ide: "Cursor (Remote)", rel: ".cursor-server/extensions" },
-  { ide: "Windsurf (Remote)", rel: ".windsurf-server/extensions" },
-];
+/** Pretty IDE name for a `~/.<slug>[-server]` extensions home. Known editors get
+ * a proper label; anything else falls back to the slug, so a new VS Code-based
+ * IDE is still covered without a code change. `-server` = a Remote-SSH host. */
+const IDE_LABELS: Record<string, string> = {
+  vscode: "VS Code",
+  "vscode-insiders": "VS Code Insiders",
+  "vscode-oss": "VS Code OSS",
+  vscodium: "VSCodium",
+  "vscodium-insiders": "VSCodium Insiders",
+  cursor: "Cursor",
+  windsurf: "Windsurf",
+  "windsurf-next": "Windsurf Next",
+  positron: "Positron",
+  trae: "Trae",
+  void: "Void",
+  pearai: "PearAI",
+  kiro: "Kiro",
+};
+
+const ideLabel = (dotDir: string): string => {
+  const slug = dotDir.replace(/^\./, "");
+  const remote = slug.endsWith("-server");
+  const baseSlug = remote ? slug.slice(0, -"-server".length) : slug;
+  const name = IDE_LABELS[baseSlug] ?? baseSlug;
+  return remote ? `${name} (Remote)` : name;
+};
 
 /** Publisher from `publisher.name-version` folder name, when package.json omits
  * it (installed copies sometimes do). */
@@ -309,8 +317,15 @@ export const discoverLocalExtensions = (): Effect.Effect<ReadonlyArray<LocalExte
     const seen = new Set<string>();
     const found: LocalExtension[] = [];
 
-    for (const { ide, rel } of IDE_EXTENSION_DIRS) {
-      const dir = path.join(home, rel);
+    // Every `~/.<ide>[-server]/extensions` — discovered by scanning $HOME's dot
+    // directories rather than a fixed list, so all VS Code-based IDEs (and any
+    // future one) are covered.
+    const homeEntries = yield* fs.readDirectory(home).pipe(Effect.orElseSucceed(() => []));
+    const extensionDirs = homeEntries
+      .filter((entry) => entry.startsWith("."))
+      .map((entry) => ({ ide: ideLabel(entry), dir: path.join(home, entry, "extensions") }));
+
+    for (const { ide, dir } of extensionDirs) {
       const exists = yield* fs.exists(dir).pipe(Effect.orElseSucceed(() => false));
       if (!exists) continue;
       const entries = yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => []));

@@ -32,6 +32,14 @@ export interface ExtensionManifest {
   readonly colorThemes: ReadonlyArray<ThemeContribution>;
 }
 
+/** An extension found already installed in a local VS Code-family IDE. */
+export interface LocalExtension extends ExtensionManifest {
+  /** The IDE it was found in (e.g. "Cursor (Remote)"). */
+  readonly source: string;
+  /** Its on-disk folder — passed back to import it. */
+  readonly sourcePath: string;
+}
+
 const ThemeContributionSchema = Schema.Struct({
   id: Schema.String,
   label: Schema.String,
@@ -50,11 +58,18 @@ const ManifestSchema = Schema.Struct({
   colorThemes: Schema.Array(ThemeContributionSchema),
 });
 
+const LocalExtensionSchema = Schema.Struct({
+  ...ManifestSchema.fields,
+  source: Schema.String,
+  sourcePath: Schema.String,
+});
+
 const ManifestListSchema = Schema.Array(ManifestSchema);
 const ConfigSchema = Schema.Record(Schema.String, Schema.Unknown);
 
 const decodeManifest = Schema.decodeUnknownSync(ManifestSchema);
 const decodeManifestList = Schema.decodeUnknownSync(ManifestListSchema);
+const decodeLocalList = Schema.decodeUnknownSync(Schema.Array(LocalExtensionSchema));
 const decodeConfig = Schema.decodeUnknownSync(ConfigSchema);
 
 const base = (apiBase: string): string => apiBase.replace(/\/+$/, "");
@@ -99,6 +114,20 @@ export const removeExtension = async (apiBase: string, id: string): Promise<void
     body: JSON.stringify({ id }),
   });
 };
+
+/** Extensions already installed in this machine's VS Code-family IDEs. */
+export const discoverLocalExtensions = async (apiBase: string): Promise<ReadonlyArray<LocalExtension>> =>
+  decodeLocalList(await request(`${base(apiBase)}/extensions/discover`));
+
+/** Import a discovered local extension by its on-disk path. */
+export const importLocalExtension = async (apiBase: string, path: string): Promise<ExtensionManifest> =>
+  decodeManifest(
+    await request(`${base(apiBase)}/extensions/import`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path }),
+    }),
+  );
 
 export const getRemoteConfig = async (apiBase: string): Promise<Record<string, unknown>> =>
   decodeConfig(await request(`${base(apiBase)}/config`));

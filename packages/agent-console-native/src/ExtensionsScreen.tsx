@@ -14,7 +14,15 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
-import { installExtension, listExtensions, removeExtension, type ExtensionManifest } from "./extensionsClient";
+import {
+  discoverLocalExtensions,
+  importLocalExtension,
+  installExtension,
+  listExtensions,
+  removeExtension,
+  type ExtensionManifest,
+  type LocalExtension,
+} from "./extensionsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
@@ -27,9 +35,11 @@ export const ExtensionsScreen = (props: Props): React.ReactElement => {
   const apiBase = getApiAddress(address);
 
   const [items, setItems] = React.useState<ReadonlyArray<ExtensionManifest>>([]);
+  const [local, setLocal] = React.useState<ReadonlyArray<LocalExtension>>([]);
   const [ref, setRef] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [installing, setInstalling] = React.useState(false);
+  const [importingId, setImportingId] = React.useState<string | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
 
   const load = React.useCallback((): void => {
@@ -43,7 +53,28 @@ export const ExtensionsScreen = (props: Props): React.ReactElement => {
       .finally(() => setLoading(false));
   }, [apiBase]);
 
-  React.useEffect(() => load(), [load]);
+  const discover = React.useCallback((): void => {
+    discoverLocalExtensions(apiBase)
+      .then(setLocal)
+      .catch(() => undefined);
+  }, [apiBase]);
+
+  React.useEffect(() => {
+    load();
+    discover();
+  }, [load, discover]);
+
+  const installedIds = React.useMemo(() => new Set(items.map((x) => x.id)), [items]);
+
+  const onImport = (ext: LocalExtension): void => {
+    if (importingId !== undefined) return;
+    setImportingId(ext.id);
+    setError(undefined);
+    importLocalExtension(apiBase, ext.sourcePath)
+      .then(() => load())
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => setImportingId(undefined));
+  };
 
   const onInstall = (): void => {
     const value = ref.trim();
@@ -106,6 +137,36 @@ export const ExtensionsScreen = (props: Props): React.ReactElement => {
           </View>
           {error !== undefined ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
+
+        {local.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>Available on this machine</Text>
+            {local.map((ext) => {
+              const already = installedIds.has(ext.id);
+              return (
+                <View key={`${ext.source}:${ext.id}`} style={styles.card}>
+                  <View style={styles.extHeader}>
+                    <View style={styles.extText}>
+                      <Text style={styles.extName} numberOfLines={1}>
+                        {ext.displayName}
+                      </Text>
+                      <Text style={styles.extMeta} numberOfLines={1}>
+                        {ext.source} · {contributes(ext)}
+                      </Text>
+                    </View>
+                    {already ? (
+                      <Text style={styles.importedText}>Imported</Text>
+                    ) : (
+                      <TouchableOpacity onPress={() => onImport(ext)} disabled={importingId !== undefined} accessibilityLabel="Import">
+                        {importingId === ext.id ? <ActivityIndicator color={colors.tint} /> : <Text style={styles.importText}>Import</Text>}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </>
+        ) : null}
 
         <Text style={styles.sectionLabel}>Installed</Text>
         {loading ? (
@@ -259,6 +320,15 @@ const styles = StyleSheet.create({
   },
   removeText: {
     color: colors.destructive,
+    fontSize: 15,
+  },
+  importText: {
+    color: colors.tint,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  importedText: {
+    color: colors.secondaryLabel,
     fontSize: 15,
   },
   extContributes: {
