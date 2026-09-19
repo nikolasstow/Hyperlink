@@ -31,6 +31,20 @@ export const ExtensionManifestSchema = Schema.Struct({
   colorThemes: Schema.Array(ThemeContribution),
 });
 
+/** An extension discovered already installed in a local VS Code-family IDE. */
+export const LocalExtensionSchema = Schema.Struct({
+  id: Schema.String,
+  publisher: Schema.String,
+  name: Schema.String,
+  version: Schema.String,
+  displayName: Schema.String,
+  description: Schema.String,
+  iconThemes: Schema.Array(ThemeContribution),
+  colorThemes: Schema.Array(ThemeContribution),
+  source: Schema.String,
+  sourcePath: Schema.String,
+});
+
 /** The synced app config is free-form JSON — the client owns its shape. */
 export const AppConfigSchema = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -47,6 +61,15 @@ const extensionsGroup = HttpApiGroup.make("extensions").add(
   HttpApiEndpoint.post("remove", "/extensions/remove", {
     payload: Schema.Struct({ id: Schema.String }),
     success: Schema.Struct({ ok: Schema.Boolean }),
+    error: ExtensionError,
+  }),
+  HttpApiEndpoint.get("discover", "/extensions/discover", {
+    success: Schema.Array(LocalExtensionSchema),
+    error: ExtensionError,
+  }),
+  HttpApiEndpoint.post("import", "/extensions/import", {
+    payload: Schema.Struct({ path: Schema.String }),
+    success: ExtensionManifestSchema,
     error: ExtensionError,
   }),
 );

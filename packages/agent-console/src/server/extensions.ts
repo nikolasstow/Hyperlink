@@ -19,6 +19,7 @@
  *
  * @internal
  */
+import { homedir } from "node:os";
 import { unzipSync } from "fflate";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, ManagedRuntime, Path, Schema } from "effect";
@@ -31,6 +32,21 @@ export interface ThemeContribution {
   /** Colour themes only: `vs` (light) / `vs-dark` / `hc-black`. */
   readonly uiTheme?: string;
   readonly file: string;
+}
+
+/** An extension found already installed in a local VS Code-family IDE, offered
+ * for import. `sourcePath` is its on-disk folder; `source` names the IDE. */
+export interface LocalExtension {
+  readonly id: string;
+  readonly publisher: string;
+  readonly name: string;
+  readonly version: string;
+  readonly displayName: string;
+  readonly description: string;
+  readonly iconThemes: ReadonlyArray<ThemeContribution>;
+  readonly colorThemes: ReadonlyArray<ThemeContribution>;
+  readonly source: string;
+  readonly sourcePath: string;
 }
 
 /** What an installed extension provides, as persisted in its manifest. */
@@ -106,6 +122,33 @@ const toContribution = (base: string, c: { id?: string; label?: string; uiTheme?
   file: `${base}/files/${c.path.replace(/^\.\//, "")}`,
 });
 
+type ParsedPackage = typeof PackageJson.Type;
+
+/** Build the manifest we persist/return from a decoded package.json. Shared by
+ * every install path (vsix, local import). */
+const buildManifest = (id: string, publisher: string, pkg: ParsedPackage): ExtensionManifest => ({
+  id,
+  publisher,
+  name: pkg.name,
+  version: pkg.version ?? "0.0.0",
+  displayName: pkg.displayName ?? pkg.name,
+  description: pkg.description ?? "",
+  iconThemes: (pkg.contributes?.iconThemes ?? []).map((c) => toContribution(id, c)),
+  colorThemes: (pkg.contributes?.themes ?? []).map((c) => toContribution(id, c)),
+});
+
+/** Decode a package.json's bytes, or fail with a manifest error. */
+const parsePackage = (bytes: Uint8Array): Effect.Effect<ParsedPackage, ExtensionError> =>
+  Effect.gen(function* () {
+    const json = yield* Effect.try({
+      try: () => JSON.parse(new TextDecoder().decode(bytes)),
+      catch: (error) => new ExtensionError({ reason: "manifest", detail: String(error) }),
+    });
+    return yield* Schema.decodeUnknownEffect(PackageJson)(json).pipe(
+      Effect.mapError((issue) => new ExtensionError({ reason: "manifest", detail: String(issue) })),
+    );
+  });
+
 /** Install from raw `.vsix` bytes: unzip, read package.json, copy the extension
  * tree into the store, extract the supported contributions, write a manifest. */
 export const installFromVsix = (bytes: Uint8Array): Effect.Effect<ExtensionManifest, ExtensionError, FileSystem.FileSystem | Path.Path> =>
@@ -121,14 +164,7 @@ export const installFromVsix = (bytes: Uint8Array): Effect.Effect<ExtensionManif
     const pkgRaw = files["extension/package.json"];
     if (pkgRaw === undefined) return yield* new ExtensionError({ reason: "manifest", detail: "no extension/package.json" });
 
-    const pkgJson = yield* Effect.try({
-      try: () => JSON.parse(new TextDecoder().decode(pkgRaw)),
-      catch: (error) => new ExtensionError({ reason: "manifest", detail: String(error) }),
-    });
-    const pkg = yield* Schema.decodeUnknownEffect(PackageJson)(pkgJson).pipe(
-      Effect.mapError((issue) => new ExtensionError({ reason: "manifest", detail: String(issue) })),
-    );
-
+    const pkg = yield* parsePackage(pkgRaw);
     const publisher = publisherOf(pkg.publisher, files);
     const id = `${publisher}.${pkg.name}`;
     const base = storeRoot(path);
@@ -150,19 +186,7 @@ export const installFromVsix = (bytes: Uint8Array): Effect.Effect<ExtensionManif
       yield* fs.writeFile(dest, data).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
     }
 
-    const iconThemes = (pkg.contributes?.iconThemes ?? []).map((c) => toContribution(id, c));
-    const colorThemes = (pkg.contributes?.themes ?? []).map((c) => toContribution(id, c));
-
-    const manifest: ExtensionManifest = {
-      id,
-      publisher,
-      name: pkg.name,
-      version: pkg.version ?? "0.0.0",
-      displayName: pkg.displayName ?? pkg.name,
-      description: pkg.description ?? "",
-      iconThemes,
-      colorThemes,
-    };
+    const manifest = buildManifest(id, publisher, pkg);
     yield* fs.writeFileString(path.join(extDir, "manifest.json"), JSON.stringify(manifest, null, 2)).pipe(
       Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })),
     );
@@ -242,6 +266,111 @@ export const installFromMarketplace = (ref: string): Effect.Effect<ExtensionMani
     if (parsed === undefined) return yield* new ExtensionError({ reason: "not-found", detail: `bad ref: ${ref}` });
     const bytes = yield* downloadVsix(parsed.publisher, parsed.name);
     return yield* installFromVsix(bytes);
+  });
+
+/** Local VS Code-family IDEs and where they keep unzipped user extensions
+ * (relative to $HOME). Extensions there are already extracted — a folder with a
+ * package.json — so we can read and import them directly. */
+const IDE_EXTENSION_DIRS: ReadonlyArray<{ readonly ide: string; readonly rel: string }> = [
+  { ide: "VS Code", rel: ".vscode/extensions" },
+  { ide: "VS Code Insiders", rel: ".vscode-insiders/extensions" },
+  { ide: "VS Code OSS", rel: ".vscode-oss/extensions" },
+  { ide: "Cursor", rel: ".cursor/extensions" },
+  { ide: "Windsurf", rel: ".windsurf/extensions" },
+  { ide: "VSCodium", rel: ".vscodium/extensions" },
+  { ide: "Positron", rel: ".positron/extensions" },
+  // Remote-SSH / server hosts keep their extensions under a `-server` dir — when
+  // this machine is the dev host (as it is here), that's where they live.
+  { ide: "VS Code (Remote)", rel: ".vscode-server/extensions" },
+  { ide: "VS Code Insiders (Remote)", rel: ".vscode-server-insiders/extensions" },
+  { ide: "Cursor (Remote)", rel: ".cursor-server/extensions" },
+  { ide: "Windsurf (Remote)", rel: ".windsurf-server/extensions" },
+];
+
+/** Publisher from `publisher.name-version` folder name, when package.json omits
+ * it (installed copies sometimes do). */
+const publisherFromFolder = (folder: string): string => {
+  const withoutVersion = folder.replace(/-\d+\.\d+\.\d+.*$/, "");
+  const dot = withoutVersion.indexOf(".");
+  return dot > 0 ? withoutVersion.slice(0, dot) : "local";
+};
+
+/**
+ * Scan the local IDEs' extension folders and return everything installed, so
+ * the user can see their setup and import what's useful. Each carries its
+ * supported contributions (icon / color themes) — often empty for
+ * language/tooling extensions. De-duplicated by extension id (first IDE wins).
+ */
+export const discoverLocalExtensions = (): Effect.Effect<ReadonlyArray<LocalExtension>, ExtensionError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const home = homedir();
+    const seen = new Set<string>();
+    const found: LocalExtension[] = [];
+
+    for (const { ide, rel } of IDE_EXTENSION_DIRS) {
+      const dir = path.join(home, rel);
+      const exists = yield* fs.exists(dir).pipe(Effect.orElseSucceed(() => false));
+      if (!exists) continue;
+      const entries = yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => []));
+      for (const entry of entries) {
+        const extDir = path.join(dir, entry);
+        const pkgFile = path.join(extDir, "package.json");
+        const hasPkg = yield* fs.exists(pkgFile).pipe(Effect.orElseSucceed(() => false));
+        if (!hasPkg) continue;
+        const bytes = yield* fs.readFile(pkgFile).pipe(Effect.option);
+        if (bytes._tag === "None") continue;
+        const pkg = yield* parsePackage(bytes.value).pipe(Effect.option);
+        if (pkg._tag === "None") continue;
+        const publisher = pkg.value.publisher ?? publisherFromFolder(entry);
+        const id = `${publisher}.${pkg.value.name}`;
+        if (seen.has(id)) continue;
+        const manifest = buildManifest(id, publisher, pkg.value);
+        seen.add(id);
+        found.push({
+          id,
+          publisher,
+          name: manifest.name,
+          version: manifest.version,
+          displayName: manifest.displayName,
+          description: manifest.description,
+          iconThemes: manifest.iconThemes,
+          colorThemes: manifest.colorThemes,
+          source: ide,
+          sourcePath: extDir,
+        });
+      }
+    }
+    return found;
+  });
+
+/** Import an already-extracted extension folder (from a local IDE) into our
+ * store: copy the tree, extract contributions, write a manifest. */
+export const importFromPath = (sourceDir: string): Effect.Effect<ExtensionManifest, ExtensionError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+
+    const pkgFile = path.join(sourceDir, "package.json");
+    const hasPkg = yield* fs.exists(pkgFile).pipe(Effect.orElseSucceed(() => false));
+    if (!hasPkg) return yield* new ExtensionError({ reason: "not-found", detail: sourceDir });
+    const bytes = yield* fs.readFile(pkgFile).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
+    const pkg = yield* parsePackage(bytes);
+    const publisher = pkg.publisher ?? publisherFromFolder(path.basename(sourceDir));
+    const id = `${publisher}.${pkg.name}`;
+
+    const extDir = path.join(storeRoot(path), id);
+    yield* fs.remove(extDir, { recursive: true }).pipe(Effect.ignore);
+    yield* fs.makeDirectory(extDir, { recursive: true }).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
+    // Copy the whole extension tree so theme JSONs keep their sibling assets.
+    yield* fs.copy(sourceDir, path.join(extDir, "files")).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
+
+    const manifest = buildManifest(id, publisher, pkg);
+    yield* fs.writeFileString(path.join(extDir, "manifest.json"), JSON.stringify(manifest, null, 2)).pipe(
+      Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })),
+    );
+    return manifest;
   });
 
 export const listExtensions = (): Effect.Effect<ReadonlyArray<ExtensionManifest>, ExtensionError, FileSystem.FileSystem | Path.Path> =>

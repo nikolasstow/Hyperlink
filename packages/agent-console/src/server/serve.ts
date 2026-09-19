@@ -19,13 +19,23 @@ import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { api } from "./api";
-import { getConfig, installFromMarketplace, listExtensions, putConfig, removeExtension } from "./extensions";
+import {
+  discoverLocalExtensions,
+  getConfig,
+  importFromPath,
+  installFromMarketplace,
+  listExtensions,
+  putConfig,
+  removeExtension,
+} from "./extensions";
 
 const extensionsHandlers = HttpApiBuilder.group(api, "extensions", (handlers) =>
   handlers
     .handle("list", () => listExtensions())
     .handle("install", ({ payload }) => installFromMarketplace(payload.ref))
-    .handle("remove", ({ payload }) => removeExtension(payload.id).pipe(Effect.as({ ok: true }))),
+    .handle("remove", ({ payload }) => removeExtension(payload.id).pipe(Effect.as({ ok: true })))
+    .handle("discover", () => discoverLocalExtensions())
+    .handle("import", ({ payload }) => importFromPath(payload.path)),
 );
 
 const configHandlers = HttpApiBuilder.group(api, "config", (handlers) =>
