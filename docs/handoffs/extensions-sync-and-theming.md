@@ -1,7 +1,16 @@
 # Extension installation, server sync, and theming
 
-Status: design. Theming (device-local) is **shipped**; server sync and extension
-installation are planned. This doc is the self-contained spec for building them.
+Status: **largely shipped.** The backend is an off-vite Effect `HttpApi` served by
+`@effect/platform-node`'s `NodeHttpServer` (`packages/agent-console`, `pnpm serve`,
+port `AGENT_CONSOLE_API_PORT` default **5199**) — NOT a vite plugin. Shipped:
+marketplace-URL install, local discovery + import (scans `~/.<ide>[-server]/extensions`
+and app-bundle built-ins, resolves NLS, filters to theme/icon contributors),
+list/remove, per-color-theme derived primary/secondary, the synced `config`
+document, device-local theming with server sync (ThemeSync), the Extensions
+screen (install/import/remove) and the Appearance screen (enable a theme + colour
+pickers). Not yet: file upload (needs a build), theme-driven code highlighting
+(see Follow-ups). The sections below are the original plan; where they say "vite
+adapter" / ":5195" read "Effect HttpApi / NodeHttpServer / :5199".
 
 ## Goal
 
