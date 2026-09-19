@@ -17,6 +17,7 @@ const ThemeContribution = Schema.Struct({
   label: Schema.String,
   uiTheme: Schema.optional(Schema.String),
   file: Schema.String,
+  colors: Schema.optional(Schema.Struct({ primary: Schema.String, secondary: Schema.String })),
 });
 
 /** Wire shape of an installed extension's manifest (mirrors ExtensionManifest). */

@@ -8,7 +8,6 @@
  *
  * @internal
  */
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,13 +22,9 @@ import {
   type ExtensionManifest,
   type LocalExtension,
 } from "./extensionsClient";
-import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
-import { SystemIcon } from "./SystemIcon";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Extensions">;
-
-export const ExtensionsScreen = (props: Props): React.ReactElement => {
+export const ExtensionsScreen = (): React.ReactElement => {
   const { address } = useAppContext();
   const insets = useSafeAreaInsets();
   const apiBase = getApiAddress(address);
@@ -98,16 +93,9 @@ export const ExtensionsScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => props.navigation.goBack()} accessibilityLabel="Back">
-          <SystemIcon name="chevron.left" size={20} color={colors.tint} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Extensions</Text>
-        <View style={styles.backButton} />
-      </View>
-
       <ScrollView
         style={styles.scroll}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -209,24 +197,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
-  backButton: {
-    width: 44,
-    height: 32,
-    justifyContent: "center",
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    color: colors.label,
-    fontSize: 17,
-    fontWeight: "600",
   },
   scroll: {
     flex: 1,

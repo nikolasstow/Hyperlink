@@ -19,6 +19,11 @@ export interface ThemeContribution {
   readonly label: string;
   readonly uiTheme?: string;
   readonly file: string;
+  /** Colour themes only: derived app primary/secondary, for applying it. */
+  readonly colors?: {
+    readonly primary: string;
+    readonly secondary: string;
+  };
 }
 
 export interface ExtensionManifest {
@@ -45,6 +50,7 @@ const ThemeContributionSchema = Schema.Struct({
   label: Schema.String,
   uiTheme: Schema.optional(Schema.String),
   file: Schema.String,
+  colors: Schema.optional(Schema.Struct({ primary: Schema.String, secondary: Schema.String })),
 });
 
 const ManifestSchema = Schema.Struct({

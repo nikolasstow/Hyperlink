@@ -32,6 +32,12 @@ export interface ThemeContribution {
   /** Colour themes only: `vs` (light) / `vs-dark` / `hc-black`. */
   readonly uiTheme?: string;
   readonly file: string;
+  /** Colour themes only: our app's primary/secondary derived from the theme's
+   * palette, so the client can apply it directly. Undefined if not derivable. */
+  readonly colors?: {
+    readonly primary: string;
+    readonly secondary: string;
+  };
 }
 
 /** An extension found already installed in a local VS Code-family IDE, offered
@@ -149,6 +155,54 @@ const buildManifest = (id: string, publisher: string, pkg: ParsedPackage, nls: R
   colorThemes: (pkg.contributes?.themes ?? []).map((c) => toContribution(id, nls, c)),
 });
 
+/** VS Code colour-theme keys we map to our primary/secondary, in preference
+ * order — the accent-ish backgrounds first, falling back to borders/links. */
+const PRIMARY_KEYS = ["activityBarBadge.background", "progressBar.background", "button.background", "textLink.foreground", "focusBorder"];
+const SECONDARY_KEYS = ["textLink.foreground", "focusBorder", "badge.background", "textLink.activeForeground", "button.background", "activityBarBadge.background"];
+
+/** Derive our {primary, secondary} from a VS Code colour theme's `colors`. */
+const deriveThemeColors = (themeJson: unknown): { primary: string; secondary: string } | undefined => {
+  if (typeof themeJson !== "object" || themeJson === null || !("colors" in themeJson)) return undefined;
+  const { colors } = themeJson;
+  if (typeof colors !== "object" || colors === null) return undefined;
+  const palette: Record<string, unknown> = { ...colors };
+  const pick = (keys: ReadonlyArray<string>): string | undefined => {
+    for (const key of keys) {
+      const value = palette[key];
+      if (typeof value === "string" && /^#[0-9a-fA-F]{6}/.test(value)) return value.slice(0, 7);
+    }
+    return undefined;
+  };
+  const primary = pick(PRIMARY_KEYS);
+  if (primary === undefined) return undefined;
+  return { primary, secondary: pick(SECONDARY_KEYS) ?? primary };
+};
+
+/** Read each colour theme's JSON from `filesBase` and attach derived colors. */
+const withThemeColors = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  filesBase: string,
+  id: string,
+  manifest: ExtensionManifest,
+): Effect.Effect<ExtensionManifest> =>
+  Effect.gen(function* () {
+    const prefix = `${id}/files/`;
+    const colorThemes = yield* Effect.forEach(manifest.colorThemes, (ct) =>
+      Effect.gen(function* () {
+        const rel = ct.file.startsWith(prefix) ? ct.file.slice(prefix.length) : ct.file;
+        const abs = path.join(filesBase, rel);
+        const has = yield* fs.exists(abs).pipe(Effect.orElseSucceed(() => false));
+        if (!has) return ct;
+        const raw = yield* fs.readFileString(abs).pipe(Effect.orElseSucceed(() => ""));
+        const parsed = yield* Effect.try(() => JSON.parse(raw)).pipe(Effect.orElseSucceed(() => undefined));
+        const colors = deriveThemeColors(parsed);
+        return colors === undefined ? ct : { ...ct, colors };
+      }),
+    );
+    return { ...manifest, colorThemes };
+  });
+
 /** Best-effort read of an extension dir's `package.nls.json` (for `%key%`). */
 const readNls = (fs: FileSystem.FileSystem, path: Path.Path, dir: string): Effect.Effect<Record<string, unknown>> =>
   Effect.gen(function* () {
@@ -210,7 +264,7 @@ export const installFromVsix = (bytes: Uint8Array): Effect.Effect<ExtensionManif
 
     const nlsRaw = files["extension/package.nls.json"];
     const nls = nlsRaw === undefined ? {} : parseNlsBytes(nlsRaw);
-    const manifest = buildManifest(id, publisher, pkg, nls);
+    const manifest = yield* withThemeColors(fs, path, path.join(extDir, "files"), id, buildManifest(id, publisher, pkg, nls));
     yield* fs.writeFileString(path.join(extDir, "manifest.json"), JSON.stringify(manifest, null, 2)).pipe(
       Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })),
     );
@@ -396,10 +450,11 @@ export const discoverLocalExtensions = (): Effect.Effect<ReadonlyArray<LocalExte
         const id = `${publisher}.${pkg.value.name}`;
         if (seen.has(id)) continue;
         const nls = yield* readNls(fs, path, extDir);
-        const manifest = buildManifest(id, publisher, pkg.value, nls);
+        const base = buildManifest(id, publisher, pkg.value, nls);
         // Only surface extensions we can actually use (themes/icons); language
         // grammars and tooling would just be noise in the import list.
-        if (manifest.iconThemes.length === 0 && manifest.colorThemes.length === 0) continue;
+        if (base.iconThemes.length === 0 && base.colorThemes.length === 0) continue;
+        const manifest = yield* withThemeColors(fs, path, extDir, id, base);
         seen.add(id);
         found.push({
           id,
@@ -440,7 +495,7 @@ export const importFromPath = (sourceDir: string): Effect.Effect<ExtensionManife
     yield* fs.copy(sourceDir, path.join(extDir, "files")).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
 
     const nls = yield* readNls(fs, path, sourceDir);
-    const manifest = buildManifest(id, publisher, pkg, nls);
+    const manifest = yield* withThemeColors(fs, path, path.join(extDir, "files"), id, buildManifest(id, publisher, pkg, nls));
     yield* fs.writeFileString(path.join(extDir, "manifest.json"), JSON.stringify(manifest, null, 2)).pipe(
       Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })),
     );

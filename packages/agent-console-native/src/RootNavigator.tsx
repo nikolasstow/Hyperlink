@@ -23,6 +23,7 @@ import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { HeaderTitlePill } from "./HeaderTitlePill";
+import { AppearanceScreen } from "./AppearanceScreen";
 import { ExtensionsScreen } from "./ExtensionsScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
@@ -34,6 +35,7 @@ export type RootStackParamList = {
   Chat: { sessionID: string };
   Settings: undefined;
   Extensions: undefined;
+  Appearance: undefined;
   // A repo (git checkout) or workspace (non-git session folder). `isRepo`
   // selects the menu variant; `dir` is the primary directory shown in the
   // header info.
@@ -216,8 +218,11 @@ export const RootNavigator = (): React.ReactElement => {
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           }}
         />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: false }} />
+        {/* Settings-family pages use the native large-title header that
+         * collapses on scroll (not the custom glass header). */}
+        <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
+        <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
+        <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         {/* Repo/workspace screen draws its own fully custom collapsing glass
          * header, so the native bar is hidden. */}
         <Stack.Screen

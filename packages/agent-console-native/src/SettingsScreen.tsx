@@ -44,37 +44,6 @@ import {
   type DefaultWorktreePreference,
 } from "./settings";
 import { SystemIcon } from "./SystemIcon";
-import { useTheme } from "./theme";
-
-/** Preset accent colours offered in the theme pickers — a spread across the
- * hue wheel, iOS system-colour values. */
-const THEME_PALETTE = [
-  "#34C759",
-  "#30B0C7",
-  "#007AFF",
-  "#5856D6",
-  "#AF52DE",
-  "#FF2D55",
-  "#FF3B30",
-  "#FF9500",
-  "#FFCC00",
-] as const;
-
-const ColorSwatches = (props: {
-  readonly value: string;
-  readonly onChange: (color: string) => void;
-}): React.ReactElement => (
-  <View style={styles.swatchRow}>
-    {THEME_PALETTE.map((color) => (
-      <TouchableOpacity
-        key={color}
-        accessibilityLabel={color}
-        onPress={() => props.onChange(color)}
-        style={[styles.swatch, { backgroundColor: color }, props.value.toLowerCase() === color.toLowerCase() ? styles.swatchSelected : null]}
-      />
-    ))}
-  </View>
-);
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
@@ -90,7 +59,6 @@ const timeAgo = (ms: number): string => {
 };
 
 export const SettingsScreen = (props: Props): React.ReactElement => {
-  const { theme, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const { client, address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
@@ -209,36 +177,27 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => props.navigation.goBack()} accessibilityLabel="Back">
-          <SystemIcon name="chevron.left" size={20} color={colors.tint} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={styles.backButton} />
-      </View>
-
       <ScrollView
         style={styles.scroll}
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-        <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Appearance</Text>
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Primary color</Text>
-          <Text style={styles.hint}>The send button, and the shade of your chat bubbles.</Text>
-          <ColorSwatches value={theme.primary} onChange={(color) => setTheme({ ...theme, primary: color })} />
-          <View style={styles.themeDivider} />
-          <Text style={styles.fieldLabel}>Secondary color</Text>
-          <Text style={styles.hint}>Accents like the unread indicator.</Text>
-          <ColorSwatches value={theme.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
-        </View>
-
-        <Text style={styles.sectionLabel}>Extensions</Text>
+        <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Customize</Text>
+        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Appearance")} activeOpacity={0.6}>
+          <View style={styles.linkRow}>
+            <View style={styles.linkText}>
+              <Text style={styles.fieldLabel}>Appearance</Text>
+              <Text style={styles.hint}>Theme and accent colors.</Text>
+            </View>
+            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+          </View>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Extensions")} activeOpacity={0.6}>
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
-              <Text style={styles.fieldLabel}>Manage extensions</Text>
+              <Text style={styles.fieldLabel}>Extensions</Text>
               <Text style={styles.hint}>Install VS Code themes and icons.</Text>
             </View>
             <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
@@ -427,27 +386,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 4,
-    paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.separator,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    flex: 1,
-    color: colors.label,
-    fontSize: 17,
-    fontWeight: "600",
-    textAlign: "center",
-  },
   scroll: {
     flex: 1,
   },
@@ -482,28 +420,6 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "600",
-  },
-  swatchRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    paddingTop: 4,
-  },
-  swatch: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-  },
-  swatchSelected: {
-    borderWidth: 3,
-    borderColor: colors.label,
-  },
-  themeDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.separator,
-    marginVertical: 4,
   },
   linkRow: {
     flexDirection: "row",
