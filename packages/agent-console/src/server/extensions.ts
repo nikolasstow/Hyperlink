@@ -114,28 +114,50 @@ const publisherOf = (pkgPublisher: string | undefined, files: Record<string, Uin
   return "local";
 };
 
-const toContribution = (base: string, c: { id?: string; label?: string; uiTheme?: string; path: string }): ThemeContribution => ({
-  id: c.id ?? c.label ?? c.path,
-  label: c.label ?? c.id ?? c.path,
-  ...(c.uiTheme === undefined ? {} : { uiTheme: c.uiTheme }),
-  // `path` is relative to the extension root; store it relative to `<id>/files/`.
-  file: `${base}/files/${c.path.replace(/^\.\//, "")}`,
-});
+/** VS Code localises manifest strings as `%key%`, resolved from
+ * `package.nls.json`. Resolve those, leaving plain strings untouched. */
+const resolveNls = (value: string, nls: Record<string, unknown>): string => {
+  const match = value.match(/^%(.+)%$/);
+  if (match === null) return value;
+  const resolved = nls[match[1]];
+  return typeof resolved === "string" ? resolved : value;
+};
+
+const toContribution = (base: string, nls: Record<string, unknown>, c: { id?: string; label?: string; uiTheme?: string; path: string }): ThemeContribution => {
+  const label = resolveNls(c.label ?? c.id ?? c.path, nls);
+  return {
+    id: c.id ?? c.label ?? c.path,
+    label,
+    ...(c.uiTheme === undefined ? {} : { uiTheme: c.uiTheme }),
+    // `path` is relative to the extension root; store it relative to `<id>/files/`.
+    file: `${base}/files/${c.path.replace(/^\.\//, "")}`,
+  };
+};
 
 type ParsedPackage = typeof PackageJson.Type;
 
-/** Build the manifest we persist/return from a decoded package.json. Shared by
- * every install path (vsix, local import). */
-const buildManifest = (id: string, publisher: string, pkg: ParsedPackage): ExtensionManifest => ({
+/** Build the manifest we persist/return from a decoded package.json, resolving
+ * `%nls%` strings against the extension's `package.nls.json` when supplied. */
+const buildManifest = (id: string, publisher: string, pkg: ParsedPackage, nls: Record<string, unknown> = {}): ExtensionManifest => ({
   id,
   publisher,
   name: pkg.name,
   version: pkg.version ?? "0.0.0",
-  displayName: pkg.displayName ?? pkg.name,
-  description: pkg.description ?? "",
-  iconThemes: (pkg.contributes?.iconThemes ?? []).map((c) => toContribution(id, c)),
-  colorThemes: (pkg.contributes?.themes ?? []).map((c) => toContribution(id, c)),
+  displayName: resolveNls(pkg.displayName ?? pkg.name, nls),
+  description: resolveNls(pkg.description ?? "", nls),
+  iconThemes: (pkg.contributes?.iconThemes ?? []).map((c) => toContribution(id, nls, c)),
+  colorThemes: (pkg.contributes?.themes ?? []).map((c) => toContribution(id, nls, c)),
 });
+
+/** Best-effort read of an extension dir's `package.nls.json` (for `%key%`). */
+const readNls = (fs: FileSystem.FileSystem, path: Path.Path, dir: string): Effect.Effect<Record<string, unknown>> =>
+  Effect.gen(function* () {
+    const file = path.join(dir, "package.nls.json");
+    const has = yield* fs.exists(file).pipe(Effect.orElseSucceed(() => false));
+    if (!has) return {};
+    const raw = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => "{}"));
+    return parseNlsBytes(new TextEncoder().encode(raw));
+  });
 
 /** Decode a package.json's bytes, or fail with a manifest error. */
 const parsePackage = (bytes: Uint8Array): Effect.Effect<ParsedPackage, ExtensionError> =>
@@ -186,12 +208,24 @@ export const installFromVsix = (bytes: Uint8Array): Effect.Effect<ExtensionManif
       yield* fs.writeFile(dest, data).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
     }
 
-    const manifest = buildManifest(id, publisher, pkg);
+    const nlsRaw = files["extension/package.nls.json"];
+    const nls = nlsRaw === undefined ? {} : parseNlsBytes(nlsRaw);
+    const manifest = buildManifest(id, publisher, pkg, nls);
     yield* fs.writeFileString(path.join(extDir, "manifest.json"), JSON.stringify(manifest, null, 2)).pipe(
       Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })),
     );
     return manifest;
   });
+
+/** Parse `package.nls.json` bytes to a flat string map, tolerating garbage. */
+const parseNlsBytes = (bytes: Uint8Array): Record<string, unknown> => {
+  try {
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? { ...parsed } : {};
+  } catch {
+    return {};
+  }
+};
 
 /** Parse `publisher.name`, or a marketplace URL (`…?itemName=publisher.name`). */
 const parseRef = (ref: string): { publisher: string; name: string } | undefined => {
@@ -317,15 +351,35 @@ export const discoverLocalExtensions = (): Effect.Effect<ReadonlyArray<LocalExte
     const seen = new Set<string>();
     const found: LocalExtension[] = [];
 
-    // Every `~/.<ide>[-server]/extensions` — discovered by scanning $HOME's dot
-    // directories rather than a fixed list, so all VS Code-based IDEs (and any
-    // future one) are covered.
-    const homeEntries = yield* fs.readDirectory(home).pipe(Effect.orElseSucceed(() => []));
-    const extensionDirs = homeEntries
-      .filter((entry) => entry.startsWith("."))
-      .map((entry) => ({ ide: ideLabel(entry), dir: path.join(home, entry, "extensions") }));
+    const sources: Array<{ ide: string; dir: string }> = [];
 
-    for (const { ide, dir } of extensionDirs) {
+    // 1. Every `~/.<ide>[-server]/extensions` — user- and Remote-SSH-installed
+    // extensions, discovered by scanning $HOME's dot directories (not a fixed
+    // list) so all VS Code-based IDEs and any future one are covered.
+    const homeEntries = yield* fs.readDirectory(home).pipe(Effect.orElseSucceed(() => []));
+    for (const entry of homeEntries) {
+      if (!entry.startsWith(".")) continue;
+      sources.push({ ide: ideLabel(entry), dir: path.join(home, entry, "extensions") });
+    }
+
+    // 2. Every VS Code-based app's BUILT-IN extensions
+    // (`<App>.app/Contents/Resources/app/extensions`) — the default themes and
+    // icon themes (Dark+, Seti, …) ship here. Scan the app folders.
+    const appRoots = ["/Applications", path.join(home, "Applications")];
+    for (const appRoot of appRoots) {
+      const rootExists = yield* fs.exists(appRoot).pipe(Effect.orElseSucceed(() => false));
+      if (!rootExists) continue;
+      const apps = yield* fs.readDirectory(appRoot).pipe(Effect.orElseSucceed(() => []));
+      for (const app of apps) {
+        if (!app.endsWith(".app")) continue;
+        sources.push({
+          ide: `${app.replace(/\.app$/, "")} (built-in)`,
+          dir: path.join(appRoot, app, "Contents", "Resources", "app", "extensions"),
+        });
+      }
+    }
+
+    for (const { ide, dir } of sources) {
       const exists = yield* fs.exists(dir).pipe(Effect.orElseSucceed(() => false));
       if (!exists) continue;
       const entries = yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => []));
@@ -341,7 +395,11 @@ export const discoverLocalExtensions = (): Effect.Effect<ReadonlyArray<LocalExte
         const publisher = pkg.value.publisher ?? publisherFromFolder(entry);
         const id = `${publisher}.${pkg.value.name}`;
         if (seen.has(id)) continue;
-        const manifest = buildManifest(id, publisher, pkg.value);
+        const nls = yield* readNls(fs, path, extDir);
+        const manifest = buildManifest(id, publisher, pkg.value, nls);
+        // Only surface extensions we can actually use (themes/icons); language
+        // grammars and tooling would just be noise in the import list.
+        if (manifest.iconThemes.length === 0 && manifest.colorThemes.length === 0) continue;
         seen.add(id);
         found.push({
           id,
@@ -381,7 +439,8 @@ export const importFromPath = (sourceDir: string): Effect.Effect<ExtensionManife
     // Copy the whole extension tree so theme JSONs keep their sibling assets.
     yield* fs.copy(sourceDir, path.join(extDir, "files")).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
 
-    const manifest = buildManifest(id, publisher, pkg);
+    const nls = yield* readNls(fs, path, sourceDir);
+    const manifest = buildManifest(id, publisher, pkg, nls);
     yield* fs.writeFileString(path.join(extDir, "manifest.json"), JSON.stringify(manifest, null, 2)).pipe(
       Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })),
     );
