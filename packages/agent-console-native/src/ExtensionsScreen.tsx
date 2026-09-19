@@ -92,14 +92,13 @@ export const ExtensionsScreen = (): React.ReactElement => {
   };
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        style={styles.scroll}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
+    <ScrollView
+      style={styles.root}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
         <Text style={styles.sectionLabel}>Install from Marketplace</Text>
         <View style={styles.card}>
           <Text style={styles.hint}>A publisher.extension id (e.g. dracula-theme.theme-dracula) or a marketplace URL.</Text>
@@ -181,8 +180,7 @@ export const ExtensionsScreen = (): React.ReactElement => {
             </View>
           ))
         )}
-      </ScrollView>
-    </View>
+    </ScrollView>
   );
 };
 

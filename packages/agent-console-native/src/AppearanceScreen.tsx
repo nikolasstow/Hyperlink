@@ -49,7 +49,7 @@ const ColorSwatches = (props: {
 
   return (
     <View style={styles.swatchArea}>
-      <View style={styles.swatchRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.swatchRow}>
         <TouchableOpacity
           accessibilityLabel="Theme colour"
           onPress={() => props.onChange(props.themeColor)}
@@ -75,7 +75,7 @@ const ColorSwatches = (props: {
         >
           <SystemIcon name="eyedropper" size={12} color={isCustom ? "#FFFFFF" : colors.secondaryLabel} />
         </TouchableOpacity>
-      </View>
+      </ScrollView>
       {customOpen ? (
         <TextInput
           style={styles.hexInput}
@@ -133,14 +133,13 @@ export const AppearanceScreen = (): React.ReactElement => {
   const anchor: Theme = activeTheme !== undefined ? { primary: activeTheme.primary, secondary: activeTheme.secondary } : DEFAULT_THEME;
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        style={styles.scroll}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
+    <ScrollView
+      style={styles.root}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
         <Text style={styles.sectionLabel}>Theme</Text>
         <View style={styles.card}>
           <ThemeRow label="Default" primary={DEFAULT_THEME.primary} active={isDefault && activeTheme === undefined} onPress={() => setTheme(DEFAULT_THEME)} last={themes.length === 0} />
@@ -168,8 +167,7 @@ export const AppearanceScreen = (): React.ReactElement => {
           <Text style={styles.hint}>Accents like the unread indicator.</Text>
           <ColorSwatches value={theme.secondary} themeColor={anchor.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
         </View>
-      </ScrollView>
-    </View>
+    </ScrollView>
   );
 };
 
@@ -252,8 +250,9 @@ const styles = StyleSheet.create({
   },
   swatchRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
     gap: 12,
+    paddingRight: 4,
   },
   swatch: {
     width: 32,

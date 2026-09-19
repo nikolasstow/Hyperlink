@@ -176,14 +176,13 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   );
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        style={styles.scroll}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-      >
+    <ScrollView
+      style={styles.root}
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
         <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Customize</Text>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Appearance")} activeOpacity={0.6}>
           <View style={styles.linkRow}>
@@ -376,8 +375,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           </TouchableOpacity>
           {pushStatus === undefined ? null : <Text style={styles.hint}>{pushStatus}</Text>}
         </View>
-      </ScrollView>
-    </View>
+    </ScrollView>
   );
 };
 
