@@ -217,6 +217,26 @@ export type HandlersBuilder<
   Handled extends keyof Endpoints = never,
 > = Handlers<Endpoints, Handled>;
 
+/**
+ * Is this handler an Effect?
+ *
+ * Declared `boolean` on purpose. `Effect.isEffect` is a type predicate that narrows to
+ * `Effect<any, any, any>`, and every later reference to a value carrying `any` in its
+ * error and requirements channels is a shape the Effect diagnostics flag. `handler`
+ * arrives as `unknown` and the channels were erased upstream, so the narrowing has
+ * nothing to offer here beyond the yes-or-no answer.
+ */
+const isPageEffect = (value: unknown): boolean => Effect.isEffect(value);
+
+/**
+ * A page handler's Effect, restated as the one the registry stores.
+ */
+const asPageEffect = (value: unknown): Effect.Effect<React.ReactNode> =>
+  // SAFE: the caller checked `isPageEffect` before reaching here, and
+  // `HandlerForEndpoint` contracts a page handler's Effect to ReactNode success with
+  // Request and Override provided at render. Phantom channels leave nothing to validate.
+  value as Effect.Effect<React.ReactNode>;
+
 const registerHandler = (
   self: Handlers<any, any>,
   identifier: string,
@@ -272,14 +292,10 @@ const registerHandler = (
     return self;
   }
 
-  if (Effect.isEffect(handler)) {
+  if (isPageEffect(handler)) {
     self.handlers.set(identifier, {
       _tag: "PageEffect",
-      // Erasure seam: a page handler's Effect is contracted upstream (HandlerForEndpoint) to
-      // ReactNode success; Request/Override are provided at render. Channels are erased in
-      // the registry and unobservable at runtime — `Effect.isEffect` confirms `handler` is
-      // genuinely an Effect; its success type stays a compile-time-only contract.
-      effect: handler as Effect.Effect<React.ReactNode>,
+      effect: asPageEffect(handler),
     });
     return self;
   }
@@ -520,7 +536,12 @@ export const layer = <
   // the generator either.
   Layer.effectContext(
     Effect.gen(function* () {
-      const resolved = yield* catalog.resolveApi(api);
+      // SAFE: `api` is declared as a union that includes `ApiConstraint`, so
+      // `resolveApi`'s `R` default widens to `unknown`. The cast at the end of this
+      // function restates the precise requirements the caller passed, which
+      // `Effect.gen` cannot recover from inside the generator. Same seam as
+      // `routes.ts`'s `resolveApi(api) as Effect.Effect<A, never, never>`.
+      const resolved = yield* (catalog.resolveApi(api) as Effect.Effect<typeof api, never, never>);
       const services = yield* Effect.context<never>();
       const availableGroups = Array.from(services.mapUnsafe.keys()).filter(
         (key) => key.startsWith(GROUP_KEY_PREFIX),

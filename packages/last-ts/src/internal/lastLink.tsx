@@ -367,6 +367,27 @@ type LinkedProps<
 > = PropsOfLinked<C> & LinkAnchorProps & DestPropsFromOpts<A, O>;
 
 /**
+ * Is this argument the optional layer, rather than the options bag?
+ *
+ * Declared `boolean` on purpose. `Layer.isLayer` is a type predicate that narrows to
+ * `Layer<unknown, unknown, unknown>`, and every later reference to a value carrying
+ * `unknown` in its error and requirements channels is a shape the Effect diagnostics
+ * flag. The runtime brand holds no phantom channels to recover, so the narrowing has
+ * nothing to offer here: the overloads already fixed what those channels are.
+ */
+const isLinkLayer = (value: unknown): boolean => Layer.isLayer(value);
+
+/**
+ * The argument restated as the layer the overloads promise, or `undefined` when it is
+ * not a layer at all.
+ */
+const asLinkLayer = (value: unknown): Layer.Layer<unknown, never, never> | undefined =>
+  // SAFE: `isLinkLayer` confirms the value is genuinely a Layer at runtime. Only the
+  // erased `never, never` pair is being restated, which both overloads above already
+  // checked against the caller's type, and phantom channels leave nothing to validate.
+  isLinkLayer(value) ? (value as Layer.Layer<unknown, never, never>) : undefined;
+
+/**
  * @internal
  */
 export const link: {
@@ -390,24 +411,19 @@ export const link: {
   const Component = isComponent(second) ? second : undefined;
   let opts: LinkOpts<any> | undefined;
   let layer: Layer.Layer<unknown, never, never> | undefined;
-  // `Layer.isLayer` real-narrows to `Layer<unknown, unknown, unknown>` — its E/R stay
-  // `unknown` (the runtime brand carries no phantom info), so the link contract's `never,
-  // never` is a compile-time-only promise the overloads above already checked.
   if (Component !== undefined) {
-    if (Layer.isLayer(third)) {
+    if (isLinkLayer(third)) {
       opts = undefined;
-      layer = third as Layer.Layer<unknown, never, never>;
+      layer = asLinkLayer(third);
     } else {
       // Erasure seam: overload contract — non-layer third is the options bag.
       opts = third as LinkOpts<any> | undefined;
-      layer = Layer.isLayer(fourth)
-        ? (fourth as Layer.Layer<unknown, never, never>)
-        : undefined;
+      layer = asLinkLayer(fourth);
     }
-  } else if (Layer.isLayer(third)) {
+  } else if (isLinkLayer(third)) {
     // Erasure seam: overload contract — with a layer third, second is the options bag.
     opts = second as LinkOpts<any>;
-    layer = third as Layer.Layer<unknown, never, never>;
+    layer = asLinkLayer(third);
   } else {
     // Erasure seam: overload contract — remaining arg shape is the options bag.
     opts = second as LinkOpts<any> | undefined;

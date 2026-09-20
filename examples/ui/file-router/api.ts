@@ -75,7 +75,12 @@ export const withBase = <P extends string>(
  */
 export const destinationsOf = (): ReadonlyArray<ProtoRoute> =>
   fileEntries.map(
-    (entry) => Route.get(entry.id, entry.routePath) as ProtoRoute,
+    // SAFE: inside `map`, `entry` widens to the `FileEntry` union, so `Route.get`
+    // returns one endpoint carrying union id/path params. `ProtoRoute` is the union
+    // of per-entry endpoints. Same endpoints, redistributed, and no expression can
+    // prove that step. The runtime value is already the endpoint for this entry, so
+    // there is nothing to validate. Same erasure seam as `fileSystem` below.
+    (entry) => Route.get(entry.id, entry.routePath) as unknown as ProtoRoute,
   );
 
 /**
