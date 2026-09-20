@@ -18,14 +18,10 @@ const alsoObject = Document.provide(Document.Default, {
 });
 expectTypeOf(alsoObject).toEqualTypeOf<Layer.Layer<Document.Cell>>();
 
+// The directive covers the line that follows it, and TypeScript reports argument
+// assignability at the argument node, so the call stays on one line.
 // @ts-expect-error incomplete provide is not Layer<Cell>
-const _incomplete: Layer.Layer<Document.Cell> = Document.provide(
-  Document.Default,
-  Document.lang("en"),
-);
+const _incomplete: Layer.Layer<Document.Cell> = Document.provide(Document.Default, Document.lang("en"));
 
 // @ts-expect-error title alone is incomplete (titleTransform required)
-const _titleOnly: Layer.Layer<Document.Cell> = Document.provide(
-  Document.Default,
-  Document.title("x"),
-);
+const _titleOnly: Layer.Layer<Document.Cell> = Document.provide(Document.Default, Document.title("x"));
