@@ -137,3 +137,27 @@ current green/blue.
   colors in `tokenColors`, so this is where those actually show up.
 - **File upload of a `.vsix`** — multipart install endpoint + a build that
   bundles `expo-document-picker`.
+
+## Code highlighting — decisions (shipped: on-device Shiki + Appearance demo)
+
+- **Engine: Shiki on device**, using its **JavaScript regex engine** (no
+  oniguruma WASM — Hermes has no WASM runtime). Not the fastest raw option
+  (native tree-sitter > WASM oniguruma > CodeMirror/Lezer-in-WebView > Shiki-JS >
+  highlight.js), but the viable + VS-Code-accurate one that reuses our imported
+  themes' `tokenColors`. Fine for read-only display with caching + virtualization.
+- **Shiki is the single highlighting source of truth.** Native display (chat,
+  file viewer) tokenizes with Shiki; the eventual **editor is Monaco-in-WebView
+  themed via `@shikijs/monaco`** — same theme + TextMate grammars, so display and
+  edit render identically. A view↔edit switch is one Monaco instance toggled
+  `editable` → seamless, no engine swap.
+- **Caching (codeCache.ts):** memory + AsyncStorage, keyed by hash(code+lang+
+  theme). Reopening a file/app and fast scrolling read from cache; tokenization
+  happens once. (Large files later: tokenize + virtualize per viewport.)
+- **Themes do NOT include fonts.** VS Code *color* themes define colors +
+  `tokenColors` (foreground + fontStyle = italic/bold/underline only). The code
+  typeface is our choice (currently Menlo). Only *icon* themes ship a font (the
+  glyph font, e.g. Seti), unrelated to code.
+- **Future: live collaborative editing** (agents live-editing, streaming edits,
+  multiple devices on the same file) → CRDT via **Yjs**, bound to the editor
+  (`y-monaco` / `y-codemirror.next`). Firms up the editor-engine choice toward
+  one with mature Yjs bindings (Monaco or CodeMirror 6).
