@@ -96,7 +96,14 @@ const configGroup = HttpApiGroup.make("config").add(
 const fontsGroup = HttpApiGroup.make("fonts").add(
   HttpApiEndpoint.post("inspect", "/fonts/inspect", {
     payload: Schema.Struct({ url: Schema.String }),
-    success: Schema.Struct({ family: Schema.String }),
+    success: Schema.Struct({
+      family: Schema.String,
+      subfamily: Schema.optional(Schema.String),
+      fullName: Schema.optional(Schema.String),
+      version: Schema.optional(Schema.String),
+      copyright: Schema.optional(Schema.String),
+      numGlyphs: Schema.optional(Schema.Number),
+    }),
     error: FontError,
   }),
 );

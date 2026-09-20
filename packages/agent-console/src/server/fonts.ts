@@ -20,8 +20,20 @@ export class FontError extends Schema.TaggedErrorClass<FontError>()("FontError",
   detail: Schema.optional(Schema.String),
 }) {}
 
-/** Download a font by URL and return its embedded family name. */
-export const inspectFont = (url: string): Effect.Effect<{ family: string }, FontError> =>
+/** Details read from a font file for the confirm/details step. */
+export interface FontDetails {
+  readonly family: string;
+  readonly subfamily?: string;
+  readonly fullName?: string;
+  readonly version?: string;
+  readonly copyright?: string;
+  readonly numGlyphs?: number;
+}
+
+const str = (value: string | null | undefined): string | undefined => (value === null || value === undefined || value === "" ? undefined : value);
+
+/** Download a font by URL and read its embedded details (family name, etc.). */
+export const inspectFont = (url: string): Effect.Effect<FontDetails, FontError> =>
   Effect.gen(function* () {
     const bytes = yield* Effect.tryPromise({
       try: async () => {
@@ -36,9 +48,16 @@ export const inspectFont = (url: string): Effect.Effect<{ family: string }, Font
         const parsed = fontkit.create(bytes);
         // A collection (.ttc) exposes `fonts`; a single font has `familyName`.
         const font = "familyName" in parsed ? parsed : parsed.fonts[0];
-        const family = font.familyName;
-        if (family === null || family === undefined || family === "") throw new Error("no family name in font");
-        return { family };
+        const family = str(font.familyName);
+        if (family === undefined) throw new Error("no family name in font");
+        return {
+          family,
+          ...(str(font.subfamilyName) === undefined ? {} : { subfamily: str(font.subfamilyName) }),
+          ...(str(font.fullName) === undefined ? {} : { fullName: str(font.fullName) }),
+          ...(font.version === null || font.version === undefined ? {} : { version: String(font.version) }),
+          ...(str(font.copyright) === undefined ? {} : { copyright: str(font.copyright) }),
+          ...(typeof font.numGlyphs === "number" ? { numGlyphs: font.numGlyphs } : {}),
+        };
       },
       catch: (error) => new FontError({ reason: "parse", detail: String(error) }),
     });
