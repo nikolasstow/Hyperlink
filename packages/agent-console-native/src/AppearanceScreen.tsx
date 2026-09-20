@@ -100,7 +100,7 @@ const ColorSwatches = (props: {
       ))}
       {/* Custom colour — Apple's native picker (Grid/Spectrum/Sliders, hex,
        * eyedropper, favourites); its swatch shows the current value. */}
-      <Host style={styles.pickerSwatch} matchContents>
+      <Host style={styles.pickerSwatch}>
         <ColorPicker
           label=""
           selection={props.value}
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   swatchRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    justifyContent: "space-between",
     paddingTop: 4,
   },
   swatch: {
