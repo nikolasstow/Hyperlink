@@ -106,6 +106,11 @@ const fontsGroup = HttpApiGroup.make("fonts").add(
     }),
     error: FontError,
   }),
+  HttpApiEndpoint.post("import", "/fonts/import", {
+    payload: Schema.Struct({ url: Schema.String }),
+    success: Schema.Struct({ family: Schema.String, fileId: Schema.String }),
+    error: FontError,
+  }),
 );
 
 export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup).add(fontsGroup);

@@ -16,9 +16,10 @@
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { api } from "./api";
+import { importFont, inspectFont, readFontFile } from "./fonts";
 import {
   discoverLocalExtensions,
   getConfig,
@@ -29,7 +30,6 @@ import {
   readThemeFile,
   removeExtension,
 } from "./extensions";
-import { inspectFont } from "./fonts";
 
 const extensionsHandlers = HttpApiBuilder.group(api, "extensions", (handlers) =>
   handlers
@@ -48,13 +48,28 @@ const configHandlers = HttpApiBuilder.group(api, "config", (handlers) =>
 );
 
 const fontsHandlers = HttpApiBuilder.group(api, "fonts", (handlers) =>
-  handlers.handle("inspect", ({ payload }) => inspectFont(payload.url)),
+  handlers
+    .handle("inspect", ({ payload }) => inspectFont(payload.url))
+    .handle("import", ({ payload }) => importFont(payload.url)),
+);
+
+// A raw route to serve stored (converted) font bytes — binary, so it's an
+// HttpRouter route rather than an HttpApi endpoint. `?id=<fileId>`.
+const fontFileRoute = HttpRouter.add("GET", "/fonts/file", (request) =>
+  Effect.gen(function* () {
+    const id = new URL(request.url, "http://localhost").searchParams.get("id");
+    if (id === null) return HttpServerResponse.empty({ status: 400 });
+    return yield* readFontFile(id).pipe(
+      Effect.map((bytes) => HttpServerResponse.uint8Array(bytes, { contentType: "font/ttf" })),
+      Effect.catchTag("FontError", () => Effect.succeed(HttpServerResponse.empty({ status: 404 }))),
+    );
+  }),
 );
 
 const apiLive = HttpApiBuilder.layer(api).pipe(Layer.provide([extensionsHandlers, configHandlers, fontsHandlers]));
 
 const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 
-const serverLive = HttpRouter.serve(apiLive).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port })));
+const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute)).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port })));
 
 NodeRuntime.runMain(Layer.launch(serverLive));
