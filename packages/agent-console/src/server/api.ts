@@ -11,6 +11,7 @@
 import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import { ExtensionError } from "./extensions";
+import { FontError } from "./fonts";
 
 const ThemeContribution = Schema.Struct({
   id: Schema.String,
@@ -92,4 +93,12 @@ const configGroup = HttpApiGroup.make("config").add(
   }),
 );
 
-export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup);
+const fontsGroup = HttpApiGroup.make("fonts").add(
+  HttpApiEndpoint.post("inspect", "/fonts/inspect", {
+    payload: Schema.Struct({ url: Schema.String }),
+    success: Schema.Struct({ family: Schema.String }),
+    error: FontError,
+  }),
+);
+
+export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup).add(fontsGroup);

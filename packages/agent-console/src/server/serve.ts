@@ -29,6 +29,7 @@ import {
   readThemeFile,
   removeExtension,
 } from "./extensions";
+import { inspectFont } from "./fonts";
 
 const extensionsHandlers = HttpApiBuilder.group(api, "extensions", (handlers) =>
   handlers
@@ -46,7 +47,11 @@ const configHandlers = HttpApiBuilder.group(api, "config", (handlers) =>
     .handle("configPut", ({ payload }) => putConfig(payload)),
 );
 
-const apiLive = HttpApiBuilder.layer(api).pipe(Layer.provide([extensionsHandlers, configHandlers]));
+const fontsHandlers = HttpApiBuilder.group(api, "fonts", (handlers) =>
+  handlers.handle("inspect", ({ payload }) => inspectFont(payload.url)),
+);
+
+const apiLive = HttpApiBuilder.layer(api).pipe(Layer.provide([extensionsHandlers, configHandlers, fontsHandlers]));
 
 const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 
