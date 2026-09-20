@@ -140,7 +140,7 @@ const AppInner = (): React.ReactElement => {
         <LaunchNavigator />
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
-          <Text style={styles.title}>Where's your OpenCode server?</Text>
+          <Text style={styles.title}>Where’s your OpenCode server?</Text>
           <Text style={styles.dimText}>Host and port, e.g. 100.67.32.32:4096</Text>
           {screen.error !== undefined ? <Text style={styles.errorText}>{screen.error}</Text> : null}
           <TextInput

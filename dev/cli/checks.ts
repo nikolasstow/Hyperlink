@@ -12,8 +12,8 @@ import { run } from "./run";
 export const deps = () => run("pnpm", ["install", "--frozen-lockfile"]);
 
 /**
- * Full typecheck gate: tsgo (root + strict-provide + ui + web + tui) then tsc.
- * Mirrors the previous `pnpm typecheck` script body.
+ * Full typecheck gate: tsgo (root + strict-provide + ui + web + tui) then tsc
+ * over the root, `last-ts`, and both app packages.
  */
 export const typecheck = () =>
   Effect.gen(function* () {
@@ -25,6 +25,10 @@ export const typecheck = () =>
     yield* run("tsgo", ["--noEmit", "-p", "packages/last-ts/tsconfig.json"]);
     yield* run("tsc", ["--noEmit", "-p", "tsconfig.json"]);
     yield* run("tsc", ["--noEmit", "-p", "packages/last-ts/tsconfig.json"]);
+    // The two app packages. Both were outside the gate until now, so a type
+    // error in either could reach a branch green.
+    yield* run("tsc", ["--noEmit", "-p", "packages/agent-console/tsconfig.json"]);
+    yield* run("tsc", ["--noEmit", "-p", "packages/agent-console-native/tsconfig.json"]);
   });
 
 /** `vitest run` */

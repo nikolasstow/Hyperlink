@@ -15,7 +15,7 @@
  */
 import * as React from "react";
 import type { ToolPart } from "@opencode-ai/sdk";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { colors } from "./colors";
 import { asHtmlPayload, HtmlToolBlock } from "./HtmlToolBlock";

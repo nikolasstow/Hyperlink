@@ -49,6 +49,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "bundle:check": "expo export --platform ios --output-dir /tmp/agent-console-native-bundle-check",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "private": true

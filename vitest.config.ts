@@ -24,6 +24,24 @@ export default defineConfig({
           exclude: ["**/node_modules/**", ...spawnHeavy],
         },
       },
+      // The app packages keep their tests beside their source, so they need
+      // their own projects: the `main` project only looks in `test/`.
+      {
+        test: {
+          name: "agent-console",
+          root: "./packages/agent-console",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+      {
+        test: {
+          name: "agent-console-native",
+          root: "./packages/agent-console-native",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
       {
         test: {
           name: "spawn-serial",
