@@ -36,11 +36,12 @@ import {
   useThemeDraft,
 } from "./themeDraft";
 import {
+  ALL_COLOR_GROUPS,
   EMPTY_THEME,
+  groupIdOf,
   humanizeKey,
   parseVsCodeTheme,
   searchTheme,
-  summarizeColorGroups,
   type ThemeType,
   type VsCodeTheme,
 } from "./vscodeTheme";
@@ -112,11 +113,33 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => props.navigation.addListener("beforeRemove", closeDraft), [props.navigation]);
 
   const theme: VsCodeTheme = draft.kind === "open" ? draft.theme : EMPTY_THEME;
-  const groups = React.useMemo(() => summarizeColorGroups(theme.colors), [theme.colors]);
+  // Every group, always — each opens its full key catalog, so all fields are
+  // reachable whether the theme is prefilled, imported, or cleared to scratch.
+  const groups = React.useMemo(
+    () =>
+      ALL_COLOR_GROUPS.map((group) => {
+        const keys = Object.keys(theme.colors)
+          .filter((key) => groupIdOf(key) === group.id)
+          .sort((a, b) => a.localeCompare(b));
+        return { group, count: keys.length, sample: keys.length > 0 ? theme.colors[keys[0]] : undefined };
+      }),
+    [theme.colors],
+  );
   const colorCount = Object.keys(theme.colors).length;
   const semanticCount = Object.keys(theme.semanticTokenColors).length;
   const results = React.useMemo(() => searchTheme(theme, query), [theme, query]);
   const searching = query.trim().length > 0;
+
+  const clearAll = (): void => {
+    Alert.alert("Clear all values?", "Empties every colour and token so you can start from scratch. All fields stay available to add.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: () => updateDraft((current) => ({ ...current, colors: {}, tokenColors: [], semanticTokenColors: {} })),
+      },
+    ]);
+  };
 
   const save = async (): Promise<void> => {
     if (draft.kind !== "open") return;
@@ -251,29 +274,28 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                 <Text style={styles.rowAction}>Import values from a theme…</Text>
                 <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
               </TouchableOpacity>
+              <TouchableOpacity style={[styles.row, styles.rowBorder]} activeOpacity={0.6} onPress={clearAll}>
+                <Text style={[styles.rowAction, styles.clearAction]}>Clear all values</Text>
+              </TouchableOpacity>
             </View>
 
             <Text style={styles.sectionLabel}>Colors · {colorCount} set</Text>
             <View style={styles.card}>
-              {groups.length === 0 ? (
-                <Text style={styles.empty}>No colours set yet. Import some, or search for a key to add one.</Text>
-              ) : (
-                groups.map((summary, index) => (
-                  <TouchableOpacity
-                    key={summary.group.id}
-                    style={[styles.row, index > 0 && styles.rowBorder]}
-                    activeOpacity={0.6}
-                    onPress={() => props.navigation.navigate("ThemeColorGroup", { groupId: summary.group.id })}
-                  >
-                    <Swatch color={summary.sample} />
-                    <Text style={styles.rowTitle} numberOfLines={1}>
-                      {summary.group.title}
-                    </Text>
-                    <Text style={styles.rowValue}>{summary.keys.length}</Text>
-                    <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
-                  </TouchableOpacity>
-                ))
-              )}
+              {groups.map((summary, index) => (
+                <TouchableOpacity
+                  key={summary.group.id}
+                  style={[styles.row, index > 0 && styles.rowBorder]}
+                  activeOpacity={0.6}
+                  onPress={() => props.navigation.navigate("ThemeColorGroup", { groupId: summary.group.id })}
+                >
+                  <Swatch color={summary.sample} />
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {summary.group.title}
+                  </Text>
+                  <Text style={styles.rowValue}>{summary.count}</Text>
+                  <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
+                </TouchableOpacity>
+              ))}
             </View>
 
             <Text style={styles.sectionLabel}>Syntax</Text>
@@ -376,6 +398,9 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.tint,
     fontSize: 16,
+  },
+  clearAction: {
+    color: colors.destructive,
   },
   rowMono: {
     flex: 1,
