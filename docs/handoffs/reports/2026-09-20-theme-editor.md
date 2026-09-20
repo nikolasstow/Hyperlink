@@ -1,9 +1,10 @@
 # Agent report: VS Code theme editor
 
-**Branch:** `feat/theme-editor`
+**Branch:** `feat/theme-editor`, merged to `app/double-agent/ios` at `a3bd389e` (PR #87)
 **Base:** `app/double-agent/ios` (`baba5ef5`)
 **Tip:** `198aff04`
-**State:** Code complete. The gate that covers this work is green. Nothing has run on a device.
+**State:** Merged. The gate that covers this work is green on the trunk. Nothing has run on a device.
+**Follow-ups:** [issue inventory](./2026-09-20-prototype-issue-inventory.md), section B.
 
 Create a VS Code colour theme on the phone, edit one created here, and copy values out of a
 theme already installed. Installed themes stay read-only, because they are files in the
@@ -115,12 +116,13 @@ grep rather than by memory.
 
 ## Sharp edges
 
-**`pnpm verify` fails, and failed before this branch.** Three type errors predate it, at
-`examples/ui/file-router/api.ts:78` and `test/document-provide.test-d.ts:24,30`. All three sit
-in the toolkit rather than either app. They are left alone here, because fixing them means
-deciding what `Document.provide`'s type-level contract should say, and that is not a call to
-make inside an app change. Confirmed by running the full gate on the clean base, where it
-fails identically with 652 message-level diagnostics and the same three errors.
+**`pnpm verify` fails, and failed before this branch.** Eight type errors predate it, all in
+the toolkit rather than either app, buried under 652 message-level diagnostics. They are left
+alone here because a toolkit fix does not belong inside an app change. A later sweep found the
+root causes and corrected what this paragraph first claimed about them: see
+[the issue inventory](./2026-09-20-prototype-issue-inventory.md), section A. The short version
+is that the two `test/document-provide.test-d.ts` failures are misplaced `@ts-expect-error`
+directives rather than a question about `Document.provide`'s contract.
 
 **Nothing has run on a device.** There is no simulator in the environment this was written in.
 The `ColorPicker` rows are the first use of `@expo/ui`'s picker in this app, and a long list of
