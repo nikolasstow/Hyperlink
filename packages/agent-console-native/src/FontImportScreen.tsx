@@ -21,6 +21,7 @@ import { colors } from "./colors";
 import { addCustomFont, inspectFont, type FontDetails } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
+import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FontImport">;
 
@@ -104,6 +105,12 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
     <ScrollView style={styles.root} contentContainerStyle={styles.center} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {step === "choose" ? (
         <View style={styles.block}>
+          <View style={styles.iconBadge}>
+            <SystemIcon name="textformat" size={28} color={colors.tint} />
+          </View>
+          <Text style={styles.title}>Add a code font</Text>
+          <Text style={styles.subtitle}>Bring your own coding font by link or file.</Text>
+
           <Text style={styles.heading}>Import from URL</Text>
           <TextInput
             style={styles.input}
@@ -132,8 +139,14 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
             onPress={() => setError("File import needs an app build (adds the document picker).")}
             activeOpacity={0.7}
           >
+            <SystemIcon name="doc.badge.plus" size={16} color={colors.tint} />
             <Text style={styles.fileButtonText}>Choose file…</Text>
           </TouchableOpacity>
+
+          <View style={styles.supported}>
+            <SystemIcon name="info.circle" size={13} color={colors.secondaryLabel} />
+            <Text style={styles.supportedText}>Supports TrueType (.ttf) and OpenType (.otf).</Text>
+          </View>
 
           {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
         </View>
@@ -173,10 +186,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
   },
-  heading: {
+  iconBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.accentTint,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  title: {
     color: colors.label,
-    fontSize: 17,
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  subtitle: {
+    color: colors.secondaryLabel,
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: -6,
+    marginBottom: 4,
+  },
+  heading: {
+    color: colors.secondaryLabel,
+    fontSize: 12,
     fontWeight: "600",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
     textAlign: "center",
   },
   input: {
@@ -207,9 +244,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   fileButton: {
-    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 22,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     borderCurve: "continuous",
     backgroundColor: colors.accentTint,
   },
@@ -217,6 +257,16 @@ const styles = StyleSheet.create({
     color: colors.tint,
     fontSize: 15,
     fontWeight: "600",
+  },
+  supported: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 6,
+  },
+  supportedText: {
+    color: colors.secondaryLabel,
+    fontSize: 12,
   },
   error: {
     color: colors.destructive,
