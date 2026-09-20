@@ -225,7 +225,23 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
         <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
-        <Stack.Screen name="FontImport" component={FontImportScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Import Font" }} />
+        <Stack.Screen
+          name="FontImport"
+          component={FontImportScreen}
+          options={({ navigation }) => ({
+            headerShown: true,
+            presentation: "modal",
+            title: "Import Font",
+            unstable_headerLeftItems: () => [
+              {
+                type: "button",
+                label: "Close",
+                icon: { type: "sfSymbol", name: "xmark" },
+                onPress: () => navigation.goBack(),
+              },
+            ],
+          })}
+        />
         {/* Repo/workspace screen draws its own fully custom collapsing glass
          * header, so the native bar is hidden. */}
         <Stack.Screen

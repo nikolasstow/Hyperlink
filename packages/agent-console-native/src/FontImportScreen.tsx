@@ -1,11 +1,12 @@
 /**
- * Import custom code fonts — add a font by URL (a direct .ttf/.otf/.woff2 link)
- * with a family name; list and remove them. Fonts live in the synced config
- * (fontsClient.ts), so they travel across devices.
+ * Import custom code fonts — presented as a native slide-up modal. Two ways in:
+ * from a URL (a direct .ttf/.otf/.woff2 link) or from a file. The font's family
+ * name is read from the file itself (server-side inspect), so you don't type it;
+ * after loading, a preview shows before you save it to your fonts.
  *
- * File upload and actually *rendering* a custom font need `expo-font` (a native
- * module → a build); adding/managing works now, and a selected custom font
- * applies once that build lands.
+ * Fonts live in the synced config (fontsClient.ts). File import and actually
+ * *rendering* a custom font need `expo-font` (a native module → a build); URL
+ * inspect + add works now, and a saved font applies once that build lands.
  *
  * @internal
  */
@@ -14,7 +15,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
-import { addCustomFont, getCustomFonts, removeCustomFont, type CustomFont } from "./fontsClient";
+import { addCustomFont, getCustomFonts, inspectFont, removeCustomFont, type CustomFont } from "./fontsClient";
 import { getApiAddress } from "./settings";
 
 export const FontImportScreen = (): React.ReactElement => {
@@ -23,8 +24,9 @@ export const FontImportScreen = (): React.ReactElement => {
   const apiBase = getApiAddress(address);
 
   const [fonts, setFonts] = React.useState<ReadonlyArray<CustomFont>>([]);
-  const [family, setFamily] = React.useState("");
-  const [url, setUrl] = React.useState("");
+  const [showUrl, setShowUrl] = React.useState(false);
+  const [urlInput, setUrlInput] = React.useState("");
+  const [pending, setPending] = React.useState<CustomFont | undefined>(undefined);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>(undefined);
 
@@ -40,24 +42,35 @@ export const FontImportScreen = (): React.ReactElement => {
     };
   }, [apiBase]);
 
-  const onAdd = (): void => {
-    const f = family.trim();
-    const u = url.trim();
-    if (f === "" || u === "" || busy) return;
+  const onLoadUrl = (): void => {
+    const url = urlInput.trim();
+    if (url === "" || busy) return;
     setBusy(true);
     setError(undefined);
-    addCustomFont(apiBase, { family: f, url: u })
-      .then((list) => {
-        setFonts(list);
-        setFamily("");
-        setUrl("");
+    inspectFont(apiBase, url)
+      .then((family) => {
+        setPending({ family, url });
+        setShowUrl(false);
+        setUrlInput("");
       })
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setBusy(false));
   };
 
-  const onRemove = (fam: string): void => {
-    removeCustomFont(apiBase, fam)
+  const onSave = (): void => {
+    if (pending === undefined || busy) return;
+    setBusy(true);
+    addCustomFont(apiBase, pending)
+      .then((list) => {
+        setFonts(list);
+        setPending(undefined);
+      })
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  const onRemove = (family: string): void => {
+    removeCustomFont(apiBase, family)
       .then(setFonts)
       .catch((e: unknown) => setError(String(e)));
   };
@@ -70,40 +83,59 @@ export const FontImportScreen = (): React.ReactElement => {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
-      <Text style={styles.sectionLabel}>Add a font</Text>
       <View style={styles.card}>
-        <Text style={styles.hint}>A family name and a direct link to a .ttf, .otf, or .woff2 file.</Text>
-        <TextInput
-          style={styles.input}
-          value={family}
-          onChangeText={setFamily}
-          placeholder="Family name (e.g. JetBrains Mono)"
-          placeholderTextColor={colors.placeholderText}
-          autoCapitalize="words"
-          autoCorrect={false}
-        />
-        <TextInput
-          style={styles.input}
-          value={url}
-          onChangeText={setUrl}
-          placeholder="https://…/font.ttf"
-          placeholderTextColor={colors.placeholderText}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-          onSubmitEditing={onAdd}
-          returnKeyType="go"
-        />
-        <TouchableOpacity
-          style={[styles.addButton, (busy || family.trim() === "" || url.trim() === "") && styles.addButtonDisabled]}
-          onPress={onAdd}
-          disabled={busy || family.trim() === "" || url.trim() === ""}
-        >
-          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.addButtonText}>Add font</Text>}
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity style={styles.choice} onPress={() => setShowUrl((s) => !s)} activeOpacity={0.6}>
+            <Text style={styles.choiceText}>Import from URL</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.choice, styles.choiceMuted]}
+            onPress={() => setError("File import needs an app build (adds the document picker).")}
+            activeOpacity={0.6}
+          >
+            <Text style={styles.choiceText}>Import from File</Text>
+          </TouchableOpacity>
+        </View>
+        {showUrl ? (
+          <View style={styles.urlRow}>
+            <TextInput
+              style={styles.input}
+              value={urlInput}
+              onChangeText={setUrlInput}
+              placeholder="https://…/font.ttf"
+              placeholderTextColor={colors.placeholderText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              onSubmitEditing={onLoadUrl}
+              returnKeyType="go"
+            />
+            <TouchableOpacity style={styles.loadButton} onPress={onLoadUrl} disabled={busy || urlInput.trim() === ""}>
+              {busy && pending === undefined ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.loadButtonText}>Load</Text>}
+            </TouchableOpacity>
+          </View>
+        ) : null}
         {error !== undefined ? <Text style={styles.errorText}>{error}</Text> : null}
-        <Text style={styles.note}>Custom fonts render after an app build that bundles font loading; you can add and select them now.</Text>
       </View>
+
+      {pending !== undefined ? (
+        <>
+          <Text style={styles.sectionLabel}>Preview</Text>
+          <View style={styles.card}>
+            <Text style={styles.previewFamily}>{pending.family}</Text>
+            <Text style={[styles.previewSample, { fontFamily: pending.family }]}>The quick brown fox 0123 {"{}"} =&gt;</Text>
+            <Text style={styles.note}>Name read from the file. Renders in this font after an app build.</Text>
+            <View style={styles.saveRow}>
+              <TouchableOpacity onPress={() => setPending(undefined)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={onSave} disabled={busy}>
+                {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveButtonText}>Save to fonts</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      ) : null}
 
       <Text style={styles.sectionLabel}>Imported fonts</Text>
       {fonts.length === 0 ? (
@@ -138,6 +170,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
+    paddingTop: 12,
   },
   sectionLabel: {
     color: colors.secondaryLabel,
@@ -157,15 +190,32 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 10,
   },
-  hint: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
+  buttonRow: {
+    flexDirection: "row",
+    gap: 10,
   },
-  note: {
-    color: colors.secondaryLabel,
-    fontSize: 12,
+  choice: {
+    flex: 1,
+    backgroundColor: colors.fillBackground,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  choiceMuted: {
+    opacity: 0.6,
+  },
+  choiceText: {
+    color: colors.tint,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  urlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   input: {
+    flex: 1,
     color: colors.label,
     fontSize: 16,
     paddingVertical: 10,
@@ -173,16 +223,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.fillBackground,
     borderRadius: 8,
   },
-  addButton: {
+  loadButton: {
     backgroundColor: colors.tint,
     borderRadius: 8,
-    paddingVertical: 11,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 68,
     alignItems: "center",
   },
-  addButtonDisabled: {
-    opacity: 0.4,
-  },
-  addButtonText: {
+  loadButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "600",
@@ -190,6 +239,43 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.destructive,
     fontSize: 13,
+  },
+  note: {
+    color: colors.secondaryLabel,
+    fontSize: 12,
+  },
+  previewFamily: {
+    color: colors.label,
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  previewSample: {
+    color: colors.label,
+    fontSize: 18,
+  },
+  saveRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 18,
+    paddingTop: 2,
+  },
+  cancelText: {
+    color: colors.secondaryLabel,
+    fontSize: 15,
+  },
+  saveButton: {
+    backgroundColor: colors.tint,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minWidth: 120,
+    alignItems: "center",
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
   },
   empty: {
     color: colors.secondaryLabel,

@@ -79,9 +79,9 @@ const decodeManifestList = Schema.decodeUnknownSync(ManifestListSchema);
 const decodeLocalList = Schema.decodeUnknownSync(Schema.Array(LocalExtensionSchema));
 const decodeConfig = Schema.decodeUnknownSync(ConfigSchema);
 
-const base = (apiBase: string): string => apiBase.replace(/\/+$/, "");
+export const base = (apiBase: string): string => apiBase.replace(/\/+$/, "");
 
-const request = async (url: string, init?: RequestInit): Promise<unknown> => {
+export const request = async (url: string, init?: RequestInit): Promise<unknown> => {
   const res = await fetch(url, init);
   const text = await res.text();
   if (!res.ok) {

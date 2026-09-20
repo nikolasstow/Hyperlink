@@ -11,7 +11,7 @@
  * @internal
  */
 import { Schema } from "effect";
-import { getRemoteConfig, putRemoteConfig } from "./extensionsClient";
+import { base, getRemoteConfig, putRemoteConfig, request } from "./extensionsClient";
 
 export interface CustomFont {
   readonly family: string;
@@ -32,6 +32,20 @@ const readFonts = (config: Record<string, unknown>): ReadonlyArray<CustomFont> =
   } catch {
     return [];
   }
+};
+
+const decodeFamily = Schema.decodeUnknownSync(Schema.Struct({ family: Schema.String }));
+
+/** Inspect a font URL server-side and return its embedded family name. */
+export const inspectFont = async (apiBase: string, url: string): Promise<string> => {
+  const result = decodeFamily(
+    await request(`${base(apiBase)}/fonts/inspect`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    }),
+  );
+  return result.family;
 };
 
 export const getCustomFonts = async (apiBase: string): Promise<ReadonlyArray<CustomFont>> => readFonts(await getRemoteConfig(apiBase));
