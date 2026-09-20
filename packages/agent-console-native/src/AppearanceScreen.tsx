@@ -13,7 +13,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, useWindowDimensions, View } from "react-native";
+import { ColorPicker, Host } from "@expo/ui/swift-ui";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { CodeBlock } from "./CodeBlock";
@@ -60,64 +61,55 @@ interface SelectableTheme {
   readonly file: string;
 }
 
+/** Swatch geometry, used to fit exactly one row with no scroll. */
+const SWATCH = 32;
+const SWATCH_GAP = 12;
+/** Horizontal chrome to subtract: screen content padding (16) + card padding
+ * (14), both sides. */
+const ROW_CHROME = (16 + 14) * 2;
+
 const ColorSwatches = (props: {
   readonly value: string;
   /** The enabled theme's colour for this role — the first ("Theme") swatch. */
   readonly themeColor: string;
   readonly onChange: (color: string) => void;
 }): React.ReactElement => {
-  const [customOpen, setCustomOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState(props.value);
-
-  const isTheme = eq(props.value, props.themeColor);
-  const isPreset = PRESETS.some((c) => eq(c, props.value));
-  const isCustom = !isTheme && !isPreset;
+  const { width } = useWindowDimensions();
+  // How many swatches fit in one row; reserve the theme swatch + the picker,
+  // and show only that many presets so the row never scrolls.
+  const available = width - ROW_CHROME;
+  const maxSwatches = Math.max(2, Math.floor((available + SWATCH_GAP) / (SWATCH + SWATCH_GAP)));
+  const presets = PRESETS.slice(0, Math.max(0, maxSwatches - 2));
 
   return (
-    <View style={styles.swatchArea}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.swatchRow}>
+    <View style={styles.swatchRow}>
+      <TouchableOpacity
+        accessibilityLabel="Theme colour"
+        onPress={() => props.onChange(props.themeColor)}
+        style={[styles.swatch, { backgroundColor: props.themeColor }, eq(props.value, props.themeColor) ? styles.swatchSelected : null]}
+      >
+        <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
+      </TouchableOpacity>
+      {presets.map((color) => (
         <TouchableOpacity
-          accessibilityLabel="Theme colour"
-          onPress={() => props.onChange(props.themeColor)}
-          style={[styles.swatch, { backgroundColor: props.themeColor }, isTheme ? styles.swatchSelected : null]}
-        >
-          <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
-        </TouchableOpacity>
-        {PRESETS.map((color) => (
-          <TouchableOpacity
-            key={color}
-            accessibilityLabel={color}
-            onPress={() => props.onChange(color)}
-            style={[styles.swatch, { backgroundColor: color }, eq(color, props.value) ? styles.swatchSelected : null]}
-          />
-        ))}
-        <TouchableOpacity
-          accessibilityLabel="Custom colour"
-          onPress={() => {
-            setDraft(isCustom ? props.value : "#");
-            setCustomOpen((open) => !open);
-          }}
-          style={[styles.swatch, styles.customSwatch, isCustom ? [styles.swatchSelected, { backgroundColor: props.value }] : null]}
-        >
-          <SystemIcon name="eyedropper" size={12} color={isCustom ? "#FFFFFF" : colors.secondaryLabel} />
-        </TouchableOpacity>
-      </ScrollView>
-      {customOpen ? (
-        <TextInput
-          style={styles.hexInput}
-          value={draft}
-          onChangeText={(text) => {
-            const next = text.startsWith("#") ? text : `#${text}`;
-            setDraft(next);
-            if (isHex(next)) props.onChange(next.toUpperCase());
-          }}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          placeholder="#RRGGBB"
-          placeholderTextColor={colors.placeholderText}
-          maxLength={7}
+          key={color}
+          accessibilityLabel={color}
+          onPress={() => props.onChange(color)}
+          style={[styles.swatch, { backgroundColor: color }, eq(color, props.value) ? styles.swatchSelected : null]}
         />
-      ) : null}
+      ))}
+      {/* Custom colour — Apple's native picker (Grid/Spectrum/Sliders, hex,
+       * eyedropper, favourites); its swatch shows the current value. */}
+      <Host style={styles.pickerSwatch} matchContents>
+        <ColorPicker
+          label=""
+          selection={props.value}
+          onSelectionChange={(next) => {
+            const hex = next.length >= 7 ? next.slice(0, 7) : next;
+            if (isHex(hex)) props.onChange(hex.toUpperCase());
+          }}
+        />
+      </Host>
     </View>
   );
 };
@@ -391,15 +383,11 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.separator,
   },
-  swatchArea: {
-    gap: 12,
-    paddingTop: 4,
-  },
   swatchRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingRight: 4,
+    paddingTop: 4,
   },
   swatch: {
     width: 32,
@@ -414,16 +402,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.label,
   },
-  customSwatch: {
-    backgroundColor: colors.fillBackground,
-  },
-  hexInput: {
-    color: colors.label,
-    fontSize: 16,
-    fontFamily: "Menlo",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: colors.fillBackground,
-    borderRadius: 8,
+  pickerSwatch: {
+    width: 32,
+    height: 32,
   },
 });
