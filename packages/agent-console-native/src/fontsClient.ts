@@ -65,6 +65,25 @@ export const inspectFont = async (apiBase: string, url: string): Promise<FontDet
     }),
   );
 
+const decodeImport = Schema.decodeUnknownSync(Schema.Struct({ family: Schema.String, fileId: Schema.String }));
+
+/**
+ * Import a font by URL: the server downloads it, converts WOFF2→TTF, stores it,
+ * and returns its family + stored file id. The device-relative served path is
+ * `/fonts/file?id=<fileId>` — stored on the font so any device builds its own
+ * absolute URL from its API base (and caches it for offline).
+ */
+export const importFontFile = async (apiBase: string, url: string): Promise<{ family: string; servedPath: string }> => {
+  const result = decodeImport(
+    await request(`${base(apiBase)}/fonts/import`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url }),
+    }),
+  );
+  return { family: result.family, servedPath: `/fonts/file?id=${encodeURIComponent(result.fileId)}` };
+};
+
 export const getCustomFonts = async (apiBase: string): Promise<ReadonlyArray<CustomFont>> => readFonts(await getRemoteConfig(apiBase));
 
 /** Add (or replace by family) a custom font, then return the updated list. */

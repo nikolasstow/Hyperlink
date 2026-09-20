@@ -18,7 +18,7 @@ import * as React from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
-import { addCustomFont, inspectFont, type FontDetails } from "./fontsClient";
+import { addCustomFont, importFontFile, inspectFont, type FontDetails } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
@@ -68,12 +68,18 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
     [apiBase],
   );
 
+  const [importing, setImporting] = React.useState(false);
   const onImport = React.useCallback((): void => {
-    if (details === undefined) return;
-    addCustomFont(apiBase, { family: details.family, url: savedUrl })
+    if (details === undefined || importing) return;
+    setImporting(true);
+    setError(undefined);
+    // Convert + store on the server, then record the served path on the font.
+    importFontFile(apiBase, savedUrl)
+      .then(({ family, servedPath }) => addCustomFont(apiBase, { family, url: servedPath }))
       .then(() => navigation.goBack())
-      .catch((e: unknown) => setError(String(e)));
-  }, [apiBase, details, savedUrl, navigation]);
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => setImporting(false));
+  }, [apiBase, details, savedUrl, navigation, importing]);
 
   const backToChoose = React.useCallback((): void => {
     setStep("choose");
@@ -96,10 +102,13 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
         unstable_headerLeftItems: () => [
           { type: "button", label: "Back", icon: { type: "sfSymbol", name: "chevron.backward" }, onPress: backToChoose },
         ],
-        unstable_headerRightItems: () => [{ type: "button", label: "Import", variant: "prominent", onPress: onImport }],
+        unstable_headerRightItems: () =>
+          importing
+            ? [{ type: "custom", element: <ActivityIndicator color={colors.tint} /> }]
+            : [{ type: "button", label: "Import", variant: "prominent", onPress: onImport }],
       });
     }
-  }, [step, validating, navigation, onImport, backToChoose]);
+  }, [step, validating, importing, navigation, onImport, backToChoose]);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.center} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
@@ -145,7 +154,7 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
 
           <View style={styles.supported}>
             <SystemIcon name="info.circle" size={13} color={colors.secondaryLabel} />
-            <Text style={styles.supportedText}>Supports TrueType (.ttf) and OpenType (.otf).</Text>
+            <Text style={styles.supportedText}>Supports .ttf, .otf, and .woff2 (converted automatically).</Text>
           </View>
 
           {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
