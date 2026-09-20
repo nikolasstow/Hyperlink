@@ -235,7 +235,9 @@ export const RootNavigator = (): React.ReactElement => {
             sheetAllowedDetents: [0.5, 1.0],
             sheetInitialDetentIndex: 0,
             sheetGrabberVisible: true,
-            title: "Import Font",
+            // No nav-bar title — the styled in-content title is the one header;
+            // the bar just carries the Close/Back/Import buttons.
+            headerTitle: "",
             unstable_headerLeftItems: () => [
               {
                 type: "button",
