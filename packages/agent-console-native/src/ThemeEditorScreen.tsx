@@ -18,6 +18,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { BottomSearchPill, useSearchPill } from "./BottomSearchPill";
@@ -58,6 +59,7 @@ const Swatch = (props: { readonly color: string | undefined }): React.ReactEleme
 export const ThemeEditorScreen = (props: Props): React.ReactElement => {
   const { themeId } = props.route.params;
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
   const appTheme = useTheme();
@@ -161,6 +163,12 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
     props.navigation.setOptions({
       headerTitle: "",
       headerBackVisible: false,
+      // Transparent bar + soft scroll-edge effect → iOS renders the bar and its
+      // items as Liquid Glass, matching Home.
+      headerTransparent: true,
+      headerStyle: { backgroundColor: "transparent" },
+      headerShadowVisible: false,
+      scrollEdgeEffects: { top: "soft", bottom: "soft" },
       unstable_headerLeftItems: () => [
         { type: "button", label: "Close", icon: { type: "sfSymbol", name: "xmark" }, onPress: () => props.navigation.goBack() },
       ],
@@ -177,8 +185,8 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
     <View style={styles.root}>
       <ScrollView
         style={styles.scroll}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={[styles.content, { paddingBottom: pill.listPaddingBottom + insets.bottom }]}
+        contentInsetAdjustmentBehavior="never"
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + 8, paddingBottom: pill.listPaddingBottom + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         onScroll={pill.onScroll}
