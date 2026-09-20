@@ -54,13 +54,11 @@ export const CodeBlock = (props: {
             <Text style={[styles.line, { color: foreground, fontFamily }]}>{props.code}</Text>
           ) : (
             result.lines.map((line, i) => (
-              // eslint-disable-next-line @eslint-react/no-array-index-key -- lines are positional
               <Text key={i} style={[styles.line, { fontFamily }]}>
                 {line.length === 0
                   ? " "
                   : line.map((token, j) => (
                       <Text
-                        // eslint-disable-next-line @eslint-react/no-array-index-key -- tokens are positional within a line
                         key={j}
                         style={{
                           color: token.color ?? foreground,

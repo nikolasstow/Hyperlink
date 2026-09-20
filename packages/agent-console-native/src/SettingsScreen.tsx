@@ -60,7 +60,7 @@ const timeAgo = (ms: number): string => {
 
 export const SettingsScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
-  const { client, address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
+  const { address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
   const [rootDirDraft, setRootDirDraft] = React.useState(rootDir);
   const [repoTemplateDraft, setRepoTemplateDraft] = React.useState(DEFAULT_REPO_TEMPLATE);

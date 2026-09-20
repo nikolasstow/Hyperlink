@@ -26,6 +26,12 @@ import { HeaderTitlePill } from "./HeaderTitlePill";
 import { AppearanceScreen } from "./AppearanceScreen";
 import { ExtensionsScreen } from "./ExtensionsScreen";
 import { FontImportScreen } from "./FontImportScreen";
+import { ThemeColorGroupScreen } from "./ThemeColorGroupScreen";
+import { ThemeEditorScreen } from "./ThemeEditorScreen";
+import { ThemeImportSourceScreen } from "./ThemeImportSourceScreen";
+import { ThemeImportValuesScreen } from "./ThemeImportValuesScreen";
+import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
+import { ThemeTokensScreen } from "./ThemeTokensScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { RepoScreen } from "./RepoScreen";
@@ -38,6 +44,17 @@ export type RootStackParamList = {
   Extensions: undefined;
   Appearance: undefined;
   FontImport: undefined;
+  // Create a VS Code colour theme, or edit one created here. No id means a new
+  // theme, prefilled from whatever is currently applied.
+  ThemeEditor: { themeId?: string };
+  // One colour group of the theme being edited. `groupId: "search"` with a
+  // `focusKey` shows a single key reached from search.
+  ThemeColorGroup: { groupId: string; focusKey?: string };
+  ThemeTokens: undefined;
+  ThemeTokenRule: { index: number };
+  ThemeImportSource: undefined;
+  // `file` is a store-relative theme file, or `created:<id>` for one of ours.
+  ThemeImportValues: { file: string; label: string };
   // A repo (git checkout) or workspace (non-git session folder). `isRepo`
   // selects the menu variant; `dir` is the primary directory shown in the
   // header info.
@@ -225,6 +242,14 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
         <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
+        {/* The theme editor and the screens it pushes. Each draws the native
+         * header; the draft they share lives in themeDraft.ts, not in params. */}
+        <Stack.Screen name="ThemeEditor" component={ThemeEditorScreen} options={{ headerShown: true, title: "New Theme" }} />
+        <Stack.Screen name="ThemeColorGroup" component={ThemeColorGroupScreen} options={{ headerShown: true, title: "Colors" }} />
+        <Stack.Screen name="ThemeTokens" component={ThemeTokensScreen} options={{ headerShown: true, title: "Token Colors" }} />
+        <Stack.Screen name="ThemeTokenRule" component={ThemeTokenRuleScreen} options={{ headerShown: true, title: "Rule" }} />
+        <Stack.Screen name="ThemeImportSource" component={ThemeImportSourceScreen} options={{ headerShown: true, title: "Import From" }} />
+        <Stack.Screen name="ThemeImportValues" component={ThemeImportValuesScreen} options={{ headerShown: true, title: "Choose Values" }} />
         <Stack.Screen
           name="FontImport"
           component={FontImportScreen}
