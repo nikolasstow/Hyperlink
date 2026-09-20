@@ -34,19 +34,36 @@ const readFonts = (config: Record<string, unknown>): ReadonlyArray<CustomFont> =
   }
 };
 
-const decodeFamily = Schema.decodeUnknownSync(Schema.Struct({ family: Schema.String }));
+/** Details read from a font file (for the import confirm step). */
+export interface FontDetails {
+  readonly family: string;
+  readonly subfamily?: string;
+  readonly fullName?: string;
+  readonly version?: string;
+  readonly copyright?: string;
+  readonly numGlyphs?: number;
+}
 
-/** Inspect a font URL server-side and return its embedded family name. */
-export const inspectFont = async (apiBase: string, url: string): Promise<string> => {
-  const result = decodeFamily(
+const decodeDetails = Schema.decodeUnknownSync(
+  Schema.Struct({
+    family: Schema.String,
+    subfamily: Schema.optional(Schema.String),
+    fullName: Schema.optional(Schema.String),
+    version: Schema.optional(Schema.String),
+    copyright: Schema.optional(Schema.String),
+    numGlyphs: Schema.optional(Schema.Number),
+  }),
+);
+
+/** Inspect a font URL server-side and return its embedded details. */
+export const inspectFont = async (apiBase: string, url: string): Promise<FontDetails> =>
+  decodeDetails(
     await request(`${base(apiBase)}/fonts/inspect`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ url }),
     }),
   );
-  return result.family;
-};
 
 export const getCustomFonts = async (apiBase: string): Promise<ReadonlyArray<CustomFont>> => readFonts(await getRemoteConfig(apiBase));
 

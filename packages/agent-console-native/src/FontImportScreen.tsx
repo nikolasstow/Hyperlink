@@ -1,118 +1,155 @@
 /**
- * Import custom code fonts — presented as a native slide-up modal. Two ways in:
- * from a URL (a direct .ttf/.otf/.woff2 link) or from a file. The font's family
- * name is read from the file itself (server-side inspect), so you don't type it;
- * after loading, a preview shows before you save it to your fonts.
+ * Import a custom code font — a native half-height slide-up sheet, two steps:
  *
- * Fonts live in the synced config (fontsClient.ts). File import and actually
- * *rendering* a custom font need `expo-font` (a native module → a build); URL
- * inspect + add works now, and a saved font applies once that build lands.
+ *  1. Choose: centered "Import from URL" (a URL field with an example
+ *     placeholder — no submit button; hit return or tap out and we validate),
+ *     an "or" divider, then "Import from File" with its button.
+ *  2. Details: the font's details (read from the file); Import (top-right) saves
+ *     it, Back (top-left) returns if it's the wrong font.
+ *
+ * Validating shows a spinner in the header and transitions to step 2 as soon as
+ * the details are ready. Fonts live in the synced config (fontsClient.ts). File
+ * import and rendering a custom font need `expo-font` (a build); URL works now.
  *
  * @internal
  */
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
-import { addCustomFont, inspectFont, type CustomFont } from "./fontsClient";
+import { addCustomFont, inspectFont, type FontDetails } from "./fontsClient";
+import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 
-export const FontImportScreen = (): React.ReactElement => {
+type Props = NativeStackScreenProps<RootStackParamList, "FontImport">;
+
+const DetailRow = (props: { readonly label: string; readonly value: string }): React.ReactElement => (
+  <View style={styles.detailRow}>
+    <Text style={styles.detailKey}>{props.label}</Text>
+    <Text style={styles.detailVal} numberOfLines={2}>
+      {props.value}
+    </Text>
+  </View>
+);
+
+export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
   const { address } = useAppContext();
-  const insets = useSafeAreaInsets();
   const apiBase = getApiAddress(address);
 
-  const [showUrl, setShowUrl] = React.useState(false);
+  const [step, setStep] = React.useState<"choose" | "details">("choose");
   const [urlInput, setUrlInput] = React.useState("");
-  const [pending, setPending] = React.useState<CustomFont | undefined>(undefined);
-  const [busy, setBusy] = React.useState(false);
+  const [validating, setValidating] = React.useState(false);
+  const [details, setDetails] = React.useState<FontDetails | undefined>(undefined);
+  const [savedUrl, setSavedUrl] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
+  const inFlight = React.useRef(false);
 
-  const onLoadUrl = (): void => {
-    const url = urlInput.trim();
-    if (url === "" || busy) return;
-    setBusy(true);
+  const validate = React.useCallback(
+    (raw: string): void => {
+      const url = raw.trim();
+      if (url === "" || inFlight.current) return;
+      inFlight.current = true;
+      setValidating(true);
+      setError(undefined);
+      inspectFont(apiBase, url)
+        .then((d) => {
+          setDetails(d);
+          setSavedUrl(url);
+          setStep("details");
+        })
+        .catch((e: unknown) => setError(String(e)))
+        .finally(() => {
+          inFlight.current = false;
+          setValidating(false);
+        });
+    },
+    [apiBase],
+  );
+
+  const onImport = React.useCallback((): void => {
+    if (details === undefined) return;
+    addCustomFont(apiBase, { family: details.family, url: savedUrl })
+      .then(() => navigation.goBack())
+      .catch((e: unknown) => setError(String(e)));
+  }, [apiBase, details, savedUrl, navigation]);
+
+  const backToChoose = React.useCallback((): void => {
+    setStep("choose");
+    setDetails(undefined);
     setError(undefined);
-    inspectFont(apiBase, url)
-      .then((family) => {
-        setPending({ family, url });
-        setShowUrl(false);
-        setUrlInput("");
-      })
-      .catch((e: unknown) => setError(String(e)))
-      .finally(() => setBusy(false));
-  };
+  }, []);
 
-  const onSave = (): void => {
-    if (pending === undefined || busy) return;
-    setBusy(true);
-    addCustomFont(apiBase, pending)
-      .then(() => setPending(undefined))
-      .catch((e: unknown) => setError(String(e)))
-      .finally(() => setBusy(false));
-  };
+  // Header buttons follow the step: Close + (spinner while validating) on choose;
+  // Back + Import on details.
+  React.useEffect(() => {
+    if (step === "choose") {
+      navigation.setOptions({
+        unstable_headerLeftItems: () => [
+          { type: "button", label: "Close", icon: { type: "sfSymbol", name: "xmark" }, onPress: () => navigation.goBack() },
+        ],
+        unstable_headerRightItems: () => (validating ? [{ type: "custom", element: <ActivityIndicator color={colors.tint} /> }] : []),
+      });
+    } else {
+      navigation.setOptions({
+        unstable_headerLeftItems: () => [
+          { type: "button", label: "Back", icon: { type: "sfSymbol", name: "chevron.backward" }, onPress: backToChoose },
+        ],
+        unstable_headerRightItems: () => [{ type: "button", label: "Import", variant: "prominent", onPress: onImport }],
+      });
+    }
+  }, [step, validating, navigation, onImport, backToChoose]);
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-    >
-      <View style={styles.card}>
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.choice} onPress={() => setShowUrl((s) => !s)} activeOpacity={0.6}>
-            <Text style={styles.choiceText}>Import from URL</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.choice, styles.choiceMuted]}
-            onPress={() => setError("File import needs an app build (adds the document picker).")}
-            activeOpacity={0.6}
-          >
-            <Text style={styles.choiceText}>Import from File</Text>
-          </TouchableOpacity>
-        </View>
-        {showUrl ? (
-          <View style={styles.urlRow}>
-            <TextInput
-              style={styles.input}
-              value={urlInput}
-              onChangeText={setUrlInput}
-              placeholder="https://…/font.ttf"
-              placeholderTextColor={colors.placeholderText}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              onSubmitEditing={onLoadUrl}
-              returnKeyType="go"
-            />
-            <TouchableOpacity style={styles.loadButton} onPress={onLoadUrl} disabled={busy || urlInput.trim() === ""}>
-              {busy && pending === undefined ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.loadButtonText}>Load</Text>}
-            </TouchableOpacity>
-          </View>
-        ) : null}
-        {error !== undefined ? <Text style={styles.errorText}>{error}</Text> : null}
-      </View>
+    <ScrollView style={styles.root} contentContainerStyle={styles.center} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+      {step === "choose" ? (
+        <View style={styles.block}>
+          <Text style={styles.heading}>Import from URL</Text>
+          <TextInput
+            style={styles.input}
+            value={urlInput}
+            onChangeText={setUrlInput}
+            placeholder="https://example.com/FiraCode-Regular.ttf"
+            placeholderTextColor={colors.placeholderText}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            returnKeyType="go"
+            editable={!validating}
+            onSubmitEditing={() => validate(urlInput)}
+            onBlur={() => validate(urlInput)}
+          />
 
-      {pending !== undefined ? (
-        <>
-          <Text style={styles.sectionLabel}>Preview</Text>
-          <View style={styles.card}>
-            <Text style={styles.previewFamily}>{pending.family}</Text>
-            <Text style={[styles.previewSample, { fontFamily: pending.family }]}>The quick brown fox 0123 {"{}"} =&gt;</Text>
-            <Text style={styles.note}>Name read from the file. Renders in this font after an app build.</Text>
-            <View style={styles.saveRow}>
-              <TouchableOpacity onPress={() => setPending(undefined)}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={onSave} disabled={busy}>
-                {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveButtonText}>Save to fonts</Text>}
-              </TouchableOpacity>
-            </View>
+          <View style={styles.divider}>
+            <View style={styles.line} />
+            <Text style={styles.or}>or</Text>
+            <View style={styles.line} />
           </View>
-        </>
+
+          <Text style={styles.heading}>Import from File</Text>
+          <TouchableOpacity
+            style={styles.fileButton}
+            onPress={() => setError("File import needs an app build (adds the document picker).")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.fileButtonText}>Choose file…</Text>
+          </TouchableOpacity>
+
+          {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
+      ) : details !== undefined ? (
+        <View style={styles.block}>
+          <Text style={[styles.family, { fontFamily: details.family }]}>{details.fullName ?? details.family}</Text>
+          <Text style={[styles.sample, { fontFamily: details.family }]}>The quick brown fox 0123 {"{}"} =&gt;</Text>
+          <View style={styles.detailList}>
+            <DetailRow label="Family" value={details.family} />
+            {details.subfamily !== undefined ? <DetailRow label="Style" value={details.subfamily} /> : null}
+            {details.version !== undefined ? <DetailRow label="Version" value={details.version} /> : null}
+            {details.numGlyphs !== undefined ? <DetailRow label="Glyphs" value={String(details.numGlyphs)} /> : null}
+            {details.copyright !== undefined ? <DetailRow label="Copyright" value={details.copyright} /> : null}
+          </View>
+          {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
       ) : null}
     </ScrollView>
   );
@@ -123,113 +160,97 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
+  center: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 24,
   },
-  sectionLabel: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-    textTransform: "uppercase",
-    marginTop: 16,
-    marginBottom: 6,
-    marginLeft: 4,
+  block: {
+    width: "100%",
+    maxWidth: 460,
+    alignItems: "center",
+    gap: 14,
   },
-  card: {
-    backgroundColor: colors.cardBackground,
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    paddingHorizontal: 14,
+  heading: {
+    color: colors.label,
+    fontSize: 17,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  input: {
+    width: "100%",
+    color: colors.label,
+    fontSize: 16,
+    textAlign: "center",
     paddingVertical: 12,
-    marginBottom: 10,
-    gap: 10,
-  },
-  buttonRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  choice: {
-    flex: 1,
+    paddingHorizontal: 14,
     backgroundColor: colors.fillBackground,
     borderRadius: 10,
-    paddingVertical: 14,
+    borderCurve: "continuous",
+  },
+  divider: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+    width: "70%",
+    marginVertical: 4,
   },
-  choiceMuted: {
-    opacity: 0.6,
+  line: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
   },
-  choiceText: {
+  or: {
+    color: colors.secondaryLabel,
+    fontSize: 13,
+  },
+  fileButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderCurve: "continuous",
+    backgroundColor: colors.accentTint,
+  },
+  fileButtonText: {
     color: colors.tint,
     fontSize: 15,
     fontWeight: "600",
   },
-  urlRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    color: colors.label,
-    fontSize: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: colors.fillBackground,
-    borderRadius: 8,
-  },
-  loadButton: {
-    backgroundColor: colors.tint,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    minWidth: 68,
-    alignItems: "center",
-  },
-  loadButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  errorText: {
+  error: {
     color: colors.destructive,
     fontSize: 13,
+    textAlign: "center",
   },
-  note: {
-    color: colors.secondaryLabel,
-    fontSize: 12,
-  },
-  previewFamily: {
+  family: {
     color: colors.label,
+    fontSize: 26,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  sample: {
+    color: colors.secondaryLabel,
     fontSize: 17,
-    fontWeight: "600",
+    textAlign: "center",
   },
-  previewSample: {
-    color: colors.label,
-    fontSize: 18,
+  detailList: {
+    width: "100%",
+    marginTop: 6,
+    gap: 8,
   },
-  saveRow: {
+  detailRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 18,
-    paddingTop: 2,
+    gap: 12,
   },
-  cancelText: {
+  detailKey: {
+    width: 96,
     color: colors.secondaryLabel,
-    fontSize: 15,
+    fontSize: 14,
   },
-  saveButton: {
-    backgroundColor: colors.tint,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    minWidth: 120,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
+  detailVal: {
+    flex: 1,
+    color: colors.label,
+    fontSize: 14,
   },
 });
