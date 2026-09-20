@@ -87,31 +87,34 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
     setError(undefined);
   }, []);
 
-  // Header buttons follow the step: Close + (spinner while validating) on choose;
-  // Back + Import on details.
-  React.useEffect(() => {
-    if (step === "choose") {
-      navigation.setOptions({
-        unstable_headerLeftItems: () => [
-          { type: "button", label: "Close", icon: { type: "sfSymbol", name: "xmark" }, onPress: () => navigation.goBack() },
-        ],
-        unstable_headerRightItems: () => (validating ? [{ type: "custom", element: <ActivityIndicator color={colors.tint} /> }] : []),
-      });
-    } else {
-      navigation.setOptions({
-        unstable_headerLeftItems: () => [
-          { type: "button", label: "Back", icon: { type: "sfSymbol", name: "chevron.backward" }, onPress: backToChoose },
-        ],
-        unstable_headerRightItems: () =>
-          importing
-            ? [{ type: "custom", element: <ActivityIndicator color={colors.tint} /> }]
-            : [{ type: "button", label: "Import", variant: "prominent", onPress: onImport }],
-      });
-    }
-  }, [step, validating, importing, navigation, onImport, backToChoose]);
-
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.center} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+    <View style={styles.root}>
+      {/* Single header row, in-content (no native bar): Close/Back at left,
+       * spinner or Import at right. */}
+      <View style={styles.topBar}>
+        {step === "choose" ? (
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10} accessibilityLabel="Close">
+            <SystemIcon name="xmark" size={17} color={colors.secondaryLabel} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={backToChoose} hitSlop={10} accessibilityLabel="Back">
+            <SystemIcon name="chevron.backward" size={18} color={colors.tint} />
+          </TouchableOpacity>
+        )}
+        <View style={styles.topRight}>
+          {step === "choose" ? (
+            validating ? <ActivityIndicator color={colors.tint} /> : null
+          ) : importing ? (
+            <ActivityIndicator color={colors.tint} />
+          ) : (
+            <TouchableOpacity onPress={onImport} hitSlop={10} accessibilityLabel="Import">
+              <Text style={styles.importText}>Import</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.center} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       {step === "choose" ? (
         <View style={styles.block}>
           <View style={styles.iconBadge}>
@@ -173,7 +176,8 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
           {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : null}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -181,6 +185,27 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 4,
+    minHeight: 44,
+  },
+  topRight: {
+    minWidth: 64,
+    alignItems: "flex-end",
+  },
+  importText: {
+    color: colors.tint,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  scroll: {
+    flex: 1,
   },
   center: {
     flexGrow: 1,

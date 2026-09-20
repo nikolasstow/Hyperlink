@@ -228,25 +228,16 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="FontImport"
           component={FontImportScreen}
-          options={({ navigation }) => ({
-            headerShown: true,
+          options={{
+            // No native header bar — the screen renders its own top row so
+            // there's a single header, not a native bar over the styled content.
+            headerShown: false,
             presentation: "formSheet",
             // Half height, expandable to full; iOS grabber to dismiss.
             sheetAllowedDetents: [0.5, 1.0],
             sheetInitialDetentIndex: 0,
             sheetGrabberVisible: true,
-            // No nav-bar title — the styled in-content title is the one header;
-            // the bar just carries the Close/Back/Import buttons.
-            headerTitle: "",
-            unstable_headerLeftItems: () => [
-              {
-                type: "button",
-                label: "Close",
-                icon: { type: "sfSymbol", name: "xmark" },
-                onPress: () => navigation.goBack(),
-              },
-            ],
-          })}
+          }}
         />
         {/* Repo/workspace screen draws its own fully custom collapsing glass
          * header, so the native bar is hidden. */}
