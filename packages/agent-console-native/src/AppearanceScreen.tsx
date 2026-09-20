@@ -81,35 +81,42 @@ const ColorSwatches = (props: {
   const maxSwatches = Math.max(2, Math.floor((available + SWATCH_GAP) / (SWATCH + SWATCH_GAP)));
   const presets = PRESETS.slice(0, Math.max(0, maxSwatches - 2));
 
+  // Equal-width cells, each centring its content — so the native picker lines
+  // up with the swatches at even spacing regardless of its intrinsic size.
   return (
     <View style={styles.swatchRow}>
-      <TouchableOpacity
-        accessibilityLabel="Theme colour"
-        onPress={() => props.onChange(props.themeColor)}
-        style={[styles.swatch, { backgroundColor: props.themeColor }, eq(props.value, props.themeColor) ? styles.swatchSelected : null]}
-      >
-        <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
-      </TouchableOpacity>
-      {presets.map((color) => (
+      <View style={styles.cell}>
         <TouchableOpacity
-          key={color}
-          accessibilityLabel={color}
-          onPress={() => props.onChange(color)}
-          style={[styles.swatch, { backgroundColor: color }, eq(color, props.value) ? styles.swatchSelected : null]}
-        />
+          accessibilityLabel="Theme colour"
+          onPress={() => props.onChange(props.themeColor)}
+          style={[styles.swatch, { backgroundColor: props.themeColor }, eq(props.value, props.themeColor) ? styles.swatchSelected : null]}
+        >
+          <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+      {presets.map((color) => (
+        <View key={color} style={styles.cell}>
+          <TouchableOpacity
+            accessibilityLabel={color}
+            onPress={() => props.onChange(color)}
+            style={[styles.swatch, { backgroundColor: color }, eq(color, props.value) ? styles.swatchSelected : null]}
+          />
+        </View>
       ))}
       {/* Custom colour — Apple's native picker (Grid/Spectrum/Sliders, hex,
-       * eyedropper, favourites); its swatch shows the current value. */}
-      <Host style={styles.pickerSwatch}>
-        <ColorPicker
-          label=""
-          selection={props.value}
-          onSelectionChange={(next) => {
-            const hex = next.length >= 7 ? next.slice(0, 7) : next;
-            if (isHex(hex)) props.onChange(hex.toUpperCase());
-          }}
-        />
-      </Host>
+       * eyedropper, favourites); its well shows the current value. */}
+      <View style={styles.cell}>
+        <Host style={styles.pickerSwatch}>
+          <ColorPicker
+            label=""
+            selection={props.value}
+            onSelectionChange={(next) => {
+              const hex = next.length >= 7 ? next.slice(0, 7) : next;
+              if (isHex(hex)) props.onChange(hex.toUpperCase());
+            }}
+          />
+        </Host>
+      </View>
     </View>
   );
 };
@@ -386,8 +393,11 @@ const styles = StyleSheet.create({
   swatchRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingTop: 4,
+  },
+  cell: {
+    flex: 1,
+    alignItems: "center",
   },
   swatch: {
     width: 32,

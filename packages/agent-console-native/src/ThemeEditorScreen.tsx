@@ -155,14 +155,21 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
     props.navigation.goBack();
   };
 
+  // Glass icon buttons in the nav bar, no title: X to close on the left; a
+  // grouped clear|import capsule and a separate save on the right.
   React.useLayoutEffect(() => {
     props.navigation.setOptions({
-      title: themeId === undefined ? "New Theme" : "Edit Theme",
-      headerRight: () => (
-        <TouchableOpacity onPress={() => void save()} disabled={saving} activeOpacity={0.6}>
-          <Text style={[styles.headerAction, saving && styles.headerActionDim]}>Save</Text>
-        </TouchableOpacity>
-      ),
+      headerTitle: "",
+      headerBackVisible: false,
+      unstable_headerLeftItems: () => [
+        { type: "button", label: "Close", icon: { type: "sfSymbol", name: "xmark" }, onPress: () => props.navigation.goBack() },
+      ],
+      unstable_headerRightItems: () => [
+        { type: "button", label: "Clear", icon: { type: "sfSymbol", name: "eraser" }, onPress: clearAll },
+        { type: "button", label: "Import values", icon: { type: "sfSymbol", name: "square.and.arrow.down" }, onPress: () => props.navigation.navigate("ThemeImportSource") },
+        { type: "spacing", spacing: 16 },
+        { type: "button", label: "Save", icon: { type: "sfSymbol", name: "checkmark" }, variant: "prominent", disabled: saving, onPress: () => void save() },
+      ],
     });
   });
 
@@ -264,20 +271,6 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
               </View>
             </View>
             <Text style={styles.hint}>Which appearance this theme is written for. Type decides where it is offered.</Text>
-
-            <View style={[styles.card, styles.cardSpaced]}>
-              <TouchableOpacity
-                style={styles.row}
-                activeOpacity={0.6}
-                onPress={() => props.navigation.navigate("ThemeImportSource")}
-              >
-                <Text style={styles.rowAction}>Import values from a theme…</Text>
-                <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.row, styles.rowBorder]} activeOpacity={0.6} onPress={clearAll}>
-                <Text style={[styles.rowAction, styles.clearAction]}>Clear all values</Text>
-              </TouchableOpacity>
-            </View>
 
             <Text style={styles.sectionLabel}>Colors · {colorCount} set</Text>
             <View style={styles.card}>
