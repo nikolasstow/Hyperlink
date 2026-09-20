@@ -13,20 +13,29 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, useWindowDimensions, View } from "react-native";
-import { ColorPicker, Host } from "@expo/ui/swift-ui";
+import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, useColorScheme, useWindowDimensions, View } from "react-native";
+import { Button, Circle, ColorPicker, ContextMenu, Divider, Host, HStack, Image, Section, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { CodeBlock } from "./CodeBlock";
 import { colors } from "./colors";
-import { getThemeJson, listExtensions } from "./extensionsClient";
+import { getThemeJson, listExtensions, removeExtension } from "./extensionsClient";
 import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
-import { DEFAULT_THEME, getApiAddress, type Theme } from "./settings";
+import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { FALLBACK_THEME } from "./shikiHighlighter";
 import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
-import { listCreatedThemes, type CreatedTheme } from "./createdThemes";
+import {
+  deleteCreatedTheme,
+  getCreatedTheme,
+  listCreatedThemes,
+  newThemeId,
+  saveCreatedTheme,
+  type CreatedTheme,
+} from "./createdThemes";
+import { deriveThemeAccents, parseVsCodeTheme, toOpaqueHex, toThemeDocument, type VsCodeTheme } from "./vscodeTheme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Appearance">;
 
@@ -51,6 +60,27 @@ const CODE_FONTS = ["Menlo", "Courier New", "Courier"];
 const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 const isHex = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value);
 
+/** A device-created theme shaped for Shiki, the same way `getThemeJson` shapes a
+ * server one — so a created theme can highlight the preview with no server file
+ * to fetch. `settings` mirrors `tokenColors` because Shiki reads that name. */
+const shikiThemeOf = (theme: VsCodeTheme): ThemeRegistrationRaw => {
+  const settings = theme.tokenColors.map((rule) => ({
+    scope: [...rule.scope],
+    settings: {
+      ...(rule.foreground === undefined ? {} : { foreground: rule.foreground }),
+      ...(rule.fontStyle === undefined ? {} : { fontStyle: rule.fontStyle }),
+    },
+  }));
+  return {
+    name: theme.name,
+    type: theme.type,
+    colors: { ...theme.colors },
+    semanticTokenColors: { ...theme.semanticTokenColors },
+    tokenColors: settings,
+    settings,
+  };
+};
+
 /** A colour theme drawn from an installed extension. */
 interface SelectableTheme {
   readonly key: string;
@@ -59,6 +89,10 @@ interface SelectableTheme {
   readonly secondary: string;
   /** Store-relative theme file, to fetch its full JSON for code highlighting. */
   readonly file: string;
+  /** The extension this theme belongs to — its id removes it, its name labels
+   * the "Uninstall Extension …" action. */
+  readonly extId: string;
+  readonly extName: string;
 }
 
 /** Swatch geometry, used to fit exactly one row with no scroll. */
@@ -120,6 +154,10 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   const { theme, setTheme } = useTheme();
   const { address } = useAppContext();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  // The theme list is a SwiftUI card that sizes to an explicit width; the screen
+  // content is padded 16 each side, so the card spans the rest.
+  const contentWidth = windowWidth - 32;
   const apiBase = getApiAddress(address);
 
   const [themes, setThemes] = React.useState<ReadonlyArray<SelectableTheme>>([]);
@@ -141,34 +179,39 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
     };
   }, [apiBase]);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    listExtensions(apiBase)
-      .then((list) => {
-        if (cancelled) return;
-        const selectable = list.flatMap((ext) =>
-          ext.colorThemes
-            .filter((ct) => ct.colors !== undefined)
-            .map((ct) => ({
-              key: `${ext.id}:${ct.id}`,
-              label: ct.label,
-              primary: ct.colors?.primary ?? DEFAULT_THEME.primary,
-              secondary: ct.colors?.secondary ?? DEFAULT_THEME.secondary,
-              file: ct.file,
-            })),
-        );
-        setThemes(selectable);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
+  // Best-effort: a settings screen must render whether or not the extension
+  // server is reachable, so a failed list leaves the previous one in place.
+  const refreshThemes = React.useCallback(async (): Promise<void> => {
+    const list = await listExtensions(apiBase).catch(() => undefined);
+    if (list === undefined) return;
+    setThemes(
+      list.flatMap((ext) =>
+        ext.colorThemes
+          .filter((ct) => ct.colors !== undefined)
+          .map((ct) => ({
+            key: `${ext.id}:${ct.id}`,
+            label: ct.label,
+            primary: ct.colors?.primary ?? DEFAULT_THEME.primary,
+            secondary: ct.colors?.secondary ?? DEFAULT_THEME.secondary,
+            file: ct.file,
+            extId: ext.id,
+            extName: ext.displayName,
+          })),
+      ),
+    );
   }, [apiBase]);
 
-  React.useEffect(
-    () => props.navigation.addListener("focus", () => void listCreatedThemes().then(setCreated)),
-    [props.navigation],
-  );
+  const refreshCreated = React.useCallback((): void => {
+    void listCreatedThemes().then(setCreated);
+  }, []);
+
+  React.useEffect(() => {
+    void refreshThemes();
+  }, [refreshThemes]);
+
+  // Reloading created themes on focus catches edits made in the editor and
+  // duplicates created from the context menu.
+  React.useEffect(() => props.navigation.addListener("focus", refreshCreated), [props.navigation, refreshCreated]);
 
   // The enabled code theme is tracked independently of the accents, so changing
   // a colour never unsets it. Its accents are the picker's "Theme" anchor.
@@ -179,10 +222,106 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   // changing colours afterwards leaves `code` intact.
   const selectTheme = (t: SelectableTheme): void =>
     setTheme({ ...theme, primary: t.primary, secondary: t.secondary, code: { label: t.label, file: t.file, primary: t.primary, secondary: t.secondary } });
+
+  // A created theme has no server file, so its accents come from its own colours
+  // and it is recorded by `createdId`; the preview reads it from local storage.
+  const selectCreated = (mine: CreatedTheme): void => {
+    const { primary, secondary } = deriveThemeAccents(mine.theme, DEFAULT_THEME);
+    setTheme({ ...theme, primary, secondary, code: { label: mine.theme.name, file: "", primary, secondary, createdId: mine.id } });
+  };
+
   const selectDefault = (): void => setTheme({ ...theme, primary: DEFAULT_THEME.primary, secondary: DEFAULT_THEME.secondary, code: undefined });
 
-  // The code preview uses the enabled theme's real tokenColors (fetched from the
-  // server), else a bundled theme matching the scheme.
+  /* --- The long-press menu on each theme ---------------------------------- */
+
+  const editCreated = (mine: CreatedTheme): void => props.navigation.navigate("ThemeEditor", { themeId: mine.id });
+  const viewExtension = (t: SelectableTheme): void => props.navigation.navigate("ThemeEditor", { viewFile: t.file, viewLabel: t.label });
+
+  /** `Base copy`, then `Base copy 2`, `Base copy 3`, … — the first free name. */
+  const copyName = (base: string): string => {
+    const taken = new Set(created.map((c) => c.theme.name));
+    let name = `${base} copy`;
+    let n = 1;
+    while (taken.has(name)) {
+      n += 1;
+      name = `${base} copy ${n}`;
+    }
+    return name;
+  };
+
+  const duplicateFrom = async (source: VsCodeTheme): Promise<void> => {
+    const id = newThemeId();
+    await saveCreatedTheme(id, { ...source, name: copyName(source.name) });
+    refreshCreated();
+    props.navigation.navigate("ThemeEditor", { themeId: id });
+  };
+
+  /** An installed theme's full document lives on the server; fetch and parse it
+   * before duplicating or exporting. A failure surfaces rather than no-ops. */
+  const loadExtensionTheme = async (t: SelectableTheme): Promise<VsCodeTheme | undefined> => {
+    try {
+      const parsed = parseVsCodeTheme(await getThemeJson(apiBase, t.file), t.label);
+      if (parsed === undefined) throw new Error("The theme file could not be read.");
+      return parsed;
+    } catch (error: unknown) {
+      Alert.alert("Couldn’t read theme", error instanceof Error ? error.message : "Unknown error.");
+      return undefined;
+    }
+  };
+
+  const duplicateCreated = (mine: CreatedTheme): void => void duplicateFrom(mine.theme);
+  const duplicateExtension = (t: SelectableTheme): void =>
+    void loadExtensionTheme(t).then((source) => (source === undefined ? undefined : duplicateFrom(source)));
+
+  // Exported as the VS Code theme document, so it drops into any VS Code-based
+  // IDE. iOS's share sheet carries it out (Copy, AirDrop, Mail, …).
+  const exportTheme = (source: VsCodeTheme): void => {
+    void Share.share({ message: JSON.stringify(toThemeDocument(source), null, 2) });
+  };
+  const exportCreated = (mine: CreatedTheme): void => exportTheme(mine.theme);
+  const exportExtension = (t: SelectableTheme): void =>
+    void loadExtensionTheme(t).then((source) => (source === undefined ? undefined : exportTheme(source)));
+
+  const deleteCreated = (mine: CreatedTheme): void => {
+    Alert.alert(`Delete “${mine.theme.name}”?`, "Removes this theme from the device. This can’t be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () =>
+          void (async () => {
+            await deleteCreatedTheme(mine.id);
+            if (enabled?.createdId === mine.id) selectDefault();
+            refreshCreated();
+          })(),
+      },
+    ]);
+  };
+
+  const uninstallExtension = (t: SelectableTheme): void => {
+    Alert.alert(`Uninstall ${t.extName}?`, "Removes the extension and every theme it provides.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Uninstall",
+        style: "destructive",
+        onPress: () =>
+          void (async () => {
+            try {
+              await removeExtension(apiBase, t.extId);
+            } catch (error: unknown) {
+              Alert.alert("Couldn’t uninstall", error instanceof Error ? error.message : "Unknown error.");
+              return;
+            }
+            if (enabled?.createdId === undefined && enabled?.file === t.file) selectDefault();
+            await refreshThemes();
+          })(),
+      },
+    ]);
+  };
+
+  // The code preview uses the enabled theme's real tokenColors — fetched from
+  // the server for an installed theme, read from local storage for a created
+  // one — else a bundled theme matching the scheme.
   const scheme = useColorScheme();
   const [previewTheme, setPreviewTheme] = React.useState<string | ThemeRegistrationRaw>(
     scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light,
@@ -193,6 +332,17 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
       setPreviewTheme(scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light);
       return;
     }
+    if (enabled.createdId !== undefined) {
+      const id = enabled.createdId;
+      void getCreatedTheme(id)
+        .then((mine) => {
+          if (!cancelled && mine !== undefined) setPreviewTheme(shikiThemeOf(mine.theme));
+        })
+        .catch(() => undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
     getThemeJson(apiBase, enabled.file)
       .then((json) => {
         if (!cancelled) setPreviewTheme({ ...json, name: enabled.file });
@@ -201,7 +351,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
     return () => {
       cancelled = true;
     };
-  }, [apiBase, enabled?.file, scheme]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed by theme file
+  }, [apiBase, enabled?.file, enabled?.createdId, scheme]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed by theme identity
 
   return (
     <ScrollView
@@ -212,50 +362,25 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
       keyboardDismissMode="on-drag"
     >
         <Text style={styles.sectionLabel}>Theme</Text>
-        <View style={styles.card}>
-          <ThemeRow label="Default" primary={DEFAULT_THEME.primary} active={enabled === undefined} onPress={selectDefault} last={themes.length === 0} />
-          {themes.map((t, index) => (
-            <ThemeRow
-              key={t.key}
-              label={t.label}
-              primary={t.primary}
-              active={enabled?.file === t.file}
-              onPress={() => selectTheme(t)}
-              last={index === themes.length - 1}
-            />
-          ))}
-        </View>
-        {themes.length === 0 ? <Text style={styles.hint}>Install a theme from Extensions to see it here.</Text> : null}
-
-        <Text style={styles.sectionLabel}>Your themes</Text>
-        <View style={styles.card}>
-          {created.map((mine) => (
-            <TouchableOpacity
-              key={mine.id}
-              onPress={() => props.navigation.navigate("ThemeEditor", { themeId: mine.id })}
-              activeOpacity={0.6}
-            >
-              <View style={styles.themeRow}>
-                <View
-                  style={[
-                    styles.themeDot,
-                    { backgroundColor: mine.theme.colors["editor.background"] ?? DEFAULT_THEME.primary },
-                  ]}
-                />
-                <Text style={styles.themeLabel} numberOfLines={1}>
-                  {mine.theme.name}
-                </Text>
-                <SystemIcon name="chevron.right" size={14} color={colors.secondaryLabel} />
-              </View>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity onPress={() => props.navigation.navigate("ThemeEditor", {})} activeOpacity={0.6}>
-            <View style={[styles.themeRow, created.length > 0 && styles.rowSeparator]}>
-              <Text style={styles.addFontLabel}>Create theme…</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.hint}>Installed themes can’t be edited. Create one to make changes.</Text>
+        <ThemeList
+          contentWidth={contentWidth}
+          themes={themes}
+          created={created}
+          enabled={enabled}
+          onSelectDefault={selectDefault}
+          onSelectExtension={selectTheme}
+          onSelectCreated={selectCreated}
+          onView={viewExtension}
+          onEdit={editCreated}
+          onDuplicateExtension={duplicateExtension}
+          onDuplicateCreated={duplicateCreated}
+          onExportExtension={exportExtension}
+          onExportCreated={exportCreated}
+          onDelete={deleteCreated}
+          onUninstall={uninstallExtension}
+          onCreate={() => props.navigation.navigate("ThemeEditor", {})}
+        />
+        <Text style={styles.hint}>Touch and hold a theme to edit, duplicate, export, or remove it.</Text>
 
         <Text style={styles.sectionLabel}>Primary color</Text>
         <View style={styles.card}>
@@ -304,24 +429,145 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const ThemeRow = (props: {
+/** Diameter of the colour dot at the head of each theme row. */
+const DOT = 20;
+
+interface ThemeListProps {
+  readonly contentWidth: number;
+  readonly themes: ReadonlyArray<SelectableTheme>;
+  readonly created: ReadonlyArray<CreatedTheme>;
+  readonly enabled: CodeTheme | undefined;
+  readonly onSelectDefault: () => void;
+  readonly onSelectExtension: (t: SelectableTheme) => void;
+  readonly onSelectCreated: (mine: CreatedTheme) => void;
+  readonly onView: (t: SelectableTheme) => void;
+  readonly onEdit: (mine: CreatedTheme) => void;
+  readonly onDuplicateExtension: (t: SelectableTheme) => void;
+  readonly onDuplicateCreated: (mine: CreatedTheme) => void;
+  readonly onExportExtension: (t: SelectableTheme) => void;
+  readonly onExportCreated: (mine: CreatedTheme) => void;
+  readonly onDelete: (mine: CreatedTheme) => void;
+  readonly onUninstall: (t: SelectableTheme) => void;
+  readonly onCreate: () => void;
+}
+
+/** One theme row's face: a colour dot, the name, and a checkmark when it is the
+ * enabled theme. Built from SwiftUI primitives so the row can be the trigger of
+ * a native context menu (long-press). */
+const ThemeFace = (props: {
+  readonly dot: string;
   readonly label: string;
-  readonly primary: string;
   readonly active: boolean;
-  readonly onPress: () => void;
-  readonly last: boolean;
+  readonly width: number;
+  readonly onTap: () => void;
 }): React.ReactElement => (
-  <TouchableOpacity onPress={props.onPress} activeOpacity={0.6}>
-    <View style={styles.themeRow}>
-      <View style={[styles.themeDot, { backgroundColor: props.primary }]} />
-      <Text style={styles.themeLabel} numberOfLines={1}>
-        {props.label}
-      </Text>
-      {props.active ? <SystemIcon name="checkmark" size={15} color={colors.tint} /> : null}
-    </View>
-    {props.last ? null : <View style={styles.rowSeparator} />}
-  </TouchableOpacity>
+  <HStack
+    spacing={12}
+    modifiers={[frame({ width: props.width, alignment: "leading" }), padding({ horizontal: 14, vertical: 12 }), onTapGesture(props.onTap)]}
+  >
+    <Circle modifiers={[frame({ width: DOT, height: DOT }), foregroundStyle(props.dot)]} />
+    <UIText modifiers={[font({ size: 16 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.label}</UIText>
+    <Spacer />
+    {props.active ? <Image systemName="checkmark" size={15} color={colors.tint} /> : null}
+  </HStack>
 );
+
+/**
+ * The one combined theme list: Default, every installed and device-created
+ * theme, then "Create theme…". Tap selects; long-press opens a native context
+ * menu whose items differ for an installed theme (view / uninstall) versus one
+ * created here (edit / delete).
+ *
+ * Rendered as a single SwiftUI card inside one `Host` so the whole list groups
+ * like an iOS inset list — native `Divider`s between rows, rounded corners —
+ * while each theme row carries its own `ContextMenu`.
+ */
+const ThemeList = (props: ThemeListProps): React.ReactElement => {
+  const { contentWidth, themes, created, enabled } = props;
+  const dotOf = (color: string | undefined): string => toOpaqueHex(color) ?? DEFAULT_THEME.primary;
+
+  const ordered: React.ReactElement[] = [];
+
+  ordered.push(
+    <VStack key="default" modifiers={[frame({ width: contentWidth })]}>
+      <ThemeFace dot={DEFAULT_THEME.primary} label="Default" active={enabled === undefined} width={contentWidth} onTap={props.onSelectDefault} />
+    </VStack>,
+  );
+
+  for (const t of themes) {
+    ordered.push(
+      <ContextMenu key={t.key}>
+        <ContextMenu.Items>
+          <Button label="View Properties" systemImage="eye" onPress={() => props.onView(t)} />
+          <Button label="Duplicate Theme" systemImage="doc.on.doc" onPress={() => props.onDuplicateExtension(t)} />
+          <Button label="Export Theme as JSON" systemImage="square.and.arrow.up" onPress={() => props.onExportExtension(t)} />
+          <Section>
+            <Button label={`Uninstall Extension ${t.extName}`} role="destructive" systemImage="trash" onPress={() => props.onUninstall(t)} />
+          </Section>
+        </ContextMenu.Items>
+        <ContextMenu.Trigger>
+          <ThemeFace
+            dot={dotOf(t.primary)}
+            label={t.label}
+            active={enabled?.createdId === undefined && enabled?.file === t.file}
+            width={contentWidth}
+            onTap={() => props.onSelectExtension(t)}
+          />
+        </ContextMenu.Trigger>
+      </ContextMenu>,
+    );
+  }
+
+  for (const mine of created) {
+    ordered.push(
+      <ContextMenu key={mine.id}>
+        <ContextMenu.Items>
+          <Button label="Edit Properties" systemImage="slider.horizontal.3" onPress={() => props.onEdit(mine)} />
+          <Button label="Duplicate Theme" systemImage="doc.on.doc" onPress={() => props.onDuplicateCreated(mine)} />
+          <Button label="Export Theme as JSON" systemImage="square.and.arrow.up" onPress={() => props.onExportCreated(mine)} />
+          <Section>
+            <Button label="Delete Theme" role="destructive" systemImage="trash" onPress={() => props.onDelete(mine)} />
+          </Section>
+        </ContextMenu.Items>
+        <ContextMenu.Trigger>
+          <ThemeFace
+            dot={dotOf(mine.theme.colors["editor.background"])}
+            label={mine.theme.name}
+            active={enabled?.createdId === mine.id}
+            width={contentWidth}
+            onTap={() => props.onSelectCreated(mine)}
+          />
+        </ContextMenu.Trigger>
+      </ContextMenu>,
+    );
+  }
+
+  ordered.push(
+    <HStack
+      key="create"
+      spacing={12}
+      modifiers={[frame({ width: contentWidth, alignment: "leading" }), padding({ horizontal: 14, vertical: 12 }), onTapGesture(props.onCreate)]}
+    >
+      <Image systemName="plus" size={16} color={colors.tint} />
+      <UIText modifiers={[font({ size: 16 }), foregroundStyle(colors.tint), lineLimit(1)]}>Create theme…</UIText>
+      <Spacer />
+    </HStack>,
+  );
+
+  const children: React.ReactElement[] = [];
+  ordered.forEach((element, index) => {
+    if (index > 0) children.push(<Divider key={`divider-${index}`} />);
+    children.push(element);
+  });
+
+  return (
+    <Host style={styles.themeHost} matchContents={{ vertical: true, horizontal: false }}>
+      <VStack spacing={0} modifiers={[frame({ width: contentWidth }), background(colors.cardBackground), cornerRadius(14)]}>
+        {children}
+      </VStack>
+    </Host>
+  );
+};
 
 const styles = StyleSheet.create({
   root: {
@@ -355,18 +601,16 @@ const styles = StyleSheet.create({
     color: colors.secondaryLabel,
     fontSize: 13,
   },
+  themeHost: {
+    // The Host sizes its height to the SwiftUI card (matchContents vertical) and
+    // stretches to the padded content width; no width needed here.
+    marginTop: 2,
+  },
   themeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingVertical: 10,
-  },
-  themeDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
   },
   themeLabel: {
     flex: 1,

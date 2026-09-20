@@ -43,6 +43,7 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const draft = useThemeDraft();
   const theme: VsCodeTheme = draft.kind === "open" ? draft.theme : EMPTY_THEME;
+  const readonly = draft.kind === "open" && draft.readonly;
   const rule = theme.tokenColors[index];
 
   const [newScope, setNewScope] = React.useState("");
@@ -95,36 +96,41 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
     >
       <Text style={styles.sectionLabel}>Scopes · {rule.scope.length}</Text>
       <View style={styles.card}>
+        {rule.scope.length === 0 && readonly ? <Text style={styles.empty}>This rule matches no scopes.</Text> : null}
         {rule.scope.map((scope, position) => (
           <View key={`${position}:${scope}`} style={[styles.row, position > 0 && styles.rowBorder]}>
             <Text style={styles.scope} numberOfLines={1}>
               {scope}
             </Text>
-            <TouchableOpacity
-              activeOpacity={0.6}
-              accessibilityLabel={`Remove ${scope}`}
-              onPress={() => replace((current) => ({ ...current, scope: current.scope.filter((_, i) => i !== position) }))}
-            >
-              <Text style={styles.remove}>Remove</Text>
-            </TouchableOpacity>
+            {readonly ? null : (
+              <TouchableOpacity
+                activeOpacity={0.6}
+                accessibilityLabel={`Remove ${scope}`}
+                onPress={() => replace((current) => ({ ...current, scope: current.scope.filter((_, i) => i !== position) }))}
+              >
+                <Text style={styles.remove}>Remove</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ))}
-        <View style={[styles.row, rule.scope.length > 0 && styles.rowBorder]}>
-          <TextInput
-            style={styles.scopeInput}
-            value={newScope}
-            onChangeText={setNewScope}
-            onSubmitEditing={addScope}
-            placeholder="Add scope, e.g. entity.name.function"
-            placeholderTextColor={colors.placeholderText}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="done"
-          />
-          <TouchableOpacity activeOpacity={0.6} onPress={addScope} disabled={newScope.trim().length === 0}>
-            <Text style={[styles.add, newScope.trim().length === 0 && styles.addDim]}>Add</Text>
-          </TouchableOpacity>
-        </View>
+        {readonly ? null : (
+          <View style={[styles.row, rule.scope.length > 0 && styles.rowBorder]}>
+            <TextInput
+              style={styles.scopeInput}
+              value={newScope}
+              onChangeText={setNewScope}
+              onSubmitEditing={addScope}
+              placeholder="Add scope, e.g. entity.name.function"
+              placeholderTextColor={colors.placeholderText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+            />
+            <TouchableOpacity activeOpacity={0.6} onPress={addScope} disabled={newScope.trim().length === 0}>
+              <Text style={[styles.add, newScope.trim().length === 0 && styles.addDim]}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <Text style={styles.sectionLabel}>Foreground</Text>
@@ -132,18 +138,22 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Colour</Text>
           <Text style={styles.rowValue}>{(foreground ?? "Not set").toUpperCase()}</Text>
-          <Host style={styles.picker} matchContents>
-            <ColorPicker
-              label=""
-              selection={foreground ?? DEFAULT_FOREGROUND}
-              supportsOpacity
-              onSelectionChange={(next) => {
-                if (isHexColor(next)) replace((current) => ({ ...current, foreground: next }));
-              }}
-            />
-          </Host>
+          {readonly ? (
+            foreground === undefined ? null : <View style={[styles.staticSwatch, { backgroundColor: foreground }]} />
+          ) : (
+            <Host style={styles.picker} matchContents>
+              <ColorPicker
+                label=""
+                selection={foreground ?? DEFAULT_FOREGROUND}
+                supportsOpacity
+                onSelectionChange={(next) => {
+                  if (isHexColor(next)) replace((current) => ({ ...current, foreground: next }));
+                }}
+              />
+            </Host>
+          )}
         </View>
-        {foreground === undefined ? null : (
+        {readonly || foreground === undefined ? null : (
           <TouchableOpacity
             style={[styles.row, styles.rowBorder]}
             activeOpacity={0.6}
@@ -161,6 +171,7 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
             <Text style={styles.rowTitle}>{label}</Text>
             <Switch
               value={flags[field]}
+              disabled={readonly}
               onValueChange={(on) =>
                 replace((current) => ({
                   ...current,
@@ -176,9 +187,11 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
         typeface is an app setting rather than part of a theme.
       </Text>
 
-      <TouchableOpacity style={styles.deleteButton} activeOpacity={0.6} onPress={removeRule}>
-        <Text style={styles.deleteText}>Delete rule</Text>
-      </TouchableOpacity>
+      {readonly ? null : (
+        <TouchableOpacity style={styles.deleteButton} activeOpacity={0.6} onPress={removeRule}>
+          <Text style={styles.deleteText}>Delete rule</Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 };
@@ -247,6 +260,13 @@ const styles = StyleSheet.create({
   picker: {
     width: 36,
     height: 36,
+  },
+  staticSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
   },
   add: {
     color: colors.tint,

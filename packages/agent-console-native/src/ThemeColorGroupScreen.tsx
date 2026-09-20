@@ -57,6 +57,8 @@ const ColorRow = (props: {
   readonly value: string;
   readonly label: string;
   readonly first: boolean;
+  /** View-only: show the colour as a static swatch, with no picker or Unset. */
+  readonly readonly: boolean;
 }): React.ReactElement => (
   <View style={[styles.row, !props.first && styles.rowBorder]}>
     <View style={styles.rowText}>
@@ -68,27 +70,33 @@ const ColorRow = (props: {
       </Text>
     </View>
     <Text style={styles.rowValue}>{props.value.toUpperCase()}</Text>
-    {/* The swatch is Apple's control, not ours: tapping it opens the system
-     * picker. `supportsOpacity` matters because plenty of real theme keys
-     * (selections, overlays, highlights) are deliberately translucent. */}
-    <Host style={styles.picker} matchContents>
-      <ColorPicker
-        label=""
-        selection={props.value}
-        supportsOpacity
-        onSelectionChange={(next) => {
-          if (isHexColor(next)) setColor(props.themeKey, next);
-        }}
-      />
-    </Host>
-    <TouchableOpacity
-      style={styles.clear}
-      activeOpacity={0.6}
-      accessibilityLabel={`Unset ${props.label}`}
-      onPress={() => clearColor(props.themeKey)}
-    >
-      <Text style={styles.clearText}>Unset</Text>
-    </TouchableOpacity>
+    {props.readonly ? (
+      <View style={[styles.staticSwatch, { backgroundColor: props.value }]} />
+    ) : (
+      <>
+        {/* The swatch is Apple's control, not ours: tapping it opens the system
+         * picker. `supportsOpacity` matters because plenty of real theme keys
+         * (selections, overlays, highlights) are deliberately translucent. */}
+        <Host style={styles.picker} matchContents>
+          <ColorPicker
+            label=""
+            selection={props.value}
+            supportsOpacity
+            onSelectionChange={(next) => {
+              if (isHexColor(next)) setColor(props.themeKey, next);
+            }}
+          />
+        </Host>
+        <TouchableOpacity
+          style={styles.clear}
+          activeOpacity={0.6}
+          accessibilityLabel={`Unset ${props.label}`}
+          onPress={() => clearColor(props.themeKey)}
+        >
+          <Text style={styles.clearText}>Unset</Text>
+        </TouchableOpacity>
+      </>
+    )}
   </View>
 );
 
@@ -97,6 +105,7 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const draft = useThemeDraft();
   const theme: VsCodeTheme = draft.kind === "open" ? draft.theme : EMPTY_THEME;
+  const readonly = draft.kind === "open" && draft.readonly;
 
   const group = ALL_COLOR_GROUPS.find((candidate) => candidate.id === groupId);
 
@@ -113,10 +122,11 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
    * bundled catalog (THEME_COLOR_KEYS), so a blank theme still offers them all
    * without needing an import. */
   const unset = React.useMemo(() => {
-    if (focusKey !== undefined || group === undefined) return [];
+    // Nothing to add in a read-only theme, so the whole "Not set" section drops.
+    if (focusKey !== undefined || group === undefined || readonly) return [];
     const set = new Set(Object.keys(theme.colors));
     return THEME_COLOR_KEYS.filter((key) => !set.has(key) && groupIdOf(key) === groupId).sort((a, b) => a.localeCompare(b));
-  }, [group, groupId, theme.colors, focusKey]);
+  }, [group, groupId, theme.colors, focusKey, readonly]);
 
   React.useLayoutEffect(() => {
     props.navigation.setOptions({ title: focusKey !== undefined ? "Color" : (group?.title ?? "Colors") });
@@ -143,6 +153,7 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
                 value={value}
                 label={humanizeKey(key, focusKey === undefined ? groupPrefixOf(key) : undefined)}
                 first={index === 0}
+                readonly={readonly}
               />
             );
           })
@@ -245,6 +256,13 @@ const styles = StyleSheet.create({
   picker: {
     width: 36,
     height: 36,
+  },
+  staticSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
   },
   clear: {
     paddingVertical: 4,

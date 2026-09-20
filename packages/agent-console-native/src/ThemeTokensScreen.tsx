@@ -46,6 +46,7 @@ export const ThemeTokensScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const draft = useThemeDraft();
   const theme: VsCodeTheme = draft.kind === "open" ? draft.theme : EMPTY_THEME;
+  const readonly = draft.kind === "open" && draft.readonly;
 
   const addRule = (): void => {
     updateDraft((current) => ({
@@ -62,6 +63,7 @@ export const ThemeTokensScreen = (props: Props): React.ReactElement => {
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
     >
       <View style={styles.card}>
+        {readonly && theme.tokenColors.length === 0 ? <Text style={styles.empty}>This theme sets no token colours.</Text> : null}
         {theme.tokenColors.map((rule, index) => (
           <TouchableOpacity
             key={`${index}:${rule.scope[0] ?? "empty"}`}
@@ -83,17 +85,21 @@ export const ThemeTokensScreen = (props: Props): React.ReactElement => {
             <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
           </TouchableOpacity>
         ))}
-        <TouchableOpacity
-          style={[styles.row, theme.tokenColors.length > 0 && styles.rowBorder]}
-          activeOpacity={0.6}
-          onPress={addRule}
-        >
-          <Text style={styles.addText}>Add rule…</Text>
-        </TouchableOpacity>
+        {readonly ? null : (
+          <TouchableOpacity
+            style={[styles.row, theme.tokenColors.length > 0 && styles.rowBorder]}
+            activeOpacity={0.6}
+            onPress={addRule}
+          >
+            <Text style={styles.addText}>Add rule…</Text>
+          </TouchableOpacity>
+        )}
       </View>
-      <Text style={styles.hint}>
-        Rules apply in order and later ones win, so a rule added here overrides the ones above it.
-      </Text>
+      {readonly ? null : (
+        <Text style={styles.hint}>
+          Rules apply in order and later ones win, so a rule added here overrides the ones above it.
+        </Text>
+      )}
     </ScrollView>
   );
 };
@@ -163,6 +169,12 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.tint,
     fontSize: 16,
+  },
+  empty: {
+    color: colors.secondaryLabel,
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   hint: {
     color: colors.secondaryLabel,

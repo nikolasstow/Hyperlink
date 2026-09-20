@@ -32,6 +32,9 @@ export type ThemeDraft =
       readonly original: VsCodeTheme;
       /** Paths written by the most recent import, so the editor can badge them. */
       readonly imported: ReadonlySet<string>;
+      /** View-only: an installed extension theme opened to inspect, never edit.
+       * Every editing control keys off this, and writes are refused below. */
+      readonly readonly: boolean;
     };
 
 const CLOSED: ThemeDraft = { kind: "closed" };
@@ -59,23 +62,27 @@ export const useThemeDraft = (): ThemeDraft => React.useSyncExternalStore(subscr
 /**
  * Starts editing. `id` is undefined for a brand-new theme; `theme` is the
  * prefill, which for a new theme is the values of whatever theme is currently
- * applied.
+ * applied. `readonly` opens the theme for inspection only — an installed
+ * extension theme, which the store owns and this app cannot rewrite.
  */
-export const openDraft = (id: string | undefined, theme: VsCodeTheme): void => {
+export const openDraft = (id: string | undefined, theme: VsCodeTheme, readonly = false): void => {
   emit({
     kind: "open",
     id,
     theme,
     original: theme,
     imported: new Set(),
+    readonly,
   });
 };
 
 export const closeDraft = (): void => emit(CLOSED);
 
-/** Applies an edit. A closed draft ignores writes rather than resurrecting itself. */
+/** Applies an edit. A closed draft ignores writes rather than resurrecting
+ * itself, and a read-only draft refuses them so a view-only theme can never be
+ * mutated by a stray control. */
 export const updateDraft = (change: (theme: VsCodeTheme) => VsCodeTheme): void => {
-  if (current.kind !== "open") return;
+  if (current.kind !== "open" || current.readonly) return;
   emit({ ...current, theme: change(current.theme) });
 };
 

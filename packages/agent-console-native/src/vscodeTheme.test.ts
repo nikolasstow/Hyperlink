@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_COLOR_GROUPS,
   applyImport,
+  deriveThemeAccents,
   EMPTY_THEME,
   formatFontStyle,
   groupIdOf,
@@ -25,6 +26,7 @@ import {
   toggleGroup,
   togglePath,
   TOKENS_GROUP_ID,
+  toOpaqueHex,
   toThemeDocument,
   type VsCodeTheme,
 } from "./vscodeTheme";
@@ -113,6 +115,45 @@ describe("toThemeDocument", () => {
     const rules = doc.tokenColors;
     expect(Array.isArray(rules)).toBe(true);
     expect(JSON.stringify(rules)).toBe('[{"scope":["x"],"settings":{}}]');
+  });
+});
+
+describe("toOpaqueHex", () => {
+  it("passes through a six-digit hex, upper-cased", () => {
+    expect(toOpaqueHex("#1a2b3c")).toBe("#1A2B3C");
+  });
+
+  it("drops the alpha of an eight-digit hex", () => {
+    expect(toOpaqueHex("#12345678")).toBe("#123456");
+  });
+
+  it("expands short form and drops its alpha", () => {
+    expect(toOpaqueHex("#abc")).toBe("#AABBCC");
+    expect(toOpaqueHex("#abcd")).toBe("#AABBCC");
+  });
+
+  it("rejects non-hex and undefined", () => {
+    expect(toOpaqueHex("rebeccapurple")).toBeUndefined();
+    expect(toOpaqueHex(undefined)).toBeUndefined();
+  });
+});
+
+describe("deriveThemeAccents", () => {
+  const fallback = { primary: "#111111", secondary: "#222222" };
+
+  it("keeps the fallback when the theme sets no accent keys", () => {
+    expect(deriveThemeAccents(theme({ colors: { "editor.background": "#000000" } }), fallback)).toEqual(fallback);
+  });
+
+  it("prefers the button background for primary and focusBorder for secondary, opaque", () => {
+    const accents = deriveThemeAccents(theme({ colors: { "button.background": "#ff8800cc", "focusBorder": "#00ccff" } }), fallback);
+    expect(accents).toEqual({ primary: "#FF8800", secondary: "#00CCFF" });
+  });
+
+  it("falls back only for the role a theme leaves unset", () => {
+    const accents = deriveThemeAccents(theme({ colors: { "progressBar.background": "#00ccff" } }), fallback);
+    // progressBar.background is only in the secondary list, so primary keeps the fallback.
+    expect(accents).toEqual({ primary: "#111111", secondary: "#00CCFF" });
   });
 });
 

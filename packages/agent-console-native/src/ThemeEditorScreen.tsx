@@ -57,7 +57,7 @@ const Swatch = (props: { readonly color: string | undefined }): React.ReactEleme
 );
 
 export const ThemeEditorScreen = (props: Props): React.ReactElement => {
-  const { themeId } = props.route.params;
+  const { themeId, viewFile, viewLabel } = props.route.params;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { address } = useAppContext();
@@ -77,6 +77,22 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
+      // View Properties: an installed extension theme, opened to inspect only.
+      // Its document lives in the server's store, so it is fetched and parsed,
+      // then the draft is opened read-only.
+      if (viewFile !== undefined) {
+        try {
+          const json = await getThemeJson(apiBase, viewFile);
+          if (cancelled) return;
+          const parsed = parseVsCodeTheme(json, viewLabel ?? "Theme");
+          openDraft(undefined, parsed ?? { ...EMPTY_THEME, name: viewLabel ?? "Theme" }, true);
+        } catch (error: unknown) {
+          if (cancelled) return;
+          setLoadError(error instanceof Error ? error.message : "Could not read this theme.");
+          openDraft(undefined, { ...EMPTY_THEME, name: viewLabel ?? "Theme" }, true);
+        }
+        return;
+      }
       if (themeId !== undefined) {
         const created = await getCreatedTheme(themeId);
         if (cancelled) return;
@@ -108,13 +124,16 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
     return () => {
       cancelled = true;
     };
-  }, [themeId, apiBase, enabledFile]);
+  }, [themeId, apiBase, enabledFile, viewFile, viewLabel]);
 
   // Leaving the editor for good ends the draft. Pushing a child screen does not
   // fire this, so the draft survives the whole flow.
   React.useEffect(() => props.navigation.addListener("beforeRemove", closeDraft), [props.navigation]);
 
   const theme: VsCodeTheme = draft.kind === "open" ? draft.theme : EMPTY_THEME;
+  // View Properties opens an installed theme read-only; every editing control
+  // below keys off this, and the draft store itself refuses writes.
+  const readonly = draft.kind === "open" && draft.readonly;
   // Every group, always — each opens its full key catalog, so all fields are
   // reachable whether the theme is prefilled, imported, or cleared to scratch.
   const groups = React.useMemo(
@@ -172,12 +191,15 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
       unstable_headerLeftItems: () => [
         { type: "button", label: "Close", icon: { type: "sfSymbol", name: "xmark" }, onPress: () => props.navigation.goBack() },
       ],
-      unstable_headerRightItems: () => [
-        { type: "button", label: "Clear", icon: { type: "sfSymbol", name: "eraser" }, onPress: clearAll },
-        { type: "button", label: "Import values", icon: { type: "sfSymbol", name: "square.and.arrow.down" }, onPress: () => props.navigation.navigate("ThemeImportSource") },
-        { type: "spacing", spacing: 16 },
-        { type: "button", label: "Save", icon: { type: "sfSymbol", name: "checkmark" }, variant: "prominent", disabled: saving, onPress: () => void save() },
-      ],
+      // Read-only: nothing to clear, import or save, so the right side is bare.
+      unstable_headerRightItems: readonly
+        ? () => []
+        : () => [
+            { type: "button", label: "Clear", icon: { type: "sfSymbol", name: "eraser" }, onPress: clearAll },
+            { type: "button", label: "Import values", icon: { type: "sfSymbol", name: "square.and.arrow.down" }, onPress: () => props.navigation.navigate("ThemeImportSource") },
+            { type: "spacing", spacing: 16 },
+            { type: "button", label: "Save", icon: { type: "sfSymbol", name: "checkmark" }, variant: "prominent", disabled: saving, onPress: () => void save() },
+          ],
     });
   });
 
@@ -248,6 +270,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                 <TextInput
                   style={styles.input}
                   value={theme.name}
+                  editable={!readonly}
                   onChangeText={(name) => updateDraft((current) => ({ ...current, name }))}
                   placeholder="My Theme"
                   placeholderTextColor={colors.placeholderText}
@@ -262,6 +285,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                     key={type}
                     style={[styles.segment, theme.type === type && styles.segmentOn]}
                     activeOpacity={0.6}
+                    disabled={readonly}
                     onPress={() => updateDraft((current) => ({ ...current, type }))}
                   >
                     <Text style={[styles.segmentText, theme.type === type && styles.segmentTextOn]}>
@@ -274,6 +298,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                 <Text style={styles.rowTitle}>Semantic highlighting</Text>
                 <Switch
                   value={theme.semanticHighlighting}
+                  disabled={readonly}
                   onValueChange={(semanticHighlighting) => updateDraft((current) => ({ ...current, semanticHighlighting }))}
                 />
               </View>

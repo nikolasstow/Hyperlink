@@ -45,8 +45,10 @@ export type RootStackParamList = {
   Appearance: undefined;
   FontImport: undefined;
   // Create a VS Code colour theme, or edit one created here. No id means a new
-  // theme, prefilled from whatever is currently applied.
-  ThemeEditor: { themeId?: string };
+  // theme, prefilled from whatever is currently applied. `viewFile` (a store-
+  // relative theme file) opens an installed extension theme read-only —
+  // "View Properties" — with `viewLabel` as its name.
+  ThemeEditor: { themeId?: string; viewFile?: string; viewLabel?: string };
   // One colour group of the theme being edited. `groupId: "search"` with a
   // `focusKey` shows a single key reached from search.
   ThemeColorGroup: { groupId: string; focusKey?: string };

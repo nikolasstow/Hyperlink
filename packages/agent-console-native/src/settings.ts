@@ -236,11 +236,16 @@ const THEME_KEY = "agent-console-native:theme";
  * selected, but changing `primary`/`secondary` afterwards does NOT clear it. */
 export type CodeTheme = {
   readonly label: string;
-  /** Store-relative theme file, for fetching the full JSON to highlight with. */
+  /** Store-relative theme file, for fetching the full JSON to highlight with.
+   * Empty for a device-created theme, which has no file in the extension store
+   * and is loaded from local storage by `createdId` instead. */
   readonly file: string;
   /** The accents this theme seeds (for the picker's "theme" anchor). */
   readonly primary: string;
   readonly secondary: string;
+  /** Set when the enabled theme is one created on this device — its document is
+   * read from `createdThemes` storage rather than fetched from the server. */
+  readonly createdId?: string;
 };
 
 /** The app's theme. `primary` drives the send button and (as a tint) the user's
@@ -293,7 +298,8 @@ const parseCodeTheme = (value: unknown): CodeTheme | undefined => {
   if (!("label" in value) || !("file" in value) || !("primary" in value) || !("secondary" in value)) return undefined;
   const { label, file, primary, secondary } = value;
   if (typeof label !== "string" || typeof file !== "string" || typeof primary !== "string" || typeof secondary !== "string") return undefined;
-  return { label, file, primary, secondary };
+  const createdId = "createdId" in value && typeof value.createdId === "string" ? value.createdId : undefined;
+  return { label, file, primary, secondary, ...(createdId === undefined ? {} : { createdId }) };
 };
 
 export const setStoredTheme = (value: Theme): Promise<void> =>

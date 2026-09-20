@@ -161,6 +161,48 @@ export const toThemeDocument = (theme: VsCodeTheme): Record<string, unknown> => 
   })),
 });
 
+/**
+ * A hex colour normalised to `#RRGGBB` — alpha dropped and short form expanded —
+ * or undefined if it is not a hex colour. The app accents are opaque, so a
+ * translucent theme value contributes its colour without its alpha.
+ */
+export const toOpaqueHex = (value: string | undefined): string | undefined => {
+  if (value === undefined || !isHexColor(value)) return undefined;
+  const body = value.slice(1);
+  const rgb =
+    body.length === 3 || body.length === 4
+      ? body
+          .slice(0, 3)
+          .split("")
+          .map((c) => `${c}${c}`)
+          .join("")
+      : body.slice(0, 6);
+  return `#${rgb.toUpperCase()}`;
+};
+
+/** App accents derived from a theme's workbench colours. The keys are the ones
+ * VS Code themes most reliably set to their signature accent, tried in order;
+ * a theme that sets none keeps the app defaults passed in. Mirrors the server's
+ * own derivation for installed themes so a created theme reads the same way. */
+export const deriveThemeAccents = (
+  theme: VsCodeTheme,
+  fallback: { readonly primary: string; readonly secondary: string },
+): { readonly primary: string; readonly secondary: string } => {
+  const first = (keys: ReadonlyArray<string>): string | undefined => {
+    for (const key of keys) {
+      const hex = toOpaqueHex(theme.colors[key]);
+      if (hex !== undefined) return hex;
+    }
+    return undefined;
+  };
+  const primary = first(["button.background", "activityBarBadge.background", "statusBarItem.remoteBackground", "editorCursor.foreground", "focusBorder", "textLink.foreground"]);
+  const secondary = first(["focusBorder", "textLink.foreground", "progressBar.background", "activityBarBadge.background", "button.background"]);
+  return {
+    primary: primary ?? fallback.primary,
+    secondary: secondary ?? fallback.secondary,
+  };
+};
+
 /* ------------------------------------------------------------------ *
  * Labels
  * ------------------------------------------------------------------ */
