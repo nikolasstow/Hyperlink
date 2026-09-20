@@ -20,6 +20,8 @@ export const CodeBlock = (props: {
   readonly lang: string;
   /** A bundled theme name or a raw VS Code theme object. */
   readonly theme: string | ThemeRegistrationRaw;
+  /** Monospace family for the code (defaults to Menlo). */
+  readonly fontFamily?: string;
 }): React.ReactElement => {
   const [result, setResult] = React.useState<HighlightResult | undefined>(undefined);
 
@@ -42,17 +44,18 @@ export const CodeBlock = (props: {
 
   const background = result?.background ?? colors.fillBackground;
   const foreground = result?.foreground ?? colors.label;
+  const fontFamily = props.fontFamily ?? "Menlo";
 
   return (
     <View style={[styles.wrap, { backgroundColor: background }]}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View>
           {result === undefined ? (
-            <Text style={[styles.line, { color: foreground }]}>{props.code}</Text>
+            <Text style={[styles.line, { color: foreground, fontFamily }]}>{props.code}</Text>
           ) : (
             result.lines.map((line, i) => (
               // eslint-disable-next-line @eslint-react/no-array-index-key -- lines are positional
-              <Text key={i} style={styles.line}>
+              <Text key={i} style={[styles.line, { fontFamily }]}>
                 {line.length === 0
                   ? " "
                   : line.map((token, j) => (

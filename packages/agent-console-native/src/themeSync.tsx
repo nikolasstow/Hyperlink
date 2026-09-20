@@ -12,16 +12,8 @@
 import * as React from "react";
 import { useAppContext } from "./AppContext";
 import { getRemoteConfig, putRemoteConfig } from "./extensionsClient";
-import { getApiAddress, type Theme } from "./settings";
+import { getApiAddress, parseTheme } from "./settings";
 import { useTheme } from "./theme";
-
-const isTheme = (value: unknown): value is Theme =>
-  typeof value === "object" &&
-  value !== null &&
-  "primary" in value &&
-  "secondary" in value &&
-  typeof value.primary === "string" &&
-  typeof value.secondary === "string";
 
 export const ThemeSync = (): null => {
   const { theme, setTheme } = useTheme();
@@ -35,7 +27,8 @@ export const ThemeSync = (): null => {
     getRemoteConfig(apiBase)
       .then((config) => {
         if (cancelled) return;
-        if (isTheme(config.theme)) setTheme({ primary: config.theme.primary, secondary: config.theme.secondary });
+        const remote = parseTheme(config.theme);
+        if (remote !== undefined) setTheme(remote);
       })
       .catch(() => undefined)
       .finally(() => {

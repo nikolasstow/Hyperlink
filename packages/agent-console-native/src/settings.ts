@@ -231,35 +231,69 @@ export const setBackendAddress = (value: string): Promise<void> =>
 
 const THEME_KEY = "agent-console-native:theme";
 
-/** The app's theme colours. `primary` drives the send button and (as a tint)
- * the user's chat bubble; `secondary` drives accents like the unread dot. Hex
- * strings so they can come from a picker or, later, an extracted VS Code theme.
- * Persisted on-device here and mirrored to the server for multi-device sync. */
-export type Theme = {
+/** The enabled code/IDE theme — an installed VS Code colour theme used for code
+ * highlighting. Independent of the app accents: it seeds them when first
+ * selected, but changing `primary`/`secondary` afterwards does NOT clear it. */
+export type CodeTheme = {
+  readonly label: string;
+  /** Store-relative theme file, for fetching the full JSON to highlight with. */
+  readonly file: string;
+  /** The accents this theme seeds (for the picker's "theme" anchor). */
   readonly primary: string;
   readonly secondary: string;
 };
 
-/** Placeholder defaults — systemGreen / systemBlue — until real theme work
- * (or an installed VS Code theme) supplies colours. */
+/** The app's theme. `primary` drives the send button and (as a tint) the user's
+ * chat bubble; `secondary` drives accents like the unread dot — both freely
+ * editable and INDEPENDENT of `code` (the enabled IDE theme). `codeFont` is the
+ * monospace family for code. Persisted on-device and mirrored to the server for
+ * multi-device sync. */
+export type Theme = {
+  readonly primary: string;
+  readonly secondary: string;
+  readonly code?: CodeTheme;
+  readonly codeFont: string;
+};
+
+/** Default code font — a guaranteed-present iOS monospace. */
+export const DEFAULT_CODE_FONT = "Menlo";
+
+/** Placeholder accent defaults — systemGreen / systemBlue; no code theme (the
+ * highlighter falls back to a bundled theme) and the default code font. */
 export const DEFAULT_THEME: Theme = {
   primary: "#34C759",
   secondary: "#007AFF",
+  codeFont: DEFAULT_CODE_FONT,
+};
+
+/** Validate an arbitrary value into a `Theme` (shared by device storage and the
+ * server-synced config), or undefined if it isn't one. */
+export const parseTheme = (parsed: unknown): Theme | undefined => {
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  if (!("primary" in parsed) || !("secondary" in parsed)) return undefined;
+  const { primary, secondary } = parsed;
+  if (typeof primary !== "string" || typeof secondary !== "string") return undefined;
+  const codeFont = "codeFont" in parsed && typeof parsed.codeFont === "string" ? parsed.codeFont : DEFAULT_CODE_FONT;
+  const code = "code" in parsed ? parseCodeTheme(parsed.code) : undefined;
+  return { primary, secondary, codeFont, ...(code === undefined ? {} : { code }) };
 };
 
 export const getStoredTheme = async (): Promise<Theme | undefined> => {
   const raw = await AsyncStorage.getItem(THEME_KEY);
   if (raw === null || raw === "") return undefined;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return undefined;
-    if (!("primary" in parsed) || !("secondary" in parsed)) return undefined;
-    const { primary, secondary } = parsed;
-    if (typeof primary !== "string" || typeof secondary !== "string") return undefined;
-    return { primary, secondary };
+    return parseTheme(JSON.parse(raw));
   } catch {
     return undefined;
   }
+};
+
+const parseCodeTheme = (value: unknown): CodeTheme | undefined => {
+  if (typeof value !== "object" || value === null) return undefined;
+  if (!("label" in value) || !("file" in value) || !("primary" in value) || !("secondary" in value)) return undefined;
+  const { label, file, primary, secondary } = value;
+  if (typeof label !== "string" || typeof file !== "string" || typeof primary !== "string" || typeof secondary !== "string") return undefined;
+  return { label, file, primary, secondary };
 };
 
 export const setStoredTheme = (value: Theme): Promise<void> =>

@@ -37,6 +37,10 @@ const greet = (id: number) =>
 /** Good default accents (between the theme swatch and the custom picker). */
 const PRESETS = ["#34C759", "#30B0C7", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#FF9500", "#FFCC00"] as const;
 
+/** Monospace fonts guaranteed present on iOS. Bundled coding fonts (JetBrains
+ * Mono, etc.) and custom uploads come later (need expo-font + a build). */
+const CODE_FONTS = ["Menlo", "Courier New", "Courier"];
+
 const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 const isHex = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value);
 
@@ -144,32 +148,38 @@ export const AppearanceScreen = (): React.ReactElement => {
     };
   }, [apiBase]);
 
-  const activeTheme = themes.find((t) => eq(t.primary, theme.primary) && eq(t.secondary, theme.secondary));
-  const isDefault = eq(theme.primary, DEFAULT_THEME.primary) && eq(theme.secondary, DEFAULT_THEME.secondary);
-  // The picker's "Theme" anchor: the enabled theme's colours, else the default.
-  const anchor: Theme = activeTheme !== undefined ? { primary: activeTheme.primary, secondary: activeTheme.secondary } : DEFAULT_THEME;
+  // The enabled code theme is tracked independently of the accents, so changing
+  // a colour never unsets it. Its accents are the picker's "Theme" anchor.
+  const enabled = theme.code;
+  const anchor: Theme = enabled !== undefined ? { primary: enabled.primary, secondary: enabled.secondary, codeFont: theme.codeFont } : DEFAULT_THEME;
+
+  // Selecting a theme seeds the accents AND records it as the code theme;
+  // changing colours afterwards leaves `code` intact.
+  const selectTheme = (t: SelectableTheme): void =>
+    setTheme({ ...theme, primary: t.primary, secondary: t.secondary, code: { label: t.label, file: t.file, primary: t.primary, secondary: t.secondary } });
+  const selectDefault = (): void => setTheme({ ...theme, primary: DEFAULT_THEME.primary, secondary: DEFAULT_THEME.secondary, code: undefined });
 
   // The code preview uses the enabled theme's real tokenColors (fetched from the
-  // server) when one is selected, else a bundled theme matching the scheme.
+  // server), else a bundled theme matching the scheme.
   const scheme = useColorScheme();
   const [previewTheme, setPreviewTheme] = React.useState<string | ThemeRegistrationRaw>(
     scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light,
   );
   React.useEffect(() => {
     let cancelled = false;
-    if (activeTheme === undefined) {
+    if (enabled === undefined) {
       setPreviewTheme(scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light);
       return;
     }
-    getThemeJson(apiBase, activeTheme.file)
+    getThemeJson(apiBase, enabled.file)
       .then((json) => {
-        if (!cancelled) setPreviewTheme({ ...json, name: activeTheme.key });
+        if (!cancelled) setPreviewTheme({ ...json, name: enabled.file });
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [apiBase, activeTheme?.key, activeTheme?.file, scheme]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed by theme identity
+  }, [apiBase, enabled?.file, scheme]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed by theme file
 
   return (
     <ScrollView
@@ -181,14 +191,14 @@ export const AppearanceScreen = (): React.ReactElement => {
     >
         <Text style={styles.sectionLabel}>Theme</Text>
         <View style={styles.card}>
-          <ThemeRow label="Default" primary={DEFAULT_THEME.primary} active={isDefault && activeTheme === undefined} onPress={() => setTheme(DEFAULT_THEME)} last={themes.length === 0} />
+          <ThemeRow label="Default" primary={DEFAULT_THEME.primary} active={enabled === undefined} onPress={selectDefault} last={themes.length === 0} />
           {themes.map((t, index) => (
             <ThemeRow
               key={t.key}
               label={t.label}
               primary={t.primary}
-              active={activeTheme?.key === t.key}
-              onPress={() => setTheme({ primary: t.primary, secondary: t.secondary })}
+              active={enabled?.file === t.file}
+              onPress={() => selectTheme(t)}
               last={index === themes.length - 1}
             />
           ))}
@@ -207,10 +217,27 @@ export const AppearanceScreen = (): React.ReactElement => {
           <ColorSwatches value={theme.secondary} themeColor={anchor.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
         </View>
 
+        <Text style={styles.sectionLabel}>Code font</Text>
+        <View style={styles.card}>
+          {CODE_FONTS.map((font, index) => (
+            <TouchableOpacity key={font} onPress={() => setTheme({ ...theme, codeFont: font })} activeOpacity={0.6}>
+              <View style={styles.themeRow}>
+                <Text style={[styles.fontSample, { fontFamily: font }]}>Ag</Text>
+                <Text style={styles.themeLabel} numberOfLines={1}>
+                  {font}
+                </Text>
+                {theme.codeFont === font ? <SystemIcon name="checkmark" size={15} color={colors.tint} /> : null}
+              </View>
+              {index === CODE_FONTS.length - 1 ? null : <View style={styles.rowSeparator} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.hint}>Custom code fonts (file or URL upload) are coming — see Extensions.</Text>
+
         <Text style={styles.sectionLabel}>Preview</Text>
         <View style={styles.card}>
-          <Text style={styles.hint}>How code looks with the enabled theme.</Text>
-          <CodeBlock code={PREVIEW_CODE} lang="typescript" theme={previewTheme} />
+          <Text style={styles.hint}>How code looks with the enabled theme and font.</Text>
+          <CodeBlock code={PREVIEW_CODE} lang="typescript" theme={previewTheme} fontFamily={theme.codeFont} />
         </View>
     </ScrollView>
   );
@@ -284,6 +311,11 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.label,
     fontSize: 16,
+  },
+  fontSample: {
+    width: 30,
+    fontSize: 17,
+    color: colors.label,
   },
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
