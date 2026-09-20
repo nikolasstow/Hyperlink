@@ -25,6 +25,7 @@ import { DEFAULT_THEME, getApiAddress, type Theme } from "./settings";
 import { FALLBACK_THEME } from "./shikiHighlighter";
 import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
+import { listCreatedThemes, type CreatedTheme } from "./createdThemes";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Appearance">;
 
@@ -128,6 +129,10 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   const apiBase = getApiAddress(address);
 
   const [themes, setThemes] = React.useState<ReadonlyArray<SelectableTheme>>([]);
+  // Themes made on this device. They sit beside the installed ones but, unlike
+  // those, can be opened and edited — an installed theme is a file in the
+  // server's extension store and is not ours to rewrite.
+  const [created, setCreated] = React.useState<ReadonlyArray<CreatedTheme>>([]);
   const [customFonts, setCustomFonts] = React.useState<ReadonlyArray<CustomFont>>([]);
 
   React.useEffect(() => {
@@ -165,6 +170,11 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
       cancelled = true;
     };
   }, [apiBase]);
+
+  React.useEffect(
+    () => props.navigation.addListener("focus", () => void listCreatedThemes().then(setCreated)),
+    [props.navigation],
+  );
 
   // The enabled code theme is tracked independently of the accents, so changing
   // a colour never unsets it. Its accents are the picker's "Theme" anchor.
@@ -222,6 +232,36 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
           ))}
         </View>
         {themes.length === 0 ? <Text style={styles.hint}>Install a theme from Extensions to see it here.</Text> : null}
+
+        <Text style={styles.sectionLabel}>Your themes</Text>
+        <View style={styles.card}>
+          {created.map((mine) => (
+            <TouchableOpacity
+              key={mine.id}
+              onPress={() => props.navigation.navigate("ThemeEditor", { themeId: mine.id })}
+              activeOpacity={0.6}
+            >
+              <View style={styles.themeRow}>
+                <View
+                  style={[
+                    styles.themeDot,
+                    { backgroundColor: mine.theme.colors["editor.background"] ?? DEFAULT_THEME.primary },
+                  ]}
+                />
+                <Text style={styles.themeLabel} numberOfLines={1}>
+                  {mine.theme.name}
+                </Text>
+                <SystemIcon name="chevron.right" size={14} color={colors.secondaryLabel} />
+              </View>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity onPress={() => props.navigation.navigate("ThemeEditor", {})} activeOpacity={0.6}>
+            <View style={[styles.themeRow, created.length > 0 && styles.rowSeparator]}>
+              <Text style={styles.addFontLabel}>Create theme…</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.hint}>Installed themes can’t be edited. Create one to make changes.</Text>
 
         <Text style={styles.sectionLabel}>Primary color</Text>
         <View style={styles.card}>

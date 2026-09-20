@@ -27,6 +27,7 @@ export const colors = {
   opaqueSeparator: PlatformColor("opaqueSeparator"),
   label: PlatformColor("label"),
   secondaryLabel: PlatformColor("secondaryLabel"),
+  tertiaryLabel: PlatformColor("tertiaryLabel"),
   placeholderText: PlatformColor("placeholderText"),
   tint: PlatformColor("systemBlue"),
   destructive: PlatformColor("systemRed"),

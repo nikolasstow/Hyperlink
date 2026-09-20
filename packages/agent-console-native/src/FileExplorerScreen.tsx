@@ -16,25 +16,18 @@
 import * as React from "react";
 import {
   ActivityIndicator,
-  Animated,
   DynamicColorIOS,
-  Easing,
   LayoutAnimation,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { GlassView } from "expo-glass-effect";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
+import { BottomSearchPill, useSearchPill } from "./BottomSearchPill";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { iconForFile } from "./fileIcon";
@@ -59,9 +52,6 @@ const ICON_GAP = 12;
 /** A hand-set row divider, a touch darker than the system `separator`/
  * `opaqueSeparator` (both too faint here) without being heavy. */
 const DIVIDER = DynamicColorIOS({ light: "rgba(60,60,67,0.4)", dark: "rgba(120,120,128,0.5)" });
-/** Height of the floating glass search pill at the bottom. */
-const SEARCH_PILL_HEIGHT = 44;
-
 const Row = (props: {
   readonly row: FileRow;
   readonly last: boolean;
@@ -119,8 +109,6 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const tree = useFileTree(backend, dir);
   const { navigation } = props;
   const forwardTarget = useForwardTarget();
-  const insets = useSafeAreaInsets();
-  const scheme = useColorScheme();
   const [query, setQuery] = React.useState("");
 
   // Filter the visible rows by name. A trimmed, case-insensitive substring
@@ -128,42 +116,8 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const q = query.trim().toLowerCase();
   const rows = q.length === 0 ? tree.rows : tree.rows.filter((row) => row.name.toLowerCase().includes(q));
 
-  // Hide the bottom search pill on scroll-down, reveal it on scroll-up — the
-  // Files/Mail toolbar behavior. UIKit has no native hook for a custom bottom
-  // bar, so it's driven from the scroll direction here: `pillOffset` slides the
-  // pill down past the bottom edge (and back) via the native driver.
-  const pillOffset = React.useRef(new Animated.Value(0)).current;
-  const lastY = React.useRef(0);
-  const hidden = React.useRef(false);
-  const hiddenDistance = SEARCH_PILL_HEIGHT + insets.bottom + 18;
-  const setPillHidden = React.useCallback(
-    (next: boolean): void => {
-      if (hidden.current === next) return;
-      hidden.current = next;
-      Animated.timing(pillOffset, {
-        toValue: next ? hiddenDistance : 0,
-        // Curved, not linear: accelerate away on hide, and ease it back in
-        // (decelerate into place) a touch slower on reveal.
-        duration: next ? 200 : 320,
-        easing: next ? Easing.in(Easing.cubic) : Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    },
-    [pillOffset, hiddenDistance],
-  );
-  const onScroll = React.useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
-      const y = event.nativeEvent.contentOffset.y;
-      const dy = y - lastY.current;
-      // Near the top the pill is always shown; otherwise follow the direction
-      // past a small threshold so tiny jitters don't toggle it.
-      if (y <= 4) setPillHidden(false);
-      else if (dy > 6) setPillHidden(true);
-      else if (dy < -6) setPillHidden(false);
-      lastY.current = y;
-    },
-    [setPillHidden],
-  );
+  // Bottom search pill behaviour, shared with the theme editor.
+  const pill = useSearchPill();
 
   // When this folder is popped (back button or swipe-back), remember it so the
   // forward button can return here. Native stacks otherwise discard it.
@@ -225,7 +179,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
         </View>
       ) : tree.rootFailed ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-          <Text style={styles.error}>Couldn't load this folder.</Text>
+          <Text style={styles.error}>Couldn’t load this folder.</Text>
           {tree.rootError !== undefined ? <Text style={styles.errorDetail}>{tree.rootError}</Text> : null}
           <TouchableOpacity onPress={tree.reloadRoot} activeOpacity={0.6}>
             <Text style={styles.retry}>Try again</Text>
@@ -237,9 +191,9 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
         <ScrollView
           style={styles.fill}
           keyboardDismissMode="interactive"
-          onScroll={onScroll}
+          onScroll={pill.onScroll}
           scrollEventThrottle={16}
-          contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: insets.bottom + SEARCH_PILL_HEIGHT + 28, paddingHorizontal: 14 }}
+          contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: pill.listPaddingBottom, paddingHorizontal: 14 }}
         >
           {rows.length === 0 ? (
             <Text style={styles.noMatch}>No matches.</Text>
@@ -252,27 +206,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       )}
       <EdgeBlurBars variant="top" />
       {!tree.rootLoading && !tree.rootFailed && tree.rows.length > 0 ? (
-        <Animated.View
-          style={[styles.searchWrap, { paddingBottom: insets.bottom + 10, transform: [{ translateY: pillOffset }] }]}
-          pointerEvents="box-none"
-        >
-          <View style={styles.searchClip}>
-            <GlassView style={styles.searchPill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-              <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
-              <TextInput
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search"
-                placeholderTextColor={colors.placeholderText}
-                returnKeyType="search"
-                autoCorrect={false}
-                autoCapitalize="none"
-                clearButtonMode="while-editing"
-              />
-            </GlassView>
-          </View>
-        </Animated.View>
+        <BottomSearchPill value={query} onChangeText={setQuery} placeholder="Search" offset={pill.offset} />
       ) : null}
     </View>
   );
@@ -337,31 +271,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: "center",
     marginTop: 24,
-  },
-  searchWrap: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
-  },
-  searchClip: {
-    borderRadius: SEARCH_PILL_HEIGHT / 2,
-    borderCurve: "continuous",
-    overflow: "hidden",
-  },
-  searchPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    height: SEARCH_PILL_HEIGHT,
-    paddingHorizontal: 14,
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.label,
-    fontSize: 16,
-    padding: 0,
   },
   error: {
     color: colors.secondaryLabel,

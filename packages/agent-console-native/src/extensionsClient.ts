@@ -144,8 +144,11 @@ const ThemeSetting = Schema.Struct({
 const ThemeJsonSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   displayName: Schema.optional(Schema.String),
+  /** `light` / `dark` / an `hc` variant — which appearance the theme is for. */
+  type: Schema.optional(Schema.String),
   colors: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   tokenColors: Schema.optional(Schema.Array(ThemeSetting)),
+  semanticTokenColors: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
 const decodeThemeJson = Schema.decodeUnknownSync(ThemeJsonSchema);
 
@@ -170,7 +173,12 @@ export const getThemeJson = async (apiBase: string, file: string): Promise<Theme
   }));
   return {
     name: decoded.name,
+    // `type` and `semanticTokenColors` are carried through for the theme
+    // editor, which reads a theme as a document to copy values out of rather
+    // than only as something to highlight with.
+    type: decoded.type === undefined ? undefined : decoded.type.toLowerCase().includes("light") ? "light" : "dark",
     colors: decoded.colors === undefined ? undefined : { ...decoded.colors },
+    semanticTokenColors: decoded.semanticTokenColors === undefined ? undefined : { ...decoded.semanticTokenColors },
     tokenColors: settings,
     settings,
   };
