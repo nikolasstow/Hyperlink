@@ -11,6 +11,7 @@
  *
  * @internal
  */
+import type { ThemeRegistrationRaw } from "shiki/core";
 import { Schema } from "effect";
 
 /** A contribution an installed extension provides. */
@@ -134,6 +135,46 @@ export const importLocalExtension = async (apiBase: string, path: string): Promi
       body: JSON.stringify({ path }),
     }),
   );
+
+const ThemeSetting = Schema.Struct({
+  name: Schema.optional(Schema.String),
+  scope: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+  settings: Schema.Record(Schema.String, Schema.String),
+});
+const ThemeJsonSchema = Schema.Struct({
+  name: Schema.optional(Schema.String),
+  displayName: Schema.optional(Schema.String),
+  colors: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  tokenColors: Schema.optional(Schema.Array(ThemeSetting)),
+});
+const decodeThemeJson = Schema.decodeUnknownSync(ThemeJsonSchema);
+
+/**
+ * Fetch a stored theme's JSON and shape it for Shiki (a `ThemeRegistrationRaw`).
+ * VS Code themes carry `tokenColors`; Shiki's `RawTheme` requires `settings`
+ * (the same array), so we mirror it there.
+ */
+export const getThemeJson = async (apiBase: string, file: string): Promise<ThemeRegistrationRaw> => {
+  const decoded = decodeThemeJson(
+    await request(`${base(apiBase)}/extensions/theme`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ file }),
+    }),
+  );
+  // Rebuild with mutable copies — Schema yields readonly, Shiki wants mutable.
+  const settings = (decoded.tokenColors ?? []).map((token) => ({
+    name: token.name,
+    scope: token.scope === undefined ? undefined : typeof token.scope === "string" ? token.scope : [...token.scope],
+    settings: { ...token.settings },
+  }));
+  return {
+    name: decoded.name,
+    colors: decoded.colors === undefined ? undefined : { ...decoded.colors },
+    tokenColors: settings,
+    settings,
+  };
+};
 
 export const getRemoteConfig = async (apiBase: string): Promise<Record<string, unknown>> =>
   decodeConfig(await request(`${base(apiBase)}/config`));

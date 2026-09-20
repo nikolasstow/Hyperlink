@@ -26,6 +26,7 @@ import {
   installFromMarketplace,
   listExtensions,
   putConfig,
+  readThemeFile,
   removeExtension,
 } from "./extensions";
 
@@ -35,7 +36,8 @@ const extensionsHandlers = HttpApiBuilder.group(api, "extensions", (handlers) =>
     .handle("install", ({ payload }) => installFromMarketplace(payload.ref))
     .handle("remove", ({ payload }) => removeExtension(payload.id).pipe(Effect.as({ ok: true })))
     .handle("discover", () => discoverLocalExtensions())
-    .handle("import", ({ payload }) => importFromPath(payload.path)),
+    .handle("import", ({ payload }) => importFromPath(payload.path))
+    .handle("theme", ({ payload }) => readThemeFile(payload.file)),
 );
 
 const configHandlers = HttpApiBuilder.group(api, "config", (handlers) =>

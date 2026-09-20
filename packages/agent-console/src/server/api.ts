@@ -73,6 +73,11 @@ const extensionsGroup = HttpApiGroup.make("extensions").add(
     success: ExtensionManifestSchema,
     error: ExtensionError,
   }),
+  HttpApiEndpoint.post("theme", "/extensions/theme", {
+    payload: Schema.Struct({ file: Schema.String }),
+    success: AppConfigSchema,
+    error: ExtensionError,
+  }),
 );
 
 const configGroup = HttpApiGroup.make("config").add(

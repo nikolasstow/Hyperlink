@@ -502,6 +502,23 @@ export const importFromPath = (sourceDir: string): Effect.Effect<ExtensionManife
     return manifest;
   });
 
+/** Read a stored theme's raw JSON (colors + tokenColors) by its store-relative
+ * `file` (a `ThemeContribution.file`), for the client to highlight code with.
+ * Guarded so `file` can't escape the store. */
+export const readThemeFile = (file: string): Effect.Effect<Record<string, unknown>, ExtensionError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const base = path.resolve(storeRoot(path));
+    const abs = path.resolve(path.join(base, file));
+    if (!abs.startsWith(base + path.sep) && abs !== base) return yield* new ExtensionError({ reason: "not-found", detail: file });
+    const has = yield* fs.exists(abs).pipe(Effect.orElseSucceed(() => false));
+    if (!has) return yield* new ExtensionError({ reason: "not-found", detail: file });
+    const raw = yield* fs.readFileString(abs).pipe(Effect.mapError((error) => new ExtensionError({ reason: "io", detail: String(error) })));
+    const parsed = yield* Effect.try(() => JSON.parse(raw)).pipe(Effect.mapError(() => new ExtensionError({ reason: "io", detail: "bad theme json" })));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? { ...parsed } : {};
+  });
+
 export const listExtensions = (): Effect.Effect<ReadonlyArray<ExtensionManifest>, ExtensionError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

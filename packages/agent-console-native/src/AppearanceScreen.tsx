@@ -10,15 +10,29 @@
  *
  * @internal
  */
+import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
+import { CodeBlock } from "./CodeBlock";
 import { colors } from "./colors";
-import { listExtensions } from "./extensionsClient";
+import { getThemeJson, listExtensions } from "./extensionsClient";
 import { DEFAULT_THEME, getApiAddress, type Theme } from "./settings";
+import { FALLBACK_THEME } from "./shikiHighlighter";
 import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
+
+/** Sample snippet for the code-highlighting preview. */
+const PREVIEW_CODE = `import { Effect } from "effect"
+
+// A tiny program: fetch a user, greet them.
+const greet = (id: number) =>
+  Effect.gen(function* () {
+    const user = yield* findUser(id)
+    return \`Hello, \${user.name}!\`
+  })
+`;
 
 /** Good default accents (between the theme swatch and the custom picker). */
 const PRESETS = ["#34C759", "#30B0C7", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#FF9500", "#FFCC00"] as const;
@@ -32,6 +46,8 @@ interface SelectableTheme {
   readonly label: string;
   readonly primary: string;
   readonly secondary: string;
+  /** Store-relative theme file, to fetch its full JSON for code highlighting. */
+  readonly file: string;
 }
 
 const ColorSwatches = (props: {
@@ -117,6 +133,7 @@ export const AppearanceScreen = (): React.ReactElement => {
               label: ct.label,
               primary: ct.colors?.primary ?? DEFAULT_THEME.primary,
               secondary: ct.colors?.secondary ?? DEFAULT_THEME.secondary,
+              file: ct.file,
             })),
         );
         setThemes(selectable);
@@ -131,6 +148,28 @@ export const AppearanceScreen = (): React.ReactElement => {
   const isDefault = eq(theme.primary, DEFAULT_THEME.primary) && eq(theme.secondary, DEFAULT_THEME.secondary);
   // The picker's "Theme" anchor: the enabled theme's colours, else the default.
   const anchor: Theme = activeTheme !== undefined ? { primary: activeTheme.primary, secondary: activeTheme.secondary } : DEFAULT_THEME;
+
+  // The code preview uses the enabled theme's real tokenColors (fetched from the
+  // server) when one is selected, else a bundled theme matching the scheme.
+  const scheme = useColorScheme();
+  const [previewTheme, setPreviewTheme] = React.useState<string | ThemeRegistrationRaw>(
+    scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light,
+  );
+  React.useEffect(() => {
+    let cancelled = false;
+    if (activeTheme === undefined) {
+      setPreviewTheme(scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light);
+      return;
+    }
+    getThemeJson(apiBase, activeTheme.file)
+      .then((json) => {
+        if (!cancelled) setPreviewTheme({ ...json, name: activeTheme.key });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase, activeTheme?.key, activeTheme?.file, scheme]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed by theme identity
 
   return (
     <ScrollView
@@ -166,6 +205,12 @@ export const AppearanceScreen = (): React.ReactElement => {
         <View style={styles.card}>
           <Text style={styles.hint}>Accents like the unread indicator.</Text>
           <ColorSwatches value={theme.secondary} themeColor={anchor.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
+        </View>
+
+        <Text style={styles.sectionLabel}>Preview</Text>
+        <View style={styles.card}>
+          <Text style={styles.hint}>How code looks with the enabled theme.</Text>
+          <CodeBlock code={PREVIEW_CODE} lang="typescript" theme={previewTheme} />
         </View>
     </ScrollView>
   );
