@@ -46,7 +46,14 @@ export type RootStackParamList = {
   FontImport: undefined;
   // Create a VS Code colour theme, or edit one created here. No id means a new
   // theme, prefilled from whatever is currently applied.
-  ThemeEditor: { themeId?: string };
+  ThemeEditor: {
+    /** A theme already saved on this device, opened for editing. */
+    themeId?: string;
+    /** An installed theme to copy from, instead of the one currently applied. */
+    sourceFile?: string;
+    /** The name to give the copy, so a duplicate says what it came from. */
+    sourceName?: string;
+  };
   // One colour group of the theme being edited. `groupId: "search"` with a
   // `focusKey` shows a single key reached from search.
   ThemeColorGroup: { groupId: string; focusKey?: string };

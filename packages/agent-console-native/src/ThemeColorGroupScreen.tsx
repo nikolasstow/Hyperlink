@@ -30,7 +30,9 @@ import {
   groupIdOf,
   groupPrefixOf,
   humanizeKey,
-  isHexColor,
+  isPickedColorChange,
+  normalizePickedColor,
+  unsetKeysOf,
   type VsCodeTheme,
 } from "./vscodeTheme";
 
@@ -38,6 +40,14 @@ type Props = NativeStackScreenProps<RootStackParamList, "ThemeColorGroup">;
 
 /** A sensible starting colour when adding a key that has never been set. */
 const SEED_COLOR = "#808080";
+
+/**
+ * How many unset keys a group offers before it stops and points at search.
+ * `editor` alone holds 111 and `other` holds 287, and this screen renders its
+ * rows rather than virtualising them, because the set rows carry a native
+ * picker each and a recycling list would tear those down.
+ */
+const UNSET_LIMIT = 50;
 
 const setColor = (key: string, value: string): void =>
   updateDraft((theme) => ({ ...theme, colors: { ...theme.colors, [key]: value } }));
@@ -76,7 +86,12 @@ const ColorRow = (props: {
         selection={props.value}
         supportsOpacity
         onSelectionChange={(next) => {
-          if (isHexColor(next)) setColor(props.themeKey, next);
+          // The picker answers in eight uppercase digits whatever it was given,
+          // so the reported value has to be read back into the key's own
+          // notation before it can be compared or stored.
+          if (isPickedColorChange(next, props.value)) {
+            setColor(props.themeKey, normalizePickedColor(next, props.value));
+          }
         }}
       />
     </Host>
@@ -102,22 +117,25 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
   // A search result arrives with `groupId: "search"` and one key to show, so
   // the same screen serves both a whole group and a single hit.
   const keys = React.useMemo(() => {
-    if (focusKey !== undefined) return [focusKey];
+    if (focusKey !== undefined) return theme.colors[focusKey] === undefined ? [] : [focusKey];
     return Object.keys(theme.colors)
       .filter((key) => groupIdOf(key) === groupId)
       .sort((a, b) => a.localeCompare(b));
   }, [theme.colors, groupId, focusKey]);
 
-  /** Keys this group claims that the theme has not set. */
+  /**
+   * Keys this group holds that the theme has not set. A search result arrives
+   * as a single `focusKey`, which is offered here when the theme has not set it.
+   */
   const unset = React.useMemo(() => {
-    if (focusKey !== undefined || group === undefined) return [];
-    const known = new Set(Object.keys(theme.colors));
-    return group.prefixes
-      .filter((prefix) => !known.has(prefix))
-      .map((prefix) => `${prefix}.background`)
-      .filter((key) => !known.has(key))
-      .sort((a, b) => a.localeCompare(b));
-  }, [group, theme.colors, focusKey]);
+    if (focusKey !== undefined) {
+      return theme.colors[focusKey] === undefined
+        ? { keys: [focusKey], remaining: 0 }
+        : { keys: [], remaining: 0 };
+    }
+    if (group === undefined) return { keys: [], remaining: 0 };
+    return unsetKeysOf(theme, group.id, UNSET_LIMIT);
+  }, [group, theme, focusKey]);
 
   React.useLayoutEffect(() => {
     props.navigation.setOptions({ title: focusKey !== undefined ? "Color" : (group?.title ?? "Colors") });
@@ -132,7 +150,9 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
       <Text style={styles.sectionLabel}>Set in this theme · {keys.length}</Text>
       <View style={styles.card}>
         {keys.length === 0 ? (
-          <Text style={styles.empty}>Nothing set in this group.</Text>
+          <Text style={styles.empty}>
+            {focusKey === undefined ? "Nothing set in this group." : "This theme does not set this key."}
+          </Text>
         ) : (
           keys.map((key, index) => {
             const value = theme.colors[key];
@@ -150,11 +170,11 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
         )}
       </View>
 
-      {unset.length === 0 ? null : (
+      {unset.keys.length === 0 ? null : (
         <>
-          <Text style={styles.sectionLabel}>Not set · {unset.length}</Text>
+          <Text style={styles.sectionLabel}>Not set · {unset.keys.length}</Text>
           <View style={styles.card}>
-            {unset.map((key, index) => (
+            {unset.keys.map((key, index) => (
               <TouchableOpacity
                 key={key}
                 style={[styles.row, index > 0 && styles.rowBorder]}
@@ -175,6 +195,9 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
           </View>
           <Text style={styles.hint}>
             A key this theme does not set inherits VS Code’s default for a {theme.type} theme.
+            {unset.remaining === 0
+              ? ""
+              : ` ${String(unset.remaining)} more in this group; search by name to reach one.`}
           </Text>
         </>
       )}

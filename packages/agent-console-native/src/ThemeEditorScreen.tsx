@@ -55,7 +55,7 @@ const Swatch = (props: { readonly color: string | undefined }): React.ReactEleme
 );
 
 export const ThemeEditorScreen = (props: Props): React.ReactElement => {
-  const { themeId } = props.route.params;
+  const { themeId, sourceFile, sourceName } = props.route.params;
   const insets = useSafeAreaInsets();
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
@@ -68,9 +68,11 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
   const [saving, setSaving] = React.useState(false);
 
   // Open the draft once: an existing theme is loaded from storage, a new one is
-  // seeded from the theme currently applied so the first screen already shows
-  // something coherent rather than an empty document.
-  const enabledFile = appTheme.theme.code?.file;
+  // seeded from a theme already installed so the first screen shows something
+  // coherent rather than an empty document. That source is the theme currently
+  // applied, unless a duplicate named one.
+  const source = sourceFile ?? appTheme.theme.code?.file;
+  const newName = sourceName === undefined ? "My Theme" : `${sourceName} copy`;
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -84,28 +86,28 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
         openDraft(created.id, created.theme);
         return;
       }
-      if (enabledFile === undefined) {
-        openDraft(undefined, { ...EMPTY_THEME, name: "My Theme" });
+      if (source === undefined) {
+        openDraft(undefined, { ...EMPTY_THEME, name: newName });
         return;
       }
       // Prefill from the applied theme. A failure here is reported rather than
       // silently starting from blank, which would look like the prefill worked
       // and produced nothing.
       try {
-        const json = await getThemeJson(apiBase, enabledFile);
+        const json = await getThemeJson(apiBase, source);
         if (cancelled) return;
-        const parsed = parseVsCodeTheme(json, "My Theme");
-        openDraft(undefined, parsed === undefined ? { ...EMPTY_THEME, name: "My Theme" } : { ...parsed, name: "My Theme" });
+        const parsed = parseVsCodeTheme(json, newName);
+        openDraft(undefined, parsed === undefined ? { ...EMPTY_THEME, name: newName } : { ...parsed, name: newName });
       } catch (error: unknown) {
         if (cancelled) return;
-        setLoadError(error instanceof Error ? error.message : "Could not read the current theme.");
-        openDraft(undefined, { ...EMPTY_THEME, name: "My Theme" });
+        setLoadError(error instanceof Error ? error.message : "Could not read that theme.");
+        openDraft(undefined, { ...EMPTY_THEME, name: newName });
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [themeId, apiBase, enabledFile]);
+  }, [themeId, apiBase, source, newName]);
 
   // Leaving the editor for good ends the draft. Pushing a child screen does not
   // fire this, so the draft survives the whole flow.
@@ -126,7 +128,15 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
     }
     setSaving(true);
     const id = draft.id ?? newThemeId();
-    await saveCreatedTheme(id, theme);
+    try {
+      await saveCreatedTheme(id, theme);
+    } catch (error: unknown) {
+      setSaving(false);
+      // Storage can refuse a write, and a Save button that closed the screen
+      // anyway would look like it had worked.
+      Alert.alert("Could not save", error instanceof Error ? error.message : "The theme was not written to this device.");
+      return;
+    }
     adoptSavedId(id);
     setSaving(false);
     props.navigation.goBack();
@@ -174,7 +184,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                     <Text style={styles.rowTitle} numberOfLines={1}>
                       {hit.label}
                     </Text>
-                    <Text style={styles.rowValue}>{hit.value}</Text>
+                    <Text style={styles.rowValue}>{hit.value ?? "Not set"}</Text>
                   </TouchableOpacity>
                 ))
               )}

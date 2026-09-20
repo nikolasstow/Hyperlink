@@ -15,7 +15,9 @@ import {
   importCount,
   importGroupsOf,
   isHexColor,
+  isPickedColorChange,
   NO_FONT_STYLE,
+  normalizePickedColor,
   parseFontStyle,
   parseVsCodeTheme,
   searchTheme,
@@ -26,8 +28,10 @@ import {
   togglePath,
   TOKENS_GROUP_ID,
   toThemeDocument,
+  unsetKeysOf,
   type VsCodeTheme,
 } from "./vscodeTheme";
+import { VSCODE_COLOR_KEYS } from "./vscodeColorKeys.gen";
 
 const theme = (over: Partial<VsCodeTheme>): VsCodeTheme => ({ ...EMPTY_THEME, ...over });
 
@@ -129,6 +133,62 @@ describe("isHexColor", () => {
     expect(isHexColor("#12345")).toBe(false);
     expect(isHexColor("rgb(1,2,3)")).toBe(false);
     expect(isHexColor("")).toBe(false);
+  });
+});
+
+describe("normalizePickedColor", () => {
+  // `@expo/ui` formats with `#%02X%02X%02X%02X` when `supportsOpacity` is on, so
+  // everything it reports arrives as eight uppercase digits.
+  it("drops a fully opaque alpha when the key had none", () => {
+    expect(normalizePickedColor("#1E1E1EFF", "#1e1e1e")).toBe("#1e1e1e");
+  });
+
+  it("keeps the alpha when the key already carried one", () => {
+    expect(normalizePickedColor("#1E1E1EFF", "#1e1e1e80")).toBe("#1e1e1eff");
+  });
+
+  it("keeps a real alpha whatever the key looked like", () => {
+    expect(normalizePickedColor("#1E1E1E80", "#1e1e1e")).toBe("#1e1e1e80");
+  });
+
+  it("follows the case the key was written in", () => {
+    expect(normalizePickedColor("#AABBCCFF", "#AABBCC")).toBe("#AABBCC");
+    expect(normalizePickedColor("#AABBCCFF", "#aabbcc")).toBe("#aabbcc");
+  });
+
+  it("writes a key that had no previous value in lower case", () => {
+    expect(normalizePickedColor("#AABBCCFF", undefined)).toBe("#aabbcc");
+  });
+
+  it("treats a short-form previous value as having no alpha", () => {
+    expect(normalizePickedColor("#AABBCCFF", "#abc")).toBe("#aabbcc");
+  });
+
+  it("keeps the alpha when the previous value was short form with one", () => {
+    expect(normalizePickedColor("#AABBCCFF", "#abcd")).toBe("#aabbccff");
+  });
+});
+
+describe("isPickedColorChange", () => {
+  it("rejects the same colour reported in the picker's own notation", () => {
+    expect(isPickedColorChange("#1E1E1EFF", "#1e1e1e")).toBe(false);
+  });
+
+  it("accepts a colour that differs", () => {
+    expect(isPickedColorChange("#2E2E2EFF", "#1e1e1e")).toBe(true);
+  });
+
+  it("accepts any colour for a key with no previous value", () => {
+    expect(isPickedColorChange("#1E1E1EFF", undefined)).toBe(true);
+  });
+
+  it("rejects anything that is not a colour", () => {
+    expect(isPickedColorChange("rebeccapurple", "#1e1e1e")).toBe(false);
+    expect(isPickedColorChange("", undefined)).toBe(false);
+  });
+
+  it("spots an alpha change on a key that already had one", () => {
+    expect(isPickedColorChange("#1E1E1E80", "#1e1e1eff")).toBe(true);
   });
 });
 
@@ -235,16 +295,20 @@ describe("searchTheme", () => {
     ],
   });
 
+  /** The keys the theme actually sets, which come first in a result. */
+  const setHits = (query: string): ReadonlyArray<string> =>
+    searchTheme(subject, query).colors.filter((c) => c.value !== undefined).map((c) => c.key);
+
   it("matches the raw key", () => {
-    expect(searchTheme(subject, "focusBorder").colors.map((c) => c.key)).toEqual(["focusBorder"]);
+    expect(setHits("focusBorder")).toEqual(["focusBorder"]);
   });
 
   it("matches the humanised label, which is the point of having one", () => {
-    expect(searchTheme(subject, "line number").colors.map((c) => c.key)).toEqual(["editor.lineNumber.foreground"]);
+    expect(setHits("line number")).toEqual(["editor.lineNumber.foreground"]);
   });
 
   it("matches the value", () => {
-    expect(searchTheme(subject, "#282A36").colors.map((c) => c.key)).toEqual(["editor.background"]);
+    expect(setHits("#282A36")).toEqual(["editor.background"]);
   });
 
   it("matches token scopes and reports which scope hit", () => {
@@ -255,12 +319,78 @@ describe("searchTheme", () => {
   });
 
   it("is case-insensitive and ignores surrounding space", () => {
-    expect(searchTheme(subject, "  FOCUSBORDER ").colors).toHaveLength(1);
+    expect(setHits("  FOCUSBORDER ")).toEqual(["focusBorder"]);
   });
 
   it("returns nothing for an empty query rather than everything", () => {
     expect(searchTheme(subject, "")).toEqual({ colors: [], tokens: [] });
     expect(searchTheme(subject, "   ")).toEqual({ colors: [], tokens: [] });
+  });
+});
+
+describe("searchTheme reaching unset keys", () => {
+  const theme = { ...EMPTY_THEME, colors: { "editor.background": "#1e1e1e" } };
+
+  it("finds a key the theme has never set", () => {
+    const hit = searchTheme(theme, "terminal.ansiRed").colors.find((c) => c.key === "terminal.ansiRed");
+    expect(hit?.value).toBeUndefined();
+  });
+
+  it("puts the keys the theme sets first", () => {
+    const { colors } = searchTheme(theme, "editor.background");
+    expect(colors[0]?.key).toBe("editor.background");
+    expect(colors[0]?.value).toBe("#1e1e1e");
+  });
+
+  it("never lists a set key twice", () => {
+    const keys = searchTheme(theme, "editor.background").colors.map((c) => c.key);
+    expect(keys.filter((k) => k === "editor.background")).toHaveLength(1);
+  });
+});
+
+describe("VSCODE_COLOR_KEYS", () => {
+  it("carries the keys every real theme sets", () => {
+    for (const key of ["editor.background", "editor.foreground", "activityBar.background", "focusBorder"]) {
+      expect(VSCODE_COLOR_KEYS).toContain(key);
+    }
+  });
+
+  it("leads with the most widely set key", () => {
+    expect(VSCODE_COLOR_KEYS[0]).toBe("editor.background");
+  });
+
+  it("holds no duplicates", () => {
+    expect(new Set(VSCODE_COLOR_KEYS).size).toBe(VSCODE_COLOR_KEYS.length);
+  });
+});
+
+describe("unsetKeysOf", () => {
+  const theme = { ...EMPTY_THEME, colors: { "editor.background": "#1e1e1e" } };
+
+  it("leaves out a key the theme already sets", () => {
+    expect(unsetKeysOf(theme, "editor", 200).keys).not.toContain("editor.background");
+  });
+
+  it("offers keys from the group asked for and no others", () => {
+    for (const key of unsetKeysOf(theme, "terminal", 200).keys) {
+      expect(groupIdOf(key)).toBe("terminal");
+    }
+  });
+
+  it("cuts to the limit and says how many are left", () => {
+    const all = unsetKeysOf(theme, "editor", 1000);
+    const cut = unsetKeysOf(theme, "editor", 5);
+    expect(cut.keys).toHaveLength(5);
+    expect(cut.remaining).toBe(all.keys.length - 5);
+  });
+
+  it("sorts what it offers by name", () => {
+    const { keys } = unsetKeysOf(theme, "editor", 20);
+    expect([...keys].sort((a, b) => a.localeCompare(b))).toEqual(keys);
+  });
+
+  it("reports nothing remaining when the limit covers the group", () => {
+    expect(unsetKeysOf(theme, "terminal", 1000).remaining).toBe(0);
   });
 });
 

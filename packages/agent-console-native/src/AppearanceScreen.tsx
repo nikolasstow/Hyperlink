@@ -227,6 +227,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
               primary={t.primary}
               active={enabled?.file === t.file}
               onPress={() => selectTheme(t)}
+              onLongPress={() => props.navigation.navigate("ThemeEditor", { sourceFile: t.file, sourceName: t.label })}
               last={index === themes.length - 1}
             />
           ))}
@@ -261,7 +262,10 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             </View>
           </TouchableOpacity>
         </View>
-        <Text style={styles.hint}>Installed themes can’t be edited. Create one to make changes.</Text>
+        <Text style={styles.hint}>
+          Installed themes can’t be edited: they are files in the server’s extension store. Touch and
+          hold one above to start an editable copy, or create a theme from scratch.
+        </Text>
 
         <Text style={styles.sectionLabel}>Primary color</Text>
         <View style={styles.card}>
@@ -315,9 +319,11 @@ const ThemeRow = (props: {
   readonly primary: string;
   readonly active: boolean;
   readonly onPress: () => void;
+  /** Touch and hold an installed theme to copy it into an editable one. */
+  readonly onLongPress?: () => void;
   readonly last: boolean;
 }): React.ReactElement => (
-  <TouchableOpacity onPress={props.onPress} activeOpacity={0.6}>
+  <TouchableOpacity onPress={props.onPress} onLongPress={props.onLongPress} activeOpacity={0.6}>
     <View style={styles.themeRow}>
       <View style={[styles.themeDot, { backgroundColor: props.primary }]} />
       <Text style={styles.themeLabel} numberOfLines={1}>

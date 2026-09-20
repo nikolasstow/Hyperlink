@@ -9,6 +9,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import * as checks from "./checks";
 import * as docs from "./docs";
 import { fileRouterCommand } from "./fileRouter";
+import { themeKeys } from "./themeKeys";
 
 const checkDeps = Command.make("deps").pipe(
   Command.withDescription("Frozen lockfile install (`pnpm install --frozen-lockfile`)."),
@@ -165,5 +166,6 @@ export const hyp = Command.make("hyp").pipe(
     clean,
     docsCommand,
     fileRouterCommand,
+    themeKeys,
   ]),
 );

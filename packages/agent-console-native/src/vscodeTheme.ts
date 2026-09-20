@@ -31,6 +31,8 @@ const stringOf = (value: unknown): string | undefined => (typeof value === "stri
  * two for rendering, so the editor stores what it can honour rather than a
  * third value nothing reads.
  */
+import { VSCODE_COLOR_KEYS } from "./vscodeColorKeys.gen";
+
 export type ThemeType = "light" | "dark";
 
 /**
@@ -68,6 +70,38 @@ export const EMPTY_THEME: VsCodeTheme = {
 
 /** `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA`, which is every colour VS Code accepts. */
 export const isHexColor = (value: string): boolean => /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value);
+
+/**
+ * The colour a native picker reported, written in the notation the theme was
+ * already using.
+ *
+ * `@expo/ui`'s `ColorPicker` formats with `#%02X%02X%02X%02X` whenever
+ * `supportsOpacity` is on, so it always answers with eight uppercase digits.
+ * Taken at face value that turns `#1e1e1e` into `#1E1E1EFF` the first time
+ * anyone opens the picker on it. VS Code reads both as the same colour, so the
+ * rewrite buys nothing and costs a diff on every key someone touches.
+ *
+ * A fully opaque colour is written in six digits unless the key already carried
+ * an alpha channel, and the case follows whatever the key was written in.
+ */
+export const normalizePickedColor = (picked: string, previous: string | undefined): string => {
+  const hadAlpha = previous !== undefined && (previous.length === 5 || previous.length === 9);
+  const opaque = picked.length === 9 && picked.slice(7).toLowerCase() === "ff";
+  const trimmed = opaque && !hadAlpha ? picked.slice(0, 7) : picked;
+  const wasUpper = previous !== undefined && previous !== previous.toLowerCase();
+  return wasUpper ? trimmed.toUpperCase() : trimmed.toLowerCase();
+};
+
+/**
+ * Is this a colour the theme does not already hold for that key?
+ *
+ * The picker reports on mount as well as on a real change in some
+ * configurations, and the reported form differs from the stored one even when
+ * the colour is identical, so comparing raw strings would record edits nobody
+ * made.
+ */
+export const isPickedColorChange = (picked: string, previous: string | undefined): boolean =>
+  isHexColor(picked) && normalizePickedColor(picked, previous) !== previous;
 
 /** `hc-black` and `hcDark` are dark; anything else unrecognised follows dark, the app's own default. */
 const toThemeType = (value: unknown): ThemeType => (stringOf(value)?.toLowerCase().includes("light") === true ? "light" : "dark");
@@ -384,6 +418,50 @@ export const summarizeColorGroups = (colors: Readonly<Record<string, string>>): 
   return summaries;
 };
 
+/**
+ * The registry split by group, worked out once. `groupIdOf` walks every group's
+ * prefixes, and this runs on every keystroke and every colour change.
+ */
+const REGISTRY_BY_GROUP = new Map<string, ReadonlyArray<string>>();
+
+const registryByGroup = (groupId: string): ReadonlyArray<string> => {
+  if (REGISTRY_BY_GROUP.size === 0) {
+    const buckets = new Map<string, Array<string>>();
+    for (const key of VSCODE_COLOR_KEYS) {
+      const id = groupIdOf(key);
+      const bucket = buckets.get(id);
+      if (bucket === undefined) buckets.set(id, [key]);
+      else bucket.push(key);
+    }
+    for (const [id, keys] of buckets) REGISTRY_BY_GROUP.set(id, keys);
+  }
+  return REGISTRY_BY_GROUP.get(groupId) ?? [];
+};
+
+/** What a group screen offers when someone adds a key the theme has not set. */
+export interface UnsetKeys {
+  /** Sorted by name, so the list reads the way a list of keys should. */
+  readonly keys: ReadonlyArray<string>;
+  /** How many the limit left out. Search is how those are reached. */
+  readonly remaining: number;
+}
+
+/**
+ * The keys in a group that this theme does not set, most widely used first,
+ * cut to `limit`.
+ *
+ * Groups run from twenty-four keys to nearly three hundred, and a screen that
+ * rendered every one of them would be unusable. Taking the head of the
+ * registry, which is ordered by how many real themes set each key, puts the
+ * keys somebody is likely to want in front of them, and search covers the rest.
+ */
+export const unsetKeysOf = (theme: VsCodeTheme, groupId: string, limit: number): UnsetKeys => {
+  const set = new Set(Object.keys(theme.colors));
+  const all = registryByGroup(groupId).filter((key) => !set.has(key));
+  const keys = all.slice(0, limit).sort((a, b) => a.localeCompare(b));
+  return { keys, remaining: all.length - keys.length };
+};
+
 /* ------------------------------------------------------------------ *
  * Search
  * ------------------------------------------------------------------ */
@@ -391,7 +469,8 @@ export const summarizeColorGroups = (colors: Readonly<Record<string, string>>): 
 export interface ColorHit {
   readonly key: string;
   readonly label: string;
-  readonly value: string;
+  /** Undefined for a key the theme has not set, which search offers so it can be added. */
+  readonly value: string | undefined;
 }
 
 export interface TokenHit {
@@ -411,18 +490,30 @@ const EMPTY_SEARCH: ThemeSearchResult = { colors: [], tokens: [] };
  * Matches a query against colour keys, their humanised labels, their values,
  * and token scopes. Searching the label as well as the key is what lets
  * "line number" find `editor.lineNumber.foreground`.
+ *
+ * Keys the theme has not set are searched too, after the ones it has. A group
+ * can hold hundreds of keys and only a handful are ever set, so search is the
+ * only way most of them are reachable at all.
  */
 export const searchTheme = (theme: VsCodeTheme, query: string): ThemeSearchResult => {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return EMPTY_SEARCH;
 
   const colors: Array<ColorHit> = [];
-  for (const key of Object.keys(theme.colors).sort((a, b) => a.localeCompare(b))) {
+  const set = new Set(Object.keys(theme.colors));
+  for (const key of [...set].sort((a, b) => a.localeCompare(b))) {
     const value = theme.colors[key];
     if (value === undefined) continue;
     const label = humanizeKey(key);
     const haystack = `${key} ${label} ${value}`.toLowerCase();
     if (haystack.includes(needle)) colors.push({ key, label, value });
+  }
+  for (const key of VSCODE_COLOR_KEYS) {
+    if (set.has(key)) continue;
+    const label = humanizeKey(key);
+    if (`${key} ${label}`.toLowerCase().includes(needle)) {
+      colors.push({ key, label, value: undefined });
+    }
   }
 
   const tokens: Array<TokenHit> = [];

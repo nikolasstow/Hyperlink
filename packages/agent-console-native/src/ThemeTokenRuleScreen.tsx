@@ -20,7 +20,8 @@ import { updateDraft, useThemeDraft } from "./themeDraft";
 import {
   EMPTY_THEME,
   formatFontStyle,
-  isHexColor,
+  isPickedColorChange,
+  normalizePickedColor,
   parseFontStyle,
   type FontStyleFlags,
   type TokenRule,
@@ -128,29 +129,48 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
       </View>
 
       <Text style={styles.sectionLabel}>Foreground</Text>
+      {/* A rule with no foreground gets a Set row rather than a picker. A theme
+       * distinguishes a rule that sets no foreground from one that sets a
+       * transparent colour, and a picker showing an empty swatch cannot say
+       * which of the two it is looking at. */}
       <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.rowTitle}>Colour</Text>
-          <Text style={styles.rowValue}>{(foreground ?? "Not set").toUpperCase()}</Text>
-          <Host style={styles.picker} matchContents>
-            <ColorPicker
-              label=""
-              selection={foreground ?? DEFAULT_FOREGROUND}
-              supportsOpacity
-              onSelectionChange={(next) => {
-                if (isHexColor(next)) replace((current) => ({ ...current, foreground: next }));
-              }}
-            />
-          </Host>
-        </View>
-        {foreground === undefined ? null : (
+        {foreground === undefined ? (
           <TouchableOpacity
-            style={[styles.row, styles.rowBorder]}
+            style={styles.row}
             activeOpacity={0.6}
-            onPress={() => replace((current) => ({ ...current, foreground: undefined }))}
+            onPress={() => replace((current) => ({ ...current, foreground: DEFAULT_FOREGROUND }))}
           >
-            <Text style={styles.remove}>Unset colour</Text>
+            <Text style={styles.rowTitle}>Colour</Text>
+            <Text style={styles.rowValue}>NOT SET</Text>
+            <Text style={styles.add}>Set</Text>
           </TouchableOpacity>
+        ) : (
+          <>
+            <View style={styles.row}>
+              <Text style={styles.rowTitle}>Colour</Text>
+              <Text style={styles.rowValue}>{foreground.toUpperCase()}</Text>
+              <Host style={styles.picker} matchContents>
+                <ColorPicker
+                  label=""
+                  selection={foreground}
+                  supportsOpacity
+                  onSelectionChange={(next) => {
+                    if (isPickedColorChange(next, foreground)) {
+                      const value = normalizePickedColor(next, foreground);
+                      replace((current) => ({ ...current, foreground: value }));
+                    }
+                  }}
+                />
+              </Host>
+            </View>
+            <TouchableOpacity
+              style={[styles.row, styles.rowBorder]}
+              activeOpacity={0.6}
+              onPress={() => replace((current) => ({ ...current, foreground: undefined }))}
+            >
+              <Text style={styles.remove}>Unset colour</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
 

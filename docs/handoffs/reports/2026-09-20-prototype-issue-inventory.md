@@ -5,6 +5,10 @@
 **Split:** issues in the iOS trunk agent's area were routed to
 [`ios-trunk-followups-handoff.md`](../ios-trunk-followups-handoff.md) and are not repeated
 here.
+**Status:** section A is fixed on `fix/toolkit-typecheck`. B2, B3, B4, B5 and B8 are fixed on
+`fix/theme-editor-followups`, reported in
+[the follow-ups report](./2026-09-20-theme-editor-followups.md). B6 was assessed and left
+alone. B1 and B7 are open. Sections C, D and E are open.
 
 ## Before acting on this report
 
@@ -19,7 +23,7 @@ here.
 errors, all outside both apps. Two of the three I reported earlier had the wrong root cause,
 corrected below.
 
-### A1. `examples/ui/file-router/api.ts:78`, TS2352
+### A1. `examples/ui/file-router/api.ts:78`, TS2352 (fixed)
 
 ```ts
 export const destinationsOf = (): ReadonlyArray<ProtoRoute> =>
@@ -39,7 +43,7 @@ to the caller. This file is a prototype whose own doc comment says a real implem
 would discover routes from a directory, so the cast is holding a shape that is going to be
 replaced. Worth ten minutes to find out which fix survives that replacement.
 
-### A2. `test/document-provide.test-d.ts:24` and `:30`, TS2345
+### A2. `test/document-provide.test-d.ts:24` and `:30`, TS2345 (fixed)
 
 The earlier report called these a question about what `Document.provide`'s type-level
 contract should say. That was wrong. The mechanism is positional:
@@ -61,7 +65,7 @@ carries `_error: "Document.provide: incomplete"` and `missing: "title" | "titleT
 Collapsing each of the two calls onto the line directly under its directive fixes both, with
 no change to `Document.provide` and no decision to make.
 
-### A3. Five `TS28` diagnostics in `packages/last-ts`
+### A3. Five `TS28` diagnostics in `packages/last-ts` (fixed)
 
 `internal/lastLink.tsx:399,404,410` and `internal/routerBuilder.tsx:282,523`, all reading
 "has unknown in the requirements channel and unknown in the error channel which is not
@@ -69,9 +73,14 @@ recommended". Each sits in an overload-erasure seam with a comment above it expl
 `Layer.isLayer` cannot preserve E and R and why the overloads already checked what the
 narrowing loses.
 
-The code is deliberate and documented in place. What is not settled is whether
-`@effect/language-service` should raise that diagnostic at error severity in a file that has
-answered it. Owner call, because the answer applies repo-wide.
+The code is deliberate and documented in place, and `tsgo` over the same project reports none
+of it, so the disagreement was between the two checkers the gate runs rather than between the
+code and the rules. Both predicates narrow to a type whose error and requirements channels are
+`unknown` or `any`, and in each case the next line restates those channels from the overload
+contract, so the narrowing contributed nothing that survived. `isLinkLayer` and `isPageEffect`
+keep the runtime check and drop the narrowing, and the cast sits once in a helper beside each
+rather than in three copies. `RouterBuilder.layer` pins `resolveApi`'s requirements at the
+yield, matching the seam `routes.ts:1260` already used.
 
 ### A4. 652 `TS377032` diagnostics drown the output
 
@@ -103,15 +112,19 @@ If it reproduces, the fix is to render each row as text plus a tap target and mo
 `Host`-backed picker in a sheet for the selected key. That also takes N native views out of
 the list, which is the better shape regardless of what the device shows.
 
-### B2. An unset colour may be written the moment you open it
+### B2. The picker rewrites every colour it touches (fixed, and not what this said)
 
-`ThemeTokenRuleScreen.tsx:138` feeds the picker `foreground ?? DEFAULT_FOREGROUND`, and
-`ThemeColorGroupScreen` does the same for unset keys. If `@expo/ui` fires
-`onSelectionChange` on mount with its initial selection, opening a rule silently writes
-`#808080` onto it. Cheap guard regardless of what the device does: ignore a change equal to
-the value already in the draft.
+This originally claimed the picker might write an unset key the moment it was opened.
+`@expo/ui@57.0.13`'s `ios/ColorPickerView.swift` rules that out: `.onAppear` records the hex it
+was handed and the dispatch fires only when a new hex differs from it.
 
-### B3. The "unset" key list is synthesised, not real
+The real defect was next to it. `colorToHex` formats with `#%02X%02X%02X%02X` whenever
+`supportsOpacity` is on, which both screens pass, so the picker answers in eight uppercase
+digits whatever it was given. A key written `#1e1e1e` came back `#1E1E1EFF` on the first edit,
+and a theme imported and edited in one place came out differing on keys nobody touched.
+`normalizePickedColor` reads the value back into the key's own notation.
+
+### B3. The "unset" key list is synthesised, not real (fixed)
 
 `ThemeColorGroupScreen` builds its Add list from patterns like `${prefix}.background` rather
 than a registry, so it offers keys VS Code does not define and omits keys it does. Fix:
@@ -120,7 +133,7 @@ of keys across the themes bundled with `shiki` is available offline and covers m
 surface; VS Code's own colour registry is the authoritative list if vendoring it is
 acceptable.
 
-### B4. A theme that fails to parse is deleted, permanently
+### B4. A theme that fails to parse is deleted, permanently (fixed)
 
 `createdThemes.ts:39` drops a row `toCreatedTheme` cannot parse, and `write` at line 79
 persists whatever `listCreatedThemes` returned. So one unparseable theme is skipped on read
@@ -130,19 +143,24 @@ B that is a bug rather than a follow-up.
 Fix: carry unrecognised rows through verbatim in the written payload, or refuse to write at
 all when any row failed to parse.
 
-### B5. Saving is read-modify-write with no serialisation
+### B5. Saving is read-modify-write with no serialisation (fixed)
 
 `saveCreatedTheme` calls `listCreatedThemes`, which re-parses every stored theme, then writes
 the whole list back. Two saves in flight race, and the loser is lost. Fix: an in-memory list
 as the source of truth with a serialised write behind it, matching `settings.ts`.
 
-### B6. Token rules are addressed by array index
+### B6. Token rules are addressed by array index (assessed, left alone)
 
 `ThemeTokenRuleScreen` takes `route.params.index` and the import scheme uses
-`tokens:<index>`. Delete or insert a rule and every index after it shifts. Only one rule
-screen is pushed at a time today, so it does not bite yet. It will the moment anything
-reorders rules. Fix: a stable local id per rule inside the draft, with the index kept only
-for serialisation order.
+`tokens:<index>`, so a delete or an insert shifts every index after it.
+
+Checked against what the editor can actually do: nothing reorders `tokenColors`, the list
+screen only appends, `applyImport` appends, and deletion happens on the rule screen which pops
+straight after. No sequence produces the failure. A stable id would have to live either in the
+document model, which is the VS Code format and not ours to extend, or in a second array
+inside the draft kept in step with the first. Neither earns its keep against a bug nothing can
+reach, so this is recorded as a constraint: anything that reorders or inserts rules has to
+bring ids with it.
 
 ### B7. Created themes do not sync
 
@@ -150,7 +168,7 @@ They live in AsyncStorage and stay on the device. The server keeps a synced `con
 document, described as small and last-write-wins. A full theme is a few hundred keys. Whether
 that document should carry them is the question to answer before building anything.
 
-### B8. No Duplicate on an installed theme
+### B8. No Duplicate on an installed theme (fixed)
 
 Editing a stock theme is create followed by import. A Duplicate action makes it two taps.
 Pure addition, no risk, smallest item here.
