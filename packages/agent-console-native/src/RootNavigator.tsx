@@ -25,6 +25,7 @@ import { SettingsScreen } from "./SettingsScreen";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { AppearanceScreen } from "./AppearanceScreen";
 import { ExtensionsScreen } from "./ExtensionsScreen";
+import { FontImportScreen } from "./FontImportScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { RepoScreen } from "./RepoScreen";
@@ -36,6 +37,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Extensions: undefined;
   Appearance: undefined;
+  FontImport: undefined;
   // A repo (git checkout) or workspace (non-git session folder). `isRepo`
   // selects the menu variant; `dir` is the primary directory shown in the
   // header info.
@@ -223,6 +225,7 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
         <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
+        <Stack.Screen name="FontImport" component={FontImportScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Import Font" }} />
         {/* Repo/workspace screen draws its own fully custom collapsing glass
          * header, so the native bar is hidden. */}
         <Stack.Screen

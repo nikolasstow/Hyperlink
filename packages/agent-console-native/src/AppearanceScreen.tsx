@@ -10,6 +10,7 @@
  *
  * @internal
  */
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native";
@@ -18,10 +19,14 @@ import { useAppContext } from "./AppContext";
 import { CodeBlock } from "./CodeBlock";
 import { colors } from "./colors";
 import { getThemeJson, listExtensions } from "./extensionsClient";
+import { getCustomFonts, type CustomFont } from "./fontsClient";
+import type { RootStackParamList } from "./RootNavigator";
 import { DEFAULT_THEME, getApiAddress, type Theme } from "./settings";
 import { FALLBACK_THEME } from "./shikiHighlighter";
 import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
+
+type Props = NativeStackScreenProps<RootStackParamList, "Appearance">;
 
 /** Sample snippet for the code-highlighting preview. */
 const PREVIEW_CODE = `import { Effect } from "effect"
@@ -116,13 +121,26 @@ const ColorSwatches = (props: {
   );
 };
 
-export const AppearanceScreen = (): React.ReactElement => {
+export const AppearanceScreen = (props: Props): React.ReactElement => {
   const { theme, setTheme } = useTheme();
   const { address } = useAppContext();
   const insets = useSafeAreaInsets();
   const apiBase = getApiAddress(address);
 
   const [themes, setThemes] = React.useState<ReadonlyArray<SelectableTheme>>([]);
+  const [customFonts, setCustomFonts] = React.useState<ReadonlyArray<CustomFont>>([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    getCustomFonts(apiBase)
+      .then((list) => {
+        if (!cancelled) setCustomFonts(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBase]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -219,7 +237,7 @@ export const AppearanceScreen = (): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Code font</Text>
         <View style={styles.card}>
-          {CODE_FONTS.map((font, index) => (
+          {[...CODE_FONTS, ...customFonts.map((f) => f.family)].map((font) => (
             <TouchableOpacity key={font} onPress={() => setTheme({ ...theme, codeFont: font })} activeOpacity={0.6}>
               <View style={styles.themeRow}>
                 <Text style={[styles.fontSample, { fontFamily: font }]}>Ag</Text>
@@ -228,11 +246,20 @@ export const AppearanceScreen = (): React.ReactElement => {
                 </Text>
                 {theme.codeFont === font ? <SystemIcon name="checkmark" size={15} color={colors.tint} /> : null}
               </View>
-              {index === CODE_FONTS.length - 1 ? null : <View style={styles.rowSeparator} />}
+              <View style={styles.rowSeparator} />
             </TouchableOpacity>
           ))}
+          {/* Add-font entry at the bottom of the list. */}
+          <TouchableOpacity onPress={() => props.navigation.navigate("FontImport")} activeOpacity={0.6}>
+            <View style={styles.themeRow}>
+              <SystemIcon name="plus" size={16} color={colors.tint} />
+              <Text style={[styles.themeLabel, styles.addFontLabel]} numberOfLines={1}>
+                Add font…
+              </Text>
+              <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+            </View>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.hint}>Custom code fonts (file or URL upload) are coming — see Extensions.</Text>
 
         <Text style={styles.sectionLabel}>Preview</Text>
         <View style={styles.card}>
@@ -316,6 +343,9 @@ const styles = StyleSheet.create({
     width: 30,
     fontSize: 17,
     color: colors.label,
+  },
+  addFontLabel: {
+    color: colors.tint,
   },
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
