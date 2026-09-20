@@ -258,23 +258,23 @@ export const COLOR_GROUPS: ReadonlyArray<ColorGroup> = [
   },
   {
     id: "sidebar",
-    title: "Side bar and activity bar",
+    title: "Side Bar and Activity Bar",
     prefixes: ["sideBar", "sideBarTitle", "sideBarSectionHeader", "activityBar", "activityBarBadge", "activityBarTop"],
   },
   {
     id: "tabs",
-    title: "Tabs and editor groups",
+    title: "Tabs and Editor Groups",
     prefixes: ["tab", "editorGroup", "editorGroupHeader", "breadcrumb", "breadcrumbPicker"],
   },
   {
     id: "bars",
-    title: "Status bar and title bar",
+    title: "Status Bar and Title Bar",
     prefixes: ["statusBar", "statusBarItem", "titleBar", "banner", "commandCenter"],
   },
   { id: "terminal", title: "Terminal", prefixes: ["terminal", "terminalCursor", "terminalCommandDecoration", "terminalOverviewRuler"] },
   {
     id: "controls",
-    title: "Buttons, inputs and lists",
+    title: "Buttons, Inputs and Lists",
     prefixes: [
       "button",
       "badge",
@@ -301,24 +301,24 @@ export const COLOR_GROUPS: ReadonlyArray<ColorGroup> = [
   },
   {
     id: "git",
-    title: "Git and diff",
+    title: "Git and Diff",
     prefixes: ["gitDecoration", "diffEditor", "diffEditorGutter", "diffEditorOverview", "merge", "mergeEditor", "peekView", "peekViewEditor", "peekViewResult", "peekViewTitle"],
   },
   {
     id: "panels",
-    title: "Panels, notifications and debug",
+    title: "Panels, Notifications and Debug",
     prefixes: ["panel", "panelTitle", "panelSection", "panelInput", "notification", "notifications", "notificationCenter", "notificationToast", "notificationLink", "debugToolBar", "debugIcon", "debugConsole", "debugExceptionWidget", "debugView", "testing", "notebook", "notebookScrollbarSlider", "notebookStatusErrorIcon", "chat", "inlineChat", "problemsErrorIcon", "problemsWarningIcon", "problemsInfoIcon"],
   },
   {
     id: "widgets",
-    title: "Widgets and overlays",
+    title: "Widgets and Overlays",
     prefixes: ["editorWidget", "editorSuggestWidget", "editorHoverWidget", "editorMarkerNavigation", "editorMarkerNavigationError", "editorMarkerNavigationWarning", "editorMarkerNavigationInfo", "widget", "pickerGroup", "settings", "welcomePage", "walkThrough", "window", "extensionButton", "extensionBadge", "extensionIcon"],
   },
 ];
 
 const OTHER_GROUP: ColorGroup = {
   id: "other",
-  title: "Everything else",
+  title: "Everything Else",
   prefixes: [],
 };
 

@@ -23,6 +23,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
+import { THEME_COLOR_KEYS } from "./themeColorKeys";
 import { updateDraft, useThemeDraft } from "./themeDraft";
 import {
   ALL_COLOR_GROUPS,
@@ -108,16 +109,14 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
       .sort((a, b) => a.localeCompare(b));
   }, [theme.colors, groupId, focusKey]);
 
-  /** Keys this group claims that the theme has not set. */
+  /** Every known key this group claims that the theme has not set — from the
+   * bundled catalog (THEME_COLOR_KEYS), so a blank theme still offers them all
+   * without needing an import. */
   const unset = React.useMemo(() => {
     if (focusKey !== undefined || group === undefined) return [];
-    const known = new Set(Object.keys(theme.colors));
-    return group.prefixes
-      .filter((prefix) => !known.has(prefix))
-      .map((prefix) => `${prefix}.background`)
-      .filter((key) => !known.has(key))
-      .sort((a, b) => a.localeCompare(b));
-  }, [group, theme.colors, focusKey]);
+    const set = new Set(Object.keys(theme.colors));
+    return THEME_COLOR_KEYS.filter((key) => !set.has(key) && groupIdOf(key) === groupId).sort((a, b) => a.localeCompare(b));
+  }, [group, groupId, theme.colors, focusKey]);
 
   React.useLayoutEffect(() => {
     props.navigation.setOptions({ title: focusKey !== undefined ? "Color" : (group?.title ?? "Colors") });
