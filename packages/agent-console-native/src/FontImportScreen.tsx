@@ -15,7 +15,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
-import { addCustomFont, getCustomFonts, inspectFont, removeCustomFont, type CustomFont } from "./fontsClient";
+import { addCustomFont, inspectFont, type CustomFont } from "./fontsClient";
 import { getApiAddress } from "./settings";
 
 export const FontImportScreen = (): React.ReactElement => {
@@ -23,24 +23,11 @@ export const FontImportScreen = (): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const apiBase = getApiAddress(address);
 
-  const [fonts, setFonts] = React.useState<ReadonlyArray<CustomFont>>([]);
   const [showUrl, setShowUrl] = React.useState(false);
   const [urlInput, setUrlInput] = React.useState("");
   const [pending, setPending] = React.useState<CustomFont | undefined>(undefined);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | undefined>(undefined);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    getCustomFonts(apiBase)
-      .then((list) => {
-        if (!cancelled) setFonts(list);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [apiBase]);
 
   const onLoadUrl = (): void => {
     const url = urlInput.trim();
@@ -61,18 +48,9 @@ export const FontImportScreen = (): React.ReactElement => {
     if (pending === undefined || busy) return;
     setBusy(true);
     addCustomFont(apiBase, pending)
-      .then((list) => {
-        setFonts(list);
-        setPending(undefined);
-      })
+      .then(() => setPending(undefined))
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setBusy(false));
-  };
-
-  const onRemove = (family: string): void => {
-    removeCustomFont(apiBase, family)
-      .then(setFonts)
-      .catch((e: unknown) => setError(String(e)));
   };
 
   return (
@@ -136,29 +114,6 @@ export const FontImportScreen = (): React.ReactElement => {
           </View>
         </>
       ) : null}
-
-      <Text style={styles.sectionLabel}>Imported fonts</Text>
-      {fonts.length === 0 ? (
-        <Text style={styles.empty}>No custom fonts yet.</Text>
-      ) : (
-        fonts.map((font) => (
-          <View key={font.family} style={styles.card}>
-            <View style={styles.row}>
-              <View style={styles.rowText}>
-                <Text style={styles.family} numberOfLines={1}>
-                  {font.family}
-                </Text>
-                <Text style={styles.url} numberOfLines={1}>
-                  {font.url}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => onRemove(font.family)} accessibilityLabel="Remove">
-                <Text style={styles.removeText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))
-      )}
     </ScrollView>
   );
 };
@@ -276,34 +231,5 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "600",
-  },
-  empty: {
-    color: colors.secondaryLabel,
-    fontSize: 15,
-    textAlign: "center",
-    marginTop: 8,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  rowText: {
-    flex: 1,
-  },
-  family: {
-    color: colors.label,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  url: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-    marginTop: 2,
-  },
-  removeText: {
-    color: colors.destructive,
-    fontSize: 15,
   },
 });

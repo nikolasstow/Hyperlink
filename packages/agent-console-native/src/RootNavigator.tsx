@@ -230,7 +230,11 @@ export const RootNavigator = (): React.ReactElement => {
           component={FontImportScreen}
           options={({ navigation }) => ({
             headerShown: true,
-            presentation: "modal",
+            presentation: "formSheet",
+            // Half height, expandable to full; iOS grabber to dismiss.
+            sheetAllowedDetents: [0.5, 1.0],
+            sheetInitialDetentIndex: 0,
+            sheetGrabberVisible: true,
             title: "Import Font",
             unstable_headerLeftItems: () => [
               {
