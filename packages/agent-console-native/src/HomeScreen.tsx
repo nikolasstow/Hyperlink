@@ -311,6 +311,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           disabled={sending || target === undefined}
           bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
           placeholder="Plan, ask, build…"
+          agentSurface="home"
           topSection={
             <HomeTargetPickers
               scanned={scanned}

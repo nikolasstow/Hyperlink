@@ -86,6 +86,8 @@ import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { LayoutAnimation, Pressable, StyleSheet, Text, TextInput, useColorScheme, View } from "react-native";
 import { useAppContext } from "./AppContext";
+import { AgentButton } from "./AgentButton";
+import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { useTheme } from "./theme";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
@@ -217,22 +219,6 @@ const sendButtonModifiers = (active: boolean, activeFill: string, mutedFill: str
   foregroundStyle("#FFFFFF"),
 ];
 
-// The app-wide assistant button (`sparkles`), shown to the right of the pill
-// only while collapsed. Same proven glass recipe as the + chip (`CHIP_FILL`
-// tint is the confirmed-safe mechanism — see CHIP_BUTTON_MODIFIERS), with the
-// icon in the theme's SECONDARY accent so it reads as its own thing, distinct
-// from + (gray) and send (primary/green). `iconColor` is theme-derived, so the
-// modifiers are built per-render like the send button's.
-const agentButtonModifiers = (iconColor: string) => [
-  buttonStyle("plain"),
-  labelStyle("iconOnly"),
-  imageScale("medium"),
-  frame({ width: COMPOSER_SEND_CHIP_SIZE, height: COMPOSER_SEND_CHIP_SIZE }),
-  glassEffect({ glass: { variant: "regular", interactive: true, tint: CHIP_FILL }, shape: "circle" }),
-  // Last, after glassEffect — same modifier-order constraint as the others.
-  foregroundStyle(iconColor),
-];
-
 export const Composer = (props: {
   readonly onSend: (text: string, model: ModelOption | undefined) => Promise<void>;
   readonly disabled: boolean;
@@ -249,8 +235,11 @@ export const Composer = (props: {
    * Stays mounted when hidden — same Host/GlassView first-mount rule as
    * everything else in this tree. */
   readonly topSection?: React.ReactNode;
-  /** Opens the app-wide assistant. The button always renders (collapsed state);
-   * the handler is wired later, so it's optional and a no-op until then. */
+  /** Which surface this composer is on — gates whether the assistant button
+   * shows, per the user's per-surface visibility settings. */
+  readonly agentSurface: AgentSurface;
+  /** Opens the app-wide assistant. The handler is wired later, so it's optional
+   * and a no-op until then. */
   readonly onAgent?: () => void;
 }): React.ReactElement => {
   const { client } = useAppContext();
@@ -264,6 +253,11 @@ export const Composer = (props: {
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
   const expanded = focused || text.length > 0;
   const hasContent = text.trim().length > 0 && !props.disabled;
+  // Whether to render the assistant accessory at all, per the user's global +
+  // per-surface visibility settings. A stable-per-mount preference, so gating
+  // the accessory's presence on it doesn't fight the no-remount rule (that's
+  // about the expand/collapse cycle, which uses opacity/width — see below).
+  const showAgent = useAgentButtonVisible(props.agentSurface);
   // iOS multiline TextInput's own intrinsic-size reporting to Yoga doesn't
   // reliably account for its own padding — measuring the actual content
   // height directly (the standard RN pattern for auto-growing text inputs)
@@ -468,21 +462,17 @@ export const Composer = (props: {
           ) : null}
         </GlassView>
       </View>
-      {/* The app-wide assistant — OUTSIDE the pill, shown only while collapsed;
-       * it slides away (width 0, opacity 0) when the field expands and Send
-       * returns. Always mounted (glass Host first-mount rule), gated by
-       * width/opacity, ridden by the same expand/collapse LayoutAnimation.
-       * Handler wired later. */}
-      <View style={[styles.agentSlot, expanded && styles.agentSlotCollapsed]} pointerEvents={expanded ? "none" : "auto"}>
-        <Host style={styles.agentHost}>
-          <Button
-            label="Assistant"
-            systemImage="sparkles"
-            onPress={() => props.onAgent?.()}
-            modifiers={agentButtonModifiers(themeColors.secondary)}
-          />
-        </Host>
-      </View>
+      {/* The app-wide assistant (Dubz) — OUTSIDE the pill, shown only while
+       * collapsed; it slides away (width 0, opacity 0) when the field expands
+       * and Send returns. Rendered only when the user's settings enable it here;
+       * within that, gated by width/opacity and ridden by the same
+       * expand/collapse LayoutAnimation — the button never remounts during the
+       * collapse cycle (glass Host first-mount rule). */}
+      {showAgent ? (
+        <View style={[styles.agentSlot, expanded && styles.agentSlotCollapsed]} pointerEvents={expanded ? "none" : "auto"}>
+          <AgentButton onPress={props.onAgent} />
+        </View>
+      ) : null}
       </View>
     </View>
   );
@@ -499,12 +489,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     paddingHorizontal: 4,
   },
-  // The pill + the assistant button, on one row. `alignItems: "flex-end"` so
-  // the assistant bottom-aligns with the pill's content row (where + / send
-  // sit), not the pill's padded top.
+  // The pill + the assistant button, on one row, vertically centred against
+  // the pill (the assistant only shows while the pill is at its collapsed
+  // height, so centre reads correctly).
   barRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
   },
   fieldClip: {
     // Flex so the pill fills the row and reclaims the assistant's width once it
@@ -529,23 +519,23 @@ const styles = StyleSheet.create({
     width: 0,
     opacity: 0,
   },
-  // The assistant's collapsing wrapper, mirror image of sendSlot: sized (plus a
-  // left gap from the pill) while collapsed, 0 width + 0 margin + 0 opacity
-  // while expanded. Same clip-don't-unmount treatment.
+  // The assistant's collapsing wrapper. Shown (collapsed composer): sized to the
+  // button plus a left gap, centred, NO clipping (so the glass circle's edge is
+  // never cropped). Hidden (expanded composer): 0 width/margin/opacity, and
+  // `overflow: hidden` only here — that clips the still-mounted button down to
+  // nothing without ever unmounting it (glass Host first-mount rule).
   agentSlot: {
     width: COMPOSER_SEND_CHIP_SIZE,
     height: COMPOSER_SEND_CHIP_SIZE,
     marginLeft: 8,
-    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
   agentSlotCollapsed: {
     width: 0,
     marginLeft: 0,
     opacity: 0,
-  },
-  agentHost: {
-    width: COMPOSER_SEND_CHIP_SIZE,
-    height: COMPOSER_SEND_CHIP_SIZE,
+    overflow: "hidden",
   },
   field: {
     padding: 10,

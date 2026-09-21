@@ -390,6 +390,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           bottomInset={keyboardHeight > 0 ? 0 : insets.bottom}
           placeholder="Message"
           seedModel={resolvedSeed}
+          agentSurface="session"
         />
       </View>
     </View>

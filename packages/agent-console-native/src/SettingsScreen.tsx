@@ -202,6 +202,15 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
           </View>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("AgentButtonSettings")} activeOpacity={0.6}>
+          <View style={styles.linkRow}>
+            <View style={styles.linkText}>
+              <Text style={styles.fieldLabel}>Dubz</Text>
+              <Text style={styles.hint}>Show the assistant button, and where it appears.</Text>
+            </View>
+            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+          </View>
+        </TouchableOpacity>
 
         <Text style={styles.sectionLabel}>Workspace</Text>
         <View style={styles.card}>

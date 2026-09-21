@@ -24,6 +24,7 @@ import { SessionChatScreen } from "./SessionChatScreen";
 import { SettingsScreen } from "./SettingsScreen";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { AppearanceScreen } from "./AppearanceScreen";
+import { AgentButtonSettingsScreen } from "./AgentButtonSettingsScreen";
 import { ExtensionsScreen } from "./ExtensionsScreen";
 import { FontImportScreen } from "./FontImportScreen";
 import { ThemeColorGroupScreen } from "./ThemeColorGroupScreen";
@@ -43,6 +44,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Extensions: undefined;
   Appearance: undefined;
+  AgentButtonSettings: undefined;
   FontImport: undefined;
   // Create a VS Code colour theme, or edit one created here. No id means a new
   // theme, prefilled from whatever is currently applied. `viewFile` (a store-
@@ -244,6 +246,7 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
         <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
+        <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
          * header; the draft they share lives in themeDraft.ts, not in params. */}
         <Stack.Screen name="ThemeEditor" component={ThemeEditorScreen} options={{ headerShown: true, title: "New Theme" }} />
