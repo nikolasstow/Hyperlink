@@ -631,11 +631,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   themeStack: {
+    // Cancel the screen's 16pt content padding so the row Hosts can carry their
+    // own horizontal margin instead. A native Host does not inherit RN parent
+    // padding the way the section labels do (matchContents.horizontal is off,
+    // so its width is not derived from the SwiftUI content), so relying on the
+    // content padding let the cards bleed to the screen edges — the same reason
+    // the Home session/repo cards set their margin on the Host itself.
+    marginHorizontal: -16,
     marginTop: 2,
   },
   themeCardHost: {
     // Each row is its own Host (so its context menu can lift the whole card);
-    // a small gap stacks them like the Home session cards.
+    // the horizontal margin insets it to match the labels, and a small bottom
+    // gap stacks them like the Home session cards.
+    marginHorizontal: 16,
     marginBottom: 8,
   },
   themeRow: {
