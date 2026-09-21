@@ -1,6 +1,6 @@
 # Assistant (Dubz) & the bottom bar
 
-**Status:** Assistant button + visibility settings SHIPPED (chat/Home composer). Compositional `BottomBar` shell and the assistant's own behavior are PLANNED. Owner-driven; app-wide agent to be spec'd by a separate agent later.
+**Status:** Assistant button + visibility settings + compositional `BottomBar` shell SHIPPED (chat/Home composer). The assistant's own behavior is PLANNED. Owner-driven; app-wide agent to be spec'd by a separate agent later.
 **Package:** `packages/agent-console-native`. Device-only UI (no simulator here) — verify on device.
 **Related:** `agent-console-native-composer.md` (composer invariants — load-bearing), `skills-management.md`, `rules-app-integration.md`.
 
@@ -30,9 +30,13 @@ Two kinds of bottom bar — **chat input** and **search** — are meant to conve
 
 `repo` and `editor` are wired in the settings/config now; those surfaces render the button as they're built out (the app-wide agent work).
 
-## Planned: the compositional `BottomBar` shell
+## The compositional `BottomBar` shell (SHIPPED)
 
-Owner direction: **a shell that takes slotted components, not one massive component with variant params.** The shell owns the hard parts once (glass field + squircle clip, expanded/collapsed state, the collapse animation, the assistant accessory, trailing gating); variants compose it:
+Per owner direction — **a shell that takes slotted components, not one massive component with variant params.** `BottomBar.tsx` owns the hard parts once (glass field + squircle clip, the collapse *layout*, the assistant accessory + its visibility, trailing gating) and takes the variable parts as slots: `input`, `leading` (+), `expandedCenter` (model picker), `collapsedCenter` (mirror), `trailing` (send), `topSection`. `Composer.tsx` is now the chat variant: it owns the intricate state (focus/text/animation/model/send) and passes those slots, driving the shell with a single `expanded` flag.
+
+The shell is **presentational** (no state) — deliberately, so the fragile focus→animate→collapse timing stays in one place (the variant) and the invariants hold by construction: nothing unmounts across the collapse cycle, the clip is on the plain `fieldClip` View, and the variant still triggers the `LayoutAnimation` while the layout it animates lives in the shell. A pure-context version (no `expanded` prop) is a possible later refinement; the slot split is the win the owner asked for.
+
+The eventual/earlier sketch of the slot API:
 
 ```
 <BottomBar>                    // owns glass, expand state, animation, assistant accessory
@@ -49,5 +53,6 @@ Owner direction: **a shell that takes slotted components, not one massive compon
 ## Open / later
 
 - Wire the assistant's actual behavior (the app-wide, context-aware agent) — separate spec, later agent.
-- Build the `BottomBar` shell and move chat + search onto it.
+- Move the **search** bottom bar (`BottomSearchPill`) onto `BottomBar` too — its scroll-hide behavior differs, so it was left separate for now (the shell was built chat-first).
+- Optional refinement: a pure-context `BottomBar` (drop the `expanded` prop) if the slot split proves it wants it.
 - Render the assistant on the `repo` and `editor` surfaces once those exist.
