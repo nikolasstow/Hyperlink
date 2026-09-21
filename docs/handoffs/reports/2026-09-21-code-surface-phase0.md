@@ -63,9 +63,9 @@ bundles, which the architecture implies rather than something this introduces.
 instance, which is what keeps language intelligence, inline completions and
 collaborative editing additive.
 
-## Two defects the browser run caught
+## Three defects the browser run caught
 
-Both would have shipped to the device.
+All three would have shipped to the device.
 
 **Monaco refuses most theme names.** `defineTheme` validates against
 `/^[a-z0-9-]+$/i` and throws `Illegal theme name!` otherwise. `useCodeTheme`
@@ -74,6 +74,18 @@ theme would have thrown, silently leaving the surface on its bundled fallback.
 `monacoThemeName` leaves a name Monaco already accepts alone, so `github-dark`
 stays itself, and slugs anything else with a digest of the original appended so
 two themes cannot collapse into one.
+
+**The text could not be selected, so Copy could not work.** Monaco marks a
+read-only editor `no-user-select` and takes selection over itself, which on a
+phone leaves nothing for the system callout to act on. A native selection over
+the rendered lines returned an empty string. The handoff lists selection and
+copy among the acceptance criteria, and the viewer this replaces had them
+through `<Text selectable>`.
+
+While the surface is read-only the platform keeps selection, with its own
+handles and its own menu, through a `surface-readonly` class on the body. The
+class comes off in `setReadOnly` the moment editing starts, because Monaco needs
+selection back with the cursor. Both directions are verified.
 
 **An empty `settings` would have lost every token rule.** Shiki moves
 `tokenColors` into `settings` only when `settings` is absent
@@ -93,6 +105,8 @@ the app sends.
 | A theme named `themes/Night Owl-color-theme.json` | Applies; background `#011627` as written |
 | Token colours against a theme document with `tokenColors` and no `settings` | Keywords, strings and comments each take the theme's colour and italics |
 | Read-only | Clicking in and typing changes nothing |
+| Selection while read-only | A native selection over the lines returns the line text, so the system Copy callout has something to act on |
+| Selection after `setReadOnly(false)` | Handed back to Monaco, `user-select` off, class removed; and restored on the way back |
 | A 20,000 line file | First paint 101 ms, 37 line elements rendered, so virtualization is intact |
 | `scrollTo` line 9000 | Gutter reveals 8981 to 9018 |
 | Content carrying `U+2028`, `U+2029`, `</script>`, backticks and quotes | Renders intact, no script error |
@@ -111,6 +125,27 @@ npx expo export --platform ios                                    assets/code-su
 The root project still reports the eight toolkit errors that predate this
 branch. They are fixed on `fix/toolkit-typecheck`, unmerged, and none of them
 are in this diff.
+
+## Decisions worth knowing
+
+**Monaco's accessibility layer is off.** `accessibilitySupport: "off"` stops
+Monaco mirroring the document into a hidden textarea, which on a phone means
+VoiceOver reads the file twice. The cost is that Monaco no longer announces
+itself as an editor. Worth a pass with VoiceOver on device, and worth revisiting
+when editing lands, where the trade-off is different.
+
+**The page declares a content security policy** that permits no origin at all:
+inline script and style, `data:` for the codicon font, nothing else. The surface
+cannot reach the network even if something in it tried.
+
+**The file viewer no longer nests a scroll view.** Monaco scrolls and
+virtualizes itself, so the screen hands it a fixed frame. `ScrollViewMarker` and
+its scroll edge effects went with the RN text rendering, along with the 200,000
+character cap that used to skip highlighting on a large file.
+
+**`contentHeight` is reported and not used.** The surface fills its frame here,
+so the height is advisory. It stays in the protocol because a host that wants to
+size to its content, a chat attachment for instance, would need it.
 
 ## Sharp edges
 

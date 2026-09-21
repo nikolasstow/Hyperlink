@@ -183,9 +183,19 @@ const scrollTo = (line: number): void => {
   editor?.setPosition({ lineNumber: Math.max(1, line), column: 1 });
 };
 
+/**
+ * Read-only also decides who owns selection.
+ *
+ * Monaco takes selection over itself and marks the editor `no-user-select`,
+ * which on a touch device leaves the text unselectable and the system Copy
+ * callout with nothing to act on. While the surface is read-only the platform
+ * keeps selection, which is what a reader wants; the moment it becomes editable
+ * Monaco needs it back, cursor and all.
+ */
 const setReadOnly = (next: boolean): void => {
   readOnly = next;
   editor?.updateOptions({ readOnly: next });
+  document.body.classList.toggle("surface-readonly", next);
 };
 
 let lastHeight = -1;
@@ -229,6 +239,9 @@ const start = async (): Promise<void> => {
   const hl = await ensureHighlighter();
   for (const language of SURFACE_LANGUAGES) monaco.languages.register({ id: language });
   applyShiki(hl);
+
+  // Set before the editor exists, so the first paint is already selectable.
+  document.body.classList.toggle("surface-readonly", readOnly);
 
   const host = document.getElementById("surface");
   if (host === null) throw new Error("The surface container is missing from the document.");

@@ -75,11 +75,20 @@ const html = `<!doctype html>
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background:transparent;-webkit-text-size-adjust:100%;}
 #surface{position:absolute;inset:0;}
-/* The page is a code view, not a web page: a long-press should offer Copy on
-   the selection rather than the system callout for a document. */
-#surface{-webkit-touch-callout:none;}
 </style>
 <style>${css}</style>
+<!-- After Monaco's own stylesheet, so these win on order as well as specificity. -->
+<style>
+/* Monaco marks a read-only editor no-user-select and takes selection over
+   itself, which on a phone means the text cannot be selected at all and there
+   is nothing for the system Copy callout to act on. While the surface is
+   read-only the platform gets selection back, with its handles and its menu.
+   The class comes off when editing starts and Monaco's own model takes over. */
+body.surface-readonly .monaco-editor .lines-content,
+body.surface-readonly .monaco-editor .view-line,
+body.surface-readonly .monaco-editor .view-line span,
+body.surface-readonly .monaco-editor .view-lines{user-select:text;-webkit-user-select:text;cursor:text;}
+</style>
 </head>
 <body>
 <div id="surface"></div>
