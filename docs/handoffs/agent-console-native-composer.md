@@ -36,6 +36,19 @@ These are load-bearing, not incidental, and each is documented at its point of u
 3. **`SessionTopBar`'s "More" button** — rendered, not wired. What belongs in that menu hasn't been decided.
 4. **Delete-tool for the `console` agent** — separate from the composer itself. Direction decided in a prior session: a safe, controlled delete capability, not a blanket permission-config change. Requires a real OpenCode plugin with path validation (deny anything outside the session's own directory scope), not started.
 
+## Update (2026-09-21): assistant button + send-gating
+
+The "+ and send stay visible at all times" behavior above **changed**: send now
+**hides when collapsed** (width 0 / opacity 0) and the app-wide assistant button
+("Dubz", theme-secondary glass + white `sparkles`) rides the pill's right edge
+outside it, shown only while collapsed; on expand, send returns and the
+assistant slides away. Both are gated by width/opacity on the **same** expand
+`LayoutAnimation` — nothing unmounts, so the invariants above still hold. The
+assistant is a reusable `AgentButton.tsx`; its visibility is per the user's
+`agentButtonSettings` (master + per-surface). The compositional `BottomBar`
+shell (slots, not params) is the planned next step. Full writeup:
+[`assistant-and-bottom-bar.md`](./assistant-and-bottom-bar.md).
+
 ## Not started: repo → worktree organization
 
 A full plan exists at `~/.claude/plans/warm-sprouting-reddy.md` (Plan-mode output, not yet executed) for reorganizing `agent-console`'s session list by repo → worktree, modeled on the Cursor mobile app. It is scoped to `packages/agent-console` (the web client), not `-native`, and covers: a `rootDir` setting, filesystem-based repo/worktree discovery via `client.file.list`, a `repo-admin` OpenCode agent profile scoped to `git worktree*` only, new Home/RepoSessions pages, and a worktree-creation flow. None of it has been built. Read that plan file in full before starting — it has its own verification steps and an explicit out-of-scope list (no repo creation/deletion from the UI).
