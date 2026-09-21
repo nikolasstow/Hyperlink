@@ -16,10 +16,13 @@ import {
   importCount,
   importGroupsOf,
   isHexColor,
+  isPickedColorChange,
   NO_FONT_STYLE,
+  normalizePickedColor,
   parseFontStyle,
   parseVsCodeTheme,
   searchTheme,
+  searchUnsetKeys,
   SEMANTIC_GROUP_ID,
   selectionOf,
   summarizeColorGroups,
@@ -302,6 +305,89 @@ describe("searchTheme", () => {
   it("returns nothing for an empty query rather than everything", () => {
     expect(searchTheme(subject, "")).toEqual({ colors: [], tokens: [] });
     expect(searchTheme(subject, "   ")).toEqual({ colors: [], tokens: [] });
+  });
+});
+
+describe("normalizePickedColor", () => {
+  // `@expo/ui` formats with `#%02X%02X%02X%02X` when `supportsOpacity` is on,
+  // so everything the picker reports arrives as eight uppercase digits.
+  it("drops a fully opaque alpha when the key had none", () => {
+    expect(normalizePickedColor("#1E1E1EFF", "#1e1e1e")).toBe("#1e1e1e");
+  });
+
+  it("keeps the alpha when the key already carried one", () => {
+    expect(normalizePickedColor("#1E1E1EFF", "#1e1e1e80")).toBe("#1e1e1eff");
+  });
+
+  it("keeps a real alpha whatever the key looked like", () => {
+    expect(normalizePickedColor("#1E1E1E80", "#1e1e1e")).toBe("#1e1e1e80");
+  });
+
+  it("follows the case the key was written in", () => {
+    expect(normalizePickedColor("#AABBCCFF", "#AABBCC")).toBe("#AABBCC");
+    expect(normalizePickedColor("#AABBCCFF", "#aabbcc")).toBe("#aabbcc");
+  });
+
+  it("writes a key with no previous value in lower case", () => {
+    expect(normalizePickedColor("#AABBCCFF", undefined)).toBe("#aabbcc");
+  });
+
+  it("reads a short previous value for whether it had an alpha", () => {
+    expect(normalizePickedColor("#AABBCCFF", "#abc")).toBe("#aabbcc");
+    expect(normalizePickedColor("#AABBCCFF", "#abcd")).toBe("#aabbccff");
+  });
+});
+
+describe("isPickedColorChange", () => {
+  it("rejects the same colour reported in the picker's own notation", () => {
+    expect(isPickedColorChange("#1E1E1EFF", "#1e1e1e")).toBe(false);
+  });
+
+  it("accepts a colour that differs", () => {
+    expect(isPickedColorChange("#2E2E2EFF", "#1e1e1e")).toBe(true);
+  });
+
+  it("accepts any colour for a key with no previous value", () => {
+    expect(isPickedColorChange("#1E1E1EFF", undefined)).toBe(true);
+  });
+
+  it("spots an alpha change on a key that already had one", () => {
+    expect(isPickedColorChange("#1E1E1E80", "#1e1e1eff")).toBe(true);
+  });
+
+  it("rejects anything that is not a colour", () => {
+    expect(isPickedColorChange("rebeccapurple", "#1e1e1e")).toBe(false);
+    expect(isPickedColorChange("", undefined)).toBe(false);
+  });
+});
+
+describe("searchUnsetKeys", () => {
+  const subject: VsCodeTheme = { ...EMPTY_THEME, colors: { "editor.background": "#1e1e1e" } };
+
+  it("finds a key the theme has never set", () => {
+    expect(searchUnsetKeys(subject, "terminal.ansiRed", 20).map((h) => h.key)).toContain("terminal.ansiRed");
+  });
+
+  it("never offers a key the theme already sets", () => {
+    expect(searchUnsetKeys(subject, "editor.background", 20).map((h) => h.key)).not.toContain("editor.background");
+  });
+
+  it("matches the humanised label as well as the key", () => {
+    expect(searchUnsetKeys(subject, "line number", 20).map((h) => h.key)).toContain("editorLineNumber.foreground");
+  });
+
+  it("carries the label the row renders", () => {
+    const hit = searchUnsetKeys(subject, "terminal.ansiRed", 20)[0];
+    expect(hit?.label).toBe(humanizeKey("terminal.ansiRed"));
+  });
+
+  it("stops at the limit", () => {
+    expect(searchUnsetKeys(subject, "editor", 5)).toHaveLength(5);
+  });
+
+  it("returns nothing for an empty query rather than the whole catalog", () => {
+    expect(searchUnsetKeys(subject, "", 20)).toEqual([]);
+    expect(searchUnsetKeys(subject, "   ", 20)).toEqual([]);
   });
 });
 
