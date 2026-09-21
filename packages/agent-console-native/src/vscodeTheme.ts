@@ -31,6 +31,8 @@ const stringOf = (value: unknown): string | undefined => (typeof value === "stri
  * two for rendering, so the editor stores what it can honour rather than a
  * third value nothing reads.
  */
+import { THEME_COLOR_KEYS } from "./themeColorKeys";
+
 export type ThemeType = "light" | "dark";
 
 /**
@@ -68,6 +70,39 @@ export const EMPTY_THEME: VsCodeTheme = {
 
 /** `#RGB`, `#RGBA`, `#RRGGBB` or `#RRGGBBAA`, which is every colour VS Code accepts. */
 export const isHexColor = (value: string): boolean => /^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value);
+
+/**
+ * The colour a native picker reported, in the notation the key was already
+ * written in.
+ *
+ * `@expo/ui`'s `ColorPicker` formats with `#%02X%02X%02X%02X` whenever
+ * `supportsOpacity` is on, which both picker screens pass because plenty of
+ * theme keys are deliberately translucent. So it answers with eight uppercase
+ * digits whatever it was handed, and a key written `#1e1e1e` comes back
+ * `#1E1E1EFF`. VS Code reads the two as the same colour, so the rewrite buys
+ * nothing and costs a diff on every key anyone touches: import a theme, change
+ * one colour, and the document that comes back out differs on keys nobody
+ * edited.
+ *
+ * A fully opaque colour is written in six digits unless the key already carried
+ * an alpha channel, and the case follows whatever the key was written in.
+ */
+export const normalizePickedColor = (picked: string, previous: string | undefined): string => {
+  const hadAlpha = previous !== undefined && (previous.length === 5 || previous.length === 9);
+  const opaque = picked.length === 9 && picked.slice(7).toLowerCase() === "ff";
+  const trimmed = opaque && !hadAlpha ? picked.slice(0, 7) : picked;
+  const wasUpper = previous !== undefined && previous !== previous.toLowerCase();
+  return wasUpper ? trimmed.toUpperCase() : trimmed.toLowerCase();
+};
+
+/**
+ * Is this a colour the theme does not already hold for that key?
+ *
+ * The reported form differs from the stored one even when the colour is
+ * identical, so comparing the raw strings would record edits nobody made.
+ */
+export const isPickedColorChange = (picked: string, previous: string | undefined): boolean =>
+  isHexColor(picked) && normalizePickedColor(picked, previous) !== previous;
 
 /** `hc-black` and `hcDark` are dark; anything else unrecognised follows dark, the app's own default. */
 const toThemeType = (value: unknown): ThemeType => (stringOf(value)?.toLowerCase().includes("light") === true ? "light" : "dark");
@@ -479,6 +514,37 @@ export const searchTheme = (theme: VsCodeTheme, query: string): ThemeSearchResul
   });
 
   return { colors, tokens };
+};
+
+/** A key the theme does not set, offered so search can reach one. */
+export interface UnsetHit {
+  readonly key: string;
+  readonly label: string;
+}
+
+/**
+ * Keys from the bundled catalog that match the query and that this theme does
+ * not set.
+ *
+ * Kept apart from {@link searchTheme} rather than folded into its results,
+ * because the two answer different questions. A theme sets on the order of a
+ * hundred keys out of the catalog's several hundred, so mixing them would bury
+ * what the theme actually holds under everything it could hold. The editor
+ * shows these below the real results, and only while the theme can be edited:
+ * in a read-only theme there is nothing to add and they are noise.
+ */
+export const searchUnsetKeys = (theme: VsCodeTheme, query: string, limit: number): ReadonlyArray<UnsetHit> => {
+  const needle = query.trim().toLowerCase();
+  if (needle.length === 0) return [];
+  const set = new Set(Object.keys(theme.colors));
+  const hits: Array<UnsetHit> = [];
+  for (const key of THEME_COLOR_KEYS) {
+    if (hits.length >= limit) break;
+    if (set.has(key)) continue;
+    const label = humanizeKey(key);
+    if (`${key} ${label}`.toLowerCase().includes(needle)) hits.push({ key, label });
+  }
+  return hits;
 };
 
 /* ------------------------------------------------------------------ *

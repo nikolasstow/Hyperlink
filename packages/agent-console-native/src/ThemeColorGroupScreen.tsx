@@ -31,7 +31,8 @@ import {
   groupIdOf,
   groupPrefixOf,
   humanizeKey,
-  isHexColor,
+  isPickedColorChange,
+  normalizePickedColor,
   type VsCodeTheme,
 } from "./vscodeTheme";
 
@@ -83,7 +84,12 @@ const ColorRow = (props: {
             selection={props.value}
             supportsOpacity
             onSelectionChange={(next) => {
-              if (isHexColor(next)) setColor(props.themeKey, next);
+              // The picker answers in eight uppercase digits whatever it was
+              // handed, so the reported value is read back into the key's own
+              // notation before it is compared or stored.
+              if (isPickedColorChange(next, props.value)) {
+                setColor(props.themeKey, normalizePickedColor(next, props.value));
+              }
             }}
           />
         </Host>
@@ -112,7 +118,9 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
   // A search result arrives with `groupId: "search"` and one key to show, so
   // the same screen serves both a whole group and a single hit.
   const keys = React.useMemo(() => {
-    if (focusKey !== undefined) return [focusKey];
+    // A focused key the theme has not set belongs in the Add list below, not
+    // here: search can now reach a key that has never been given a value.
+    if (focusKey !== undefined) return theme.colors[focusKey] === undefined ? [] : [focusKey];
     return Object.keys(theme.colors)
       .filter((key) => groupIdOf(key) === groupId)
       .sort((a, b) => a.localeCompare(b));
@@ -123,7 +131,10 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
    * without needing an import. */
   const unset = React.useMemo(() => {
     // Nothing to add in a read-only theme, so the whole "Not set" section drops.
-    if (focusKey !== undefined || group === undefined || readonly) return [];
+    if (readonly) return [];
+    // One focused key from search, offered when the theme has not set it.
+    if (focusKey !== undefined) return theme.colors[focusKey] === undefined ? [focusKey] : [];
+    if (group === undefined) return [];
     const set = new Set(Object.keys(theme.colors));
     return THEME_COLOR_KEYS.filter((key) => !set.has(key) && groupIdOf(key) === groupId).sort((a, b) => a.localeCompare(b));
   }, [group, groupId, theme.colors, focusKey, readonly]);
@@ -141,7 +152,9 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
       <Text style={styles.sectionLabel}>Set in this theme · {keys.length}</Text>
       <View style={styles.card}>
         {keys.length === 0 ? (
-          <Text style={styles.empty}>Nothing set in this group.</Text>
+          <Text style={styles.empty}>
+            {focusKey === undefined ? "Nothing set in this group." : "This theme does not set this key."}
+          </Text>
         ) : (
           keys.map((key, index) => {
             const value = theme.colors[key];

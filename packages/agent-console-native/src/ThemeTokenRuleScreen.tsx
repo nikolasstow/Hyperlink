@@ -20,7 +20,8 @@ import { updateDraft, useThemeDraft } from "./themeDraft";
 import {
   EMPTY_THEME,
   formatFontStyle,
-  isHexColor,
+  isPickedColorChange,
+  normalizePickedColor,
   parseFontStyle,
   type FontStyleFlags,
   type TokenRule,
@@ -147,7 +148,12 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
                 selection={foreground ?? DEFAULT_FOREGROUND}
                 supportsOpacity
                 onSelectionChange={(next) => {
-                  if (isHexColor(next)) replace((current) => ({ ...current, foreground: next }));
+                  // Same notation round trip as the colour rows: the picker
+                  // always answers in eight uppercase digits.
+                  if (isPickedColorChange(next, foreground)) {
+                    const value = normalizePickedColor(next, foreground);
+                    replace((current) => ({ ...current, foreground: value }));
+                  }
                 }}
               />
             </Host>

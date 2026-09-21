@@ -43,6 +43,7 @@ import {
   humanizeKey,
   parseVsCodeTheme,
   searchTheme,
+  searchUnsetKeys,
   type ThemeType,
   type VsCodeTheme,
 } from "./vscodeTheme";
@@ -51,6 +52,13 @@ type Props = NativeStackScreenProps<RootStackParamList, "ThemeEditor">;
 
 /** The two appearances a theme can declare. Typed once here rather than cast at the call site. */
 const THEME_TYPES: ReadonlyArray<ThemeType> = ["light", "dark"];
+
+/**
+ * How many unset keys search offers. The catalog runs to several hundred and a
+ * broad query would otherwise bury the Token scopes section under keys the
+ * theme does not hold.
+ */
+const ADDABLE_LIMIT = 20;
 
 const Swatch = (props: { readonly color: string | undefined }): React.ReactElement => (
   <View style={[styles.swatch, props.color === undefined ? styles.swatchEmpty : { backgroundColor: props.color }]} />
@@ -149,6 +157,15 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
   const colorCount = Object.keys(theme.colors).length;
   const semanticCount = Object.keys(theme.semanticTokenColors).length;
   const results = React.useMemo(() => searchTheme(theme, query), [theme, query]);
+  /**
+   * Keys the theme does not set that match the query, shown under the real
+   * results so they read as something to add rather than something it holds.
+   * A read-only theme has nothing to add, where they would be noise.
+   */
+  const addable = React.useMemo(
+    () => (readonly ? [] : searchUnsetKeys(theme, query, ADDABLE_LIMIT)),
+    [theme, query, readonly],
+  );
   const searching = query.trim().length > 0;
 
   const clearAll = (): void => {
@@ -170,7 +187,15 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
     }
     setSaving(true);
     const id = draft.id ?? newThemeId();
-    await saveCreatedTheme(id, theme);
+    try {
+      await saveCreatedTheme(id, theme);
+    } catch (error: unknown) {
+      setSaving(false);
+      // Storage can refuse a write. A Save button that closed the screen anyway
+      // would look like it had worked.
+      Alert.alert("Could not save", error instanceof Error ? error.message : "The theme was not written to this device.");
+      return;
+    }
     adoptSavedId(id);
     setSaving(false);
     props.navigation.goBack();
@@ -239,6 +264,31 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                 ))
               )}
             </View>
+
+            {addable.length === 0 ? null : (
+              <>
+                <Text style={styles.sectionLabel}>Add keys · {addable.length}</Text>
+                <View style={styles.card}>
+                  {addable.map((hit, index) => (
+                    <TouchableOpacity
+                      key={hit.key}
+                      style={[styles.row, index > 0 && styles.rowBorder]}
+                      activeOpacity={0.6}
+                      onPress={() => props.navigation.navigate("ThemeColorGroup", { groupId: "search", focusKey: hit.key })}
+                    >
+                      <Swatch color={undefined} />
+                      <Text style={styles.rowTitleDim} numberOfLines={1}>
+                        {hit.label}
+                      </Text>
+                      <Text style={styles.rowValue}>Not set</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.addableHint}>
+                  Keys this theme does not set. Open one to give it a value.
+                </Text>
+              </>
+            )}
 
             <Text style={styles.sectionLabel}>Token scopes · {results.tokens.length}</Text>
             <View style={styles.card}>
@@ -420,6 +470,11 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 16,
   },
+  rowTitleDim: {
+    flex: 1,
+    color: colors.secondaryLabel,
+    fontSize: 16,
+  },
   rowAction: {
     flex: 1,
     color: colors.tint,
@@ -476,6 +531,13 @@ const styles = StyleSheet.create({
   },
   hint: {
     color: colors.secondaryLabel,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 7,
+    marginHorizontal: 5,
+  },
+  addableHint: {
+    color: colors.tertiaryLabel,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 7,
