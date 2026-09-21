@@ -11,9 +11,8 @@
  * @internal
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
-import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, useColorScheme, useWindowDimensions, View } from "react-native";
+import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
@@ -24,13 +23,12 @@ import { colors } from "./colors";
 import { getThemeJson, listExtensions, removeExtension } from "./extensionsClient";
 import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
-import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
-import { FALLBACK_THEME } from "./shikiHighlighter";
+import { DEFAULT_THEME, getApiAddress, type CodeTheme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
+import { useCodeTheme } from "./useCodeTheme";
 import {
   deleteCreatedTheme,
-  getCreatedTheme,
   listCreatedThemes,
   newThemeId,
   saveCreatedTheme,
@@ -60,27 +58,6 @@ const CODE_FONTS = ["Menlo", "Courier New", "Courier"];
 
 const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 const isHex = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value);
-
-/** A device-created theme shaped for Shiki, the same way `getThemeJson` shapes a
- * server one — so a created theme can highlight the preview with no server file
- * to fetch. `settings` mirrors `tokenColors` because Shiki reads that name. */
-const shikiThemeOf = (theme: VsCodeTheme): ThemeRegistrationRaw => {
-  const settings = theme.tokenColors.map((rule) => ({
-    scope: [...rule.scope],
-    settings: {
-      ...(rule.foreground === undefined ? {} : { foreground: rule.foreground }),
-      ...(rule.fontStyle === undefined ? {} : { fontStyle: rule.fontStyle }),
-    },
-  }));
-  return {
-    name: theme.name,
-    type: theme.type,
-    colors: { ...theme.colors },
-    semanticTokenColors: { ...theme.semanticTokenColors },
-    tokenColors: settings,
-    settings,
-  };
-};
 
 /** A colour theme drawn from an installed extension. */
 interface SelectableTheme {
@@ -217,7 +194,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   // The enabled code theme is tracked independently of the accents, so changing
   // a colour never unsets it. Its accents are the picker's "Theme" anchor.
   const enabled = theme.code;
-  const anchor: Theme = enabled !== undefined ? { primary: enabled.primary, secondary: enabled.secondary, codeFont: theme.codeFont } : DEFAULT_THEME;
+  const anchor = enabled !== undefined ? { primary: enabled.primary, secondary: enabled.secondary, codeFont: theme.codeFont } : DEFAULT_THEME;
 
   // Selecting a theme seeds the accents AND records it as the code theme;
   // changing colours afterwards leaves `code` intact.
@@ -334,39 +311,9 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
     ]);
   };
 
-  // The code preview uses the enabled theme's real tokenColors — fetched from
-  // the server for an installed theme, read from local storage for a created
-  // one — else a bundled theme matching the scheme.
-  const scheme = useColorScheme();
-  const [previewTheme, setPreviewTheme] = React.useState<string | ThemeRegistrationRaw>(
-    scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light,
-  );
-  React.useEffect(() => {
-    let cancelled = false;
-    if (enabled === undefined) {
-      setPreviewTheme(scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light);
-      return;
-    }
-    if (enabled.createdId !== undefined) {
-      const id = enabled.createdId;
-      void getCreatedTheme(id)
-        .then((mine) => {
-          if (!cancelled && mine !== undefined) setPreviewTheme(shikiThemeOf(mine.theme));
-        })
-        .catch(() => undefined);
-      return () => {
-        cancelled = true;
-      };
-    }
-    getThemeJson(apiBase, enabled.file)
-      .then((json) => {
-        if (!cancelled) setPreviewTheme({ ...json, name: enabled.file });
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [apiBase, enabled?.file, enabled?.createdId, scheme]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed by theme identity
+  // The code preview highlights with the enabled theme (installed, created, or a
+  // bundled fallback) — resolved by the same hook the file viewer uses.
+  const previewTheme = useCodeTheme();
 
   return (
     <ScrollView

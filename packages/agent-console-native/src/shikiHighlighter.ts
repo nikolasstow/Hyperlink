@@ -17,6 +17,7 @@
 import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemeRegistrationRaw } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { cacheKey, getCachedTokens, setCachedTokens } from "./codeCache";
+import type { VsCodeTheme } from "./vscodeTheme";
 import bash from "shiki/langs/bash.mjs";
 import css from "shiki/langs/css.mjs";
 import go from "shiki/langs/go.mjs";
@@ -70,6 +71,39 @@ const LANG_ALIASES: Record<string, string> = {
 /** Built-in fallback theme names by colour scheme, used when no VS Code theme
  * is supplied. */
 export const FALLBACK_THEME = { dark: "github-dark", light: "github-light" } as const;
+
+/**
+ * A device-created theme shaped for Shiki, the same way `getThemeJson` shapes a
+ * server one — so a created theme can highlight with no server file to fetch.
+ * `settings` mirrors `tokenColors` because Shiki reads that name.
+ */
+export const shikiThemeOf = (theme: VsCodeTheme): ThemeRegistrationRaw => {
+  const settings = theme.tokenColors.map((rule) => ({
+    scope: [...rule.scope],
+    settings: {
+      ...(rule.foreground === undefined ? {} : { foreground: rule.foreground }),
+      ...(rule.fontStyle === undefined ? {} : { fontStyle: rule.fontStyle }),
+    },
+  }));
+  return {
+    name: theme.name,
+    type: theme.type,
+    colors: { ...theme.colors },
+    semanticTokenColors: { ...theme.semanticTokenColors },
+    tokenColors: settings,
+    settings,
+  };
+};
+
+/** The language id for a filename, from its extension — passed straight to
+ * `tokenizeCode`, which resolves aliases and falls back to plain text for
+ * anything unknown or extension-less. */
+export const langFromFilename = (name: string): string => {
+  const base = name.slice(name.lastIndexOf("/") + 1);
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0 || dot === base.length - 1) return "text";
+  return base.slice(dot + 1).toLowerCase();
+};
 
 let singleton: Promise<HighlighterCore> | undefined;
 const loadedThemes = new Set<string>(["github-dark", "github-light"]);
