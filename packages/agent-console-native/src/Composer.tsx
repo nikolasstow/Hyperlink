@@ -217,6 +217,22 @@ const sendButtonModifiers = (active: boolean, activeFill: string, mutedFill: str
   foregroundStyle("#FFFFFF"),
 ];
 
+// The app-wide assistant button (`sparkles`), shown to the right of the pill
+// only while collapsed. Same proven glass recipe as the + chip (`CHIP_FILL`
+// tint is the confirmed-safe mechanism — see CHIP_BUTTON_MODIFIERS), with the
+// icon in the theme's SECONDARY accent so it reads as its own thing, distinct
+// from + (gray) and send (primary/green). `iconColor` is theme-derived, so the
+// modifiers are built per-render like the send button's.
+const agentButtonModifiers = (iconColor: string) => [
+  buttonStyle("plain"),
+  labelStyle("iconOnly"),
+  imageScale("medium"),
+  frame({ width: COMPOSER_SEND_CHIP_SIZE, height: COMPOSER_SEND_CHIP_SIZE }),
+  glassEffect({ glass: { variant: "regular", interactive: true, tint: CHIP_FILL }, shape: "circle" }),
+  // Last, after glassEffect — same modifier-order constraint as the others.
+  foregroundStyle(iconColor),
+];
+
 export const Composer = (props: {
   readonly onSend: (text: string, model: ModelOption | undefined) => Promise<void>;
   readonly disabled: boolean;
@@ -233,6 +249,9 @@ export const Composer = (props: {
    * Stays mounted when hidden — same Host/GlassView first-mount rule as
    * everything else in this tree. */
   readonly topSection?: React.ReactNode;
+  /** Opens the app-wide assistant. The button always renders (collapsed state);
+   * the handler is wired later, so it's optional and a no-op until then. */
+  readonly onAgent?: () => void;
 }): React.ReactElement => {
   const { client } = useAppContext();
   const { colors: themeColors } = useTheme();
@@ -323,6 +342,9 @@ export const Composer = (props: {
   return (
     <View style={[styles.root, { paddingBottom: Math.max(props.bottomInset, 8) }]}>
       {error !== undefined ? <Text style={styles.error}>{error}</Text> : null}
+      {/* The pill and the app-wide assistant button sit in one row: the pill
+       * flexes to fill, the assistant rides its right edge. */}
+      <View style={styles.barRow}>
       {/* The squircle clip lives on this plain wrapping View via RN's
        * standard `borderCurve` handling, not on GlassView directly —
        * confirmed the hard way in the two-tree version: GlassView's own
@@ -411,20 +433,27 @@ export const Composer = (props: {
                 </Text>
               </Pressable>
             </View>
-            <Host style={styles.sendChipHost}>
-              <Button
-                label="Send"
-                systemImage="arrow.up"
-                onPress={() => {
-                  if (!expanded) {
-                    inputRef.current?.focus();
-                    return;
-                  }
-                  void send();
-                }}
-                modifiers={sendButtonModifiers(hasContent, themeColors.sendActiveFill, themeColors.sendMutedFill)}
-              />
-            </Host>
+            {/* Send lives in the pill and shows only while EXPANDED; collapsed,
+             * it slides away (width 0, opacity 0) and the assistant button
+             * takes the right edge. Never unmounts — same Host first-mount rule
+             * as everything else; gated by width/opacity, ridden by the same
+             * expand/collapse LayoutAnimation. */}
+            <View style={[styles.sendSlot, !expanded && styles.sendSlotCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
+              <Host style={styles.sendChipHost}>
+                <Button
+                  label="Send"
+                  systemImage="arrow.up"
+                  onPress={() => {
+                    if (!expanded) {
+                      inputRef.current?.focus();
+                      return;
+                    }
+                    void send();
+                  }}
+                  modifiers={sendButtonModifiers(hasContent, themeColors.sendActiveFill, themeColors.sendMutedFill)}
+                />
+              </Host>
+            </View>
           </View>
           {/* Collapsed: catch taps on glass padding / anywhere the Host
            * buttons don't claim, so the whole pill expands — not just the
@@ -438,6 +467,22 @@ export const Composer = (props: {
             />
           ) : null}
         </GlassView>
+      </View>
+      {/* The app-wide assistant — OUTSIDE the pill, shown only while collapsed;
+       * it slides away (width 0, opacity 0) when the field expands and Send
+       * returns. Always mounted (glass Host first-mount rule), gated by
+       * width/opacity, ridden by the same expand/collapse LayoutAnimation.
+       * Handler wired later. */}
+      <View style={[styles.agentSlot, expanded && styles.agentSlotCollapsed]} pointerEvents={expanded ? "none" : "auto"}>
+        <Host style={styles.agentHost}>
+          <Button
+            label="Assistant"
+            systemImage="sparkles"
+            onPress={() => props.onAgent?.()}
+            modifiers={agentButtonModifiers(themeColors.secondary)}
+          />
+        </Host>
+      </View>
       </View>
     </View>
   );
@@ -454,7 +499,17 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     paddingHorizontal: 4,
   },
+  // The pill + the assistant button, on one row. `alignItems: "flex-end"` so
+  // the assistant bottom-aligns with the pill's content row (where + / send
+  // sit), not the pill's padded top.
+  barRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
   fieldClip: {
+    // Flex so the pill fills the row and reclaims the assistant's width once it
+    // collapses away on expand.
+    flex: 1,
     borderRadius: FIELD_RADIUS,
     // Plain `borderRadius` alone renders iOS's standard circular-arc
     // corner, not Apple's "continuous" curve (the actual squircle every
@@ -462,6 +517,35 @@ const styles = StyleSheet.create({
     // uses).
     borderCurve: "continuous",
     overflow: "hidden",
+  },
+  // Send's collapsing wrapper: fixed at the send-chip size while expanded, 0
+  // width + 0 opacity while collapsed. `overflow: hidden` clips the still-
+  // mounted Host so nothing unmounts (glass first-mount rule).
+  sendSlot: {
+    width: COMPOSER_SEND_CHIP_SIZE,
+    overflow: "hidden",
+  },
+  sendSlotCollapsed: {
+    width: 0,
+    opacity: 0,
+  },
+  // The assistant's collapsing wrapper, mirror image of sendSlot: sized (plus a
+  // left gap from the pill) while collapsed, 0 width + 0 margin + 0 opacity
+  // while expanded. Same clip-don't-unmount treatment.
+  agentSlot: {
+    width: COMPOSER_SEND_CHIP_SIZE,
+    height: COMPOSER_SEND_CHIP_SIZE,
+    marginLeft: 8,
+    overflow: "hidden",
+  },
+  agentSlotCollapsed: {
+    width: 0,
+    marginLeft: 0,
+    opacity: 0,
+  },
+  agentHost: {
+    width: COMPOSER_SEND_CHIP_SIZE,
+    height: COMPOSER_SEND_CHIP_SIZE,
   },
   field: {
     padding: 10,
