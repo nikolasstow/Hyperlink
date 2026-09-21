@@ -1,0 +1,299 @@
+/**
+ * The code surface: Monaco, running inside the app's WebView, themed by Shiki.
+ *
+ * This file is not part of the React Native bundle. `scripts/gen-code-surface.mjs`
+ * bundles it with esbuild for a browser target and inlines the result into
+ * `assets/code-surface.html`, which the app loads from its own bundle. Nothing
+ * here is fetched at runtime, so the surface renders with no network.
+ *
+ * Why Monaco and why Shiki together: the app already tokenizes chat code blocks
+ * on device with Shiki, and `@shikijs/monaco` hands Monaco the same TextMate
+ * grammars and the same VS Code theme. A file and a chat block in the same
+ * language and theme therefore resolve the same tokens to the same colours.
+ * Monaco's own Monarch grammars are never registered, because a second
+ * highlighting source is exactly what the decision this implements rules out.
+ *
+ * Read-only is a message, not a build flag. Editing is the host sending
+ * `setReadOnly` with `false` on this same instance, which is what keeps later
+ * phases (LSP, inline completions, collaborative editing) additive.
+ *
+ * @internal
+ */
+import * as monaco from "monaco-editor/editor/editor.api.js";
+import { shikiToMonaco } from "@shikijs/monaco";
+import { createHighlighterCore, type HighlighterCore, type ThemeRegistrationRaw } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import bash from "shiki/langs/bash.mjs";
+import css from "shiki/langs/css.mjs";
+import go from "shiki/langs/go.mjs";
+import html from "shiki/langs/html.mjs";
+import javascript from "shiki/langs/javascript.mjs";
+import json from "shiki/langs/json.mjs";
+import markdown from "shiki/langs/markdown.mjs";
+import python from "shiki/langs/python.mjs";
+import rust from "shiki/langs/rust.mjs";
+import tsx from "shiki/langs/tsx.mjs";
+import typescript from "shiki/langs/typescript.mjs";
+import githubDark from "shiki/themes/github-dark.mjs";
+import githubLight from "shiki/themes/github-light.mjs";
+import {
+  monacoThemeName,
+  parseHostMessage,
+  SURFACE_GLOBAL,
+  SURFACE_LANGUAGES,
+  type SurfaceMessage,
+  type SurfaceTheme,
+} from "../src/codeSurfaceProtocol";
+
+/**
+ * The same eleven grammars `shikiHighlighter.ts` bundles, in the same order.
+ * They are duplicated into this bundle rather than sent across the bridge
+ * because a TextMate grammar is megabytes of JSON and the surface needs them
+ * before it can render a first frame.
+ */
+const GRAMMARS = [bash, css, go, html, javascript, json, markdown, python, rust, tsx, typescript];
+
+/** The fallbacks, so the surface renders before a theme arrives. */
+const BUNDLED_THEMES = [githubDark, githubLight];
+const BUNDLED_THEME_NAMES = new Set(["github-dark", "github-light"]);
+
+const post = (message: SurfaceMessage): void => {
+  window.ReactNativeWebView?.postMessage(JSON.stringify(message));
+};
+
+const messageOf = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
+
+/** Keyed by theme name, because registering one twice throws in Monaco. */
+const registeredThemes = new Set<string>();
+
+let highlighter: HighlighterCore | undefined;
+let editor: monaco.editor.IStandaloneCodeEditor | undefined;
+/** The latest `setContent` applied, so an out-of-order message is dropped. */
+let contentVersion = -1;
+let readOnly = true;
+
+/**
+ * The id this theme is registered and selected by, which is not always the name
+ * it arrived with: Monaco refuses anything outside `[a-z0-9-]`, and an
+ * installed theme arrives named by the file it was read from.
+ */
+const themeIdOf = (theme: string | SurfaceTheme): string =>
+  monacoThemeName(typeof theme === "string" ? theme : theme.name);
+
+/**
+ * Hand Monaco every grammar and every theme Shiki currently holds.
+ *
+ * `shikiToMonaco` rewires the tokenizer for each registered language, so it is
+ * called again after a theme is loaded rather than once at startup. Monaco
+ * keeps one tokenizer per language, so repeating this replaces rather than
+ * stacks.
+ */
+const applyShiki = (hl: HighlighterCore): void => {
+  shikiToMonaco(hl, monaco);
+};
+
+const ensureHighlighter = async (): Promise<HighlighterCore> => {
+  if (highlighter === undefined) {
+    highlighter = await createHighlighterCore({
+      themes: BUNDLED_THEMES,
+      langs: GRAMMARS,
+      engine: createJavaScriptRegexEngine(),
+    });
+    for (const name of BUNDLED_THEME_NAMES) registeredThemes.add(name);
+    applyShiki(highlighter);
+  }
+  return highlighter;
+};
+
+/**
+ * The theme in the shape Shiki's loader insists on.
+ *
+ * Shiki moves `tokenColors` into `settings` only when `settings` is absent, and
+ * a VS Code theme document carries the former and not the latter. Handing over
+ * an empty `settings` would satisfy the type and then silently lose every token
+ * rule, because an empty array is not absent. The same rule is applied here,
+ * where it is visible.
+ */
+const toShikiTheme = (theme: SurfaceTheme): ThemeRegistrationRaw => ({
+  ...theme,
+  name: theme.name,
+  settings: theme.settings ?? theme.tokenColors ?? [],
+});
+
+const setTheme = async (theme: string | SurfaceTheme): Promise<void> => {
+  const hl = await ensureHighlighter();
+  const id = themeIdOf(theme);
+  if (typeof theme !== "string" && !registeredThemes.has(id)) {
+    // Registered under the Monaco-safe id, because `shikiToMonaco` hands Monaco
+    // whatever name Shiki holds the theme under.
+    await hl.loadTheme(toShikiTheme({ ...theme, name: id }));
+    registeredThemes.add(id);
+    // A newly loaded theme needs Monaco's theme data generated for it, which is
+    // what re-running the bridge does.
+    applyShiki(hl);
+  }
+  monaco.editor.setTheme(id);
+  // The page behind the editor has to match, or a short document shows the
+  // browser's default white below the last line.
+  const background = typeof theme === "string" ? undefined : theme.colors?.["editor.background"];
+  if (background !== undefined) document.body.style.backgroundColor = background;
+};
+
+const setContent = (content: string, language: string, version: number): void => {
+  if (version < contentVersion) return;
+  contentVersion = version;
+  const model = editor?.getModel();
+  if (model === null || model === undefined) return;
+  // `setValue` rather than a new model: the model's URI and view state stay put,
+  // which is what lets a later phase attach a language client or a CRDT to it.
+  if (model.getValue() !== content) model.setValue(content);
+  monaco.editor.setModelLanguage(model, language);
+  reportHeight();
+};
+
+/**
+ * A `@font-face` for a font the device does not have, injected once per family.
+ * Nothing calls this yet: a custom code font needs `expo-font` before the rest
+ * of the app can render it, and this surface must match the chat blocks rather
+ * than get ahead of them. The path exists so that when the font lands, the
+ * surface needs no protocol change.
+ */
+const injectedFonts = new Set<string>();
+
+const injectFontFace = (family: string, source: string): void => {
+  if (injectedFonts.has(family)) return;
+  injectedFonts.add(family);
+  const style = document.createElement("style");
+  style.textContent = `@font-face{font-family:${JSON.stringify(family)};src:url(${JSON.stringify(source)});font-display:block;}`;
+  document.head.appendChild(style);
+};
+
+const setFont = (family: string, size: number, source: string | undefined): void => {
+  if (source !== undefined) injectFontFace(family, source);
+  editor?.updateOptions({ fontFamily: family, fontSize: size, lineHeight: Math.round(size * 1.45) });
+  // Monaco caches glyph widths; a font swap has to invalidate that or the
+  // gutter and the text drift apart.
+  monaco.editor.remeasureFonts();
+  reportHeight();
+};
+
+const scrollTo = (line: number): void => {
+  editor?.revealLineInCenter(Math.max(1, line));
+  editor?.setPosition({ lineNumber: Math.max(1, line), column: 1 });
+};
+
+const setReadOnly = (next: boolean): void => {
+  readOnly = next;
+  editor?.updateOptions({ readOnly: next });
+};
+
+let lastHeight = -1;
+
+const reportHeight = (): void => {
+  const height = editor?.getContentHeight() ?? 0;
+  if (height === lastHeight) return;
+  lastHeight = height;
+  post({ kind: "contentHeight", height });
+};
+
+const receive = (raw: string): void => {
+  void (async (): Promise<void> => {
+    try {
+      const message = parseHostMessage(raw);
+      if (message === undefined) return;
+      switch (message.kind) {
+        case "setContent":
+          setContent(message.content, message.language, message.version);
+          return;
+        case "setTheme":
+          await setTheme(message.theme);
+          return;
+        case "setFont":
+          setFont(message.family, message.size, message.source);
+          return;
+        case "scrollTo":
+          scrollTo(message.line);
+          return;
+        case "setReadOnly":
+          setReadOnly(message.readOnly);
+          return;
+      }
+    } catch (cause: unknown) {
+      post({ kind: "error", message: messageOf(cause) });
+    }
+  })();
+};
+
+const start = async (): Promise<void> => {
+  const hl = await ensureHighlighter();
+  for (const language of SURFACE_LANGUAGES) monaco.languages.register({ id: language });
+  applyShiki(hl);
+
+  const host = document.getElementById("surface");
+  if (host === null) throw new Error("The surface container is missing from the document.");
+
+  editor = monaco.editor.create(host, {
+    value: "",
+    language: "plaintext",
+    readOnly,
+    // A read-only Monaco still shows a cursor and lets you type into nothing
+    // unless this is off as well.
+    domReadOnly: true,
+    automaticLayout: true,
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    // The host is a touch device: momentum scrolling is the platform's job and
+    // Monaco's own overlay scrollbars only get in its way.
+    scrollbar: { vertical: "auto", horizontal: "auto", useShadows: false },
+    renderLineHighlight: "none",
+    occurrencesHighlight: "off",
+    selectionHighlight: false,
+    contextmenu: false,
+    lineNumbersMinChars: 3,
+    padding: { top: 8, bottom: 40 },
+    fontLigatures: false,
+    wordWrap: "off",
+    // Monaco's accessibility layer duplicates the document into a textarea,
+    // which on a phone means VoiceOver reads it twice.
+    accessibilitySupport: "off",
+  });
+
+  editor.onDidChangeCursorSelection((event) => {
+    const model = editor?.getModel();
+    post({
+      kind: "selectionChanged",
+      text: model === null || model === undefined ? "" : model.getValueInRange(event.selection),
+      startLine: event.selection.startLineNumber,
+      endLine: event.selection.endLineNumber,
+    });
+  });
+
+  editor.onDidContentSizeChange(reportHeight);
+
+  // Monaco turns a URL in the text into a link and then asks to open it. The
+  // host decides what that means, because only it can open Safari.
+  editor.onMouseDown((event) => {
+    const url = event.target.element?.closest("a")?.getAttribute("href");
+    if (url !== null && url !== undefined && url.length > 0) post({ kind: "linkActivated", url });
+  });
+
+  post({ kind: "ready" });
+};
+
+window[SURFACE_GLOBAL] = { receive };
+
+window.addEventListener("error", (event) => post({ kind: "error", message: event.message }));
+window.addEventListener("unhandledrejection", (event) =>
+  post({ kind: "error", message: messageOf(event.reason) }),
+);
+
+void start().catch((cause: unknown) => post({ kind: "error", message: messageOf(cause) }));
+
+declare global {
+  interface Window {
+    /** Injected by `react-native-webview` into every document it loads. */
+    readonly ReactNativeWebView?: { readonly postMessage: (message: string) => void };
+    [SURFACE_GLOBAL]: { readonly receive: (raw: string) => void };
+  }
+}
