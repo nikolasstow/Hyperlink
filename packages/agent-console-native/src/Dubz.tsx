@@ -81,6 +81,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const grow = useSharedValue(0);
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
+  // Open/close manages `visible` + the shrink-out (which is smooth as-is).
   React.useEffect(() => {
     if (isOpen) {
       if (closeTimer.current !== undefined) {
@@ -88,13 +89,24 @@ export const DubzOverlay = (): React.ReactElement | null => {
         closeTimer.current = undefined;
       }
       setVisible(true);
-      grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
     } else if (visible) {
       Keyboard.dismiss();
       grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
       closeTimer.current = setTimeout(() => setVisible(false), ANIM_MS + 40);
     }
   }, [isOpen, visible, grow]);
+
+  // Grow IN only once the window has actually mounted (next frame), so the timing
+  // doesn't start mid-mount / mid-glass-init — that's what dropped the first
+  // frames (jitter) on the way in; the way out was already mounted, hence smooth.
+  React.useEffect(() => {
+    if (!visible) return undefined;
+    grow.value = 0;
+    const id = requestAnimationFrame(() => {
+      grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [visible, grow]);
 
   React.useEffect(() => () => {
     if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
