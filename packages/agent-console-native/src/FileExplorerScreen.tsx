@@ -206,7 +206,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       )}
       <EdgeBlurBars variant="top" />
       {!tree.rootLoading && !tree.rootFailed && tree.rows.length > 0 ? (
-        <BottomSearchPill value={query} onChangeText={setQuery} placeholder="Search" offset={pill.offset} agentSurface="repo" />
+        <BottomSearchPill value={query} onChangeText={setQuery} placeholder="Search" hidden={pill.hidden} agentSurface="repo" />
       ) : null}
     </View>
   );
