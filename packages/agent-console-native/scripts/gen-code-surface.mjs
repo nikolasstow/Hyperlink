@@ -25,6 +25,16 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
 const entry = resolve(projectRoot, "webview/codeSurface.ts");
+/**
+ * Monaco's own web worker, which backs word-based suggestions, link detection
+ * and diffs. It is bundled separately and inlined as a Blob so the page can
+ * start it with no URL to resolve: this document is loaded from `file://`, and
+ * Monaco's default path builds a relative URL that throws there.
+ */
+const workerEntry = resolve(
+  projectRoot,
+  "node_modules/monaco-editor/esm/vs/editor/editor.worker.start.js",
+);
 const outFile = resolve(projectRoot, "assets/code-surface.html");
 
 /**
@@ -32,9 +42,43 @@ const outFile = resolve(projectRoot, "assets/code-surface.html");
  * and CSS as two files. Both are read back and inlined; a real output directory
  * is what lets esbuild resolve those CSS imports at all.
  */
+/**
+ * Two things `editor.main.js` drags in that this surface must not have.
+ *
+ * `../languages/definitions/<lang>/register.js` is Monaco's own Monarch grammar
+ * for each of some ninety languages. Registering those would put a second
+ * highlighting engine beside Shiki, which the code-highlighting decision rules
+ * out: Shiki is the single source of truth, so a file and a chat block resolve
+ * the same tokens. Stubbing them also keeps the asset from carrying ninety
+ * grammars nothing reads.
+ *
+ * `monaco-lsp-client` is re-exported as `monaco.lsp` and used by nothing inside
+ * Monaco. It builds worker URLs on load, which throws outright on a `file://`
+ * page, so the surface would not boot at all with it in.
+ *
+ * Everything else in `editor.main.js` stays: find and replace, folding, the
+ * comment shortcut, auto-indent, bracket matching, multiple cursors, suggest,
+ * hover, rename, code actions. This surface becomes an editor, so it is built
+ * on the whole thing rather than on a core that each later phase re-adds a
+ * piece of.
+ */
+const STRIPPED = /(?:[\\/]languages[\\/]definitions[\\/][^\\/]+[\\/]register\.js$)|(?:monaco-lsp-client)/;
+
+const stripMonacoExtras = {
+  name: "strip-monaco-extras",
+  setup(build) {
+    build.onResolve({ filter: /.*/ }, (args) => {
+      const full = args.path.startsWith(".") ? `${args.resolveDir}/${args.path}` : args.path;
+      return STRIPPED.test(full) ? { path: args.path, namespace: "monaco-stub" } : undefined;
+    });
+    build.onLoad({ filter: /.*/, namespace: "monaco-stub" }, () => ({ contents: "export {};", loader: "js" }));
+  },
+};
+
 const stage = await mkdtemp(join(tmpdir(), "code-surface-"));
 let script;
 let css;
+let worker;
 try {
   await build({
     entryPoints: [entry],
@@ -48,10 +92,24 @@ try {
     // Monaco ships its codicon glyph font as a .ttf import. Inlining it keeps
     // the page self-contained; without this esbuild emits a third file.
     loader: { ".ttf": "dataurl" },
+    plugins: [stripMonacoExtras],
+    logLevel: "error",
+  });
+  await build({
+    entryPoints: [workerEntry],
+    bundle: true,
+    minify: true,
+    format: "iife",
+    platform: "browser",
+    target: "es2020",
+    outdir: stage,
+    entryNames: "worker",
+    plugins: [stripMonacoExtras],
     logLevel: "error",
   });
   script = await readFile(join(stage, "surface.js"), "utf8");
   css = await readFile(join(stage, "surface.css"), "utf8").catch(() => "");
+  worker = await readFile(join(stage, "worker.js"), "utf8");
 } finally {
   await rm(stage, { recursive: true, force: true });
 }
@@ -63,6 +121,24 @@ try {
  */
 const safeScript = script.replaceAll("</script", "<\\/script");
 
+/**
+ * The worker source travels as a JSON string literal rather than its own
+ * script tag, so the page can hand it to `Blob` at startup. `MonacoEnvironment`
+ * has to exist before Monaco loads, which is why this goes in first.
+ */
+const workerBootstrap = `
+var __workerSource = ${JSON.stringify(worker)};
+self.MonacoEnvironment = {
+  getWorker: function () {
+    return new Worker(URL.createObjectURL(new Blob([__workerSource], { type: "text/javascript" })));
+  }
+};
+`.replaceAll("</script", "<\\/script");
+
+// Nothing written into the literal parts of this template may contain a
+// backtick: it would close the literal and this file would stop parsing. That
+// has happened twice, and the syntax error is immediate, so it needs no further
+// guard than this note.
 const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -70,7 +146,8 @@ const html = `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <!-- No remote origin is reachable from this page. The app must render code
      with no network, so anything the surface needs is already inline. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:;">
+<!-- blob: covers the inlined Monaco worker; no remote origin is reachable. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:; child-src blob:; style-src 'unsafe-inline'; font-src data:; img-src data:;">
 <title>Code surface</title>
 <style>
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background:transparent;-webkit-text-size-adjust:100%;}
@@ -92,6 +169,7 @@ body.surface-readonly .monaco-editor .view-lines{user-select:text;-webkit-user-s
 </head>
 <body>
 <div id="surface"></div>
+<script>${workerBootstrap}</script>
 <script>${safeScript}</script>
 </body>
 </html>
