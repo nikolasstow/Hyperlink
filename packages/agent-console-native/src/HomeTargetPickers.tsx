@@ -109,11 +109,14 @@ const PillLabel = (props: {
   readonly dimmed?: boolean;
   /** Optional leading glyph, e.g. a branch / worktree icon. */
   readonly icon?: React.ComponentProps<typeof Feather>["name"];
+  /** Which edge the label hugs within its (slightly wider) Host — "start" for
+   * the leading pickers, "end" for the trailing worktree so it meets the edge. */
+  readonly align?: "start" | "end";
 }): React.ReactElement => {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
     <RNHostView matchContents>
-      <View style={[styles.pill, props.dimmed === true && styles.pillDimmed]}>
+      <View style={[styles.pill, props.align === "end" && styles.pillEnd, props.dimmed === true && styles.pillDimmed]}>
         {props.icon !== undefined ? <Feather name={props.icon} size={14} color={PILL_FG} /> : null}
         <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
           {props.text}
@@ -484,7 +487,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         ignoreSafeArea="all"
       >
         <Menu
-          label={<PillLabel text={worktreePill} dimmed={repoOnly} icon="hard-drive" />}
+          label={<PillLabel text={worktreePill} dimmed={repoOnly} icon="hard-drive" align="end" />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
           {worktrees.map((wt) => {
@@ -542,11 +545,17 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    // Left-aligned, not centred: the Host is sized a little wider than the label
+    // (pillHostWidth), and centring pushed the text in from the left edge. This
+    // makes the label hug the left so the leading dropdown lines up flush.
+    justifyContent: "flex-start",
     gap: 4,
     height: PILL_HEIGHT,
     width: "100%",
     paddingHorizontal: 2,
+  },
+  pillEnd: {
+    justifyContent: "flex-end",
   },
   pillDimmed: {
     opacity: 0.4,
