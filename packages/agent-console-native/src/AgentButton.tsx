@@ -19,7 +19,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, StyleSheet, useColorScheme, View } from "react-native";
+import { Pressable, StyleSheet, useColorScheme } from "react-native";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { useTheme } from "./theme";
 
@@ -45,11 +45,16 @@ export const AgentButton = (props: {
         { width: size, height: size, borderRadius: size / 2, overflow: "hidden", opacity: pressed ? 0.85 : 1 },
       ]}
     >
-      <GlassView style={styles.fill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-        {/* A light secondary-accent wash over the glass — kept translucent
-         * (styles.wash opacity) so the glass reads through and the button stays
-         * glassy rather than a solid coloured disc; white glyph on top. */}
-        <View style={[StyleSheet.absoluteFill, styles.wash, { backgroundColor: colors.secondaryFill }]} />
+      {/* Tint the GLASS MATERIAL itself (tintColor + isInteractive), not a
+       * colour View washed over it — the wash read as a flat disc, this reads as
+       * real Liquid Glass, matching the send button's tinted glassEffect. */}
+      <GlassView
+        style={styles.fill}
+        glassEffectStyle="regular"
+        tintColor={colors.secondaryFill}
+        isInteractive
+        colorScheme={scheme === "dark" ? "dark" : "light"}
+      >
         <Ionicons name="sparkles" size={Math.round(size * 0.46)} color="#FFFFFF" />
       </GlassView>
     </Pressable>
@@ -61,9 +66,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  // Softens the secondary tint so the glass shows through — lower is glassier.
-  wash: {
-    opacity: 0.5,
   },
 });
