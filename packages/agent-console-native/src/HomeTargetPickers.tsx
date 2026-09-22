@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     gap: 4,
     height: PILL_HEIGHT,
     width: "100%",
-    paddingHorizontal: 8,
+    paddingHorizontal: 2,
   },
   pillDimmed: {
     opacity: 0.4,
@@ -556,7 +556,7 @@ const styles = StyleSheet.create({
   staticRepo: {
     justifyContent: "center",
     height: PILL_HEIGHT,
-    paddingHorizontal: 8,
+    paddingHorizontal: 2,
     flexShrink: 1,
     maxWidth: PILL_MAX_WIDTH,
   },
