@@ -38,9 +38,9 @@ const MARGIN = 12;
 const WINDOW_RADIUS = 30;
 /** Grow/shrink duration (ms) for the window opening and closing. */
 const ANIM_MS = 320;
-/** The glass fades in (none → clear) over the first ~30% of the grow — native
+/** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
-const FADE_S = (ANIM_MS * 0.3) / 1000;
+const FADE_S = (ANIM_MS * 0.55) / 1000;
 
 interface DubzApi {
   readonly open: () => void;
