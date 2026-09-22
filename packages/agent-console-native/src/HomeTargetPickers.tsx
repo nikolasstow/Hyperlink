@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
     // Right breathing room so the worktree isn't flush against the field edge.
-    paddingRight: 4,
+    paddingRight: 2,
     marginBottom: 6,
   },
   leading: {
