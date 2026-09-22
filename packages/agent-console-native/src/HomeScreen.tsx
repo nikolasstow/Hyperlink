@@ -45,7 +45,7 @@ import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
-import { useKeyboardSlide } from "./useKeyboardSlide";
+import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -215,7 +215,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const keyboardHeight = useKeyboardHeight();
   // Reanimated keyboard tracking so the floating composer rides the keyboard
   // exactly; the list padding / blur keep the plain number (behind the keyboard).
-  const composerSlide = useKeyboardSlide(insets.bottom);
+  const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
   // Measured, not a fixed height — the composer grows with multi-line
   // input, and it floats over the list (absolute) so the glass has
   // content behind it, meaning the list has to reserve the space itself.

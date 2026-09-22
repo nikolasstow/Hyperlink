@@ -24,6 +24,14 @@
 import { useAnimatedKeyboard, useAnimatedStyle, type AnimatedStyle } from "react-native-reanimated";
 import type { ViewStyle } from "react-native";
 
+/**
+ * Where the floating composer rests when the keyboard is down: tucked below the
+ * full home-indicator safe-area inset so the pill sits closer to the screen
+ * bottom, while keeping a small clearance above the indicator itself. On devices
+ * with no home indicator (`safeBottom` ≈ 0) it floors to a modest edge gap.
+ */
+export const composerRestingBottom = (safeBottom: number): number => Math.max(safeBottom - 16, 6);
+
 export const useKeyboardSlide = (restingBottom: number): AnimatedStyle<ViewStyle> => {
   const keyboard = useAnimatedKeyboard();
   return useAnimatedStyle(() => ({

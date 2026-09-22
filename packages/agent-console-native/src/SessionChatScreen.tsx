@@ -40,7 +40,7 @@ import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { useKeyboardHeight } from "./useKeyboardHeight";
-import { useKeyboardSlide } from "./useKeyboardSlide";
+import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { runStartedAt, useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 
@@ -58,7 +58,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // Reanimated keyboard tracking so the floating composer rides the keyboard
   // exactly (real position each frame). The list padding / blur bars keep the
   // plain number (behind it, where a snap is invisible).
-  const composerSlide = useKeyboardSlide(insets.bottom);
+  const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
   // Transparent header, so content sits under it and pads itself by the
   // header's real height. On this inverted list that padding is
   // `paddingBottom` — see the contentContainerStyle note below.
