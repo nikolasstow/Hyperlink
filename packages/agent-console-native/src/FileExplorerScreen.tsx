@@ -32,6 +32,8 @@ import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { iconForFile } from "./fileIcon";
 import { clearForward, popForward, pushForward, useForwardTarget } from "./fileNavHistory";
+import { codeSurfaceUri } from "./codeSurfaceAsset";
+import { warmCodeSurfaces } from "../modules/code-surface";
 import { useFileTree, type FileRow } from "./fileTree";
 import type { RootStackParamList } from "./RootNavigator";
 import { SetiIcon } from "./SetiIcon";
@@ -102,6 +104,13 @@ const Row = (props: {
   );
 };
 
+/**
+ * How many surfaces to keep warm. One is being looked at; the second is what a
+ * second file opens into without waiting. Each costs Monaco's own baseline, so
+ * this is deliberately small.
+ */
+const WARM_SURFACES = 2;
+
 export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const { repo, dir } = props.route.params;
   const { backend } = useAppContext();
@@ -110,6 +119,17 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const { navigation } = props;
   const forwardTarget = useForwardTarget();
   const [query, setQuery] = React.useState("");
+
+  // Build the code surfaces now, while someone is reading a directory listing,
+  // so the first file they tap opens against a web view that has already parsed
+  // megabytes of Monaco. Doing it at launch would charge everyone who never
+  // opens a file; doing it on the tap is the wait this exists to remove. A
+  // build without the native module ignores this.
+  React.useEffect(() => {
+    void codeSurfaceUri()
+      .then((uri) => warmCodeSurfaces(WARM_SURFACES, uri))
+      .catch(() => undefined);
+  }, []);
 
   // Filter the visible rows by name. A trimmed, case-insensitive substring
   // match over what's loaded — expanded folders included.

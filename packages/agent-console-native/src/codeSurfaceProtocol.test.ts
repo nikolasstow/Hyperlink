@@ -9,6 +9,8 @@ import {
   parseHostMessage,
   parseSurfaceMessage,
   SURFACE_GLOBAL,
+  DOCUMENT_BUDGET,
+  evictionsFor,
   monacoThemeName,
   SURFACE_LANGUAGES,
   surfaceLanguageOf,
@@ -56,7 +58,10 @@ describe("parseHostMessage", () => {
 
   it("round-trips every message the host sends", () => {
     const messages: ReadonlyArray<HostMessage> = [
-      { kind: "setContent", content: "const a = 1\n", language: "typescript", version: 3 },
+      { kind: "openDocument", path: "/src/a.ts", text: "const a = 1\n", language: "typescript", version: 3 },
+      { kind: "showDocument", path: "/src/a.ts" },
+      { kind: "closeDocument", path: "/src/a.ts" },
+      { kind: "closeAllExcept", path: "/src/a.ts" },
       { kind: "setTheme", theme: "github-dark" },
       { kind: "setTheme", theme: { name: "My Theme", type: "dark", colors: { "editor.background": "#1e1e1e" } } },
       { kind: "setFont", family: "Menlo", size: 12.5 },
@@ -79,7 +84,8 @@ describe("parseHostMessage", () => {
   });
 
   it("drops a known kind whose fields are wrong", () => {
-    expect(parseHostMessage('{"kind":"setContent","content":"x","language":"ts"}')).toBeUndefined();
+    expect(parseHostMessage('{"kind":"openDocument","path":"/a","text":"x","language":"ts"}')).toBeUndefined();
+    expect(parseHostMessage('{"kind":"showDocument"}')).toBeUndefined();
     expect(parseHostMessage('{"kind":"setReadOnly","readOnly":"yes"}')).toBeUndefined();
     expect(parseHostMessage('{"kind":"scrollTo"}')).toBeUndefined();
   });
@@ -101,19 +107,19 @@ describe("toInjectedScript", () => {
   };
 
   it("delivers the message the host meant to send", () => {
-    const message: HostMessage = { kind: "setContent", content: "a\nb", language: "typescript", version: 1 };
+    const message: HostMessage = { kind: "openDocument", path: "/a.ts", text: "a\nb", language: "typescript", version: 1 };
     expect(evaluate(toInjectedScript(message))).toEqual(message);
   });
 
   it("survives content that would close a string or a script", () => {
     const content = `"'\`\\ </script> ${"${}"} \u0000`;
-    const message: HostMessage = { kind: "setContent", content, language: "plaintext", version: 1 };
+    const message: HostMessage = { kind: "openDocument", path: "/a.txt", text: content, language: "plaintext", version: 1 };
     expect(evaluate(toInjectedScript(message))).toEqual(message);
   });
 
   it("survives the line separators that are legal in JSON and were not in JavaScript", () => {
     const content = `a${LINE_SEPARATOR}b${PARAGRAPH_SEPARATOR}c`;
-    const message: HostMessage = { kind: "setContent", content, language: "plaintext", version: 1 };
+    const message: HostMessage = { kind: "openDocument", path: "/a.txt", text: content, language: "plaintext", version: 1 };
     expect(toInjectedScript(message)).not.toContain(LINE_SEPARATOR);
     expect(toInjectedScript(message)).not.toContain(PARAGRAPH_SEPARATOR);
     expect(evaluate(toInjectedScript(message))).toEqual(message);
@@ -125,6 +131,65 @@ describe("toInjectedScript", () => {
 
   it("ends in a value iOS can serialise back", () => {
     expect(toInjectedScript({ kind: "scrollTo", line: 1 }).endsWith("true;")).toBe(true);
+  });
+});
+
+describe("evictionsFor", () => {
+  const doc = (path: string, bytes: number, shownAt: number) => ({ path, bytes, shownAt });
+
+  it("keeps everything while the budget covers it", () => {
+    expect(evictionsFor([doc("a", 1000, 1), doc("b", 1000, 2)], "b")).toEqual([]);
+  });
+
+  it("lets go of the least recently shown first", () => {
+    const held = [doc("old", 3_000_000, 1), doc("newer", 3_000_000, 2), doc("visible", 100, 3)];
+    expect(evictionsFor(held, "visible")).toEqual(["old"]);
+  });
+
+  it("never evicts the file being looked at, whatever it costs", () => {
+    const held = [doc("huge", 9_000_000, 1), doc("small", 10, 2)];
+    expect(evictionsFor(held, "huge")).toEqual(["small"]);
+  });
+
+  it("evicts on the count cap even when the bytes are trivial", () => {
+    const held = Array.from({ length: DOCUMENT_BUDGET.count + 3 }, (_, i) => doc(`f${i}`, 10, i));
+    expect(evictionsFor(held, `f${DOCUMENT_BUDGET.count + 2}`)).toEqual(["f0", "f1", "f2"]);
+  });
+
+  it("stops as soon as both limits are met rather than emptying the list", () => {
+    const held = [doc("a", 3_000_000, 1), doc("b", 3_000_000, 2), doc("c", 100, 3)];
+    expect(evictionsFor(held, "c")).toEqual(["a"]);
+  });
+
+  it("evicts nothing from an empty surface", () => {
+    expect(evictionsFor([], undefined)).toEqual([]);
+  });
+
+  it("will evict every held file when none of them is visible", () => {
+    const held = [doc("a", 5_000_000, 1), doc("b", 5_000_000, 2)];
+    expect(evictionsFor(held, undefined)).toEqual(["a", "b"]);
+  });
+
+  it("takes a budget, so a caller under memory pressure can tighten it", () => {
+    const held = [doc("a", 100, 1), doc("b", 100, 2)];
+    expect(evictionsFor(held, "b", { bytes: 100, count: 1 })).toEqual(["a"]);
+  });
+});
+
+describe("document messages", () => {
+  it("round-trips an evicted report", () => {
+    expect(parseSurfaceMessage('{"kind":"documentEvicted","path":"/src/a.ts"}')).toEqual({
+      kind: "documentEvicted",
+      path: "/src/a.ts",
+    });
+  });
+
+  it("refuses an evicted report with no path", () => {
+    expect(parseSurfaceMessage('{"kind":"documentEvicted"}')).toBeUndefined();
+  });
+
+  it("refuses an open that carries no text, since the surface cannot invent it", () => {
+    expect(parseHostMessage('{"kind":"openDocument","path":"/a","language":"ts","version":1}')).toBeUndefined();
   });
 });
 

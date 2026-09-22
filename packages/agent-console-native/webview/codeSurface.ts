@@ -49,6 +49,7 @@ import typescript from "shiki/langs/typescript.mjs";
 import githubDark from "shiki/themes/github-dark.mjs";
 import githubLight from "shiki/themes/github-light.mjs";
 import {
+  evictionsFor,
   monacoThemeName,
   parseHostMessage,
   SURFACE_GLOBAL,
@@ -81,9 +82,31 @@ const registeredThemes = new Set<string>();
 
 let highlighter: HighlighterCore | undefined;
 let editor: monaco.editor.IStandaloneCodeEditor | undefined;
-/** The latest `setContent` applied, so an out-of-order message is dropped. */
-let contentVersion = -1;
 let readOnly = true;
+
+/**
+ * One file the surface is holding: its model, what it cost, when it was last
+ * displayed, and the scroll and cursor it was left at.
+ */
+interface Document {
+  readonly model: monaco.editor.ITextModel;
+  readonly bytes: number;
+  version: number;
+  shownAt: number;
+  viewState: monaco.editor.ICodeEditorViewState | null;
+}
+
+const documents = new Map<string, Document>();
+let visiblePath: string | undefined;
+
+/**
+ * A model URI from a file path.
+ *
+ * Monaco keys models by URI and refuses two with the same one, so the path is
+ * the identity. `file` rather than `inmemory` because a later phase hands these
+ * to a language server, which expects a file URI.
+ */
+const uriOf = (path: string): monaco.Uri => monaco.Uri.from({ scheme: "file", path });
 
 /**
  * The id this theme is registered and selected by, which is not always the name
@@ -152,16 +175,77 @@ const setTheme = async (theme: string | SurfaceTheme): Promise<void> => {
   if (background !== undefined) document.body.style.backgroundColor = background;
 };
 
-const setContent = (content: string, language: string, version: number): void => {
-  if (version < contentVersion) return;
-  contentVersion = version;
-  const model = editor?.getModel();
-  if (model === null || model === undefined) return;
-  // `setValue` rather than a new model: the model's URI and view state stay put,
-  // which is what lets a later phase attach a language client or a CRDT to it.
-  if (model.getValue() !== content) model.setValue(content);
-  monaco.editor.setModelLanguage(model, language);
+/** Remember where the visible file was left, before showing another. */
+const rememberViewState = (): void => {
+  if (visiblePath === undefined) return;
+  const held = documents.get(visiblePath);
+  if (held !== undefined && editor !== undefined) held.viewState = editor.saveViewState();
+};
+
+const showDocument = (path: string): void => {
+  const held = documents.get(path);
+  if (held === undefined || editor === undefined) return;
+  if (visiblePath !== path) rememberViewState();
+  visiblePath = path;
+  held.shownAt = Date.now();
+  editor.setModel(held.model);
+  // Restoring puts the scroll, the cursor and the folded regions back, which is
+  // the whole point of keeping the file rather than re-reading it.
+  if (held.viewState !== null) editor.restoreViewState(held.viewState);
   reportHeight();
+};
+
+/**
+ * Let go of the files the budget cannot cover, oldest first.
+ *
+ * Monaco does not free a model when it stops being displayed, so this is the
+ * only thing that reclaims one. Each is reported, because the host tracks what
+ * the surface holds and would otherwise ask to show something that is gone.
+ */
+const evict = (): void => {
+  const held = [...documents].map(([path, entry]) => ({ path, bytes: entry.bytes, shownAt: entry.shownAt }));
+  for (const path of evictionsFor(held, visiblePath)) {
+    documents.get(path)?.model.dispose();
+    documents.delete(path);
+    post({ kind: "documentEvicted", path });
+  }
+};
+
+const openDocument = (path: string, text: string, language: string, version: number): void => {
+  const existing = documents.get(path);
+  if (existing !== undefined) {
+    // A stale open, from the host replaying its state after a reload.
+    if (version < existing.version) return;
+    existing.version = version;
+    if (existing.model.getValue() !== text) existing.model.setValue(text);
+    monaco.editor.setModelLanguage(existing.model, language);
+    showDocument(path);
+    return;
+  }
+  documents.set(path, {
+    model: monaco.editor.createModel(text, language, uriOf(path)),
+    bytes: text.length,
+    version,
+    shownAt: Date.now(),
+    viewState: null,
+  });
+  showDocument(path);
+  evict();
+};
+
+const closeDocument = (path: string): void => {
+  const held = documents.get(path);
+  if (held === undefined) return;
+  held.model.dispose();
+  documents.delete(path);
+  if (visiblePath === path) visiblePath = undefined;
+};
+
+/** Memory pressure: keep the file being looked at, drop the rest. */
+const closeAllExcept = (path: string): void => {
+  for (const held of [...documents.keys()]) {
+    if (held !== path) closeDocument(held);
+  }
 };
 
 /**
@@ -227,8 +311,17 @@ const receive = (raw: string): void => {
       const message = parseHostMessage(raw);
       if (message === undefined) return;
       switch (message.kind) {
-        case "setContent":
-          setContent(message.content, message.language, message.version);
+        case "openDocument":
+          openDocument(message.path, message.text, message.language, message.version);
+          return;
+        case "showDocument":
+          showDocument(message.path);
+          return;
+        case "closeDocument":
+          closeDocument(message.path);
+          return;
+        case "closeAllExcept":
+          closeAllExcept(message.path);
           return;
         case "setTheme":
           await setTheme(message.theme);
@@ -261,8 +354,10 @@ const start = async (): Promise<void> => {
   if (host === null) throw new Error("The surface container is missing from the document.");
 
   editor = monaco.editor.create(host, {
-    value: "",
-    language: "plaintext",
+    // No implicit model: every document the surface shows is one it created for
+    // a path and is tracking, so an anonymous one here would be a model nothing
+    // owns and nothing ever disposes.
+    model: null,
     // The mode, not the build. `setReadOnly` moves both of these together.
     readOnly,
     domReadOnly: readOnly,
