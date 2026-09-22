@@ -109,14 +109,11 @@ const PillLabel = (props: {
   readonly dimmed?: boolean;
   /** Optional leading glyph, e.g. a branch / worktree icon. */
   readonly icon?: React.ComponentProps<typeof Feather>["name"];
-  /** Which edge the label hugs within its (slightly wider) Host — "start" for
-   * the leading pickers, "end" for the trailing worktree so it meets the edge. */
-  readonly align?: "start" | "end";
 }): React.ReactElement => {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
     <RNHostView matchContents>
-      <View style={[styles.pill, props.align === "end" && styles.pillEnd, props.dimmed === true && styles.pillDimmed]}>
+      <View style={[styles.pill, props.dimmed === true && styles.pillDimmed]}>
         {props.icon !== undefined ? <Feather name={props.icon} size={14} color={PILL_FG} /> : null}
         <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
           {props.text}
@@ -487,7 +484,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         ignoreSafeArea="all"
       >
         <Menu
-          label={<PillLabel text={worktreePill} dimmed={repoOnly} icon="hard-drive" align="end" />}
+          label={<PillLabel text={worktreePill} dimmed={repoOnly} icon="hard-drive" />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
           {worktrees.map((wt) => {
@@ -523,11 +520,10 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    // Packed to the left (not space-between) so branch and worktree sit next to
+    // each other rather than being shoved to opposite edges.
+    justifyContent: "flex-start",
     gap: 8,
-    // A little breathing room so the trailing worktree doesn't sit flush against
-    // the field's right edge.
-    paddingRight: 8,
     marginBottom: 6,
   },
   leading: {
@@ -556,9 +552,6 @@ const styles = StyleSheet.create({
     height: PILL_HEIGHT,
     width: "100%",
     paddingHorizontal: 2,
-  },
-  pillEnd: {
-    justifyContent: "flex-end",
   },
   pillDimmed: {
     opacity: 0.4,
