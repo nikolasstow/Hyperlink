@@ -144,7 +144,7 @@ export const BottomSearchPill = (props: {
              * glyph off-centre on first mount here, fixing only on
              * background/foreground. A vector icon flex-centres reliably and
              * still takes the adaptive PlatformColor. */}
-            <Feather name="search" size={16} color={colors.label} />
+            <Feather name="search" size={29} color={colors.label} />
             <TextInput
               style={styles.input}
               value={props.value}
