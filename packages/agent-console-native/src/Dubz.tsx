@@ -27,14 +27,7 @@
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, View } from "react-native";
-import Reanimated, {
-  Easing,
-  runOnJS,
-  useAnimatedKeyboard,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import Reanimated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
@@ -43,9 +36,6 @@ import { colors } from "./colors";
 const MARGIN = 12;
 /** Corner radius of the glass window. */
 const WINDOW_RADIUS = 30;
-/** Entrance/exit timing. */
-const OPEN_MS = 280;
-const CLOSE_MS = 220;
 
 interface DubzApi {
   readonly open: () => void;
@@ -72,8 +62,7 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
 
 /**
  * The overlay itself — rendered once at the root, ABOVE the navigator. Mounts
- * only while open (fresh glass each time); the exit animation keeps it mounted a
- * beat longer via `visible`.
+ * only while open.
  */
 export const DubzOverlay = (): React.ReactElement | null => {
   const { isOpen, close } = useDubz();
@@ -81,40 +70,27 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const scheme = useColorScheme();
   const keyboard = useAnimatedKeyboard();
 
-  // `visible` keeps the tree mounted through the exit animation; `progress`
-  // (0→1) drives the scale/fade.
   const [visible, setVisible] = React.useState(false);
-  const progress = useSharedValue(0);
-
-  // Open/close manages `visible`. On close, animate out first, then unmount.
   React.useEffect(() => {
-    if (isOpen) {
-      setVisible(true);
-    } else if (visible) {
+    if (isOpen) setVisible(true);
+    else if (visible) {
       Keyboard.dismiss();
-      progress.value = withTiming(0, { duration: CLOSE_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(setVisible)(false);
-      });
+      setVisible(false);
     }
-  }, [isOpen, visible, progress]);
+  }, [isOpen, visible]);
 
-  // Animate IN only once the window is actually mounted, so the entrance always
-  // runs from 0 (starting the timing before mount can skip the animation).
-  React.useEffect(() => {
-    if (!visible) return;
-    progress.value = 0;
-    progress.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
-  }, [visible, progress]);
-
-  // The window: fixed top (safe area + margin), bottom rides the keyboard, and it
-  // rises + fades in. The GlassView keeps opacity 1 — only this wrapper animates.
+  // POSITION ONLY — top under the safe area, bottom rides the keyboard. Crucially
+  // NO opacity/transform animation on this wrapper: an animated opacity or
+  // transform composites the subtree into its own layer, and a UIVisualEffectView
+  // (the glass) inside a composited layer can't capture the backdrop behind it to
+  // refract — which renders `clear` glass as nothing. Animating `bottom` (a
+  // layout prop) is safe — the same reason the composer rides the keyboard via
+  // `bottom`, not `transform`.
   const windowStyle = useAnimatedStyle(() => ({
     top: insets.top + MARGIN,
     left: MARGIN,
     right: MARGIN,
     bottom: Math.max(keyboard.height.value, insets.bottom) + MARGIN,
-    opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * 20 }, { scale: 0.96 + 0.04 * progress.value }],
   }));
 
   if (!visible) return null;
@@ -124,18 +100,14 @@ export const DubzOverlay = (): React.ReactElement | null => {
       {/* Transparent tap-catcher — tap outside to dismiss; no visible background. */}
       <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close Dubz" />
 
-      {/* The glass window. The GlassView is hosted inside a GlassContainer
-       * (UIGlassContainerEffect) — the render context Liquid Glass elements need;
-       * standalone `clear` glass rendered nothing without it. `clear` keeps it
-       * see-through (no tint, no scrim). The autofocused input pops the keyboard
+      {/* The clear glass window, hosted in a GlassContainer. See-through with
+       * refraction (no tint, no scrim); the autofocused input pops the keyboard
        * so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
         <GlassContainer style={styles.glassContainer}>
-          {/* `regular`, not `clear`: clear Liquid Glass renders nothing on this
-           * OS (no fallback), so regular is the only visible native glass. */}
           <GlassView
             style={styles.glass}
-            glassEffectStyle="regular"
+            glassEffectStyle="clear"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
             <TextInput
