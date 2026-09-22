@@ -525,6 +525,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
+    // A little breathing room so the trailing worktree doesn't sit flush against
+    // the field's right edge.
+    paddingRight: 8,
     marginBottom: 6,
   },
   leading: {
