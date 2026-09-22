@@ -27,7 +27,8 @@
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
-import Reanimated, { Easing, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, { Easing, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
@@ -41,6 +42,12 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
+/** Smallest height the window shrinks to when the drag bar is pulled down. */
+const MIN_HEIGHT = 160;
+/** The top drag-bar area's height. */
+const GRABBER_AREA_H = 30;
+/** Snap-to-detent duration on drag release. */
+const SNAP_MS = 240;
 
 interface DubzApi {
   readonly open: () => void;
@@ -84,7 +91,12 @@ export const DubzOverlay = (): React.ReactElement | null => {
   // own animate fades it, no opacity); `grow` scales the window via layout.
   const [visible, setVisible] = React.useState(false);
   const [entered, setEntered] = React.useState(false);
+  // `lowered` = the window has been dragged below full; when true the tap-catcher
+  // passes touches through so you can see/scroll what's behind (e.g. the code).
+  const [lowered, setLowered] = React.useState(false);
   const grow = useSharedValue(0);
+  const dragY = useSharedValue(0); // 0 = full height; positive = top lowered (shorter)
+  const dragStart = useSharedValue(0);
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Open/close manages `visible` + the shrink/fade-out (which is smooth as-is).
@@ -99,9 +111,10 @@ export const DubzOverlay = (): React.ReactElement | null => {
       Keyboard.dismiss();
       setEntered(false); // glass fades clear → none
       grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
+      dragY.value = withTiming(0, { duration: ANIM_MS });
       closeTimer.current = setTimeout(() => setVisible(false), ANIM_MS + 40);
     }
-  }, [isOpen, visible, grow]);
+  }, [isOpen, visible, grow, dragY]);
 
   // Grow + fade IN only once the window has actually mounted (next frame), so the
   // timing doesn't start mid-mount / mid-glass-init — that's what dropped the
@@ -110,16 +123,58 @@ export const DubzOverlay = (): React.ReactElement | null => {
   React.useEffect(() => {
     if (!visible) return undefined;
     grow.value = 0;
+    dragY.value = 0;
+    setLowered(false);
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
       setEntered(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [visible, grow]);
+  }, [visible, grow, dragY]);
 
   React.useEffect(() => () => {
     if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
   }, []);
+
+  // Drag the top bar down to lower the window (revealing what's behind), snapping
+  // to detents like an iOS sheet — but anchored above the keyboard, not the very
+  // bottom. `dragY` (px the top is lowered) is added to the window's top.
+  const topInset = insets.top;
+  const bottomInset = insets.bottom;
+  const drag = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .onStart(() => {
+          dragStart.value = dragY.value;
+        })
+        .onUpdate((e) => {
+          const fullTop = topInset + MARGIN;
+          const bottom = Math.max(keyboard.height.value, bottomInset) + MARGIN;
+          const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+          const next = dragStart.value + e.translationY;
+          dragY.value = next < 0 ? 0 : next > maxDrag ? maxDrag : next;
+        })
+        .onEnd((e) => {
+          const fullTop = topInset + MARGIN;
+          const bottom = Math.max(keyboard.height.value, bottomInset) + MARGIN;
+          const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+          const detents = [0, maxDrag * 0.5, maxDrag];
+          const projected = dragY.value + e.velocityY * 0.08;
+          let target = 0;
+          let best = 1e9;
+          for (let i = 0; i < detents.length; i++) {
+            const diff = projected - detents[i];
+            const dist = diff < 0 ? -diff : diff;
+            if (dist < best) {
+              best = dist;
+              target = detents[i];
+            }
+          }
+          dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
+          runOnJS(setLowered)(target > 4);
+        }),
+    [screenH, topInset, bottomInset, dragY, dragStart, keyboard],
+  );
 
   // Grows via LAYOUT (animating `top`), never a transform — a transform/opacity
   // would composite the subtree and stop the glass rendering. Full width the whole
@@ -131,7 +186,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
     const bottom = Math.max(keyboard.height.value, insets.bottom) + MARGIN;
     const collapsedTop = screenH - bottom; // sitting on its own bottom edge = 0 height
     return {
-      top: collapsedTop + (fullTop - collapsedTop) * grow.value,
+      top: collapsedTop + (fullTop - collapsedTop) * grow.value + dragY.value,
       left: MARGIN,
       right: MARGIN,
       bottom,
@@ -142,8 +197,15 @@ export const DubzOverlay = (): React.ReactElement | null => {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* Transparent tap-catcher — tap outside to dismiss; no visible background. */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close Dubz" />
+      {/* Transparent tap-catcher — tap outside to dismiss (at full height). Once
+       * lowered, it passes touches through so you can see/scroll what's behind. */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        pointerEvents={lowered ? "none" : "auto"}
+        onPress={close}
+        accessibilityRole="button"
+        accessibilityLabel="Close Dubz"
+      />
 
       {/* The clear glass window, hosted in a GlassContainer. See-through with
        * refraction (no tint, no scrim); the autofocused input pops the keyboard
@@ -161,6 +223,12 @@ export const DubzOverlay = (): React.ReactElement | null => {
             tintColor="rgba(0,0,0,0.18)"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
+            {/* Drag bar — pull down to lower the window to a detent (see behind). */}
+            <GestureDetector gesture={drag}>
+              <View style={styles.grabberArea}>
+                <View style={styles.grabber} />
+              </View>
+            </GestureDetector>
             <TextInput
               style={styles.input}
               placeholder={`Ask ${AGENT_NAME}…`}
@@ -194,12 +262,24 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: WINDOW_RADIUS,
     borderCurve: "continuous",
-    padding: 18,
+  },
+  grabberArea: {
+    height: GRABBER_AREA_H,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  grabber: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(120,120,128,0.55)",
   },
   input: {
     flex: 1,
     color: colors.label,
     fontSize: 16,
     textAlignVertical: "top",
+    paddingHorizontal: 18,
+    paddingBottom: 18,
   },
 });

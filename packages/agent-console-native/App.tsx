@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
 import { DubzOverlay, DubzProvider } from "./src/Dubz";
@@ -201,16 +202,20 @@ const AppInner = (): React.ReactElement => {
 
 export default function App() {
   return (
-    // initialMetrics so safe-area insets are correct on the FIRST render instead
-    // of arriving as 0 then settling — that settle was moving the space between
-    // the nav bar and the content.
-    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-      <ThemeProvider>
-        <ErrorBoundary>
-          <AppInner />
-        </ErrorBoundary>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    // GestureHandlerRootView at the very root so gesture-handler works app-wide
+    // (the Dubz drag-to-resize bar needs it).
+    <GestureHandlerRootView style={styles.root}>
+      {/* initialMetrics so safe-area insets are correct on the FIRST render instead
+       * of arriving as 0 then settling — that settle was moving the space between
+       * the nav bar and the content. */}
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <ThemeProvider>
+          <ErrorBoundary>
+            <AppInner />
+          </ErrorBoundary>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
