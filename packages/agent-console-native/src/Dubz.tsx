@@ -36,6 +36,11 @@ import { colors } from "./colors";
 const MARGIN = 12;
 /** Corner radius of the glass window. */
 const WINDOW_RADIUS = 30;
+/** Native glass fade duration — seconds for the effect, ms for the unmount timer.
+ * Animated via glassEffectStyle's own `animate` (the only way to fade glass
+ * in/out without an opacity/transform that would composite and kill the effect). */
+const GLASS_ANIM_S = 0.32;
+const GLASS_ANIM_MS = 320;
 
 interface DubzApi {
   readonly open: () => void;
@@ -70,14 +75,34 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const scheme = useColorScheme();
   const keyboard = useAnimatedKeyboard();
 
+  // `visible` mounts the tree; `entered` toggles the native glass style between
+  // `clear` (shown) and `none` (hidden) so the glass fades in/out on its own.
   const [visible, setVisible] = React.useState(false);
+  const [entered, setEntered] = React.useState(false);
+  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   React.useEffect(() => {
-    if (isOpen) setVisible(true);
-    else if (visible) {
+    if (isOpen) {
+      if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
+      setVisible(true);
+    } else if (visible) {
       Keyboard.dismiss();
-      setVisible(false);
+      setEntered(false); // native fade clear → none
+      closeTimer.current = setTimeout(() => setVisible(false), GLASS_ANIM_MS + 40);
     }
   }, [isOpen, visible]);
+
+  // Mount as `none`, then flip to `clear` next frame so the native glass animates
+  // in — no opacity/transform, which would composite and break the effect.
+  React.useEffect(() => {
+    if (!visible) return;
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, [visible]);
+
+  React.useEffect(() => () => {
+    if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
+  }, []);
 
   // POSITION ONLY — top under the safe area, bottom rides the keyboard. Crucially
   // NO opacity/transform animation on this wrapper: an animated opacity or
@@ -107,7 +132,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
         <GlassContainer style={styles.glassContainer}>
           <GlassView
             style={styles.glass}
-            glassEffectStyle="clear"
+            glassEffectStyle={{ style: entered ? "clear" : "none", animate: true, animationDuration: GLASS_ANIM_S }}
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
             <TextInput
