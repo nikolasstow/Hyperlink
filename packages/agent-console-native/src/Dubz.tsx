@@ -89,7 +89,9 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const { colors: themeColors } = useTheme();
-  const keyboard = useAnimatedKeyboard();
+  // Destructure the height SHARED VALUE — capturing the whole useAnimatedKeyboard
+  // object (KeyboardImpl) in a worklet fails to serialize to the UI thread.
+  const { height: kbHeight } = useAnimatedKeyboard();
   const { height: screenH } = useWindowDimensions();
   const [text, setText] = React.useState("");
 
@@ -164,7 +166,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
         })
         .onUpdate((e) => {
           const fullTop = topInset + MARGIN;
-          const bottom = Math.max(keyboard.height.value, bottomInset) + MARGIN;
+          const bottom = Math.max(kbHeight.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
           // Allow pulling a bit past the last detent into a dismiss zone.
           const limit = maxDrag + DISMISS_ZONE;
@@ -173,7 +175,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
         })
         .onEnd((e) => {
           const fullTop = topInset + MARGIN;
-          const bottom = Math.max(keyboard.height.value, bottomInset) + MARGIN;
+          const bottom = Math.max(kbHeight.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
           // Flung down hard, or released past the last detent → dismiss.
           if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
@@ -196,7 +198,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
           runOnJS(setLowered)(target > 4);
           runOnJS(setPillMode)(maxDrag > 0 && target >= maxDrag - 4);
         }),
-    [screenH, topInset, bottomInset, dragY, dragStart, keyboard, close],
+    [screenH, topInset, bottomInset, dragY, dragStart, kbHeight, close],
   );
 
   // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
@@ -222,7 +224,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
   // unfolds upward from the bottom.
   const windowStyle = useAnimatedStyle(() => {
     const fullTop = insets.top + MARGIN;
-    const bottom = Math.max(keyboard.height.value, insets.bottom) + MARGIN;
+    const bottom = Math.max(kbHeight.value, insets.bottom) + MARGIN;
     const collapsedTop = screenH - bottom; // sitting on its own bottom edge = 0 height
     return {
       top: collapsedTop + (fullTop - collapsedTop) * grow.value + dragY.value,
