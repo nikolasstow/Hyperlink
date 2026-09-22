@@ -44,8 +44,9 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Smallest height — the "pill" detent: grabber + composer only. */
-const MIN_HEIGHT = 86;
+/** Smallest height — the "pill" detent. Pill-shaped at the window radius (the
+ * grabber overlays the composer here rather than stacking above it). */
+const MIN_HEIGHT = 60;
 /** The top drag-bar area's height. */
 const GRABBER_AREA_H = 30;
 /** Snap-to-detent duration on drag release. */
@@ -257,9 +258,12 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
             tintColor="rgba(0,0,0,0.18)"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
-            {/* Drag bar — pull down to lower the window to a detent (see behind). */}
+            {/* Drag bar — pull down to lower the window to a detent (see behind).
+             * At the pill (min) detent the grabber overlays the top of the composer
+             * (absolute, zero layout height) so the window collapses to a true pill
+             * shape instead of stacking grabber-above-composer into a tall rect. */}
             <GestureDetector gesture={drag}>
-              <View style={styles.grabberArea}>
+              <View style={[styles.grabberArea, pillMode && styles.grabberAreaPill]}>
                 <View style={styles.grabber} />
               </View>
             </GestureDetector>
@@ -334,6 +338,16 @@ const styles = StyleSheet.create({
     height: GRABBER_AREA_H,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // Pill (min) detent only: lift the grabber out of layout flow and float it over
+  // the composer's top edge, so it adds no height and the window is a true pill.
+  grabberAreaPill: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: GRABBER_AREA_H,
+    zIndex: 2,
   },
   grabber: {
     width: 40,
