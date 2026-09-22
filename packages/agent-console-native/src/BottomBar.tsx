@@ -199,11 +199,16 @@ const styles = StyleSheet.create({
   },
   sendSlot: {
     width: COMPOSER_SEND_CHIP_SIZE,
-    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sendSlotCollapsed: {
     width: 0,
     opacity: 0,
+    // overflow clips the still-mounted Host down to 0 width ONLY while
+    // collapsed — never when shown, where it would crop the glass button's edge
+    // (the same crop the assistant button had).
+    overflow: "hidden",
   },
   agentSlot: {
     width: COMPOSER_SEND_CHIP_SIZE,
