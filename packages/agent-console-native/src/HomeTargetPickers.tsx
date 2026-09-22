@@ -450,7 +450,10 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           </Menu>
         </Host>
         )}
+      </View>
 
+      {/* Branch + worktree grouped together on the right. */}
+      <View style={styles.trailing}>
         <Host
           style={[styles.pillHost, { width: pillHostWidth(branchPill, true) }]}
           matchContents={{ vertical: true }}
@@ -476,13 +479,12 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
             })}
           </Menu>
         </Host>
-      </View>
 
-      <Host
-        style={[styles.pillHost, { width: pillHostWidth(worktreePill, true) }]}
-        matchContents={{ vertical: true }}
-        ignoreSafeArea="all"
-      >
+        <Host
+          style={[styles.pillHost, { width: pillHostWidth(worktreePill, true) }]}
+          matchContents={{ vertical: true }}
+          ignoreSafeArea="all"
+        >
         <Menu
           label={<PillLabel text={worktreePill} dimmed={repoOnly} icon="hard-drive" />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
@@ -506,6 +508,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           <Button label="Create new…" systemImage="plus" onPress={promptNewWorktree} />
         </Menu>
       </Host>
+      </View>
     </View>
     <NewRepoSheet
       visible={newRepoOpen}
@@ -520,9 +523,8 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    // Packed to the left (not space-between) so branch and worktree sit next to
-    // each other rather than being shoved to opposite edges.
-    justifyContent: "flex-start",
+    // Repo on the left; the branch + worktree group on the right.
+    justifyContent: "space-between",
     gap: 8,
     marginBottom: 6,
   },
@@ -533,6 +535,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     gap: 8,
     minWidth: 0,
+  },
+  // Branch + worktree, packed together on the right with a small gap.
+  trailing: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexShrink: 0,
+    gap: 6,
   },
   pillHost: {
     height: PILL_HEIGHT,
