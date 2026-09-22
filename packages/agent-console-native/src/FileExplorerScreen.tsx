@@ -151,7 +151,12 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   // Back + forward as one paired glass capsule (the native back button is
   // hidden — see RootNavigator). Adjacent header items with no `spacing` item
   // between them share a single background, the way Safari pairs back/forward.
-  React.useEffect(() => {
+  //
+  // useLayoutEffect, not useEffect: setOptions in a plain effect runs AFTER the
+  // pushed screen paints, so the buttons popped in a frame late (visible as them
+  // disappearing then reappearing on forward navigation / drilling in). A layout
+  // effect sets them before paint.
+  React.useLayoutEffect(() => {
     navigation.setOptions({
       unstable_headerLeftItems: () => [
         {
