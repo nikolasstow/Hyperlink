@@ -1,18 +1,25 @@
 /**
  * The app-wide assistant button — "Dubz". A glass circle tinted with the theme
  * SECONDARY accent and a white `sparkles` glyph: the secondary-coloured
- * counterpart to the primary-coloured send button (fill is the accent, glyph is
- * white — the send button's own recipe, so the two read as a pair).
+ * counterpart to the primary-coloured send button.
  *
- * A standalone component so every surface that offers the assistant renders the
- * same button (the composer today; repos/sessions/editors as they're wired),
- * and so the future `BottomBar` shell can slot it. The handler is wired later.
+ * Built from `expo-glass-effect`'s `GlassView` (a plain RN view) rather than an
+ * `@expo/ui` glass `Button` (a native `Host`). The Host renders its glyph high
+ * within its frame, so at this size the button sat visibly above the pill it
+ * pairs with — the +/send chips hide the same bias only because they're tiny. A
+ * `GlassView` clipped to a circle centres by ordinary RN layout, exactly like
+ * the search pill's glass, so it lines up with the pill's height precisely.
+ *
+ * The circle clip lives on the plain wrapping `Pressable`, never on `GlassView`
+ * itself — setting `borderCurve`/clip on the glass breaks the effect (the same
+ * invariant the search pill and composer document).
  *
  * @internal
  */
-import { Button, Host } from "@expo/ui/swift-ui";
-import { buttonStyle, foregroundStyle, frame, glassEffect, imageScale, labelStyle } from "@expo/ui/swift-ui/modifiers";
+import { Ionicons } from "@expo/vector-icons";
+import { GlassView } from "expo-glass-effect";
 import * as React from "react";
+import { Pressable, StyleSheet, useColorScheme, View } from "react-native";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { useTheme } from "./theme";
 
@@ -27,30 +34,31 @@ export const AgentButton = (props: {
   readonly onPress?: () => void;
 }): React.ReactElement => {
   const { colors } = useTheme();
+  const scheme = useColorScheme();
   const size = props.size ?? AGENT_BUTTON_SIZE;
   return (
-    // Rendered exactly like the composer's +/send chips — a bare Host, no
-    // wrapping View — so it shares their proven vertical alignment. (The drop
-    // shadow that used to live on a wrapper was removed while isolating a
-    // vertical-offset bug; it can return once alignment is confirmed.)
-    <Host style={{ width: size, height: size }}>
-      <Button
-        label={AGENT_NAME}
-        systemImage="sparkles"
-        onPress={() => props.onPress?.()}
-        modifiers={[
-          buttonStyle("plain"),
-          labelStyle("iconOnly"),
-          imageScale("medium"),
-          frame({ width: size, height: size }),
-          // Fill = secondary accent (translucent so the glass shows), glyph =
-          // white. foregroundStyle LAST, after glassEffect — modifier order is
-          // significant; before it the glass treatment overrides the glyph
-          // colour (same constraint the composer's chips document).
-          glassEffect({ glass: { variant: "regular", interactive: true, tint: colors.secondaryFill }, shape: "circle" }),
-          foregroundStyle("#FFFFFF"),
-        ]}
-      />
-    </Host>
+    <Pressable
+      onPress={() => props.onPress?.()}
+      accessibilityRole="button"
+      accessibilityLabel={AGENT_NAME}
+      style={({ pressed }) => [
+        { width: size, height: size, borderRadius: size / 2, overflow: "hidden", opacity: pressed ? 0.85 : 1 },
+      ]}
+    >
+      <GlassView style={styles.fill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+        {/* Secondary-accent wash over the glass (translucent, so the glass still
+         * reads), mirroring the send button's tinted fill; white glyph on top. */}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.secondaryFill }]} />
+        <Ionicons name="sparkles" size={Math.round(size * 0.46)} color="#FFFFFF" />
+      </GlassView>
+    </Pressable>
   );
 };
+
+const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
