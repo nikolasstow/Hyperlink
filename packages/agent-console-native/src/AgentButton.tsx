@@ -38,23 +38,22 @@ export const AgentButton = (props: {
   const size = props.size ?? AGENT_BUTTON_SIZE;
   return (
     // Outer wrapper carries the drop shadow — it must NOT clip (no overflow), or
-    // it would clip its own shadow. The circle clip lives on the inner Pressable.
-    // (Safe to wrap now: the earlier vertical offset was the @expo/ui Host, not a
-    // wrapper — this button is GlassView-based and aligns.)
+    // it would clip its own shadow.
     <View style={[styles.shadow, { width: size, height: size, borderRadius: size / 2 }]}>
       <Pressable
         onPress={() => props.onPress?.()}
         accessibilityRole="button"
         accessibilityLabel={AGENT_NAME}
-        style={({ pressed }) => [
-          { width: size, height: size, borderRadius: size / 2, overflow: "hidden", opacity: pressed ? 0.85 : 1 },
-        ]}
+        style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
       >
-        {/* Tint the GLASS MATERIAL itself (tintColor + isInteractive), not a
-         * colour View washed over it — the wash read as a flat disc, this reads as
-         * real Liquid Glass, matching the send button's tinted glassEffect. */}
+        {/* Round the GLASS itself via `borderRadius` — GlassView maps it to the
+         * native UIGlassEffect corner configuration, so the material renders as a
+         * true circle. Do NOT wrap it in an `overflow: hidden` clip: that clips the
+         * UIVisualEffectView to a hard rectangle and crops the glass edge (the
+         * "cropped, not proper glass" look). tintColor + isInteractive tint the
+         * material itself, matching the send button's glassEffect. */}
         <GlassView
-          style={styles.fill}
+          style={[styles.glass, { width: size, height: size, borderRadius: size / 2 }]}
           glassEffectStyle="regular"
           tintColor={colors.secondaryFill}
           isInteractive
@@ -68,8 +67,7 @@ export const AgentButton = (props: {
 };
 
 const styles = StyleSheet.create({
-  fill: {
-    flex: 1,
+  glass: {
     alignItems: "center",
     justifyContent: "center",
   },
