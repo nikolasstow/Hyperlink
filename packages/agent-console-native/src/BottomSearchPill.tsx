@@ -130,6 +130,10 @@ export const BottomSearchPill = (props: {
     <Reanimated.View style={[styles.wrap, { paddingBottom: 8 }, animatedStyle]} pointerEvents="box-none">
       {/* Pill + the assistant button on the right, matching the composer. */}
       <View style={styles.row}>
+        {/* The drop shadow lives on this OUTER wrapper (no overflow), matching the
+         * composer pill — `clip` below clips for the squircle and would clip its
+         * own shadow. */}
+        <View style={styles.pillShadow}>
         {/* The squircle clip lives on this plain View, never on `GlassView`:
          * setting `borderCurve` on the glass itself breaks the effect outright
          * (see the SessionComposer handoff's invariant 2). */}
@@ -154,6 +158,7 @@ export const BottomSearchPill = (props: {
             />
           </GlassView>
         </View>
+        </View>
         {/* A touch smaller than the pill and centred beside it, matching the
          * composer's assistant button. */}
         {showAgent ? <AgentButton onPress={props.onAgent} size={SEARCH_PILL_HEIGHT - 6} /> : null}
@@ -177,9 +182,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  clip: {
-    // Flex so the pill fills the row and the assistant button sits at the edge.
+  // Carries the pill's flex and its small drop shadow (no overflow, so the shadow
+  // isn't clipped) — same values as the composer's pillShadow.
+  pillShadow: {
     flex: 1,
+    borderRadius: SEARCH_PILL_HEIGHT / 2,
+    borderCurve: "continuous",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  clip: {
     borderRadius: SEARCH_PILL_HEIGHT / 2,
     borderCurve: "continuous",
     overflow: "hidden",
