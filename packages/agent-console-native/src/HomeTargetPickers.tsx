@@ -559,6 +559,8 @@ const styles = StyleSheet.create({
     // Repo on the left; the branch + worktree group on the right.
     justifyContent: "space-between",
     gap: 8,
+    // Right breathing room so the worktree isn't flush against the field edge.
+    paddingRight: 8,
     marginBottom: 6,
   },
   leading: {
