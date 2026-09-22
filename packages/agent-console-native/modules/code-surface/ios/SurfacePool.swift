@@ -1,7 +1,25 @@
 import UIKit
 import WebKit
 
-/// A pool of `WKWebView`s that have already loaded the code surface.
+/// A web view that has loaded the code surface, and the content controller it
+/// was built with.
+///
+/// The controller is held alongside deliberately. `WKWebView.configuration` is
+/// `@NSCopying`, so reading it back hands you a copy: a script message handler
+/// registered on `webView.configuration.userContentController` goes onto that
+/// copy and never fires. The only controller that works is the one the web view
+/// was created with, so it is kept here rather than fetched later.
+final class Surface {
+  let webView: WKWebView
+  let controller: WKUserContentController
+
+  init(webView: WKWebView, controller: WKUserContentController) {
+    self.webView = webView
+    self.controller = controller
+  }
+}
+
+/// A pool of surfaces that have already loaded the page.
 ///
 /// The page is five and a half megabytes of Monaco and Shiki, and parsing it
 /// costs the better part of a second. React Native cannot move a native view
@@ -13,13 +31,16 @@ import WebKit
 /// The reason this is worth native code at all is that a warm surface can be
 /// handed documents *before* anyone opens them, which nothing owned by a screen
 /// can do.
-final class SurfacePool: NSObject {
+final class SurfacePool {
   static let shared = SurfacePool()
 
-  private var idle: [WKWebView] = []
-  private var busy: [WKWebView] = []
+  /// The handler name the page's shim posts to. One name, used in both places.
+  static let messageName = "codeSurface"
 
-  /// Where a web view waits between screens.
+  private var idle: [Surface] = []
+  private var busy: [Surface] = []
+
+  /// Where a surface waits between screens.
   ///
   /// It has to be in the window and it has to have a real size: WebKit stops
   /// rendering a view that is hidden or zero-sized, and a suspended content
@@ -31,15 +52,12 @@ final class SurfacePool: NSObject {
     return view
   }()
 
-  private var parked = false
-
-  private func park(_ webView: WKWebView) {
-    if !parked, let window = Self.keyWindow() {
+  private func park(_ surface: Surface) {
+    if parking.superview == nil, let window = Self.keyWindow() {
       window.addSubview(parking)
-      parked = true
     }
-    webView.frame = parking.bounds
-    parking.addSubview(webView)
+    surface.webView.frame = parking.bounds
+    parking.addSubview(surface.webView)
   }
 
   private static func keyWindow() -> UIWindow? {
@@ -49,27 +67,29 @@ final class SurfacePool: NSObject {
       .first { $0.isKeyWindow }
   }
 
-  private func makeWebView(fileURL: URL) -> WKWebView {
-    let configuration = WKWebViewConfiguration()
+  private func makeSurface(fileURL: URL) -> Surface {
+    let controller = WKUserContentController()
     // The page talks to the host the same way it does under
-    // `react-native-webview`, so the asset needs no host-specific build. The
-    // shim is installed at document start, before the bundle runs.
-    let shim = WKUserScript(
-      source: """
-      window.ReactNativeWebView = {
-        postMessage: function (message) {
-          window.webkit.messageHandlers.codeSurface.postMessage(String(message));
-        }
-      };
-      """,
-      injectionTime: .atDocumentStart,
-      forMainFrameOnly: true
+    // `react-native-webview`, so the built asset needs no host-specific
+    // variant. The shim is installed at document start, before the bundle runs.
+    controller.addUserScript(
+      WKUserScript(
+        source: """
+        window.ReactNativeWebView = {
+          postMessage: function (message) {
+            window.webkit.messageHandlers.\(Self.messageName).postMessage(String(message));
+          }
+        };
+        """,
+        injectionTime: .atDocumentStart,
+        forMainFrameOnly: true
+      )
     )
-    configuration.userContentController.addUserScript(shim)
+
+    let configuration = WKWebViewConfiguration()
+    configuration.userContentController = controller
     configuration.suppressesIncrementalRendering = false
-    if #available(iOS 14.0, *) {
-      configuration.defaultWebpagePreferences.allowsContentJavaScript = true
-    }
+    configuration.defaultWebpagePreferences.allowsContentJavaScript = true
 
     let webView = WKWebView(frame: .zero, configuration: configuration)
     webView.isOpaque = false
@@ -80,7 +100,7 @@ final class SurfacePool: NSObject {
     // Everything the page needs is inline, so read access to the file's own
     // directory is all it ever asks for.
     webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
-    return webView
+    return Surface(webView: webView, controller: controller)
   }
 
   /// Bring the pool up to `count` warm surfaces. Safe to call more than once.
@@ -88,25 +108,25 @@ final class SurfacePool: NSObject {
     let total = idle.count + busy.count
     guard total < count else { return }
     for _ in total..<count {
-      let webView = makeWebView(fileURL: fileURL)
-      park(webView)
-      idle.append(webView)
+      let surface = makeSurface(fileURL: fileURL)
+      park(surface)
+      idle.append(surface)
     }
   }
 
   /// A warm surface, or a cold one if the pool was never warmed or is empty.
-  func claim(fileURL: URL) -> WKWebView {
-    let webView = idle.popLast() ?? makeWebView(fileURL: fileURL)
-    webView.removeFromSuperview()
-    busy.append(webView)
-    return webView
+  func claim(fileURL: URL) -> Surface {
+    let surface = idle.popLast() ?? makeSurface(fileURL: fileURL)
+    surface.webView.removeFromSuperview()
+    busy.append(surface)
+    return surface
   }
 
   /// Take a surface back. It keeps its documents and its parsed bundle.
-  func release(_ webView: WKWebView) {
-    busy.removeAll { $0 === webView }
-    guard !idle.contains(where: { $0 === webView }) else { return }
-    park(webView)
-    idle.append(webView)
+  func release(_ surface: Surface) {
+    busy.removeAll { $0 === surface }
+    guard !idle.contains(where: { $0 === surface }) else { return }
+    park(surface)
+    idle.append(surface)
   }
 }

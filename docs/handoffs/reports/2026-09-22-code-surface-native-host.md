@@ -55,6 +55,16 @@ enables it.
 view installed, and `add` throws on a duplicate name, so the view removes any existing handler
 before registering itself.
 
+**The controller is held beside the web view, not read back from it.**
+`WKWebView.configuration` is `@NSCopying`, so reading it hands you a copy: a handler registered
+on `webView.configuration.userContentController` goes onto that copy and never fires. `Surface`
+pairs each web view with the controller it was built with, which is the only one that works.
+
+**The handler is a weak proxy, not the view.** `WKUserContentController` retains its message
+handlers, so registering the view itself would close a cycle the view could never escape: the
+view holds the web view, which holds the controller, which would hold the view. `deinit` would
+never run and the surface would never return to the pool.
+
 ## It does nothing until you build, and breaks nothing before that
 
 `requireNativeModule` and `requireNativeView` are read inside a `try`, the way `HtmlToolBlock`
