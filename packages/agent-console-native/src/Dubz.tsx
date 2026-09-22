@@ -26,7 +26,7 @@
  */
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Keyboard, Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, View } from "react-native";
 import Reanimated, {
   Easing,
   runOnJS,
@@ -46,9 +46,6 @@ const WINDOW_RADIUS = 30;
 /** Entrance/exit timing. */
 const OPEN_MS = 280;
 const CLOSE_MS = 220;
-/** How much the scrim dims the app behind the window — low, so the clear glass
- * reads as glass over the app rather than a dark sheet. */
-const SCRIM_OPACITY = 0.18;
 
 interface DubzApi {
   readonly open: () => void;
@@ -109,10 +106,6 @@ export const DubzOverlay = (): React.ReactElement | null => {
     progress.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
   }, [visible, progress]);
 
-  // Scrim fades with progress — kept light so the clear glass reads as glass over
-  // the app, not a dark panel.
-  const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.value * SCRIM_OPACITY }));
-
   // The window: fixed top (safe area + margin), bottom rides the keyboard, and it
   // rises + fades in. The GlassView keeps opacity 1 — only this wrapper animates.
   const windowStyle = useAnimatedStyle(() => ({
@@ -128,21 +121,27 @@ export const DubzOverlay = (): React.ReactElement | null => {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* Dim scrim — tap to dismiss. */}
-      <Reanimated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close Dubz" />
-      </Reanimated.View>
+      {/* Transparent tap-catcher — tap outside to dismiss; no visible background. */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close Dubz" />
 
-      {/* The glass window — empty for now, just a placeholder label. */}
+      {/* Transparent glass window. `clear` (no tint, no background fill) keeps it
+       * see-through; `isInteractive` makes the glass MATERIAL — edges, specular,
+       * refraction — actually render, so it reads as glass rather than nothing.
+       * The autofocused input pops the keyboard so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
         <GlassView
           style={styles.glass}
           glassEffectStyle="clear"
+          isInteractive
           colorScheme={scheme === "dark" ? "dark" : "light"}
         >
-          <View style={styles.body}>
-            <Text style={styles.placeholder}>Ask {AGENT_NAME}…</Text>
-          </View>
+          <TextInput
+            style={styles.input}
+            placeholder={`Ask ${AGENT_NAME}…`}
+            placeholderTextColor={colors.placeholderText}
+            autoFocus
+            multiline
+          />
         </GlassView>
       </Reanimated.View>
     </View>
@@ -150,17 +149,14 @@ export const DubzOverlay = (): React.ReactElement | null => {
 };
 
 const styles = StyleSheet.create({
-  scrim: {
-    backgroundColor: "#000000",
-  },
   window: {
     position: "absolute",
     borderRadius: WINDOW_RADIUS,
     borderCurve: "continuous",
-    // A soft lift off the scrim.
+    // A soft lift so the transparent glass reads as a floating pane over the app.
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.18,
     shadowRadius: 24,
   },
   glass: {
@@ -169,13 +165,10 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
     padding: 18,
   },
-  body: {
+  input: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholder: {
-    color: colors.secondaryLabel,
+    color: colors.label,
     fontSize: 16,
+    textAlignVertical: "top",
   },
 });
