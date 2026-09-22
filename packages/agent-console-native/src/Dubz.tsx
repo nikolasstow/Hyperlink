@@ -38,9 +38,6 @@ const MARGIN = 12;
 const WINDOW_RADIUS = 30;
 /** Grow/shrink duration (ms) for the window opening and closing. */
 const ANIM_MS = 320;
-/** The window grows from this fraction of full size up to 1 as it opens — a
- * LAYOUT scale (edge insets), never a transform, so the glass keeps rendering. */
-const GROW_FROM = 0.72;
 
 interface DubzApi {
   readonly open: () => void;
@@ -74,7 +71,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const keyboard = useAnimatedKeyboard();
-  const { width: screenW, height: screenH } = useWindowDimensions();
+  const { height: screenH } = useWindowDimensions();
 
   // `visible` mounts the tree; `grow` (0→1) scales the window up by animating its
   // LAYOUT bounds — never a transform/opacity, which would composite the subtree
@@ -103,23 +100,20 @@ export const DubzOverlay = (): React.ReactElement | null => {
     if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
   }, []);
 
-  // Grow via LAYOUT (edge insets), not transform: top under the safe area, bottom
-  // rides the keyboard, and `grow` insets all four edges toward the centre at the
-  // start so the window scales from GROW_FROM up to full. Layout animation keeps
-  // the glass rendering; a transform/opacity would composite and break it.
+  // Grows via LAYOUT (animating `top`), never a transform — a transform/opacity
+  // would composite the subtree and stop the glass rendering. Full width the whole
+  // time (left/right fixed); the bottom is anchored at the keyboard, and the top
+  // animates from the bottom edge (0 height) up to the full top — so the window
+  // unfolds upward from the bottom.
   const windowStyle = useAnimatedStyle(() => {
-    const top = insets.top + MARGIN;
+    const fullTop = insets.top + MARGIN;
     const bottom = Math.max(keyboard.height.value, insets.bottom) + MARGIN;
-    const fullW = screenW - 2 * MARGIN;
-    const fullH = screenH - top - bottom;
-    const scale = GROW_FROM + (1 - GROW_FROM) * grow.value;
-    const insetX = (fullW * (1 - scale)) / 2;
-    const insetY = (fullH * (1 - scale)) / 2;
+    const collapsedTop = screenH - bottom; // sitting on its own bottom edge = 0 height
     return {
-      top: top + insetY,
-      bottom: bottom + insetY,
-      left: MARGIN + insetX,
-      right: MARGIN + insetX,
+      top: collapsedTop + (fullTop - collapsedTop) * grow.value,
+      left: MARGIN,
+      right: MARGIN,
+      bottom,
     };
   });
 
