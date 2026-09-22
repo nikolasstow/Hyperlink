@@ -134,6 +134,9 @@ export const DubzOverlay = (): React.ReactElement | null => {
           <GlassView
             style={styles.glass}
             glassEffectStyle="clear"
+            // A 0.01-alpha tint is invisible but forces the native clear-glass
+            // shader to attach — a fully-transparent/absent tint can nullify it.
+            tintColor="rgba(255,255,255,0.01)"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
             <TextInput
@@ -151,23 +154,22 @@ export const DubzOverlay = (): React.ReactElement | null => {
 };
 
 const styles = StyleSheet.create({
+  // The wrapper carries ONLY position — no borderRadius / overflow / shadow. Any
+  // rounding or clipping on a parent of the GlassView clips iOS's native glass
+  // distortion context; the rounding lives on the GlassView itself.
   window: {
     position: "absolute",
-    borderRadius: WINDOW_RADIUS,
-    borderCurve: "continuous",
-    // A soft lift so the transparent glass reads as a floating pane over the app.
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
   },
   glassContainer: {
     flex: 1,
-    borderRadius: WINDOW_RADIUS,
-    borderCurve: "continuous",
+    width: "100%",
+    height: "100%",
   },
+  // Explicit 100% size (not just flex) — the native clear backdrop can't resolve
+  // its bounds from flex wrapping alone. Rounding lives here, on the glass.
   glass: {
-    flex: 1,
+    width: "100%",
+    height: "100%",
     borderRadius: WINDOW_RADIUS,
     borderCurve: "continuous",
     padding: 18,
