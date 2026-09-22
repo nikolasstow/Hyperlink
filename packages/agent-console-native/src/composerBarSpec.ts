@@ -13,3 +13,10 @@
  */
 export const COMPOSER_CHIP_SIZE = 32;
 export const COMPOSER_SEND_CHIP_SIZE = 38;
+
+/**
+ * Rendered height of the collapsed glass pill: its field pads 10pt top and
+ * bottom around the tallest control (the send chip). The standalone assistant
+ * button and the search pill both size to this so they read level with it.
+ */
+export const COMPOSER_PILL_HEIGHT = COMPOSER_SEND_CHIP_SIZE + 20;

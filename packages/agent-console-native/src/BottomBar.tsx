@@ -29,7 +29,7 @@
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
-import { AgentButton } from "./AgentButton";
+import { AgentButton, AGENT_BUTTON_SIZE } from "./AgentButton";
 import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
@@ -226,8 +226,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   agentSlot: {
-    width: COMPOSER_SEND_CHIP_SIZE,
-    height: COMPOSER_SEND_CHIP_SIZE,
+    width: AGENT_BUTTON_SIZE,
+    height: AGENT_BUTTON_SIZE,
     marginLeft: 8,
     alignItems: "center",
     justifyContent: "center",
