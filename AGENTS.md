@@ -28,6 +28,28 @@ not always-on essays. Do not grow alwaysApply rules; put SSOT in standards.
 
 **Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat.
 
+## Code formatting in every artifact
+
+**Break every call onto its own line** — chains, nested constructors, and multi-key
+option bags. Applies to source, tests, examples, doc comments, guides, handoffs, and
+chat replies. Full rule:
+[`docs/standards/documentation.md`](./docs/standards/documentation.md)
+(*Break every call onto its own line*) and
+[`.cursor/rules/code-formatting.mdc`](./.cursor/rules/code-formatting.mdc).
+
+``` ts
+// bad
+.add(Hyperlink.group("admin").add(reset))
+```
+
+``` ts
+// good
+.add(
+  Hyperlink.group("admin")
+    .add(reset)
+)
+```
+
 ## Branch policy
 
 **Format:** `<type>/<description>` — slash-separated, **kebab-case** description.
@@ -79,7 +101,12 @@ External repositories live under `repos/` as read-only reference material, track
   repo (Effect **v4** on `main`; v3 lives on the `v3` branch). Pinned near the same beta as
   `package.json` (`effect@4.0.0-beta.*`). Source: `repos/effect/packages/effect/src/`.
   The old `effect-smol` repo is archived — do not clone or cite it as current.
-- **Init after clone:** `git submodule update --init --depth 1`.
+- **Init after clone:** `git submodule update --init`. Do **not** add `--depth 1` — the pointer
+  is a tagged release commit (`effect@4.0.0-beta.102`), not the `main` tip, so a shallow fetch
+  fails with `upload-pack: not our ref`.
+- **Stale clone?** If init fails, the clone predates the effect-smol → Effect-TS/effect repoint and
+  `.git/config` still holds the old URL (it overrides `.gitmodules`). Run
+  `git submodule sync repos/effect`, then init again.
 - **Pull latest upstream:** `git submodule update --remote repos/effect` (then commit the bumped pointer),
   or check out a release tag such as `effect@4.0.0-beta.102` when aligning with a dep bump.
 - Use the submodule to inspect idiomatic upstream source, tests, module structure, and API design — when
