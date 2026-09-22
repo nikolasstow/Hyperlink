@@ -26,7 +26,7 @@
  */
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
 import Reanimated, {
   Easing,
   runOnJS,
@@ -46,6 +46,9 @@ const WINDOW_RADIUS = 30;
 /** Entrance/exit timing. */
 const OPEN_MS = 280;
 const CLOSE_MS = 220;
+/** How much the scrim dims the app behind the window — low, so the clear glass
+ * reads as glass over the app rather than a dark sheet. */
+const SCRIM_OPACITY = 0.18;
 
 interface DubzApi {
   readonly open: () => void;
@@ -82,15 +85,14 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const keyboard = useAnimatedKeyboard();
 
   // `visible` keeps the tree mounted through the exit animation; `progress`
-  // (0→1) drives the scale/fade. React state opens it; the animation callback
-  // clears `visible` once the exit finishes.
+  // (0→1) drives the scale/fade.
   const [visible, setVisible] = React.useState(false);
   const progress = useSharedValue(0);
 
+  // Open/close manages `visible`. On close, animate out first, then unmount.
   React.useEffect(() => {
     if (isOpen) {
       setVisible(true);
-      progress.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
     } else if (visible) {
       Keyboard.dismiss();
       progress.value = withTiming(0, { duration: CLOSE_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
@@ -99,18 +101,27 @@ export const DubzOverlay = (): React.ReactElement | null => {
     }
   }, [isOpen, visible, progress]);
 
-  // Scrim fades with progress.
-  const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.value * 0.5 }));
+  // Animate IN only once the window is actually mounted, so the entrance always
+  // runs from 0 (starting the timing before mount can skip the animation).
+  React.useEffect(() => {
+    if (!visible) return;
+    progress.value = 0;
+    progress.value = withTiming(1, { duration: OPEN_MS, easing: Easing.out(Easing.cubic) });
+  }, [visible, progress]);
+
+  // Scrim fades with progress — kept light so the clear glass reads as glass over
+  // the app, not a dark panel.
+  const scrimStyle = useAnimatedStyle(() => ({ opacity: progress.value * SCRIM_OPACITY }));
 
   // The window: fixed top (safe area + margin), bottom rides the keyboard, and it
-  // scales/fades in. The GlassView keeps opacity 1 — only this wrapper animates.
+  // rises + fades in. The GlassView keeps opacity 1 — only this wrapper animates.
   const windowStyle = useAnimatedStyle(() => ({
     top: insets.top + MARGIN,
     left: MARGIN,
     right: MARGIN,
     bottom: Math.max(keyboard.height.value, insets.bottom) + MARGIN,
     opacity: progress.value,
-    transform: [{ scale: 0.94 + 0.06 * progress.value }],
+    transform: [{ translateY: (1 - progress.value) * 20 }, { scale: 0.96 + 0.04 * progress.value }],
   }));
 
   if (!visible) return null;
@@ -122,21 +133,16 @@ export const DubzOverlay = (): React.ReactElement | null => {
         <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close Dubz" />
       </Reanimated.View>
 
-      {/* The glass window — empty for now, just placeholder text. The autofocused
-       * field pops the keyboard so the window sits above it. */}
+      {/* The glass window — empty for now, just a placeholder label. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
         <GlassView
           style={styles.glass}
-          glassEffectStyle="regular"
+          glassEffectStyle="clear"
           colorScheme={scheme === "dark" ? "dark" : "light"}
         >
-          <TextInput
-            style={styles.input}
-            placeholder={`Ask ${AGENT_NAME}…`}
-            placeholderTextColor={colors.placeholderText}
-            autoFocus
-            multiline
-          />
+          <View style={styles.body}>
+            <Text style={styles.placeholder}>Ask {AGENT_NAME}…</Text>
+          </View>
         </GlassView>
       </Reanimated.View>
     </View>
@@ -163,10 +169,13 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
     padding: 18,
   },
-  input: {
+  body: {
     flex: 1,
-    color: colors.label,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholder: {
+    color: colors.secondaryLabel,
     fontSize: 16,
-    textAlignVertical: "top",
   },
 });
