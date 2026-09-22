@@ -38,6 +38,11 @@ import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPO
 // rounded corners never overlap/distort no matter which row arrangement shows.
 const FIELD_RADIUS = 30;
 
+// How much smaller the assistant button is than the pill it sits beside. The
+// button stays vertically centred with the pill (still aligned); this just gives
+// it a little inset top and bottom so it doesn't read as bulky.
+const AGENT_BUTTON_INSET = 6;
+
 export interface BottomBarProps {
   /** Focused or non-empty — the variant computes it and owns the animation. */
   readonly expanded: boolean;
@@ -78,6 +83,8 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
   // and size the button to it. Seeded with the computed value so the common case
   // needs no resize (a resize can jog the native Host's first-mount alignment).
   const [pillHeight, setPillHeight] = React.useState(COMPOSER_PILL_HEIGHT);
+  // The assistant button, a touch smaller than the pill and centred beside it.
+  const agentSize = Math.max(pillHeight - AGENT_BUTTON_INSET, 24);
   const onFieldLayout = React.useCallback(
     (height: number): void => {
       // Only the collapsed height is the button's reference — the field grows
@@ -143,10 +150,10 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
         </View>
         {showAgent ? (
           <View
-            style={[styles.agentSlot, { width: pillHeight, height: pillHeight }, expanded && styles.agentSlotCollapsed]}
+            style={[styles.agentSlot, { width: agentSize, height: agentSize }, expanded && styles.agentSlotCollapsed]}
             pointerEvents={expanded ? "none" : "auto"}
           >
-            <AgentButton onPress={props.onAgent} size={pillHeight} />
+            <AgentButton onPress={props.onAgent} size={agentSize} />
           </View>
         ) : null}
       </View>

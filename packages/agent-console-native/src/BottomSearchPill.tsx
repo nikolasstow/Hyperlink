@@ -152,7 +152,9 @@ export const BottomSearchPill = (props: {
             />
           </GlassView>
         </View>
-        {showAgent ? <AgentButton onPress={props.onAgent} /> : null}
+        {/* A touch smaller than the pill and centred beside it, matching the
+         * composer's assistant button. */}
+        {showAgent ? <AgentButton onPress={props.onAgent} size={SEARCH_PILL_HEIGHT - 6} /> : null}
       </View>
     </Reanimated.View>
   );

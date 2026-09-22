@@ -46,9 +46,10 @@ export const AgentButton = (props: {
       ]}
     >
       <GlassView style={styles.fill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-        {/* Secondary-accent wash over the glass (translucent, so the glass still
-         * reads), mirroring the send button's tinted fill; white glyph on top. */}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.secondaryFill }]} />
+        {/* A light secondary-accent wash over the glass — kept translucent
+         * (styles.wash opacity) so the glass reads through and the button stays
+         * glassy rather than a solid coloured disc; white glyph on top. */}
+        <View style={[StyleSheet.absoluteFill, styles.wash, { backgroundColor: colors.secondaryFill }]} />
         <Ionicons name="sparkles" size={Math.round(size * 0.46)} color="#FFFFFF" />
       </GlassView>
     </Pressable>
@@ -60,5 +61,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // Softens the secondary tint so the glass shows through — lower is glassier.
+  wash: {
+    opacity: 0.5,
   },
 });
