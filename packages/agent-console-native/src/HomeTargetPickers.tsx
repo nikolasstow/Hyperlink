@@ -163,24 +163,24 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   // Default to first known repo once scan lands (respects default-worktree pref).
   // When a repo is locked (repo/workspace pages) select IT instead — a workspace
   // becomes a folder target, a git repo its main (or last-used) worktree.
+  const { onChange, lockedRepo, scanned } = props;
   React.useEffect(() => {
     if (props.target !== undefined) return;
-    const locked = props.lockedRepo;
-    if (locked !== undefined) {
-      if (!locked.isRepo) {
-        props.onChange({ kind: "folder", name: locked.name, path: locked.dir });
+    if (lockedRepo !== undefined) {
+      if (!lockedRepo.isRepo) {
+        onChange({ kind: "folder", name: lockedRepo.name, path: lockedRepo.dir });
         return;
       }
-      const found = props.scanned.find((r) => r.repo === locked.name);
+      const found = scanned.find((r) => r.repo === lockedRepo.name);
       const worktree =
         found?.worktrees.find((w) => w.isMain) ??
         found?.worktrees[0] ??
         // Fall back to the dir the page was opened with, so the composer works
         // even before the scan lands.
-        { name: "main", path: locked.dir, isMain: true };
+        { name: "main", path: lockedRepo.dir, isMain: true };
       void (async () => {
         const branch = (await runFs(readCurrentBranch(backend, worktree.path))) ?? "main";
-        props.onChange({ kind: "repo", repo: locked.name, worktree, branch });
+        onChange({ kind: "repo", repo: lockedRepo.name, worktree, branch });
       })();
       return;
     }
@@ -198,9 +198,9 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       const chosen = fromLast ?? main;
       if (chosen === undefined) return;
       const branch = (await runFs(readCurrentBranch(backend, chosen.path))) ?? "main";
-      props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
+      onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
-  }, [sortedRepos, props.target, props.onChange, backend, props.lockedRepo, props.scanned]);
+  }, [sortedRepos, props.target, onChange, lockedRepo, scanned, backend]);
 
   // Keep branch label in sync when the worktree changes.
   React.useEffect(() => {
