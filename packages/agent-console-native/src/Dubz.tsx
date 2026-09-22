@@ -124,15 +124,15 @@ export const DubzOverlay = (): React.ReactElement | null => {
       {/* Transparent tap-catcher — tap outside to dismiss; no visible background. */}
       <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close Dubz" />
 
-      {/* Transparent glass window. `clear` (no tint, no background fill) keeps it
-       * see-through; `isInteractive` makes the glass MATERIAL — edges, specular,
-       * refraction — actually render, so it reads as glass rather than nothing.
-       * The autofocused input pops the keyboard so the window sits above it. */}
+      {/* The glass window. `regular` is the only variant that renders visible
+       * glass here (`clear` shows nothing) — the same material the composer and
+       * search pills use, no tint, no scrim behind it, so it reads as glass over
+       * the live app rather than a muddy blurred panel. The autofocused input
+       * pops the keyboard so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
         <GlassView
           style={styles.glass}
-          glassEffectStyle="clear"
-          isInteractive
+          glassEffectStyle="regular"
           colorScheme={scheme === "dark" ? "dark" : "light"}
         >
           <TextInput
