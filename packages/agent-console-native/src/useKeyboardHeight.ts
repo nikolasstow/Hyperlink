@@ -24,8 +24,8 @@ import { Keyboard } from "react-native";
  * Used for the *reserved space* a list needs behind the keyboard (and the blur
  * bars) — where snapping to the final value is invisible because the keyboard
  * covers that region. For anything whose *position* rides the keyboard (the
- * floating composer / search pill), use `useKeyboardOffset`, which animates —
- * `LayoutAnimation` no-ops for this on the New Architecture. */
+ * floating composer / search pill), use `useKeyboardSlide`, which tracks the
+ * keyboard's real position on the UI thread (reanimated). */
 export const useKeyboardHeight = (): number => {
   const [height, setHeight] = React.useState(0);
   React.useEffect(() => {
