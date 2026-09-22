@@ -3,6 +3,7 @@ import * as React from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
+import { DubzOverlay, DubzProvider } from "./src/Dubz";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
 import { type OpencodeClient, makeClient } from "./src/client";
@@ -185,7 +186,13 @@ const AppInner = (): React.ReactElement => {
           }}
         >
           <ThemeSync />
-          <RootNavigator />
+          {/* Dubz is app-wide: one provider wraps the whole navigator, and the
+           * overlay renders once on top so tapping the assistant button on any
+           * screen opens the same glass window. */}
+          <DubzProvider>
+            <RootNavigator />
+            <DubzOverlay />
+          </DubzProvider>
         </AppContextProvider>
       )}
     </View>

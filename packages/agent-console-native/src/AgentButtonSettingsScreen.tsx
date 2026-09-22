@@ -11,7 +11,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AGENT_NAME } from "./AgentButton";
+import { AGENT_NAME } from "./agentButtonSettings";
 import {
   AGENT_SURFACES,
   setAgentButtonEnabled,

@@ -10,6 +10,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
 
+/** The assistant's name — shown on the button (a11y) and the Dubz window. Lives
+ * here (a leaf module) so both AgentButton and the Dubz overlay can use it
+ * without an import cycle. */
+export const AGENT_NAME = "Dubz";
+
 /** The surfaces the assistant button can be shown on. */
 export type AgentSurface = "home" | "repo" | "session" | "editor";
 

@@ -20,11 +20,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, useColorScheme, View } from "react-native";
+import { AGENT_NAME } from "./agentButtonSettings";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
+import { useDubz } from "./Dubz";
 import { useTheme } from "./theme";
 
-/** The assistant's name — used for the button's accessibility label. */
-export const AGENT_NAME = "Dubz";
 /** Default diameter — the glass pill's height, so the circle sits flush with the
  * pill top and bottom rather than floating centred inside it. */
 export const AGENT_BUTTON_SIZE = COMPOSER_PILL_HEIGHT;
@@ -35,13 +35,18 @@ export const AgentButton = (props: {
 }): React.ReactElement => {
   const { colors } = useTheme();
   const scheme = useColorScheme();
+  const dubz = useDubz();
   const size = props.size ?? AGENT_BUTTON_SIZE;
   return (
     // Outer wrapper carries the drop shadow — it must NOT clip (no overflow), or
     // it would clip its own shadow.
     <View style={[styles.shadow, { width: size, height: size, borderRadius: size / 2 }]}>
       <Pressable
-        onPress={() => props.onPress?.()}
+        onPress={() => {
+          // Any per-instance handler runs first, then the app-wide Dubz window opens.
+          props.onPress?.();
+          dubz.open();
+        }}
         accessibilityRole="button"
         accessibilityLabel={AGENT_NAME}
         style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
