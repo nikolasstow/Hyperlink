@@ -101,14 +101,20 @@ const PILL_MIN_WIDTH = 56;
  * can settle at width 0 — that emptied the worktree trigger. Size the Host
  * from the label string instead (same idea as SystemIcon’s explicit box).
  */
-const pillHostWidth = (text: string): number =>
-  Math.min(PILL_MAX_WIDTH, Math.max(PILL_MIN_WIDTH, Math.ceil(text.length * 7.8) + 40));
+const pillHostWidth = (text: string, hasIcon = false): number =>
+  Math.min(PILL_MAX_WIDTH, Math.max(PILL_MIN_WIDTH, Math.ceil(text.length * 8.6) + 44 + (hasIcon ? 22 : 0)));
 
-const PillLabel = (props: { readonly text: string; readonly dimmed?: boolean }): React.ReactElement => {
+const PillLabel = (props: {
+  readonly text: string;
+  readonly dimmed?: boolean;
+  /** Optional leading glyph, e.g. a branch / worktree icon. */
+  readonly icon?: React.ComponentProps<typeof Feather>["name"];
+}): React.ReactElement => {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
     <RNHostView matchContents>
       <View style={[styles.pill, props.dimmed === true && styles.pillDimmed]}>
+        {props.icon !== undefined ? <Feather name={props.icon} size={14} color={PILL_FG} /> : null}
         <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
           {props.text}
         </Text>
@@ -442,12 +448,12 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         )}
 
         <Host
-          style={[styles.pillHost, { width: pillHostWidth(branchPill) }]}
+          style={[styles.pillHost, { width: pillHostWidth(branchPill, true) }]}
           matchContents={{ vertical: true }}
           ignoreSafeArea="all"
         >
           <Menu
-            label={<PillLabel text={branchPill} dimmed={repoOnly} />}
+            label={<PillLabel text={branchPill} dimmed={repoOnly} icon="git-branch" />}
             modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
           >
             {branches.map((branch) => {
@@ -469,12 +475,12 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       </View>
 
       <Host
-        style={[styles.pillHost, { width: pillHostWidth(worktreePill) }]}
+        style={[styles.pillHost, { width: pillHostWidth(worktreePill, true) }]}
         matchContents={{ vertical: true }}
         ignoreSafeArea="all"
       >
         <Menu
-          label={<PillLabel text={worktreePill} dimmed={repoOnly} />}
+          label={<PillLabel text={worktreePill} dimmed={repoOnly} icon="hard-drive" />}
           modifiers={[...MENU_MODIFIERS, ...(repoOnly ? [disabledModifier(true)] : [])]}
         >
           {worktrees.map((wt) => {
@@ -552,7 +558,7 @@ const styles = StyleSheet.create({
   pillText: {
     flexShrink: 1,
     color: PILL_FG,
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "400",
   },
 });
