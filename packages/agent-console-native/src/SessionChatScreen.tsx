@@ -393,7 +393,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
        * it, which defeats the glass. `bottom` tracks the keyboard
        * explicitly: absolute children here are NOT offset by the parent's
        * padding (relying on that put the composer behind the keyboard). */}
-      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom }, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      <Animated.View style={[styles.composerFloat, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           onSend={onSend}
           disabled={transcript.busy}

@@ -314,7 +314,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       {/* One tap outside the composer collapses it (consumed) instead of hitting
        * a card behind it while the keyboard is up. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} />
-      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom }, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      <Animated.View style={[styles.composerFloat, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           onSend={onSend}
           disabled={sending || target === undefined}

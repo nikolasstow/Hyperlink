@@ -121,7 +121,7 @@ export const BottomSearchPill = (props: {
   const showAgent = useAgentButtonVisible(props.agentSurface);
 
   return (
-    <Reanimated.View style={[styles.wrap, { bottom: insets.bottom, paddingBottom: 10 }, keyboardSlide]} pointerEvents="box-none">
+    <Reanimated.View style={[styles.wrap, { paddingBottom: 10 }, keyboardSlide]} pointerEvents="box-none">
       <Animated.View style={{ transform: [{ translateY: props.offset }] }}>
         {/* Pill + the assistant button on the right, matching the composer. */}
         <View style={styles.row}>
