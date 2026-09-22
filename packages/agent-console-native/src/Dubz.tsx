@@ -24,7 +24,7 @@
  *
  * @internal
  */
-import { GlassView } from "expo-glass-effect";
+import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, View } from "react-native";
 import Reanimated, {
@@ -124,25 +124,27 @@ export const DubzOverlay = (): React.ReactElement | null => {
       {/* Transparent tap-catcher — tap outside to dismiss; no visible background. */}
       <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityRole="button" accessibilityLabel="Close Dubz" />
 
-      {/* The glass window. `regular` is the only variant that renders visible
-       * glass here (`clear` shows nothing) — the same material the composer and
-       * search pills use, no tint, no scrim behind it, so it reads as glass over
-       * the live app rather than a muddy blurred panel. The autofocused input
-       * pops the keyboard so the window sits above it. */}
+      {/* The glass window. The GlassView is hosted inside a GlassContainer
+       * (UIGlassContainerEffect) — the render context Liquid Glass elements need;
+       * standalone `clear` glass rendered nothing without it. `clear` keeps it
+       * see-through (no tint, no scrim). The autofocused input pops the keyboard
+       * so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
-        <GlassView
-          style={styles.glass}
-          glassEffectStyle="regular"
-          colorScheme={scheme === "dark" ? "dark" : "light"}
-        >
-          <TextInput
-            style={styles.input}
-            placeholder={`Ask ${AGENT_NAME}…`}
-            placeholderTextColor={colors.placeholderText}
-            autoFocus
-            multiline
-          />
-        </GlassView>
+        <GlassContainer style={styles.glassContainer}>
+          <GlassView
+            style={styles.glass}
+            glassEffectStyle="clear"
+            colorScheme={scheme === "dark" ? "dark" : "light"}
+          >
+            <TextInput
+              style={styles.input}
+              placeholder={`Ask ${AGENT_NAME}…`}
+              placeholderTextColor={colors.placeholderText}
+              autoFocus
+              multiline
+            />
+          </GlassView>
+        </GlassContainer>
       </Reanimated.View>
     </View>
   );
@@ -158,6 +160,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+  },
+  glassContainer: {
+    flex: 1,
+    borderRadius: WINDOW_RADIUS,
+    borderCurve: "continuous",
   },
   glass: {
     flex: 1,
