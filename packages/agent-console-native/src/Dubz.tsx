@@ -120,6 +120,10 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const grow = useSharedValue(0);
   const dragY = useSharedValue(0); // 0 = full height; positive = top lowered
   const dragStart = useSharedValue(0);
+  // True from the moment a resize drag touches down until it finalizes — the
+  // composer's swipe-down-to-dismiss gesture ignores its end while this is set,
+  // so lowering the window can never also dismiss the keyboard.
+  const resizing = useSharedValue(false);
 
   // Grow + fade IN on mount, on the next frame — starting the timing mid-mount /
   // mid-glass-init dropped the first frames (the entrance jitter).
@@ -151,6 +155,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const drag = React.useMemo(
     () =>
       Gesture.Pan()
+        .onBegin(() => {
+          resizing.value = true;
+        })
         .onStart(() => {
           dragStart.value = dragY.value;
         })
@@ -187,8 +194,11 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
           runOnJS(setLowered)(target > 4);
           runOnJS(setPillMode)(maxDrag > 0 && target >= maxDrag - 4);
+        })
+        .onFinalize(() => {
+          resizing.value = false;
         }),
-    [screenH, topInset, bottomInset, dragY, dragStart, kbHeight, close],
+    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbHeight, close],
   );
 
   // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
@@ -206,11 +216,14 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
         .activeOffsetY(14)
         .failOffsetY(-14)
         .onEnd((e) => {
+          // Never dismiss while the window is being resized — a downward resize
+          // drag must not double as a keyboard-dismiss swipe.
+          if (resizing.value) return;
           if (e.translationY > 24 || e.velocityY > 600) {
             runOnJS(dismissKeyboard)();
           }
         }),
-    [dismissKeyboard],
+    [dismissKeyboard, resizing],
   );
 
   // Grows via LAYOUT (animating `top`), never a transform — a transform/opacity
