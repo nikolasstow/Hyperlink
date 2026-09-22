@@ -24,6 +24,7 @@
  *
  * @internal
  */
+import { Ionicons } from "@expo/vector-icons";
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
@@ -32,6 +33,7 @@ import Reanimated, { Easing, runOnJS, useAnimatedKeyboard, useAnimatedStyle, use
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
+import { useTheme } from "./theme";
 
 /** Gap between the window and the screen edges / the keyboard. */
 const MARGIN = 12;
@@ -80,8 +82,10 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const { isOpen, close } = useDubz();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
+  const { colors: themeColors } = useTheme();
   const keyboard = useAnimatedKeyboard();
   const { height: screenH } = useWindowDimensions();
+  const [text, setText] = React.useState("");
 
   // `visible` mounts the tree; `grow` (0→1) scales the window up by animating its
   // LAYOUT bounds — never a transform/opacity, which would composite the subtree
@@ -229,13 +233,38 @@ export const DubzOverlay = (): React.ReactElement | null => {
                 <View style={styles.grabber} />
               </View>
             </GestureDetector>
-            <TextInput
-              style={styles.input}
-              placeholder={`Ask ${AGENT_NAME}…`}
-              placeholderTextColor={colors.placeholderText}
-              autoFocus
-              multiline
-            />
+
+            {/* Conversation area — empty for now; flexes so the composer pill sits
+             * at the bottom of the window. */}
+            <View style={styles.conversationArea} />
+
+            {/* Glass-in-glass: a `regular` glass composer pill inside the clear
+             * window — the bottom-bar design: (+) | input | (send). */}
+            <View style={styles.pillWrap}>
+              <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+                <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
+                  <Ionicons name="add" size={22} color={colors.secondaryLabel} />
+                </Pressable>
+                <TextInput
+                  style={styles.pillInput}
+                  value={text}
+                  onChangeText={setText}
+                  placeholder={`Ask ${AGENT_NAME}…`}
+                  placeholderTextColor={colors.placeholderText}
+                  autoFocus
+                  multiline
+                />
+                <Pressable
+                  style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.secondary : themeColors.secondaryFill }]}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send"
+                  onPress={() => setText("")}
+                >
+                  <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
+                </Pressable>
+              </GlassView>
+            </View>
           </GlassView>
         </GlassContainer>
       </Reanimated.View>
@@ -274,12 +303,45 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: "rgba(120,120,128,0.55)",
   },
-  input: {
+  conversationArea: {
+    flex: 1,
+  },
+  // Margins around the inner composer pill (glass within the window glass).
+  pillWrap: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 52,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderRadius: 26,
+    borderCurve: "continuous",
+  },
+  plusChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(120,120,128,0.28)",
+  },
+  pillInput: {
     flex: 1,
     color: colors.label,
     fontSize: 16,
-    textAlignVertical: "top",
-    paddingHorizontal: 18,
-    paddingBottom: 18,
+    maxHeight: 100,
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
+  sendChip: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
