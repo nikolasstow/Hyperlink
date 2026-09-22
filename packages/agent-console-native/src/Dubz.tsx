@@ -81,10 +81,23 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
 };
 
 /**
- * The overlay itself — rendered once at the root, ABOVE the navigator. Mounts
- * only while open.
+ * Mounted once at the root, but the heavy window — its `useAnimatedKeyboard`
+ * tracking, gestures and layout animation — is only mounted while Dubz is open.
+ * Keeping those hooks alive when closed ran a global keyboard listener (fighting
+ * the composer's) and bogged the whole app down.
  */
 export const DubzOverlay = (): React.ReactElement | null => {
+  const { isOpen } = useDubz();
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    if (isOpen) setMounted(true);
+  }, [isOpen]);
+  if (!mounted) return null;
+  return <DubzWindow onClosed={() => setMounted(false)} />;
+};
+
+/** The window itself — mounted only while open (and through its exit animation). */
+const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.ReactElement => {
   const { isOpen, close } = useDubz();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
@@ -95,63 +108,39 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const { height: screenH } = useWindowDimensions();
   const [text, setText] = React.useState("");
 
-  // `visible` mounts the tree; `grow` (0→1) scales the window up by animating its
-  // LAYOUT bounds — never a transform/opacity, which would composite the subtree
-  // and stop the glass rendering (opacity 0 on the GlassView or any parent kills
-  // it outright). So the entrance is a real size grow with live glass throughout.
-  // `visible` mounts the tree; `entered` toggles the native glass none↔clear (its
-  // own animate fades it, no opacity); `grow` scales the window via layout.
-  const [visible, setVisible] = React.useState(false);
+  // `entered` toggles the native glass none↔clear (its own animate fades it, no
+  // opacity); `grow` (0→1) scales the window via LAYOUT (never a transform, which
+  // would composite and kill the glass); `dragY` is the drag-bar offset.
   const [entered, setEntered] = React.useState(false);
-  // `lowered` = the window has been dragged below full; when true the tap-catcher
-  // passes touches through so you can see/scroll what's behind (e.g. the code).
+  // `lowered` = dragged below full; the tap-catcher then passes touches through.
   const [lowered, setLowered] = React.useState(false);
-  // `pillMode` = parked at the minimum detent; the window is pill-sized, so the
-  // inner glass pill is hidden (no pill-in-pill) and the composer fills the width.
+  // `pillMode` = at the min detent; inner glass pill hidden, composer fills width.
   const [pillMode, setPillMode] = React.useState(false);
   const grow = useSharedValue(0);
-  const dragY = useSharedValue(0); // 0 = full height; positive = top lowered (shorter)
+  const dragY = useSharedValue(0); // 0 = full height; positive = top lowered
   const dragStart = useSharedValue(0);
-  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Open/close manages `visible` + the shrink/fade-out (which is smooth as-is).
+  // Grow + fade IN on mount, on the next frame — starting the timing mid-mount /
+  // mid-glass-init dropped the first frames (the entrance jitter).
   React.useEffect(() => {
-    if (isOpen) {
-      if (closeTimer.current !== undefined) {
-        clearTimeout(closeTimer.current);
-        closeTimer.current = undefined;
-      }
-      setVisible(true);
-    } else if (visible) {
-      Keyboard.dismiss();
-      setEntered(false); // glass fades clear → none
-      grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
-      // dragY is left as-is so a swipe-dismiss collapses from where it was dragged
-      // (not snapped up first); it resets to 0 on the next open.
-      closeTimer.current = setTimeout(() => setVisible(false), ANIM_MS + 40);
-    }
-  }, [isOpen, visible, grow, dragY]);
-
-  // Grow + fade IN only once the window has actually mounted (next frame), so the
-  // timing doesn't start mid-mount / mid-glass-init — that's what dropped the
-  // first frames (jitter) in; out was already mounted, hence smooth. The glass
-  // fade (via glassEffectStyle animate) is short, so it lands ~30% into the grow.
-  React.useEffect(() => {
-    if (!visible) return undefined;
     grow.value = 0;
     dragY.value = 0;
-    setLowered(false);
-    setPillMode(false);
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
       setEntered(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [visible, grow, dragY]);
+  }, [grow, dragY]);
 
-  React.useEffect(() => () => {
-    if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
-  }, []);
+  // Exit when closed: fade + shrink out, then unmount via onClosed.
+  React.useEffect(() => {
+    if (isOpen) return undefined;
+    Keyboard.dismiss();
+    setEntered(false);
+    grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
+    const t = setTimeout(onClosed, ANIM_MS + 40);
+    return () => clearTimeout(t);
+  }, [isOpen, onClosed, grow]);
 
   // Drag the top bar down to lower the window (revealing what's behind), snapping
   // to detents like an iOS sheet — but anchored above the keyboard, not the very
@@ -239,8 +228,6 @@ export const DubzOverlay = (): React.ReactElement | null => {
       bottom,
     };
   });
-
-  if (!visible) return null;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
