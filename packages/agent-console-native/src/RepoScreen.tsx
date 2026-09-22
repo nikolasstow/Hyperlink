@@ -478,7 +478,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
       {/* New-session composer — the Home bottom bar, repo locked to this page. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} />
-      <EdgeBlurBars bottomInset={keyboardHeight} />
+      {/* Only the BOTTOM feather here — the repo header draws its own top blur
+       * above, and a second top feather would sit over the header. */}
+      <EdgeBlurBars bottomInset={keyboardHeight} variant="bottom" />
       <Animated.View
         style={[styles.composerFloat, composerSlide]}
         onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}

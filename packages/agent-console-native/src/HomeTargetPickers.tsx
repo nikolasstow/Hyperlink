@@ -82,8 +82,6 @@ type Props = {
   };
 };
 
-/** Filled chip — systemGray5 / gray4, not the translucent bordered default. */
-const PILL_BG = DynamicColorIOS({ light: "#E5E5EA", dark: "#3A3A3C" });
 const PILL_FG = DynamicColorIOS({ light: "#3C3C43", dark: "#EBEBF5" });
 const PILL_CHEVRON = { light: "#8E8E93", dark: "#8E8E93" } as const;
 
@@ -383,9 +381,9 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       <View style={styles.leading}>
         {props.lockedRepo !== undefined ? (
           // Repo/workspace pages: the repo is fixed, so its dropdown is replaced
-          // by static text of the repo name (no menu, no chevron).
-          <View style={styles.staticPill}>
-            <Text style={styles.staticPillText} numberOfLines={1} ellipsizeMode="head">
+          // by plain static text of the repo name (no menu, no chevron).
+          <View style={styles.staticRepo}>
+            <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
               {repoLabel}
             </Text>
           </View>
@@ -529,6 +527,8 @@ const styles = StyleSheet.create({
     flexGrow: 0,
     flexShrink: 0,
   },
+  // No background — just the label + chevron, per design. Kept the row layout
+  // and height so the triggers stay tap-sized and aligned.
   pill: {
     flexDirection: "row",
     alignItems: "center",
@@ -536,33 +536,18 @@ const styles = StyleSheet.create({
     gap: 4,
     height: PILL_HEIGHT,
     width: "100%",
-    paddingHorizontal: 12,
-    borderRadius: PILL_HEIGHT / 2,
-    borderCurve: "continuous",
-    overflow: "hidden",
-    backgroundColor: PILL_BG,
+    paddingHorizontal: 8,
   },
   pillDimmed: {
     opacity: 0.4,
   },
-  // The locked-repo label: same filled-pill look as the pickers beside it, but
-  // static (no chevron), so it reads as "this is the repo" rather than a menu.
-  staticPill: {
-    flexDirection: "row",
-    alignItems: "center",
+  // The locked-repo label: plain static text (no background, no chevron).
+  staticRepo: {
+    justifyContent: "center",
     height: PILL_HEIGHT,
-    paddingHorizontal: 12,
-    borderRadius: PILL_HEIGHT / 2,
-    borderCurve: "continuous",
-    backgroundColor: PILL_BG,
+    paddingHorizontal: 8,
     flexShrink: 1,
     maxWidth: PILL_MAX_WIDTH,
-  },
-  staticPillText: {
-    flexShrink: 1,
-    color: PILL_FG,
-    fontSize: 13,
-    fontWeight: "600",
   },
   pillText: {
     flexShrink: 1,

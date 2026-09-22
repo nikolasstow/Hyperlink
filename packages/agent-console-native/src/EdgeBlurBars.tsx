@@ -45,9 +45,10 @@ export const EdgeBlurBars = (props: {
   /** Bottom feather offset. Ignored for `variant: "top"`. */
   readonly bottomInset?: number;
   readonly busy?: boolean;
-  /** "top" renders only the top feather — for a header over scrolling content
-   * with nothing floating at the bottom (repo screen, session list). */
-  readonly variant?: "both" | "top";
+  /** "top" renders only the top feather (a header over scrolling content);
+   * "bottom" only the bottom feather (a floating bar over content whose top
+   * feather is drawn separately, e.g. the repo screen's own header). */
+  readonly variant?: "both" | "top" | "bottom";
 }): React.ReactElement | null => {
   const pulse = React.useRef(new Animated.Value(0)).current;
 
@@ -73,6 +74,7 @@ export const EdgeBlurBars = (props: {
 
   return (
     <>
+      {props.variant === "bottom" ? null : (
       <View style={[styles.edge, { top: 0, height: TOP_BLUR_HEIGHT }]} pointerEvents="none">
         <VariableBlur blurRadius={TOP_BLUR_RADIUS} direction="down" style={StyleSheet.absoluteFill} />
         <LinearGradient
@@ -83,6 +85,7 @@ export const EdgeBlurBars = (props: {
           style={StyleSheet.absoluteFill}
         />
       </View>
+      )}
       {props.variant === "top" ? null : (
       <View style={[styles.edge, { bottom: props.bottomInset ?? 0, height: BOTTOM_BLUR_HEIGHT }]} pointerEvents="none">
         <VariableBlur blurRadius={BOTTOM_BLUR_RADIUS} direction="up" style={StyleSheet.absoluteFill} />
