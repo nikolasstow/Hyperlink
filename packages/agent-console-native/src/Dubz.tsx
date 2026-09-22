@@ -38,6 +38,9 @@ const MARGIN = 12;
 const WINDOW_RADIUS = 30;
 /** Grow/shrink duration (ms) for the window opening and closing. */
 const ANIM_MS = 320;
+/** The glass fades in (none → clear) over the first ~30% of the grow — native
+ * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
+const FADE_S = (ANIM_MS * 0.3) / 1000;
 
 interface DubzApi {
   readonly open: () => void;
@@ -77,11 +80,14 @@ export const DubzOverlay = (): React.ReactElement | null => {
   // LAYOUT bounds — never a transform/opacity, which would composite the subtree
   // and stop the glass rendering (opacity 0 on the GlassView or any parent kills
   // it outright). So the entrance is a real size grow with live glass throughout.
+  // `visible` mounts the tree; `entered` toggles the native glass none↔clear (its
+  // own animate fades it, no opacity); `grow` scales the window via layout.
   const [visible, setVisible] = React.useState(false);
+  const [entered, setEntered] = React.useState(false);
   const grow = useSharedValue(0);
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Open/close manages `visible` + the shrink-out (which is smooth as-is).
+  // Open/close manages `visible` + the shrink/fade-out (which is smooth as-is).
   React.useEffect(() => {
     if (isOpen) {
       if (closeTimer.current !== undefined) {
@@ -91,19 +97,22 @@ export const DubzOverlay = (): React.ReactElement | null => {
       setVisible(true);
     } else if (visible) {
       Keyboard.dismiss();
+      setEntered(false); // glass fades clear → none
       grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
       closeTimer.current = setTimeout(() => setVisible(false), ANIM_MS + 40);
     }
   }, [isOpen, visible, grow]);
 
-  // Grow IN only once the window has actually mounted (next frame), so the timing
-  // doesn't start mid-mount / mid-glass-init — that's what dropped the first
-  // frames (jitter) on the way in; the way out was already mounted, hence smooth.
+  // Grow + fade IN only once the window has actually mounted (next frame), so the
+  // timing doesn't start mid-mount / mid-glass-init — that's what dropped the
+  // first frames (jitter) in; out was already mounted, hence smooth. The glass
+  // fade (via glassEffectStyle animate) is short, so it lands ~30% into the grow.
   React.useEffect(() => {
     if (!visible) return undefined;
     grow.value = 0;
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
+      setEntered(true);
     });
     return () => cancelAnimationFrame(id);
   }, [visible, grow]);
@@ -143,7 +152,10 @@ export const DubzOverlay = (): React.ReactElement | null => {
         <GlassContainer style={styles.glassContainer}>
           <GlassView
             style={styles.glass}
-            glassEffectStyle="clear"
+            // Fades in via the native animate (none → clear) — no opacity, which
+            // would composite and kill the glass. Short duration so it finishes
+            // ~30% into the grow.
+            glassEffectStyle={{ style: entered ? "clear" : "none", animate: true, animationDuration: FADE_S }}
             // A slight dark tint (tints the glass material, not a solid fill) to
             // give the clear glass some body over bright content.
             tintColor="rgba(0,0,0,0.18)"
