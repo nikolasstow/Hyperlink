@@ -71,7 +71,7 @@ export const FileViewerScreen = (props: Props): React.ReactElement => {
         </View>
       ) : state.kind === "text" ? (
         <View style={[styles.surface, { paddingTop: headerHeight }]}>
-          <CodeSurface text={state.text} lang={lang} onLinkActivated={openLink} />
+          <CodeSurface path={path} text={state.text} lang={lang} onLinkActivated={openLink} />
         </View>
       ) : (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>

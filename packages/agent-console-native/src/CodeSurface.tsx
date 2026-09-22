@@ -45,6 +45,8 @@ const READ_ONLY = true;
 const FONT_SIZE = 12.5;
 
 export interface CodeSurfaceProps {
+  /** Identifies the file. Each path is its own Monaco model in the surface. */
+  readonly path: string;
   readonly text: string;
   /** A filename extension or language id; anything unknown renders plain. */
   readonly lang: string;
@@ -82,6 +84,15 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   const desired = React.useRef<ReadonlyArray<HostMessage>>([]);
   const version = React.useRef(0);
 
+  /**
+   * The paths the surface is holding, as far as the host knows.
+   *
+   * Showing a file it already has costs one small message; opening one costs
+   * the whole file. The surface reports what it evicts, which is what keeps
+   * this honest, and a `ready` means it has forgotten everything.
+   */
+  const held = React.useRef<ReadonlySet<string>>(new Set());
+
   const send = React.useCallback((message: HostMessage): void => {
     webView.current?.injectJavaScript(toInjectedScript(message));
   }, []);
@@ -115,10 +126,18 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
     [ready, send],
   );
 
+  const { path, text } = props;
   React.useEffect(() => {
+    if (held.current.has(path)) {
+      // The surface still has this file, so it only needs telling which one to
+      // show. Its scroll position and undo history come back with it.
+      apply({ kind: "showDocument", path });
+      return;
+    }
     version.current += 1;
-    apply({ kind: "setContent", content: props.text, language, version: version.current });
-  }, [props.text, language, apply]);
+    held.current = new Set([...held.current, path]);
+    apply({ kind: "openDocument", path, text, language, version: version.current });
+  }, [path, text, language, apply]);
 
   React.useEffect(() => {
     apply({ kind: "setTheme", theme: surfaceTheme });
@@ -147,14 +166,22 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
     (message: SurfaceMessage): void => {
       switch (message.kind) {
         case "ready":
+          // A reload leaves the surface holding nothing, whatever the host
+          // believed a moment ago.
+          held.current = new Set();
           setReady(true);
-          for (const held of desired.current) send(held);
+          for (const message of desired.current) send(message);
           return;
         case "selectionChanged":
           onSelectionChange?.({ text: message.text, startLine: message.startLine, endLine: message.endLine });
           return;
         case "linkActivated":
           onLinkActivated?.(message.url);
+          return;
+        case "documentEvicted":
+          // The surface let this file go, so the next open has to carry its
+          // text again rather than asking for something that is not there.
+          held.current = new Set([...held.current].filter((open) => open !== message.path));
           return;
         case "contentHeight":
         case "error":

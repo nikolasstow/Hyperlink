@@ -28,15 +28,32 @@ export type SurfaceTheme = Partial<ThemeRegistrationRaw> & { readonly name: stri
 /** React Native to the surface. */
 export type HostMessage =
   /**
-   * The document. `version` lets the surface ignore a stale message, which
-   * matters because the host queues everything sent before `ready` arrives.
+   * Put a file in the surface and show it.
+   *
+   * Each path becomes its own Monaco model, which is what makes switching back
+   * to a file keep its undo history, its markers and its scroll position. The
+   * alternative, one model rewritten per file, throws all three away every
+   * time.
+   *
+   * `version` lets the surface ignore a stale open, which matters because the
+   * host queues everything sent before `ready` arrives and replays it after.
    */
   | {
-      readonly kind: "setContent";
-      readonly content: string;
+      readonly kind: "openDocument";
+      readonly path: string;
+      readonly text: string;
       readonly language: string;
       readonly version: number;
     }
+  /**
+   * Show a file the surface already holds. This is the fast path and carries no
+   * text: the host sends it only for a path it believes is still open, which it
+   * knows from having opened it and not seen it evicted.
+   */
+  | { readonly kind: "showDocument"; readonly path: string }
+  | { readonly kind: "closeDocument"; readonly path: string }
+  /** Shed everything but one file. Sent when iOS reports memory pressure. */
+  | { readonly kind: "closeAllExcept"; readonly path: string }
   /** A bundled theme by name, or a whole theme document to register. */
   | { readonly kind: "setTheme"; readonly theme: string | SurfaceTheme }
   /**
@@ -70,6 +87,12 @@ export type SurfaceMessage =
   | { readonly kind: "linkActivated"; readonly url: string }
   /** The document's rendered height, for a host that wants to size to content. */
   | { readonly kind: "contentHeight"; readonly height: number }
+  /**
+   * A file the surface let go of, so the host stops believing it is held and
+   * sends the text again next time rather than a `showDocument` for something
+   * that is no longer there.
+   */
+  | { readonly kind: "documentEvicted"; readonly path: string }
   | { readonly kind: "error"; readonly message: string };
 
 /** The global the injected script calls. Named once, used by both sides. */
@@ -113,6 +136,8 @@ export const parseSurfaceMessage = (raw: string): SurfaceMessage | undefined => 
       return typeof parsed.url === "string" ? { kind: "linkActivated", url: parsed.url } : undefined;
     case "contentHeight":
       return typeof parsed.height === "number" ? { kind: "contentHeight", height: parsed.height } : undefined;
+    case "documentEvicted":
+      return typeof parsed.path === "string" ? { kind: "documentEvicted", path: parsed.path } : undefined;
     case "error":
       return typeof parsed.message === "string" ? { kind: "error", message: parsed.message } : undefined;
     default:
@@ -137,12 +162,25 @@ export const parseHostMessage = (raw: string): HostMessage | undefined => {
   })();
   if (!isRecord(parsed) || typeof parsed.kind !== "string") return undefined;
   switch (parsed.kind) {
-    case "setContent":
-      return typeof parsed.content === "string" &&
+    case "openDocument":
+      return typeof parsed.path === "string" &&
+        typeof parsed.text === "string" &&
         typeof parsed.language === "string" &&
         typeof parsed.version === "number"
-        ? { kind: "setContent", content: parsed.content, language: parsed.language, version: parsed.version }
+        ? {
+            kind: "openDocument",
+            path: parsed.path,
+            text: parsed.text,
+            language: parsed.language,
+            version: parsed.version,
+          }
         : undefined;
+    case "showDocument":
+      return typeof parsed.path === "string" ? { kind: "showDocument", path: parsed.path } : undefined;
+    case "closeDocument":
+      return typeof parsed.path === "string" ? { kind: "closeDocument", path: parsed.path } : undefined;
+    case "closeAllExcept":
+      return typeof parsed.path === "string" ? { kind: "closeAllExcept", path: parsed.path } : undefined;
     case "setTheme":
       if (typeof parsed.theme === "string") return { kind: "setTheme", theme: parsed.theme };
       return isRecord(parsed.theme) && typeof parsed.theme.name === "string"
@@ -229,6 +267,56 @@ export const monacoThemeName = (name: string): string => {
     .slice(0, 48)
     .replace(/-+$/, "");
   return `${slug.length === 0 ? "theme" : slug}-${digestOf(name)}`;
+};
+
+/**
+ * How much the surface keeps before it starts letting files go.
+ *
+ * Measured rather than guessed. A model nobody has looked at costs about its
+ * own text and nothing else; the cost arrives when it is displayed, because
+ * that is when tokenization state is built, and it scales with the file: about
+ * 0.7 MB for five hundred lines, 1 MB for two thousand, 3.8 MB for ten
+ * thousand, on top of Monaco's own 15 MB.
+ *
+ * So the budget counts bytes of text rather than files. A count cap sits beside
+ * it only to stop churn through many tiny files building structures without
+ * ever crossing the byte budget.
+ */
+export const DOCUMENT_BUDGET = { bytes: 4_000_000, count: 12 } as const;
+
+/** One file the surface is holding. */
+export interface HeldDocument {
+  readonly path: string;
+  readonly bytes: number;
+  /** When it was last displayed, so the oldest goes first. */
+  readonly shownAt: number;
+}
+
+/**
+ * The files to let go of, oldest first, so what remains is inside the budget.
+ *
+ * The visible file is never evicted whatever the budget says: dropping the
+ * document someone is looking at to satisfy a memory rule trades a real problem
+ * for a worse one.
+ */
+export const evictionsFor = (
+  held: ReadonlyArray<HeldDocument>,
+  visiblePath: string | undefined,
+  budget: { readonly bytes: number; readonly count: number } = DOCUMENT_BUDGET,
+): ReadonlyArray<string> => {
+  const evictable = held
+    .filter((entry) => entry.path !== visiblePath)
+    .sort((a, b) => a.shownAt - b.shownAt);
+  let bytes = held.reduce((total, entry) => total + entry.bytes, 0);
+  let count = held.length;
+  const evicted: Array<string> = [];
+  for (const entry of evictable) {
+    if (bytes <= budget.bytes && count <= budget.count) break;
+    evicted.push(entry.path);
+    bytes -= entry.bytes;
+    count -= 1;
+  }
+  return evicted;
 };
 
 /** The language ids the surface has grammars for. Anything else renders plain. */
