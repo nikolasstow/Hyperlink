@@ -44,12 +44,18 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Smallest height the window shrinks to when the drag bar is pulled down. */
-const MIN_HEIGHT = 160;
+/** Smallest height — the "pill" detent: grabber + composer only. */
+const MIN_HEIGHT = 86;
 /** The top drag-bar area's height. */
 const GRABBER_AREA_H = 30;
 /** Snap-to-detent duration on drag release. */
 const SNAP_MS = 240;
+/** Fling-down velocity (px/s) that dismisses the window. */
+const FLING_VELOCITY = 1400;
+/** How far past the last detent you can keep pulling, and the release point past
+ * which (last detent + margin) the window dismisses instead of snapping back. */
+const DISMISS_ZONE = 120;
+const DISMISS_MARGIN = 48;
 
 interface DubzApi {
   readonly open: () => void;
@@ -98,6 +104,9 @@ export const DubzOverlay = (): React.ReactElement | null => {
   // `lowered` = the window has been dragged below full; when true the tap-catcher
   // passes touches through so you can see/scroll what's behind (e.g. the code).
   const [lowered, setLowered] = React.useState(false);
+  // `pillMode` = parked at the minimum detent; the window is pill-sized, so the
+  // inner glass pill is hidden (no pill-in-pill) and the composer fills the width.
+  const [pillMode, setPillMode] = React.useState(false);
   const grow = useSharedValue(0);
   const dragY = useSharedValue(0); // 0 = full height; positive = top lowered (shorter)
   const dragStart = useSharedValue(0);
@@ -115,7 +124,8 @@ export const DubzOverlay = (): React.ReactElement | null => {
       Keyboard.dismiss();
       setEntered(false); // glass fades clear → none
       grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
-      dragY.value = withTiming(0, { duration: ANIM_MS });
+      // dragY is left as-is so a swipe-dismiss collapses from where it was dragged
+      // (not snapped up first); it resets to 0 on the next open.
       closeTimer.current = setTimeout(() => setVisible(false), ANIM_MS + 40);
     }
   }, [isOpen, visible, grow, dragY]);
@@ -129,6 +139,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
     grow.value = 0;
     dragY.value = 0;
     setLowered(false);
+    setPillMode(false);
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
       setEntered(true);
@@ -155,13 +166,20 @@ export const DubzOverlay = (): React.ReactElement | null => {
           const fullTop = topInset + MARGIN;
           const bottom = Math.max(keyboard.height.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+          // Allow pulling a bit past the last detent into a dismiss zone.
+          const limit = maxDrag + DISMISS_ZONE;
           const next = dragStart.value + e.translationY;
-          dragY.value = next < 0 ? 0 : next > maxDrag ? maxDrag : next;
+          dragY.value = next < 0 ? 0 : next > limit ? limit : next;
         })
         .onEnd((e) => {
           const fullTop = topInset + MARGIN;
           const bottom = Math.max(keyboard.height.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+          // Flung down hard, or released past the last detent → dismiss.
+          if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
+            runOnJS(close)();
+            return;
+          }
           const detents = [0, maxDrag * 0.5, maxDrag];
           const projected = dragY.value + e.velocityY * 0.08;
           let target = 0;
@@ -176,8 +194,25 @@ export const DubzOverlay = (): React.ReactElement | null => {
           }
           dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
           runOnJS(setLowered)(target > 4);
+          runOnJS(setPillMode)(maxDrag > 0 && target >= maxDrag - 4);
         }),
-    [screenH, topInset, bottomInset, dragY, dragStart, keyboard],
+    [screenH, topInset, bottomInset, dragY, dragStart, keyboard, close],
+  );
+
+  // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
+  // expands into the freed space). Only a clear downward drag activates it, so
+  // taps/typing on the input and the +/send chips are unaffected.
+  const dismissKb = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(14)
+        .failOffsetY(-14)
+        .onEnd((e) => {
+          if (e.translationY > 24 || e.velocityY > 600) {
+            runOnJS(Keyboard.dismiss)();
+          }
+        }),
+    [],
   );
 
   // Grows via LAYOUT (animating `top`), never a transform — a transform/opacity
@@ -235,35 +270,43 @@ export const DubzOverlay = (): React.ReactElement | null => {
             </GestureDetector>
 
             {/* Conversation area — empty for now; flexes so the composer pill sits
-             * at the bottom of the window. */}
-            <View style={styles.conversationArea} />
+             * at the bottom of the window. Hidden in pill mode. */}
+            {pillMode ? null : <View style={styles.conversationArea} />}
 
             {/* Glass-in-glass: a `regular` glass composer pill inside the clear
-             * window — the bottom-bar design: (+) | input | (send). */}
-            <View style={styles.pillWrap}>
-              <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-                <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
-                  <Ionicons name="add" size={22} color={colors.secondaryLabel} />
-                </Pressable>
-                <TextInput
-                  style={styles.pillInput}
-                  value={text}
-                  onChangeText={setText}
-                  placeholder={`Ask ${AGENT_NAME}…`}
-                  placeholderTextColor={colors.placeholderText}
-                  autoFocus
-                  multiline
-                />
-                <Pressable
-                  style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.secondary : themeColors.secondaryFill }]}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel="Send"
-                  onPress={() => setText("")}
+             * window — the bottom-bar design: (+) | input | (send). At the pill
+             * (min) detent the inner glass is hidden ("none") and the composer
+             * fills the window (no pill-in-pill). Swipe it down to drop the keyboard. */}
+            <View style={[styles.pillWrap, pillMode && styles.pillWrapFill]}>
+              <GestureDetector gesture={dismissKb}>
+                <GlassView
+                  style={[styles.pill, pillMode && styles.pillFill]}
+                  glassEffectStyle={pillMode ? "none" : "regular"}
+                  colorScheme={scheme === "dark" ? "dark" : "light"}
                 >
-                  <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-                </Pressable>
-              </GlassView>
+                  <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
+                    <Ionicons name="add" size={22} color={colors.secondaryLabel} />
+                  </Pressable>
+                  <TextInput
+                    style={styles.pillInput}
+                    value={text}
+                    onChangeText={setText}
+                    placeholder={`Ask ${AGENT_NAME}…`}
+                    placeholderTextColor={colors.placeholderText}
+                    autoFocus
+                    multiline
+                  />
+                  <Pressable
+                    style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.secondary : themeColors.secondaryFill }]}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel="Send"
+                    onPress={() => setText("")}
+                  >
+                    <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
+                  </Pressable>
+                </GlassView>
+              </GestureDetector>
             </View>
           </GlassView>
         </GlassContainer>
@@ -310,6 +353,15 @@ const styles = StyleSheet.create({
   pillWrap: {
     paddingHorizontal: 12,
     paddingBottom: 12,
+  },
+  // Pill mode: no margins, fill the window so the composer spans the full width.
+  pillWrapFill: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+  },
+  pillFill: {
+    flex: 1,
   },
   pill: {
     flexDirection: "row",
