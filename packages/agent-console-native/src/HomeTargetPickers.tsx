@@ -364,6 +364,10 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         : props.target.kind === "folder"
           ? props.target.name
           : props.target.repo;
+  // Repo-dropdown glyph (Home only) — a box for a git repo, a folder for a
+  // workspace. Not shown when the repo is locked (that's static text instead).
+  const repoIcon: React.ComponentProps<typeof Feather>["name"] =
+    props.target?.kind === "folder" ? "folder" : "box";
   const worktreePill =
     props.target?.kind === "repo"
       ? worktreeLabel(props.target.worktree) || props.target.worktree.name || "Worktree"
@@ -389,18 +393,18 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           // Repo/workspace pages: the repo is fixed, so its dropdown is replaced
           // by plain static text of the repo name (no menu, no chevron).
           <View style={styles.staticRepo}>
-            <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
+            <Text style={styles.staticRepoText} numberOfLines={1} ellipsizeMode="head">
               {repoLabel}
             </Text>
           </View>
         ) : (
         <Host
-          style={[styles.pillHost, { width: pillHostWidth(repoLabel) }]}
+          style={[styles.pillHost, { width: pillHostWidth(repoLabel, true) }]}
           matchContents={{ vertical: true }}
           ignoreSafeArea="all"
         >
           <Menu
-            label={<PillLabel text={repoLabel} />}
+            label={<PillLabel text={repoLabel} icon={repoIcon} />}
             modifiers={[...MENU_MODIFIERS]}
           >
             <Button
@@ -547,13 +551,20 @@ const styles = StyleSheet.create({
   pillDimmed: {
     opacity: 0.4,
   },
-  // The locked-repo label: plain static text (no background, no chevron).
+  // The locked-repo label: plain static text (no background, no chevron), a
+  // little larger than the pickers since it names the page.
   staticRepo: {
     justifyContent: "center",
     height: PILL_HEIGHT,
     paddingHorizontal: 8,
     flexShrink: 1,
     maxWidth: PILL_MAX_WIDTH,
+  },
+  staticRepoText: {
+    flexShrink: 1,
+    color: PILL_FG,
+    fontSize: 17,
+    fontWeight: "500",
   },
   pillText: {
     flexShrink: 1,
