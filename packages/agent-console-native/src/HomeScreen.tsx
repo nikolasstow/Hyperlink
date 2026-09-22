@@ -10,7 +10,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
-import { Animated, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -44,7 +45,7 @@ import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
-import { useKeyboardOffset } from "./useKeyboardOffset";
+import { useKeyboardSlide } from "./useKeyboardSlide";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -212,9 +213,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const navBarHeight = insets.top + HOME_HEADER_HEIGHT;
   const keyboardHeight = useKeyboardHeight();
-  // Native-driven translateY so the floating composer rides the keyboard
-  // smoothly; the list padding / blur keep the plain number (behind the keyboard).
-  const composerTranslateY = useKeyboardOffset(insets.bottom);
+  // Reanimated keyboard tracking so the floating composer rides the keyboard
+  // exactly; the list padding / blur keep the plain number (behind the keyboard).
+  const composerSlide = useKeyboardSlide(insets.bottom);
   // Measured, not a fixed height — the composer grows with multi-line
   // input, and it floats over the list (absolute) so the glass has
   // content behind it, meaning the list has to reserve the space itself.
@@ -313,7 +314,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       {/* One tap outside the composer collapses it (consumed) instead of hitting
        * a card behind it while the keyboard is up. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} />
-      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom, transform: [{ translateY: composerTranslateY }] }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom }, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           onSend={onSend}
           disabled={sending || target === undefined}

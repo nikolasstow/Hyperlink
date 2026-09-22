@@ -14,7 +14,8 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { ActionSheetIOS, Animated, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
+import { ActionSheetIOS, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -39,7 +40,7 @@ import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { useKeyboardHeight } from "./useKeyboardHeight";
-import { useKeyboardOffset } from "./useKeyboardOffset";
+import { useKeyboardSlide } from "./useKeyboardSlide";
 import { runStartedAt, useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 
@@ -54,9 +55,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
-  // Native-driven translateY so the floating composer rides the keyboard
-  // smoothly. The list padding / blur bars keep the plain number (behind it).
-  const composerTranslateY = useKeyboardOffset(insets.bottom);
+  // Reanimated keyboard tracking so the floating composer rides the keyboard
+  // exactly (real position each frame). The list padding / blur bars keep the
+  // plain number (behind it, where a snap is invisible).
+  const composerSlide = useKeyboardSlide(insets.bottom);
   // Transparent header, so content sits under it and pads itself by the
   // header's real height. On this inverted list that padding is
   // `paddingBottom` — see the contentContainerStyle note below.
@@ -391,7 +393,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
        * it, which defeats the glass. `bottom` tracks the keyboard
        * explicitly: absolute children here are NOT offset by the parent's
        * padding (relying on that put the composer behind the keyboard). */}
-      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom, transform: [{ translateY: composerTranslateY }] }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom }, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           onSend={onSend}
           disabled={transcript.busy}

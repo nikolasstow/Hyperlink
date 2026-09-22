@@ -26,12 +26,13 @@ import {
   useColorScheme,
   View,
 } from "react-native";
+import Reanimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AgentButton } from "./AgentButton";
 import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { SystemIcon } from "./SystemIcon";
-import { useKeyboardOffset } from "./useKeyboardOffset";
+import { useKeyboardSlide } from "./useKeyboardSlide";
 
 /** Height of the pill. Callers add it to their list's bottom inset. */
 export const SEARCH_PILL_HEIGHT = 44;
@@ -112,41 +113,41 @@ export const BottomSearchPill = (props: {
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  // Ride above the keyboard instead of hiding behind it — a native-driven
-  // translateY that tracks the keyboard, stacked on the scroll-hide offset (both
-  // native, so they compose). The pill sits statically at the safe-area inset.
-  const keyboardTranslateY = useKeyboardOffset(insets.bottom);
+  // Ride above the keyboard instead of hiding behind it — an EXACT keyboard
+  // track (reanimated, real position each frame) on the outer view. The inner
+  // view keeps the RN-`Animated` scroll-hide; nesting the two views composes
+  // their transforms without mixing the two animation systems on one node.
+  const keyboardSlide = useKeyboardSlide(insets.bottom);
   const showAgent = useAgentButtonVisible(props.agentSurface);
 
   return (
-    <Animated.View
-      style={[styles.wrap, { bottom: insets.bottom, paddingBottom: 10, transform: [{ translateY: props.offset }, { translateY: keyboardTranslateY }] }]}
-      pointerEvents="box-none"
-    >
-      {/* Pill + the assistant button on the right, matching the composer. */}
-      <View style={styles.row}>
-        {/* The squircle clip lives on this plain View, never on `GlassView`:
-         * setting `borderCurve` on the glass itself breaks the effect outright
-         * (see the SessionComposer handoff's invariant 2). */}
-        <View style={styles.clip}>
-          <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-            <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
-            <TextInput
-              style={styles.input}
-              value={props.value}
-              onChangeText={props.onChangeText}
-              placeholder={props.placeholder}
-              placeholderTextColor={colors.placeholderText}
-              returnKeyType="search"
-              autoCorrect={false}
-              autoCapitalize="none"
-              clearButtonMode="while-editing"
-            />
-          </GlassView>
+    <Reanimated.View style={[styles.wrap, { bottom: insets.bottom, paddingBottom: 10 }, keyboardSlide]} pointerEvents="box-none">
+      <Animated.View style={{ transform: [{ translateY: props.offset }] }}>
+        {/* Pill + the assistant button on the right, matching the composer. */}
+        <View style={styles.row}>
+          {/* The squircle clip lives on this plain View, never on `GlassView`:
+           * setting `borderCurve` on the glass itself breaks the effect outright
+           * (see the SessionComposer handoff's invariant 2). */}
+          <View style={styles.clip}>
+            <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+              <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
+              <TextInput
+                style={styles.input}
+                value={props.value}
+                onChangeText={props.onChangeText}
+                placeholder={props.placeholder}
+                placeholderTextColor={colors.placeholderText}
+                returnKeyType="search"
+                autoCorrect={false}
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+              />
+            </GlassView>
+          </View>
+          {showAgent ? <AgentButton onPress={props.onAgent} /> : null}
         </View>
-        {showAgent ? <AgentButton onPress={props.onAgent} /> : null}
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </Reanimated.View>
   );
 };
 
