@@ -1,0 +1,6 @@
+# Generated OpenCode demo/scratch artifacts — not source. The real vite entry is
+# index.html (tracked); ad-hoc *.html demos and a stray app.json accumulate here
+# from OpenCode sessions and shouldn't clutter the tree.
+/*.html
+!/index.html
+/app.json
