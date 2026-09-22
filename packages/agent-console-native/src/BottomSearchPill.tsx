@@ -33,9 +33,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AgentButton } from "./AgentButton";
 import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
+import { COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 
-/** Height of the pill. Callers add it to their list's bottom inset. */
-export const SEARCH_PILL_HEIGHT = 44;
+/** Height of the pill. Callers add it to their list's bottom inset.
+ * Matched to the main composer pill's collapsed height: its glass field is the
+ * tallest control (the send chip) plus the field's 10pt padding top and bottom. */
+export const SEARCH_PILL_HEIGHT = COMPOSER_SEND_CHIP_SIZE + 20;
 
 /** How far past the bottom edge the pill travels when it hides. */
 const hiddenDistanceFor = (bottomInset: number): number => SEARCH_PILL_HEIGHT + bottomInset + 18;
