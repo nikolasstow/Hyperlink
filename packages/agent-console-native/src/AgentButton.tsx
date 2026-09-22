@@ -14,12 +14,14 @@ import { Button, Host } from "@expo/ui/swift-ui";
 import { buttonStyle, foregroundStyle, frame, glassEffect, imageScale, labelStyle } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
+import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { useTheme } from "./theme";
 
 /** The assistant's name — used for the button's accessibility label. */
 export const AGENT_NAME = "Dubz";
-/** Default diameter — sized up toward the glass pill (58) without filling it. */
-export const AGENT_BUTTON_SIZE = 52;
+/** Default diameter — the glass pill's height, so the circle sits flush with the
+ * pill top and bottom rather than floating centred inside it. */
+export const AGENT_BUTTON_SIZE = COMPOSER_PILL_HEIGHT;
 
 export const AgentButton = (props: {
   readonly size?: number;
