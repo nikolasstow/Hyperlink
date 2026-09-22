@@ -28,6 +28,7 @@ import { colors } from "./colors";
 import { clearForward } from "./fileNavHistory";
 import { Composer } from "./Composer";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import {
   HomeTargetPickers,
   sessionDirectory,
@@ -305,6 +306,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       />
       </ScrollViewMarker>
       <EdgeBlurBars bottomInset={keyboardHeight} />
+      {/* One tap outside the composer collapses it (consumed) instead of hitting
+       * a card behind it while the keyboard is up. */}
+      <KeyboardDismissOverlay active={keyboardHeight > 0} />
       <View style={[styles.composerFloat, { bottom: keyboardHeight }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           onSend={onSend}

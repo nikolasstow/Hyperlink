@@ -27,8 +27,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AgentButton } from "./AgentButton";
+import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { SystemIcon } from "./SystemIcon";
+import { useKeyboardHeight } from "./useKeyboardHeight";
 
 /** Height of the pill. Callers add it to their list's bottom inset. */
 export const SEARCH_PILL_HEIGHT = 44;
@@ -102,33 +105,48 @@ export const BottomSearchPill = (props: {
   readonly onChangeText: (value: string) => void;
   readonly placeholder: string;
   readonly offset: Animated.Value;
+  /** Which surface this is, gating the assistant button per the user's settings. */
+  readonly agentSurface: AgentSurface;
+  /** Opens the app-wide assistant; wired later, so optional. */
+  readonly onAgent?: () => void;
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
+  // Ride above the keyboard instead of hiding behind it — the pill floats at
+  // the bottom edge, so without this the keyboard covers it entirely.
+  const keyboardHeight = useKeyboardHeight();
+  const showAgent = useAgentButtonVisible(props.agentSurface);
 
   return (
     <Animated.View
-      style={[styles.wrap, { paddingBottom: insets.bottom + 10, transform: [{ translateY: props.offset }] }]}
+      style={[
+        styles.wrap,
+        { bottom: keyboardHeight, paddingBottom: (keyboardHeight > 0 ? 0 : insets.bottom) + 10, transform: [{ translateY: props.offset }] },
+      ]}
       pointerEvents="box-none"
     >
-      {/* The squircle clip lives on this plain View, never on `GlassView`:
-       * setting `borderCurve` on the glass itself breaks the effect outright
-       * (see the SessionComposer handoff's invariant 2). */}
-      <View style={styles.clip}>
-        <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-          <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
-          <TextInput
-            style={styles.input}
-            value={props.value}
-            onChangeText={props.onChangeText}
-            placeholder={props.placeholder}
-            placeholderTextColor={colors.placeholderText}
-            returnKeyType="search"
-            autoCorrect={false}
-            autoCapitalize="none"
-            clearButtonMode="while-editing"
-          />
-        </GlassView>
+      {/* Pill + the assistant button on the right, matching the composer. */}
+      <View style={styles.row}>
+        {/* The squircle clip lives on this plain View, never on `GlassView`:
+         * setting `borderCurve` on the glass itself breaks the effect outright
+         * (see the SessionComposer handoff's invariant 2). */}
+        <View style={styles.clip}>
+          <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+            <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
+            <TextInput
+              style={styles.input}
+              value={props.value}
+              onChangeText={props.onChangeText}
+              placeholder={props.placeholder}
+              placeholderTextColor={colors.placeholderText}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+            />
+          </GlassView>
+        </View>
+        {showAgent ? <AgentButton onPress={props.onAgent} /> : null}
       </View>
     </Animated.View>
   );
@@ -142,7 +160,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingHorizontal: 16,
   },
+  // Pill + assistant button on one row, button vertically centred with the pill.
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   clip: {
+    // Flex so the pill fills the row and the assistant button sits at the edge.
+    flex: 1,
     borderRadius: SEARCH_PILL_HEIGHT / 2,
     borderCurve: "continuous",
     overflow: "hidden",

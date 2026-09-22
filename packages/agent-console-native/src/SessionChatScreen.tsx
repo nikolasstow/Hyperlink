@@ -27,6 +27,7 @@ import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import { MessageBubble } from "./MessageBubble";
 import { PermissionPrompt } from "./PermissionPrompt";
 import { setViewedSession } from "./push";
@@ -378,6 +379,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       />
       </ScrollViewMarker>
       <EdgeBlurBars bottomInset={keyboardHeight} busy={transcript.busy} />
+      {/* While the keyboard is up, one tap outside the composer only collapses
+       * it (consumed here) instead of hitting a message/row behind it. */}
+      <KeyboardDismissOverlay active={keyboardHeight > 0} />
       {/* Absolutely positioned, not a flex sibling — otherwise it takes
        * layout space away from the list and nothing ever passes behind
        * it, which defeats the glass. `bottom` tracks the keyboard

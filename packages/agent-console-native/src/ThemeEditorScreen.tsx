@@ -408,6 +408,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
         onChangeText={setQuery}
         placeholder={`Search ${colorCount + theme.tokenColors.length} values`}
         offset={pill.offset}
+        agentSurface="editor"
       />
     </View>
   );
