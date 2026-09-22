@@ -18,26 +18,19 @@
  * @internal
  */
 import * as React from "react";
-import { Keyboard, LayoutAnimation } from "react-native";
+import { Keyboard } from "react-native";
 
+/** The keyboard height as a plain number, updated on `keyboardWillShow/Hide`.
+ * Used for the *reserved space* a list needs behind the keyboard (and the blur
+ * bars) — where snapping to the final value is invisible because the keyboard
+ * covers that region. For anything whose *position* rides the keyboard (the
+ * floating composer / search pill), use `useKeyboardOffset`, which animates —
+ * `LayoutAnimation` no-ops for this on the New Architecture. */
 export const useKeyboardHeight = (): number => {
   const [height, setHeight] = React.useState(0);
   React.useEffect(() => {
-    // Animate the height change with the keyboard's OWN duration and curve, so
-    // anything positioned by it — the floating composer / search pill and the
-    // list's reserved space — slides up and down WITH the keyboard instead of
-    // teleporting to the final offset the instant `keyboardWillShow` fires.
-    // `keyboardWillShow/Hide` fire at the start of that animation and carry its
-    // duration; `Types.keyboard` is UIKit's own keyboard curve.
-    const animateTo = (next: number, duration: number): void => {
-      LayoutAnimation.configureNext({
-        duration: duration > 0 ? duration : 250,
-        update: { type: LayoutAnimation.Types.keyboard },
-      });
-      setHeight(next);
-    };
-    const showSub = Keyboard.addListener("keyboardWillShow", (e) => animateTo(e.endCoordinates.height, e.duration));
-    const hideSub = Keyboard.addListener("keyboardWillHide", (e) => animateTo(0, e.duration));
+    const showSub = Keyboard.addListener("keyboardWillShow", (e) => setHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
     return () => {
       showSub.remove();
       hideSub.remove();

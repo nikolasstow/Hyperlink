@@ -31,7 +31,7 @@ import { AgentButton } from "./AgentButton";
 import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { SystemIcon } from "./SystemIcon";
-import { useKeyboardHeight } from "./useKeyboardHeight";
+import { useKeyboardOffset } from "./useKeyboardOffset";
 
 /** Height of the pill. Callers add it to their list's bottom inset. */
 export const SEARCH_PILL_HEIGHT = 44;
@@ -112,17 +112,15 @@ export const BottomSearchPill = (props: {
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  // Ride above the keyboard instead of hiding behind it — the pill floats at
-  // the bottom edge, so without this the keyboard covers it entirely.
-  const keyboardHeight = useKeyboardHeight();
+  // Ride above the keyboard instead of hiding behind it — an animated bottom
+  // offset that rests at the safe-area inset and tracks the keyboard up/down
+  // (so the pad below stays constant at 10).
+  const bottomOffset = useKeyboardOffset(insets.bottom);
   const showAgent = useAgentButtonVisible(props.agentSurface);
 
   return (
     <Animated.View
-      style={[
-        styles.wrap,
-        { bottom: keyboardHeight, paddingBottom: (keyboardHeight > 0 ? 0 : insets.bottom) + 10, transform: [{ translateY: props.offset }] },
-      ]}
+      style={[styles.wrap, { bottom: bottomOffset, paddingBottom: 10, transform: [{ translateY: props.offset }] }]}
       pointerEvents="box-none"
     >
       {/* Pill + the assistant button on the right, matching the composer. */}
