@@ -204,6 +204,12 @@ export const DubzOverlay = (): React.ReactElement | null => {
   // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
   // expands into the freed space). Only a clear downward drag activates it, so
   // taps/typing on the input and the +/send chips are unaffected.
+  // NB: call a plain JS callback via runOnJS — referencing `Keyboard.dismiss`
+  // inside the worklet captures RN's Keyboard (a KeyboardImpl), which the worklets
+  // runtime can't serialize and crashes on attach.
+  const dismissKeyboard = React.useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
   const dismissKb = React.useMemo(
     () =>
       Gesture.Pan()
@@ -211,10 +217,10 @@ export const DubzOverlay = (): React.ReactElement | null => {
         .failOffsetY(-14)
         .onEnd((e) => {
           if (e.translationY > 24 || e.velocityY > 600) {
-            runOnJS(Keyboard.dismiss)();
+            runOnJS(dismissKeyboard)();
           }
         }),
-    [],
+    [dismissKeyboard],
   );
 
   // Grows via LAYOUT (animating `top`), never a transform — a transform/opacity
