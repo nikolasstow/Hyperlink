@@ -65,18 +65,29 @@ export const FileViewerScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      {state.kind === "loading" ? (
-        <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-          <ActivityIndicator color={colors.secondaryLabel} />
-        </View>
-      ) : state.kind === "text" ? (
-        <View style={[styles.surface, { paddingTop: headerHeight }]}>
-          <CodeSurface path={path} text={state.text} lang={lang} onLinkActivated={openLink} />
-        </View>
-      ) : (
+      {state.kind === "missing" || state.kind === "error" ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
           <Text style={styles.message}>{state.kind === "missing" ? "File not found." : "Couldn't read this file."}</Text>
         </View>
+      ) : (
+        <>
+          {/* Mounted before the text arrives on purpose: the surface boots
+           * while `/fs/read` is still in flight instead of afterwards. It
+           * opens nothing until there is something to open. */}
+          <View style={[styles.surface, { paddingTop: headerHeight }]}>
+            <CodeSurface
+              path={path}
+              text={state.kind === "text" ? state.text : undefined}
+              lang={lang}
+              onLinkActivated={openLink}
+            />
+          </View>
+          {state.kind === "loading" ? (
+            <View style={[styles.center, styles.overlay, { paddingTop: headerHeight + 40 }]} pointerEvents="none">
+              <ActivityIndicator color={colors.secondaryLabel} />
+            </View>
+          ) : null}
+        </>
       )}
       <EdgeBlurBars variant="top" />
     </View>
@@ -93,6 +104,13 @@ const styles = StyleSheet.create({
   },
   center: {
     alignItems: "center",
+  },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   message: {
     color: colors.secondaryLabel,

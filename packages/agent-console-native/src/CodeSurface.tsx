@@ -17,12 +17,15 @@
  *
  * @internal
  */
-import { Asset } from "expo-asset";
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
-import surfaceHtml from "../assets/code-surface.html";
+import { WebView } from "react-native-webview";
+import {
+  CodeSurfaceNativeView,
+  isCodeSurfaceNative,
+  type CodeSurfaceHandle,
+} from "../modules/code-surface";
 import {
   parseSurfaceMessage,
   surfaceLanguageOf,
@@ -31,6 +34,7 @@ import {
   type SurfaceMessage,
   type SurfaceTheme,
 } from "./codeSurfaceProtocol";
+import { codeSurfaceUri } from "./codeSurfaceAsset";
 import { colors } from "./colors";
 import { useCodeTheme } from "./useCodeTheme";
 import { useTheme } from "./theme";
@@ -47,7 +51,14 @@ const FONT_SIZE = 12.5;
 export interface CodeSurfaceProps {
   /** Identifies the file. Each path is its own Monaco model in the surface. */
   readonly path: string;
-  readonly text: string;
+  /**
+   * The file's contents, or undefined while it is still being read.
+   *
+   * The surface mounts either way, so the page boots while the read is in
+   * flight rather than after it. Without a native host that overlap is the only
+   * thing standing between a tap and most of a second of parsing.
+   */
+  readonly text: string | undefined;
   /** A filename extension or language id; anything unknown renders plain. */
   readonly lang: string;
   /** A line to reveal once the surface is up, 1-based. */
@@ -65,6 +76,12 @@ const toSurfaceTheme = (theme: string | ThemeRegistrationRaw): string | SurfaceT
 
 export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   const webView = React.useRef<WebView>(null);
+  /**
+   * The native host, when this build has it. It keeps the surface warm across
+   * screens, which the WebView cannot: React Native gives a native view no way
+   * to move between parents, so one owned by a screen dies with it.
+   */
+  const native = React.useRef<CodeSurfaceHandle>(null);
   const { theme: appTheme } = useTheme();
   const codeTheme = useCodeTheme();
 
@@ -94,20 +111,19 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   const held = React.useRef<ReadonlySet<string>>(new Set());
 
   const send = React.useCallback((message: HostMessage): void => {
-    webView.current?.injectJavaScript(toInjectedScript(message));
+    const script = toInjectedScript(message);
+    if (isCodeSurfaceNative) {
+      void native.current?.send(script);
+      return;
+    }
+    webView.current?.injectJavaScript(script);
   }, []);
 
-  // The asset is a file in the app bundle in a release build and a packager
-  // download in development; `downloadAsync` resolves both to a local file.
   React.useEffect(() => {
     let cancelled = false;
-    void Asset.fromModule(surfaceHtml)
-      .downloadAsync()
-      .then((asset) => {
-        if (cancelled) return;
-        const local = asset.localUri ?? asset.uri;
-        if (local.length === 0) setAssetFailed(true);
-        else setUri(local);
+    void codeSurfaceUri()
+      .then((local) => {
+        if (!cancelled) setUri(local);
       })
       .catch(() => {
         if (!cancelled) setAssetFailed(true);
@@ -128,6 +144,7 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
 
   const { path, text } = props;
   React.useEffect(() => {
+    if (text === undefined) return;
     if (held.current.has(path)) {
       // The surface still has this file, so it only needs telling which one to
       // show. Its scroll position and undo history come back with it.
@@ -195,7 +212,7 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   );
 
   const onMessage = React.useCallback(
-    (event: WebViewMessageEvent): void => {
+    (event: { readonly nativeEvent: { readonly data: string } }): void => {
       const message = parseSurfaceMessage(event.nativeEvent.data);
       if (message !== undefined) handle(message);
     },
@@ -214,6 +231,14 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.secondaryLabel} />
+      </View>
+    );
+  }
+
+  if (CodeSurfaceNativeView !== undefined) {
+    return (
+      <View style={styles.root}>
+        <CodeSurfaceNativeView ref={native} sourceUrl={uri} style={styles.web} onSurfaceMessage={onMessage} />
       </View>
     );
   }
