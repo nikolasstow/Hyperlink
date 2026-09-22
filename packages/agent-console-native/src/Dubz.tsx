@@ -213,6 +213,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const dismissKb = React.useMemo(
     () =>
       Gesture.Pan()
+        // TEMP: fully disabled to prove whether swipe-to-dismiss is what drops the
+        // keyboard at the min detent. Re-enable once we know.
+        .enabled(false)
         .activeOffsetY(14)
         .failOffsetY(-14)
         .onEnd((e) => {
