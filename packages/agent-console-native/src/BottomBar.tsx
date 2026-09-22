@@ -155,9 +155,9 @@ const styles = StyleSheet.create({
     borderRadius: FIELD_RADIUS,
     borderCurve: "continuous",
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
   },
   fieldClip: {
     borderRadius: FIELD_RADIUS,
