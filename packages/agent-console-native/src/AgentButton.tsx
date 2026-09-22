@@ -19,7 +19,7 @@ import { useTheme } from "./theme";
 /** The assistant's name — used for the button's accessibility label. */
 export const AGENT_NAME = "Dubz";
 /** Default diameter — sized up toward the glass pill (58) without filling it. */
-export const AGENT_BUTTON_SIZE = 46;
+export const AGENT_BUTTON_SIZE = 52;
 
 export const AgentButton = (props: {
   readonly size?: number;
