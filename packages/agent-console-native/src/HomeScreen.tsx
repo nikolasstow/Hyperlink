@@ -212,9 +212,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const navBarHeight = insets.top + HOME_HEADER_HEIGHT;
   const keyboardHeight = useKeyboardHeight();
-  // Animated bottom offset so the floating composer rides the keyboard; the list
-  // padding / blur keep the plain number (they sit behind the keyboard).
-  const composerBottom = useKeyboardOffset(insets.bottom);
+  // Native-driven translateY so the floating composer rides the keyboard
+  // smoothly; the list padding / blur keep the plain number (behind the keyboard).
+  const composerTranslateY = useKeyboardOffset(insets.bottom);
   // Measured, not a fixed height — the composer grows with multi-line
   // input, and it floats over the list (absolute) so the glass has
   // content behind it, meaning the list has to reserve the space itself.
@@ -313,7 +313,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       {/* One tap outside the composer collapses it (consumed) instead of hitting
        * a card behind it while the keyboard is up. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} />
-      <Animated.View style={[styles.composerFloat, { bottom: composerBottom }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom, transform: [{ translateY: composerTranslateY }] }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           onSend={onSend}
           disabled={sending || target === undefined}

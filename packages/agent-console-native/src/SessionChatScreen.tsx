@@ -54,9 +54,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
-  // Animated bottom offset for the floating composer, so it rides the keyboard.
-  // The list padding / blur bars keep the plain number (it's behind the keyboard).
-  const composerBottom = useKeyboardOffset(insets.bottom);
+  // Native-driven translateY so the floating composer rides the keyboard
+  // smoothly. The list padding / blur bars keep the plain number (behind it).
+  const composerTranslateY = useKeyboardOffset(insets.bottom);
   // Transparent header, so content sits under it and pads itself by the
   // header's real height. On this inverted list that padding is
   // `paddingBottom` — see the contentContainerStyle note below.
@@ -391,7 +391,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
        * it, which defeats the glass. `bottom` tracks the keyboard
        * explicitly: absolute children here are NOT offset by the parent's
        * padding (relying on that put the composer behind the keyboard). */}
-      <Animated.View style={[styles.composerFloat, { bottom: composerBottom }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      <Animated.View style={[styles.composerFloat, { bottom: insets.bottom, transform: [{ translateY: composerTranslateY }] }]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           onSend={onSend}
           disabled={transcript.busy}

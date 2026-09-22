@@ -112,15 +112,15 @@ export const BottomSearchPill = (props: {
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  // Ride above the keyboard instead of hiding behind it — an animated bottom
-  // offset that rests at the safe-area inset and tracks the keyboard up/down
-  // (so the pad below stays constant at 10).
-  const bottomOffset = useKeyboardOffset(insets.bottom);
+  // Ride above the keyboard instead of hiding behind it — a native-driven
+  // translateY that tracks the keyboard, stacked on the scroll-hide offset (both
+  // native, so they compose). The pill sits statically at the safe-area inset.
+  const keyboardTranslateY = useKeyboardOffset(insets.bottom);
   const showAgent = useAgentButtonVisible(props.agentSurface);
 
   return (
     <Animated.View
-      style={[styles.wrap, { bottom: bottomOffset, paddingBottom: 10, transform: [{ translateY: props.offset }] }]}
+      style={[styles.wrap, { bottom: insets.bottom, paddingBottom: 10, transform: [{ translateY: props.offset }, { translateY: keyboardTranslateY }] }]}
       pointerEvents="box-none"
     >
       {/* Pill + the assistant button on the right, matching the composer. */}
