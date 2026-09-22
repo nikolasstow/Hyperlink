@@ -34,6 +34,7 @@ import { AgentButton } from "./AgentButton";
 import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
+import { composerRestingBottom } from "./useKeyboardSlide";
 
 /** Height of the pill. Callers add it to their list's bottom inset.
  * Matched to the main composer pill's collapsed height (shared constant). */
@@ -115,17 +116,18 @@ export const BottomSearchPill = (props: {
   const keyboard = useAnimatedKeyboard();
   const showAgent = useAgentButtonVisible(props.agentSurface);
 
-  // One animated `bottom`: rest at the safe-area inset, rise with the keyboard
-  // (exact, UI thread), and drop by the scroll-hide amount. No transform, so the
-  // SystemIcon Host inside never mis-measures.
-  const restingBottom = insets.bottom;
+  // One animated `bottom`: rest tucked toward the bottom edge — the SAME rest as
+  // the composer (composerRestingBottom), so the search pill hugs the bottom the
+  // way the composer does instead of floating higher — rise with the keyboard
+  // (exact, UI thread), and drop by the scroll-hide amount. No transform.
+  const restingBottom = composerRestingBottom(insets.bottom);
   const hiddenValue = props.hidden;
   const animatedStyle = useAnimatedStyle(() => ({
     bottom: Math.max(keyboard.height.value, restingBottom) - hiddenValue.value,
   }));
 
   return (
-    <Reanimated.View style={[styles.wrap, { paddingBottom: 10 }, animatedStyle]} pointerEvents="box-none">
+    <Reanimated.View style={[styles.wrap, { paddingBottom: 8 }, animatedStyle]} pointerEvents="box-none">
       {/* Pill + the assistant button on the right, matching the composer. */}
       <View style={styles.row}>
         {/* The squircle clip lives on this plain View, never on `GlassView`:
@@ -166,7 +168,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 16,
+    // Match the composer bar's side inset (BottomBar root paddingHorizontal).
+    paddingHorizontal: 20,
   },
   // Pill + assistant button on one row, button vertically centred with the pill.
   row: {

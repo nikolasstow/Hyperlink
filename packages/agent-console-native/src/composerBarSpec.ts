@@ -18,12 +18,12 @@ export const COMPOSER_SEND_CHIP_SIZE = 38;
 export const COMPOSER_FIELD_PADDING = 10;
 
 /**
- * Rendered height of the COLLAPSED glass pill. Its field pads
- * `COMPOSER_FIELD_PADDING` top and bottom around the tallest *visible* control —
- * which, collapsed, is the +/model chip (`COMPOSER_CHIP_SIZE`); the taller send
- * chip is hidden. So the pill is 52, not 58. The standalone assistant button and
- * the search pill both size to this so they sit flush with the pill's height.
- * (The composer measures the real collapsed height at runtime and uses that; this
- * is the initial value and the search pill's fixed height.)
+ * Rendered height of the COLLAPSED glass pill = 58. Its field pads
+ * `COMPOSER_FIELD_PADDING` top and bottom around the tallest control in the row,
+ * the send chip (`COMPOSER_SEND_CHIP_SIZE`). When collapsed the send chip is only
+ * *width*-collapsed (overflow-clipped to 0 wide); its 38pt HEIGHT still sets the
+ * row height, so the pill stays 58, not 52. The search pill uses this as its
+ * fixed height, and it's the composer's initial value (the composer then measures
+ * the real collapsed height at runtime, which lands here too).
  */
-export const COMPOSER_PILL_HEIGHT = COMPOSER_CHIP_SIZE + COMPOSER_FIELD_PADDING * 2;
+export const COMPOSER_PILL_HEIGHT = COMPOSER_SEND_CHIP_SIZE + COMPOSER_FIELD_PADDING * 2;
