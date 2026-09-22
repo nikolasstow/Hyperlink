@@ -274,13 +274,16 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
 
             {/* Glass-in-glass: a `regular` glass composer pill inside the clear
              * window — the bottom-bar design: (+) | input | (send). At the pill
-             * (min) detent the inner glass is hidden ("none") and the composer
-             * fills the window (no pill-in-pill). Swipe it down to drop the keyboard. */}
+             * (min) detent the composer fills the window and its glass goes "clear"
+             * so it blends into the clear window (no visible pill-in-pill). It must
+             * NOT switch to "none": that swaps the native view type, remounting the
+             * focused TextInput inside it and dropping the keyboard the instant we
+             * reach the min detent. "clear" keeps the same effect view. */}
             <View style={[styles.pillWrap, pillMode && styles.pillWrapFill]}>
               <GestureDetector gesture={dismissKb}>
                 <GlassView
                   style={[styles.pill, pillMode && styles.pillFill]}
-                  glassEffectStyle={pillMode ? "none" : "regular"}
+                  glassEffectStyle={pillMode ? "clear" : "regular"}
                   colorScheme={scheme === "dark" ? "dark" : "light"}
                 >
                   <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
