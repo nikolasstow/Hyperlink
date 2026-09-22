@@ -72,6 +72,14 @@ type Props = {
   readonly onChange: (target: SessionTarget) => void;
   /** Rescan repos after create/clone/mkdir/worktree. */
   readonly onWorkspaceChanged: () => Promise<void>;
+  /** When set, the repo is FIXED to this one (the repo/workspace pages): the
+   * repo dropdown becomes static text and target selection locks to it. The
+   * worktree + branch pickers stay live. */
+  readonly lockedRepo?: {
+    readonly name: string;
+    readonly dir: string;
+    readonly isRepo: boolean;
+  };
 };
 
 /** Filled chip — systemGray5 / gray4, not the translucent bordered default. */
@@ -149,8 +157,30 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   }, [props.otherFolders, props.activityByName, sort]);
 
   // Default to first known repo once scan lands (respects default-worktree pref).
+  // When a repo is locked (repo/workspace pages) select IT instead — a workspace
+  // becomes a folder target, a git repo its main (or last-used) worktree.
   React.useEffect(() => {
-    if (props.target !== undefined || sortedRepos.length === 0) return;
+    if (props.target !== undefined) return;
+    const locked = props.lockedRepo;
+    if (locked !== undefined) {
+      if (!locked.isRepo) {
+        props.onChange({ kind: "folder", name: locked.name, path: locked.dir });
+        return;
+      }
+      const found = props.scanned.find((r) => r.repo === locked.name);
+      const worktree =
+        found?.worktrees.find((w) => w.isMain) ??
+        found?.worktrees[0] ??
+        // Fall back to the dir the page was opened with, so the composer works
+        // even before the scan lands.
+        { name: "main", path: locked.dir, isMain: true };
+      void (async () => {
+        const branch = (await runFs(readCurrentBranch(backend, worktree.path))) ?? "main";
+        props.onChange({ kind: "repo", repo: locked.name, worktree, branch });
+      })();
+      return;
+    }
+    if (sortedRepos.length === 0) return;
     const repo = sortedRepos[0]!;
     void (async () => {
       const preference = await getDefaultWorktreePreference();
@@ -166,7 +196,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       const branch = (await runFs(readCurrentBranch(backend, chosen.path))) ?? "main";
       props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
-  }, [sortedRepos, props.target, props.onChange, backend]);
+  }, [sortedRepos, props.target, props.onChange, backend, props.lockedRepo, props.scanned]);
 
   // Keep branch label in sync when the worktree changes.
   React.useEffect(() => {
@@ -321,13 +351,15 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   };
 
   const repoLabel =
-    props.target === undefined
-      ? props.scanned.length === 0
-        ? "Scanning…"
-        : "Repo"
-      : props.target.kind === "folder"
-        ? props.target.name
-        : props.target.repo;
+    props.lockedRepo !== undefined
+      ? props.lockedRepo.name
+      : props.target === undefined
+        ? props.scanned.length === 0
+          ? "Scanning…"
+          : "Repo"
+        : props.target.kind === "folder"
+          ? props.target.name
+          : props.target.repo;
   const worktreePill =
     props.target?.kind === "repo"
       ? worktreeLabel(props.target.worktree) || props.target.worktree.name || "Worktree"
@@ -349,6 +381,15 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     <>
     <View style={styles.row}>
       <View style={styles.leading}>
+        {props.lockedRepo !== undefined ? (
+          // Repo/workspace pages: the repo is fixed, so its dropdown is replaced
+          // by static text of the repo name (no menu, no chevron).
+          <View style={styles.staticPill}>
+            <Text style={styles.staticPillText} numberOfLines={1} ellipsizeMode="head">
+              {repoLabel}
+            </Text>
+          </View>
+        ) : (
         <Host
           style={[styles.pillHost, { width: pillHostWidth(repoLabel) }]}
           matchContents={{ vertical: true }}
@@ -400,6 +441,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
             </Section>
           </Menu>
         </Host>
+        )}
 
         <Host
           style={[styles.pillHost, { width: pillHostWidth(branchPill) }]}
@@ -502,6 +544,25 @@ const styles = StyleSheet.create({
   },
   pillDimmed: {
     opacity: 0.4,
+  },
+  // The locked-repo label: same filled-pill look as the pickers beside it, but
+  // static (no chevron), so it reads as "this is the repo" rather than a menu.
+  staticPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: PILL_HEIGHT,
+    paddingHorizontal: 12,
+    borderRadius: PILL_HEIGHT / 2,
+    borderCurve: "continuous",
+    backgroundColor: PILL_BG,
+    flexShrink: 1,
+    maxWidth: PILL_MAX_WIDTH,
+  },
+  staticPillText: {
+    flexShrink: 1,
+    color: PILL_FG,
+    fontSize: 13,
+    fontWeight: "600",
   },
   pillText: {
     flexShrink: 1,

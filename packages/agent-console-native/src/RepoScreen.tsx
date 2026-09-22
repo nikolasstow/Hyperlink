@@ -24,8 +24,15 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { AGENT } from "./client";
 import { colors } from "./colors";
+import { Composer } from "./Composer";
 import { clearForward } from "./fileNavHistory";
+import { HomeTargetPickers, sessionDirectory, type SessionTarget } from "./HomeTargetPickers";
+import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
+import type { ModelOption } from "./models";
+import { useKeyboardHeight } from "./useKeyboardHeight";
+import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useTheme } from "./theme";
 import { repoMenuFor } from "./repoMenu";
 import { abortSession, promptRenameSession } from "./sessionActions";
@@ -34,7 +41,7 @@ import { useSessionActivity } from "./useSessionActivity";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
-import { readWorkspace } from "./repoScanCache";
+import { readWorkspace, refreshWorkspace } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
@@ -64,9 +71,14 @@ const GLASS_FADE_OUT = [1, 1, 1, 0.99, 0.97, 0.9, 0.6, 0.2, 0];
 /** false = fade the squircle wrapper's opacity; true = slide it out. */
 const SQUIRCLE_FADE_BY_TRANSLATE = false;
 
+/** Stable empty map for the pickers' repo-sort input — unused while the repo is
+ * locked (no repo menu), but the prop is required. Module-level so it doesn't
+ * change identity each render. */
+const EMPTY_ACTIVITY: ReadonlyMap<string, number> = new Map();
+
 export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
-  const { client } = useAppContext();
+  const { client, backend, rootDir } = useAppContext();
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
   const perGroup = useGroupSize();
@@ -115,6 +127,44 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     setRefreshing(true);
     void load().finally(() => setRefreshing(false));
   }, [load]);
+
+  // New-session composer, same bottom bar as Home — but the repo is fixed to this
+  // page, so its dropdown shows as static text (see HomeTargetPickers lockedRepo).
+  const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
+  const [sending, setSending] = React.useState(false);
+  const [composerHeight, setComposerHeight] = React.useState(0);
+  const keyboardHeight = useKeyboardHeight();
+  const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
+
+  const onSend = React.useCallback(
+    async (text: string, model: ModelOption | undefined): Promise<void> => {
+      if (target === undefined || sending) return;
+      setSending(true);
+      try {
+        const directory = sessionDirectory(target);
+        const { data } = await client.session.create({ query: { directory } });
+        if (data === undefined) throw new Error("no session");
+        await client.session.promptAsync({
+          path: { id: data.id },
+          body: {
+            agent: AGENT,
+            parts: [{ type: "text", text }],
+            model: model === undefined ? undefined : { providerID: model.providerID, modelID: model.modelID },
+          },
+        });
+        props.navigation.navigate("Chat", { sessionID: data.id });
+        void load();
+      } finally {
+        setSending(false);
+      }
+    },
+    [target, sending, client, props.navigation, load],
+  );
+
+  // Rescan after a worktree/workspace is created from the pickers.
+  const onWorkspaceChanged = React.useCallback(async (): Promise<void> => {
+    setScanned(await refreshWorkspace(backend, rootDir));
+  }, [backend, rootDir]);
 
   // This repo/workspace's own sessions, via the shared grouping logic.
   const group = React.useMemo(() => groupByRepo(sessions, scanned).find((g) => g.repo === name), [sessions, scanned, name]);
@@ -253,7 +303,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
         contentContainerStyle={{
           paddingTop: expandedH + 12,
-          paddingBottom: insets.bottom + 40,
+          // Reserve room for the floating composer (measured) so the last session
+          // clears it, plus the keyboard when it's up.
+          paddingBottom: composerHeight + keyboardHeight + 24,
         }}
       >
         {repoSessions.length === 0 ? (
@@ -423,6 +475,33 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           </Pressable>
         </Animated.View>
       </Animated.View>
+
+      {/* New-session composer — the Home bottom bar, repo locked to this page. */}
+      <KeyboardDismissOverlay active={keyboardHeight > 0} />
+      <EdgeBlurBars bottomInset={keyboardHeight} />
+      <Animated.View
+        style={[styles.composerFloat, composerSlide]}
+        onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}
+      >
+        <Composer
+          onSend={onSend}
+          disabled={sending || target === undefined}
+          bottomInset={0}
+          placeholder="Plan, ask, build…"
+          agentSurface="repo"
+          topSection={
+            <HomeTargetPickers
+              scanned={scanned}
+              otherFolders={[]}
+              activityByName={EMPTY_ACTIVITY}
+              target={target}
+              onChange={setTarget}
+              onWorkspaceChanged={onWorkspaceChanged}
+              lockedRepo={{ name, dir, isRepo }}
+            />
+          }
+        />
+      </Animated.View>
     </View>
   );
 };
@@ -431,6 +510,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  composerFloat: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    // `bottom` is animated inline via composerSlide (rides the keyboard).
   },
   header: {
     position: "absolute",
