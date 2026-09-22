@@ -13,12 +13,24 @@
  * Monaco's own Monarch grammars are never registered, because a second
  * highlighting source is exactly what the decision this implements rules out.
  *
- * Read-only is a message, not a build flag. Editing is the host sending
- * `setReadOnly` with `false` on this same instance, which is what keeps later
- * phases (LSP, inline completions, collaborative editing) additive.
+ * The whole editor is bundled, not its API alone. `editor.main.js` carries
+ * Monaco's feature modules with it: find and replace, auto-indent, bracket
+ * matching, the comment shortcut, multiple cursors. The endgame for this
+ * surface is an editor, so it is built on the full thing from the start rather
+ * than on a lean core that every later phase would have to re-add a piece of.
+ *
+ * Read-only is a mode, not a build. The editor is constructed the way an
+ * editable one is and `setReadOnly` flips it, so editing, language
+ * intelligence, inline completions and collaborative editing all land on this
+ * same instance.
  *
  * @internal
  */
+// The runtime bundle, imported for its side effects: evaluating it is what
+// registers Monaco's feature modules. Monaco ships type declarations only on
+// `editor.api.js`, so the typed namespace comes from there. Both resolve to the
+// same module graph, so nothing is bundled twice.
+import "monaco-editor/editor/editor.main.js";
 import * as monaco from "monaco-editor/editor/editor.api.js";
 import { shikiToMonaco } from "@shikijs/monaco";
 import { createHighlighterCore, type HighlighterCore, type ThemeRegistrationRaw } from "shiki/core";
@@ -194,7 +206,9 @@ const scrollTo = (line: number): void => {
  */
 const setReadOnly = (next: boolean): void => {
   readOnly = next;
-  editor?.updateOptions({ readOnly: next });
+  // `domReadOnly` has to move with the mode. On its own `readOnly` refuses the
+  // edit after the input has taken it; together they stop it at the DOM.
+  editor?.updateOptions({ readOnly: next, domReadOnly: next });
   document.body.classList.toggle("surface-readonly", next);
 };
 
@@ -249,10 +263,9 @@ const start = async (): Promise<void> => {
   editor = monaco.editor.create(host, {
     value: "",
     language: "plaintext",
+    // The mode, not the build. `setReadOnly` moves both of these together.
     readOnly,
-    // A read-only Monaco still shows a cursor and lets you type into nothing
-    // unless this is off as well.
-    domReadOnly: true,
+    domReadOnly: readOnly,
     automaticLayout: true,
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
@@ -262,14 +275,10 @@ const start = async (): Promise<void> => {
     renderLineHighlight: "none",
     occurrencesHighlight: "off",
     selectionHighlight: false,
-    contextmenu: false,
     lineNumbersMinChars: 3,
     padding: { top: 8, bottom: 40 },
     fontLigatures: false,
     wordWrap: "off",
-    // Monaco's accessibility layer duplicates the document into a textarea,
-    // which on a phone means VoiceOver reads it twice.
-    accessibilitySupport: "off",
   });
 
   editor.onDidChangeCursorSelection((event) => {
