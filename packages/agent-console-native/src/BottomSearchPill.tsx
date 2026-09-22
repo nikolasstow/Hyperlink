@@ -28,11 +28,11 @@ import Reanimated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
+import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AgentButton } from "./AgentButton";
 import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
-import { SystemIcon } from "./SystemIcon";
 
 /** Height of the pill. Callers add it to their list's bottom inset. */
 export const SEARCH_PILL_HEIGHT = 44;
@@ -131,7 +131,12 @@ export const BottomSearchPill = (props: {
          * (see the SessionComposer handoff's invariant 2). */}
         <View style={styles.clip}>
           <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-            <SystemIcon name="magnifyingglass" size={16} color={colors.secondaryLabel} />
+            {/* A plain Feather glyph, not the @expo/ui SystemIcon (a Host): the
+             * Host's measurement race (see SystemIcon's own doc) drifted the
+             * glyph off-centre on first mount here, fixing only on
+             * background/foreground. A vector icon flex-centres reliably and
+             * still takes the adaptive PlatformColor. */}
+            <Feather name="search" size={16} color={colors.secondaryLabel} />
             <TextInput
               style={styles.input}
               value={props.value}
