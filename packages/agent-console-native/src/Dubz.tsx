@@ -26,8 +26,8 @@
  */
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, View } from "react-native";
-import Reanimated, { useAnimatedKeyboard, useAnimatedStyle } from "react-native-reanimated";
+import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
+import Reanimated, { Easing, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
@@ -36,11 +36,11 @@ import { colors } from "./colors";
 const MARGIN = 12;
 /** Corner radius of the glass window. */
 const WINDOW_RADIUS = 30;
-/** Native glass fade duration — seconds for the effect, ms for the unmount timer.
- * Animated via glassEffectStyle's own `animate` (the only way to fade glass
- * in/out without an opacity/transform that would composite and kill the effect). */
-const GLASS_ANIM_S = 0.32;
-const GLASS_ANIM_MS = 320;
+/** Grow/shrink duration (ms) for the window opening and closing. */
+const ANIM_MS = 320;
+/** The window grows from this fraction of full size up to 1 as it opens — a
+ * LAYOUT scale (edge insets), never a transform, so the glass keeps rendering. */
+const GROW_FROM = 0.72;
 
 interface DubzApi {
   readonly open: () => void;
@@ -74,49 +74,54 @@ export const DubzOverlay = (): React.ReactElement | null => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const keyboard = useAnimatedKeyboard();
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
-  // `visible` mounts the tree; `entered` toggles the native glass style between
-  // `clear` (shown) and `none` (hidden) so the glass fades in/out on its own.
+  // `visible` mounts the tree; `grow` (0→1) scales the window up by animating its
+  // LAYOUT bounds — never a transform/opacity, which would composite the subtree
+  // and stop the glass rendering (opacity 0 on the GlassView or any parent kills
+  // it outright). So the entrance is a real size grow with live glass throughout.
   const [visible, setVisible] = React.useState(false);
-  const [entered, setEntered] = React.useState(false);
+  const grow = useSharedValue(0);
   const closeTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   React.useEffect(() => {
     if (isOpen) {
-      if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
+      if (closeTimer.current !== undefined) {
+        clearTimeout(closeTimer.current);
+        closeTimer.current = undefined;
+      }
       setVisible(true);
+      grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
     } else if (visible) {
       Keyboard.dismiss();
-      setEntered(false); // native fade clear → none
-      closeTimer.current = setTimeout(() => setVisible(false), GLASS_ANIM_MS + 40);
+      grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
+      closeTimer.current = setTimeout(() => setVisible(false), ANIM_MS + 40);
     }
-  }, [isOpen, visible]);
-
-  // Mount as `none`, then flip to `clear` next frame so the native glass animates
-  // in — no opacity/transform, which would composite and break the effect.
-  React.useEffect(() => {
-    if (!visible) return;
-    const id = requestAnimationFrame(() => setEntered(true));
-    return () => cancelAnimationFrame(id);
-  }, [visible]);
+  }, [isOpen, visible, grow]);
 
   React.useEffect(() => () => {
     if (closeTimer.current !== undefined) clearTimeout(closeTimer.current);
   }, []);
 
-  // POSITION ONLY — top under the safe area, bottom rides the keyboard. Crucially
-  // NO opacity/transform animation on this wrapper: an animated opacity or
-  // transform composites the subtree into its own layer, and a UIVisualEffectView
-  // (the glass) inside a composited layer can't capture the backdrop behind it to
-  // refract — which renders `clear` glass as nothing. Animating `bottom` (a
-  // layout prop) is safe — the same reason the composer rides the keyboard via
-  // `bottom`, not `transform`.
-  const windowStyle = useAnimatedStyle(() => ({
-    top: insets.top + MARGIN,
-    left: MARGIN,
-    right: MARGIN,
-    bottom: Math.max(keyboard.height.value, insets.bottom) + MARGIN,
-  }));
+  // Grow via LAYOUT (edge insets), not transform: top under the safe area, bottom
+  // rides the keyboard, and `grow` insets all four edges toward the centre at the
+  // start so the window scales from GROW_FROM up to full. Layout animation keeps
+  // the glass rendering; a transform/opacity would composite and break it.
+  const windowStyle = useAnimatedStyle(() => {
+    const top = insets.top + MARGIN;
+    const bottom = Math.max(keyboard.height.value, insets.bottom) + MARGIN;
+    const fullW = screenW - 2 * MARGIN;
+    const fullH = screenH - top - bottom;
+    const scale = GROW_FROM + (1 - GROW_FROM) * grow.value;
+    const insetX = (fullW * (1 - scale)) / 2;
+    const insetY = (fullH * (1 - scale)) / 2;
+    return {
+      top: top + insetY,
+      bottom: bottom + insetY,
+      left: MARGIN + insetX,
+      right: MARGIN + insetX,
+    };
+  });
 
   if (!visible) return null;
 
@@ -132,7 +137,10 @@ export const DubzOverlay = (): React.ReactElement | null => {
         <GlassContainer style={styles.glassContainer}>
           <GlassView
             style={styles.glass}
-            glassEffectStyle={{ style: entered ? "clear" : "none", animate: true, animationDuration: GLASS_ANIM_S }}
+            glassEffectStyle="clear"
+            // A slight dark tint (tints the glass material, not a solid fill) to
+            // give the clear glass some body over bright content.
+            tintColor="rgba(0,0,0,0.18)"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
             <TextInput
