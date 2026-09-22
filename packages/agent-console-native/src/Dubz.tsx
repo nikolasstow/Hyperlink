@@ -131,12 +131,11 @@ export const DubzOverlay = (): React.ReactElement | null => {
        * so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
         <GlassContainer style={styles.glassContainer}>
+          {/* `regular`, not `clear`: clear Liquid Glass renders nothing on this
+           * OS (no fallback), so regular is the only visible native glass. */}
           <GlassView
             style={styles.glass}
-            glassEffectStyle="clear"
-            // A 0.01-alpha tint is invisible but forces the native clear-glass
-            // shader to attach — a fully-transparent/absent tint can nullify it.
-            tintColor="rgba(255,255,255,0.01)"
+            glassEffectStyle="regular"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
             <TextInput
