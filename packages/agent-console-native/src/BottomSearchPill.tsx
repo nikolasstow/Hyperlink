@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
   },
   clip: {
     // Flex so the pill fills the row and the assistant button sits at the edge.

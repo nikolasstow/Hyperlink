@@ -29,10 +29,10 @@
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
-import { AgentButton, AGENT_BUTTON_SIZE } from "./AgentButton";
+import { AgentButton } from "./AgentButton";
 import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
-import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 
 // Comfortably under half the field's smallest (idle) rendered height, so the
 // rounded corners never overlap/distort no matter which row arrangement shows.
@@ -71,6 +71,24 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
   const showAgent = useAgentButtonVisible(props.agentSurface);
   const { expanded } = props;
 
+  // The assistant button must be exactly the pill's COLLAPSED height so its
+  // circle sits flush with the pill (not taller, not floating centred). That
+  // height depends on which controls are visible, so rather than recompute it
+  // from constants and risk drift, measure the real glass pill while collapsed
+  // and size the button to it. Seeded with the computed value so the common case
+  // needs no resize (a resize can jog the native Host's first-mount alignment).
+  const [pillHeight, setPillHeight] = React.useState(COMPOSER_PILL_HEIGHT);
+  const onFieldLayout = React.useCallback(
+    (height: number): void => {
+      // Only the collapsed height is the button's reference — the field grows
+      // tall when expanded, but the button is hidden then.
+      if (expanded) return;
+      const next = Math.round(height);
+      if (next > 0) setPillHeight((current) => (current === next ? current : next));
+    },
+    [expanded],
+  );
+
   return (
     <View style={[styles.root, { paddingBottom: Math.max(props.bottomInset, 8) }]}>
       {props.error !== undefined ? <Text style={styles.error}>{props.error}</Text> : null}
@@ -83,7 +101,7 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
         <View style={styles.pillShadow}>
         {/* The squircle clip lives on this plain wrapping View, not on GlassView
          * directly — GlassView's own setBorderCurve broke the glass effect. */}
-        <View style={styles.fieldClip}>
+        <View style={styles.fieldClip} onLayout={(e) => onFieldLayout(e.nativeEvent.layout.height)}>
           <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
             {props.topSection !== undefined ? (
               <View style={[styles.topSection, !expanded && styles.topSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
@@ -124,8 +142,11 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
         </View>
         </View>
         {showAgent ? (
-          <View style={[styles.agentSlot, expanded && styles.agentSlotCollapsed]} pointerEvents={expanded ? "none" : "auto"}>
-            <AgentButton onPress={props.onAgent} />
+          <View
+            style={[styles.agentSlot, { width: pillHeight, height: pillHeight }, expanded && styles.agentSlotCollapsed]}
+            pointerEvents={expanded ? "none" : "auto"}
+          >
+            <AgentButton onPress={props.onAgent} size={pillHeight} />
           </View>
         ) : null}
       </View>
@@ -165,7 +186,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   field: {
-    padding: 10,
+    padding: COMPOSER_FIELD_PADDING,
     position: "relative",
   },
   expandHit: {
@@ -226,9 +247,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   agentSlot: {
-    width: AGENT_BUTTON_SIZE,
-    height: AGENT_BUTTON_SIZE,
-    marginLeft: 8,
+    // width/height set inline to the measured pill height so the button is flush.
+    marginLeft: 12,
     alignItems: "center",
     justifyContent: "center",
   },
