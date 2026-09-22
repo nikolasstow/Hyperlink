@@ -135,7 +135,7 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
 
 const styles = StyleSheet.create({
   root: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 20,
     paddingTop: 8,
   },
   error: {
