@@ -385,8 +385,41 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
 
   const repoOnly = props.target?.kind !== "repo";
 
+  // The native Menu Hosts need an explicit width (matchContents horizontal races
+  // to 0). A character-count ESTIMATE leaves a different amount of dead space per
+  // label — the inconsistent spacing. So measure each trigger's real content
+  // width off-screen and size its Host to exactly that: no slack, only the
+  // intended flex gaps remain. The estimate is just the first-frame fallback.
+  const [labelWidths, setLabelWidths] = React.useState<Record<string, number>>({});
+  const onMeasure = React.useCallback((key: string, w: number): void => {
+    const next = Math.ceil(w);
+    if (next <= 0) return;
+    setLabelWidths((prev) => (prev[key] === next ? prev : { ...prev, [key]: next }));
+  }, []);
+  const hostWidth = (key: string, text: string): number =>
+    Math.min(PILL_MAX_WIDTH, Math.max(PILL_MIN_WIDTH, labelWidths[key] ?? pillHostWidth(text, true)));
+  const measureItems: ReadonlyArray<{
+    readonly key: string;
+    readonly text: string;
+    readonly icon: React.ComponentProps<typeof Feather>["name"];
+  }> = [
+    ...(props.lockedRepo === undefined ? [{ key: `repo:${repoLabel}`, text: repoLabel, icon: repoIcon }] : []),
+    { key: `branch:${branchPill}`, text: branchPill, icon: "git-branch" },
+    { key: `wt:${worktreePill}`, text: worktreePill, icon: "hard-drive" },
+  ];
+
   return (
     <>
+    {/* Off-screen measurers: report each trigger's natural content width. */}
+    <View style={styles.measureLayer} pointerEvents="none" aria-hidden>
+      {measureItems.map((m) => (
+        <View key={m.key} style={styles.pillMeasure} onLayout={(e) => onMeasure(m.key, e.nativeEvent.layout.width)}>
+          <Feather name={m.icon} size={14} color={PILL_FG} />
+          <Text style={styles.pillText}>{m.text}</Text>
+          <Feather name="chevron-down" size={12} color={PILL_CHEVRON.light} />
+        </View>
+      ))}
+    </View>
     <View style={styles.row}>
       <View style={styles.leading}>
         {props.lockedRepo !== undefined ? (
@@ -399,7 +432,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           </View>
         ) : (
         <Host
-          style={[styles.pillHost, { width: pillHostWidth(repoLabel, true) }]}
+          style={[styles.pillHost, { width: hostWidth(`repo:${repoLabel}`, repoLabel) }]}
           matchContents={{ vertical: true }}
           ignoreSafeArea="all"
         >
@@ -455,7 +488,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       {/* Branch + worktree grouped together on the right. */}
       <View style={styles.trailing}>
         <Host
-          style={[styles.pillHost, { width: pillHostWidth(branchPill, true) }]}
+          style={[styles.pillHost, { width: hostWidth(`branch:${branchPill}`, branchPill) }]}
           matchContents={{ vertical: true }}
           ignoreSafeArea="all"
         >
@@ -481,7 +514,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         </Host>
 
         <Host
-          style={[styles.pillHost, { width: pillHostWidth(worktreePill, true) }]}
+          style={[styles.pillHost, { width: hostWidth(`wt:${worktreePill}`, worktreePill) }]}
           matchContents={{ vertical: true }}
           ignoreSafeArea="all"
         >
@@ -564,6 +597,22 @@ const styles = StyleSheet.create({
   },
   pillDimmed: {
     opacity: 0.4,
+  },
+  // Off-screen; only there to be measured.
+  measureLayer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    opacity: 0,
+  },
+  // Same chrome as `pill` (icon/text/chevron gaps + padding) but content-sized,
+  // so onLayout reports the exact width the Host should be.
+  pillMeasure: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    paddingHorizontal: 2,
   },
   // The locked-repo label: plain static text (no background, no chevron), a
   // little larger than the pickers since it names the page.
