@@ -77,6 +77,10 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
       {/* The pill and the assistant sit in one row: the pill flexes to fill,
        * the assistant rides its right edge. */}
       <View style={styles.barRow}>
+        {/* The shadow lives on this OUTER wrapper, never on `fieldClip` — that
+         * one clips (overflow: hidden) for the squircle, which would clip its
+         * own shadow too. */}
+        <View style={styles.pillShadow}>
         {/* The squircle clip lives on this plain wrapping View, not on GlassView
          * directly — GlassView's own setBorderCurve broke the glass effect. */}
         <View style={styles.fieldClip}>
@@ -118,6 +122,7 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
             ) : null}
           </GlassView>
         </View>
+        </View>
         {showAgent ? (
           <View style={[styles.agentSlot, expanded && styles.agentSlotCollapsed]} pointerEvents={expanded ? "none" : "auto"}>
             <AgentButton onPress={props.onAgent} />
@@ -143,8 +148,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  fieldClip: {
+  // Carries the pill's flex and its small drop shadow (no overflow, so the
+  // shadow isn't clipped); the rounded rect gives the shadow its shape.
+  pillShadow: {
     flex: 1,
+    borderRadius: FIELD_RADIUS,
+    borderCurve: "continuous",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  fieldClip: {
     borderRadius: FIELD_RADIUS,
     borderCurve: "continuous",
     overflow: "hidden",
