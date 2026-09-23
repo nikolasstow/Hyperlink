@@ -282,7 +282,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
     const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
     const pad = COMPOSER_INSET * (1 - p);
-    return { paddingHorizontal: pad, paddingBottom: pad };
+    // Only the horizontal margin collapses toward the pill; the bottom (Y) stays
+    // constant so the composer keeps its distance from the bottom glass edge.
+    return { paddingHorizontal: pad, paddingBottom: COMPOSER_INSET };
   });
 
   // The composer's frosted glass fades out over the SAME travel as the margins,
