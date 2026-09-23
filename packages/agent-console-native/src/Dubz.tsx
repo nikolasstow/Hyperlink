@@ -461,7 +461,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.label,
     fontSize: 16,
-    maxHeight: 100,
+    // Grows upward with each new line (the bottom-anchored pill grows up), capped
+    // at ~8 lines — a fixed lineHeight makes that cap exact — then scrolls.
+    lineHeight: 21,
+    maxHeight: 21 * 8,
     paddingVertical: 6,
     paddingHorizontal: 2,
   },
