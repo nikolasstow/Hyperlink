@@ -44,10 +44,9 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Smallest height — the "pill" detent. Equal to the composer row's own height
- * (sendChip 36 + 2×12 padding = 60), so at the min detent the window is exactly
- * the composer: its symmetric padding centres the bottom-aligned chips and there's
- * room for the input. A full capsule at the window radius. */
+/** Smallest height — the "pill" detent. A full capsule at the window radius, tall
+ * enough for the composer (52) with breathing room; the composer keeps its natural
+ * height and is centred within it (pillWrapFill), so the chips land at the centre. */
 const MIN_HEIGHT = 60;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
@@ -357,7 +356,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * capsule throughout — no radius pop. */}
             <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
-                <View style={[styles.pill, pillMode && styles.pillFill]}>
+                <View style={styles.pill}>
                   {/* Frosted glass background, faded by the drag. Regular glass
                    * survives an animated-opacity layer (only CLEAR glass dies under
                    * compositing), and this is a descendant of the window glass, not
@@ -448,28 +447,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: COMPOSER_INSET,
     paddingBottom: COMPOSER_INSET,
   },
-  // Pill mode: fill the window so the composer spans it (padding comes to 0 via
-  // the animated style, not here).
+  // Pill mode: fill the window (padding comes to 0 via the animated style) and
+  // CENTRE the composer row vertically within it — the row keeps its natural
+  // height rather than stretching, so bottom-aligned chips sit at the pill's
+  // centre instead of low against a stretched bottom edge.
   pillWrapFill: {
     flex: 1,
-  },
-  // Fills the window edge-to-edge at the pill detent.
-  pillFill: {
-    flex: 1,
+    justifyContent: "center",
   },
   // The composer row. Chips ALWAYS bottom-align (so they hold position as the
-  // input grows upward); symmetric vertical padding + the min height matching this
-  // row's height makes that read as centred in the single-line pill. The glass is
-  // a separate faded background (pillGlass), not this view.
+  // input grows upward); the row is centred within the pill at the min detent
+  // (pillWrapFill) so bottom-aligned chips read as centred there. The glass is a
+  // separate faded background (pillGlass), not this view.
   pill: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
     minHeight: 52,
     paddingHorizontal: 8,
-    // 12 (not 8) so the row is 60 tall (sendChip 36 + 24): comfortable room for the
-    // input, and symmetric padding centres the bottom-aligned chips in the pill.
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   // Frosted glass background of the composer. Window radius in every mode — a full
   // capsule throughout, so no radius pop, and it coincides with the window's own
