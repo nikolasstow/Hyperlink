@@ -113,6 +113,16 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const { height: kbHeight } = useAnimatedKeyboard();
   const { height: screenH } = useWindowDimensions();
   const [text, setText] = React.useState("");
+  // Whether the input has grown past a single line. The chips centre in the
+  // single-line pill and only bottom-align once it grows, so they hold position
+  // as the text climbs. Baseline is the first (empty, single-line) content height.
+  const singleLineH = React.useRef<number | null>(null);
+  const [inputGrown, setInputGrown] = React.useState(false);
+  const onInputSize = React.useCallback((e: { readonly nativeEvent: { readonly contentSize: { readonly height: number } } }) => {
+    const h = e.nativeEvent.contentSize.height;
+    if (singleLineH.current === null) singleLineH.current = h;
+    setInputGrown(h > singleLineH.current + 8);
+  }, []);
 
   // `entered` toggles the native glass none↔clear (its own animate fades it, no
   // opacity); `grow` (0→1) scales the window via LAYOUT (never a transform, which
@@ -355,7 +365,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * capsule throughout — no radius pop. */}
             <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
-                <View style={[styles.pill, pillMode && styles.pillFill, pillMode && styles.pillCentered]}>
+                <View style={[styles.pill, pillMode && styles.pillFill, inputGrown && styles.pillBottom]}>
                   {/* Frosted glass background, faded by the drag. Regular glass
                    * survives an animated-opacity layer (only CLEAR glass dies under
                    * compositing), and this is a descendant of the window glass, not
@@ -378,6 +388,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
                     placeholderTextColor={colors.placeholderText}
                     autoFocus
                     multiline
+                    onContentSizeChange={onInputSize}
                   />
                   <Pressable
                     style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.secondary : themeColors.secondaryFill }]}
@@ -455,21 +466,20 @@ const styles = StyleSheet.create({
   pillFill: {
     flex: 1,
   },
-  // At the pill detent it's a single-line capsule — centre the chips vertically.
-  // (Expanded, they bottom-align so they stay put as the input grows upward.)
-  pillCentered: {
-    alignItems: "center",
-  },
-  // The composer row. The chips sit at the BOTTOM (flex-end) so they stay put as
-  // the input grows upward. The glass is a separate faded background (pillGlass),
-  // not this view.
+  // The composer row. Single line → chips CENTRED in the pill; only once the
+  // input grows past one line do they bottom-align (pillBottom) so they hold
+  // position as the text climbs. The glass is a separate faded background
+  // (pillGlass), not this view.
   pill: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     gap: 8,
     minHeight: 52,
     paddingHorizontal: 8,
     paddingVertical: 8,
+  },
+  pillBottom: {
+    alignItems: "flex-end",
   },
   // Frosted glass background of the composer. Window radius in every mode — a full
   // capsule throughout, so no radius pop, and it coincides with the window's own
