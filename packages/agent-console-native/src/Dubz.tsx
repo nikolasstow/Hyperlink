@@ -44,10 +44,9 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Smallest height — the "pill" detent. A full capsule at the window radius, kept
- * close to the composer's own height so there's little empty space between the
- * content and the glass edge; the composer is centred within it (pillWrapFill). */
-const MIN_HEIGHT = 50;
+/** Smallest height — the "pill" detent. A full capsule at the window radius; the
+ * composer keeps its natural height and is centred within it (pillWrapFill). */
+const MIN_HEIGHT = 60;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
@@ -356,7 +355,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * capsule throughout — no radius pop. */}
             <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
-                <View style={[styles.pill, pillMode && styles.pillTightY]}>
+                <View style={styles.pill}>
                   {/* Frosted glass background, faded by the drag. Regular glass
                    * survives an animated-opacity layer (only CLEAR glass dies under
                    * compositing), and this is a descendant of the window glass, not
@@ -467,12 +466,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
-  // At the min detent only: tighter vertical padding AND a smaller min height so
-  // the row hugs its content and sits close to the glass edge (less empty space).
-  pillTightY: {
-    paddingVertical: 4,
-    minHeight: 44,
-  },
   // Frosted glass background of the composer. Window radius in every mode — a full
   // capsule throughout, so no radius pop, and it coincides with the window's own
   // capsule at the min detent.
@@ -500,7 +493,10 @@ const styles = StyleSheet.create({
     // at ~8 lines — a fixed lineHeight makes that cap exact — then scrolls.
     lineHeight: 21,
     maxHeight: 21 * 8,
-    paddingVertical: 6,
+    // No vertical padding on the input itself — the pill's own paddingVertical is
+    // the only vertical space, so the input content isn't inset from the glass edge
+    // more than the chips are.
+    paddingVertical: 0,
     paddingHorizontal: 2,
   },
   sendChip: {
