@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     // more than the chips are. Negative vertical margin pulls the input's own line
     // box tighter (iOS gives multiline inputs extra internal leading).
     paddingVertical: 0,
-    marginVertical: -4,
+    marginVertical: -8,
     paddingHorizontal: 2,
   },
   sendChip: {
