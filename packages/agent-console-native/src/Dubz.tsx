@@ -471,6 +471,9 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: 8,
     paddingVertical: 8,
+    // Negative vertical margin on the pill (the whole composer row: input + both
+    // buttons) — pulls it tighter without touching the pill's height or padding.
+    marginVertical: -6,
   },
   // Frosted glass background of the composer. Window radius in every mode — a full
   // capsule throughout, so no radius pop, and it coincides with the window's own
