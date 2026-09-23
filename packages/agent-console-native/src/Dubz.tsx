@@ -47,6 +47,11 @@ const FADE_S = (ANIM_MS * 0.55) / 1000;
 /** Smallest height — the "pill" detent. Pill-shaped at the window radius (the
  * grabber overlays the composer here rather than stacking above it). */
 const MIN_HEIGHT = 60;
+/** Composer margin inside the window (expanded); collapses to 0 at the pill. */
+const COMPOSER_INSET = 12;
+/** Drag distance (px before the min detent) over which the composer margins
+ * collapse — the composer eases into a full pill instead of snapping. */
+const COMPOSER_INSET_RANGE = 110;
 /** The top drag-bar area's height. */
 const GRABBER_AREA_H = 30;
 /** Snap-to-detent duration on drag release. */
@@ -243,6 +248,22 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     };
   });
 
+  // The composer's margins collapse CONTINUOUSLY as the window nears the pill
+  // (min) detent, tracking the drag, so it grows into a full-width pill smoothly
+  // instead of popping edge-to-edge the instant the detent latches. Only the last
+  // COMPOSER_INSET_RANGE px of travel animate it; higher detents keep the margins.
+  const pillPadStyle = useAnimatedStyle(() => {
+    const fullTop = insets.top + MARGIN;
+    const bottom = Math.max(kbHeight.value, insets.bottom) + MARGIN;
+    const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+    const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
+    const denom = maxDrag - start;
+    const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    const pad = COMPOSER_INSET * (1 - p);
+    return { paddingHorizontal: pad, paddingBottom: pad };
+  });
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Transparent tap-catcher — tap outside to dismiss (at full height). Once
@@ -288,13 +309,16 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
             {pillMode ? null : <View style={styles.conversationArea} />}
 
             {/* Glass-in-glass: a `regular` glass composer pill inside the clear
-             * window — the bottom-bar design: (+) | input | (send). At the pill
-             * (min) detent the composer fills the window and its glass goes "clear"
-             * so it blends into the clear window (no visible pill-in-pill). It must
-             * NOT switch to "none": that swaps the native view type, remounting the
-             * focused TextInput inside it and dropping the keyboard the instant we
-             * reach the min detent. "clear" keeps the same effect view. */}
-            <View style={[styles.pillWrap, pillMode && styles.pillWrapFill]}>
+             * window — the bottom-bar design: (+) | input | (send). Its margins
+             * collapse continuously (pillPadStyle) as the window nears the pill
+             * detent so it grows into a full-width pill smoothly. At the detent the
+             * composer fills the window and its glass goes "clear" so it blends into
+             * the clear window (no visible pill-in-pill). It must NOT switch to
+             * "none": that swaps the native view type, remounting the focused
+             * TextInput inside it and dropping the keyboard. "clear" keeps the same
+             * effect view. The pill radius stays at the window radius in every mode
+             * so it's a full capsule throughout — no radius pop at the detent. */}
+            <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
                 <GlassView
                   style={[styles.pill, pillMode && styles.pillFill]}
@@ -324,7 +348,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
                   </Pressable>
                 </GlassView>
               </GestureDetector>
-            </View>
+            </Reanimated.View>
           </GlassView>
         </GlassContainer>
       </Reanimated.View>
@@ -374,22 +398,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   // Margins around the inner composer pill (glass within the window glass).
+  // The padding itself is animated (pillPadStyle) so it collapses smoothly toward
+  // the pill detent; these are the resting/expanded values as a fallback.
   pillWrap: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingHorizontal: COMPOSER_INSET,
+    paddingBottom: COMPOSER_INSET,
   },
-  // Pill mode: no margins, fill the window so the composer spans the full width.
+  // Pill mode: fill the window so the composer spans it (padding comes to 0 via
+  // the animated style, not here).
   pillWrapFill: {
     flex: 1,
-    paddingHorizontal: 0,
-    paddingBottom: 0,
   },
-  // Fills the window edge-to-edge; match the window's radius so the two capsules
-  // coincide — at MIN_HEIGHT the composer's own (smaller) radius would otherwise
-  // poke past the window corners and read as a rounded rect, not a pill.
+  // Fills the window edge-to-edge at the pill detent.
   pillFill: {
     flex: 1,
-    borderRadius: WINDOW_RADIUS,
   },
   pill: {
     flexDirection: "row",
@@ -398,7 +420,10 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: 8,
     paddingVertical: 8,
-    borderRadius: 26,
+    // Window radius in every mode: a full capsule throughout, so the shape never
+    // changes between expanded and pill — no radius pop, and it coincides with the
+    // window's own capsule at the min detent.
+    borderRadius: WINDOW_RADIUS,
     borderCurve: "continuous",
   },
   plusChip: {
