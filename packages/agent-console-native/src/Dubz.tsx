@@ -356,7 +356,13 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * frame and dropped the keyboard), and the min detent is a true pill. */}
             <GestureDetector gesture={drag}>
               <View style={[styles.grabberArea, pillMode && styles.grabberAreaPill]}>
-                <View style={styles.grabber} />
+                {/* Tab-shaped container: invisible normally; at the min detent it's
+                 * lifted above the pill (grabberAreaPill's negative offset) and given
+                 * a visible fill, so the handle reads as a tab and sits clear of the
+                 * text instead of overlapping it. */}
+                <View style={[styles.grabberTab, pillMode && styles.grabberTabVisible]}>
+                  <View style={styles.grabber} />
+                </View>
               </View>
             </GestureDetector>
 
@@ -449,11 +455,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 2,
   },
-  // Min detent: nudge the grabber up toward the top edge so it sits clear of the
-  // centred composer content.
+  // Min detent: lift the grabber above the pill's top edge (negative offset) so the
+  // tab pops up clear of the composer content.
   grabberAreaPill: {
-    justifyContent: "flex-start",
-    paddingTop: 5,
+    top: -16,
+  },
+  // The tab around the grabber line — invisible (no fill) at every detent except…
+  grabberTab: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 8,
+    borderRadius: 12,
+    borderCurve: "continuous",
+    alignItems: "center",
+  },
+  // …the min detent, where it gets a fill so it reads as a handle tab.
+  grabberTabVisible: {
+    backgroundColor: "rgba(120,120,128,0.22)",
   },
   grabber: {
     width: 40,
