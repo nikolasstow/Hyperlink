@@ -29,7 +29,7 @@ import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { Easing, runOnJS, useAnimatedKeyboard, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Reanimated, { Easing, runOnJS, useAnimatedKeyboard, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
@@ -125,6 +125,19 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const grow = useSharedValue(0);
   const dragY = useSharedValue(0); // 0 = full height; positive = top lowered
   const dragStart = useSharedValue(0);
+  // The full (resting) keyboard height, tracked as the running max of the live
+  // height. The window's HEIGHT is computed from this stable value while its
+  // bottom edge rides the LIVE keyboard — so dismissing the keyboard keeps the
+  // window's height and just drops it to the bottom of the screen (rather than
+  // growing it downward), and the detents are the same with the keyboard present
+  // or gone.
+  const kbFull = useSharedValue(0);
+  useAnimatedReaction(
+    () => kbHeight.value,
+    (h) => {
+      if (h > kbFull.value) kbFull.value = h;
+    },
+  );
   // True from the moment a resize drag touches down until it finalizes — the
   // composer's swipe-down-to-dismiss gesture ignores its end while this is set,
   // so lowering the window can never also dismiss the keyboard.
@@ -168,8 +181,10 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
         })
         .onUpdate((e) => {
           const fullTop = topInset + MARGIN;
-          const bottom = Math.max(kbHeight.value, bottomInset) + MARGIN;
-          const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+          // Height-based, from the STABLE keyboard height — so the detents are the
+          // same whether the keyboard is present or gone.
+          const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
+          const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
           // Allow pulling a bit past the last detent into a dismiss zone.
           const limit = maxDrag + DISMISS_ZONE;
           const next = dragStart.value + e.translationY;
@@ -177,8 +192,8 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
         })
         .onEnd((e) => {
           const fullTop = topInset + MARGIN;
-          const bottom = Math.max(kbHeight.value, bottomInset) + MARGIN;
-          const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+          const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
+          const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
           // Flung down hard, or released past the last detent → dismiss.
           if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
             runOnJS(close)();
@@ -203,7 +218,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
         .onFinalize(() => {
           resizing.value = false;
         }),
-    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbHeight, close],
+    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbFull, close],
   );
 
   // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
@@ -238,13 +253,19 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // unfolds upward from the bottom.
   const windowStyle = useAnimatedStyle(() => {
     const fullTop = insets.top + MARGIN;
-    const bottom = Math.max(kbHeight.value, insets.bottom) + MARGIN;
-    const collapsedTop = screenH - bottom; // sitting on its own bottom edge = 0 height
+    // Bottom edge rides the LIVE keyboard (sits above it, or above the home
+    // indicator when the keyboard is gone).
+    const bottomEdge = screenH - (Math.max(kbHeight.value, insets.bottom) + MARGIN);
+    // Expanded height is derived from the STABLE keyboard height, so it doesn't
+    // change as the keyboard opens/closes — only the position (bottomEdge) does.
+    const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
+    const fullHeight = screenH - stableBottom - fullTop;
+    const height = Math.max(fullHeight * grow.value - dragY.value, 0);
     return {
-      top: collapsedTop + (fullTop - collapsedTop) * grow.value + dragY.value,
+      top: bottomEdge - height,
+      height,
       left: MARGIN,
       right: MARGIN,
-      bottom,
     };
   });
 
@@ -254,8 +275,8 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // COMPOSER_INSET_RANGE px of travel animate it; higher detents keep the margins.
   const pillPadStyle = useAnimatedStyle(() => {
     const fullTop = insets.top + MARGIN;
-    const bottom = Math.max(kbHeight.value, insets.bottom) + MARGIN;
-    const maxDrag = Math.max(screenH - fullTop - bottom - MIN_HEIGHT, 0);
+    const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
+    const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
     const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
     const denom = maxDrag - start;
     const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
@@ -322,7 +343,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
               <GestureDetector gesture={dismissKb}>
                 <GlassView
                   style={[styles.pill, pillMode && styles.pillFill]}
-                  glassEffectStyle={pillMode ? "clear" : "regular"}
+                  // Animate the material change so the frost FADES to clear at the
+                  // pill detent (native crossfade) instead of switching instantly.
+                  glassEffectStyle={{ style: pillMode ? "clear" : "regular", animate: true, animationDuration: FADE_S }}
                   colorScheme={scheme === "dark" ? "dark" : "light"}
                 >
                   <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
