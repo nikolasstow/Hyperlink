@@ -498,9 +498,7 @@ const styles = StyleSheet.create({
     // at ~8 lines — a fixed lineHeight makes that cap exact — then scrolls.
     lineHeight: 21,
     maxHeight: 21 * 8,
-    // Half the normal input padding — tighter than 6 but not 0 (which clipped/
-    // misaligned the line box on iOS).
-    paddingVertical: 3,
+    paddingVertical: 6,
     paddingHorizontal: 2,
   },
   sendChip: {
