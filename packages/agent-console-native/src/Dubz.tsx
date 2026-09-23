@@ -485,9 +485,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    // Centre on the cross axis so this smaller chip lines up with the taller send
-    // chip's centre (the row itself bottom-aligns for the growing input).
-    alignSelf: "center",
     backgroundColor: "rgba(120,120,128,0.28)",
   },
   pillInput: {
