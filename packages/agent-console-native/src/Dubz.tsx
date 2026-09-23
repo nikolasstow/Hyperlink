@@ -501,10 +501,8 @@ const styles = StyleSheet.create({
     maxHeight: 21 * 8,
     // No vertical padding on the input itself — the pill's own paddingVertical is
     // the only vertical space, so the input content isn't inset from the glass edge
-    // more than the chips are. Negative vertical margin pulls the input's own line
-    // box tighter (iOS gives multiline inputs extra internal leading).
+    // more than the chips are.
     paddingVertical: 0,
-    marginVertical: -8,
     paddingHorizontal: 2,
   },
   sendChip: {
