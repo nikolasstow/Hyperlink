@@ -452,10 +452,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: COMPOSER_INSET,
     paddingBottom: COMPOSER_INSET,
   },
-  // Pill mode: fill the window (padding comes to 0 via the animated style). No
-  // justifyContent — the composer keeps its natural bottom-anchored position.
+  // Pill mode: fill the window (padding comes to 0 via the animated style) and keep
+  // the composer at the BOTTOM — filling flips the default to flex-start (top), so
+  // pin it back to flex-end to match the expanded layout.
   pillWrapFill: {
     flex: 1,
+    justifyContent: "flex-end",
   },
   // The composer row. Chips ALWAYS bottom-align (so they hold position as the
   // input grows upward); the row is centred within the pill at the min detent
