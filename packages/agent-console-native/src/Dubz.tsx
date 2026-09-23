@@ -46,7 +46,7 @@ const ANIM_MS = 320;
 const FADE_S = (ANIM_MS * 0.55) / 1000;
 /** Smallest height — the "pill" detent. A full capsule at the window radius; the
  * composer keeps its natural height and is centred within it (pillWrapFill). */
-const MIN_HEIGHT = 60;
+const MIN_HEIGHT = 68;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
@@ -336,7 +336,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * below the keyboard-anchored bottom (which collapsed the TextInput's
              * frame and dropped the keyboard), and the min detent is a true pill. */}
             <GestureDetector gesture={drag}>
-              <View style={styles.grabberArea}>
+              <View style={[styles.grabberArea, pillMode && styles.grabberAreaPill]}>
                 <View style={styles.grabber} />
               </View>
             </GestureDetector>
@@ -429,6 +429,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
+  },
+  // Min detent: nudge the grabber up toward the top edge so it sits clear of the
+  // centred composer content.
+  grabberAreaPill: {
+    justifyContent: "flex-start",
+    paddingTop: 5,
   },
   grabber: {
     width: 40,
