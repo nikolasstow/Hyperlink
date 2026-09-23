@@ -498,9 +498,9 @@ const styles = StyleSheet.create({
     // at ~8 lines — a fixed lineHeight makes that cap exact — then scrolls.
     lineHeight: 21,
     maxHeight: 21 * 8,
-    // Normal input padding — the pill's negative margin does the tightening, so the
-    // input renders with its natural line box (padding 0 clipped/misaligned on iOS).
-    paddingVertical: 6,
+    // Half the normal input padding — tighter than 6 but not 0 (which clipped/
+    // misaligned the line box on iOS).
+    paddingVertical: 3,
     paddingHorizontal: 2,
   },
   sendChip: {
