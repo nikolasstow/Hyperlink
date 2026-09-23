@@ -355,7 +355,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * capsule throughout — no radius pop. */}
             <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
-                <View style={[styles.pill, pillMode && styles.pillFill]}>
+                <View style={[styles.pill, pillMode && styles.pillFill, pillMode && styles.pillCentered]}>
                   {/* Frosted glass background, faded by the drag. Regular glass
                    * survives an animated-opacity layer (only CLEAR glass dies under
                    * compositing), and this is a descendant of the window glass, not
@@ -454,6 +454,11 @@ const styles = StyleSheet.create({
   // Fills the window edge-to-edge at the pill detent.
   pillFill: {
     flex: 1,
+  },
+  // At the pill detent it's a single-line capsule — centre the chips vertically.
+  // (Expanded, they bottom-align so they stay put as the input grows upward.)
+  pillCentered: {
+    alignItems: "center",
   },
   // The composer row. The chips sit at the BOTTOM (flex-end) so they stay put as
   // the input grows upward. The glass is a separate faded background (pillGlass),
