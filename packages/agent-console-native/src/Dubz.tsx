@@ -45,10 +45,10 @@ const ANIM_MS = 320;
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
 /** Smallest height — the "pill" detent. Equal to the composer row's own height
- * (sendChip 36 + 2×8 padding), so at the min detent the window is exactly the
- * composer and its symmetric padding centres the bottom-aligned chips. Still a
- * full capsule at the window radius. */
-const MIN_HEIGHT = 52;
+ * (sendChip 36 + 2×12 padding = 60), so at the min detent the window is exactly
+ * the composer: its symmetric padding centres the bottom-aligned chips and there's
+ * room for the input. A full capsule at the window radius. */
+const MIN_HEIGHT = 60;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
@@ -467,7 +467,9 @@ const styles = StyleSheet.create({
     gap: 8,
     minHeight: 52,
     paddingHorizontal: 8,
-    paddingVertical: 8,
+    // 12 (not 8) so the row is 60 tall (sendChip 36 + 24): comfortable room for the
+    // input, and symmetric padding centres the bottom-aligned chips in the pill.
+    paddingVertical: 12,
   },
   // Frosted glass background of the composer. Window radius in every mode — a full
   // capsule throughout, so no radius pop, and it coincides with the window's own
