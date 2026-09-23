@@ -452,13 +452,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: COMPOSER_INSET,
     paddingBottom: COMPOSER_INSET,
   },
-  // Pill mode: fill the window (padding comes to 0 via the animated style) and
-  // CENTRE the composer row vertically within it — the row keeps its natural
-  // height rather than stretching, so bottom-aligned chips sit at the pill's
-  // centre instead of low against a stretched bottom edge.
+  // Pill mode: fill the window (padding comes to 0 via the animated style). No
+  // justifyContent — the composer keeps its natural bottom-anchored position.
   pillWrapFill: {
     flex: 1,
-    justifyContent: "center",
   },
   // The composer row. Chips ALWAYS bottom-align (so they hold position as the
   // input grows upward); the row is centred within the pill at the min detent
@@ -502,10 +499,9 @@ const styles = StyleSheet.create({
     // at ~8 lines — a fixed lineHeight makes that cap exact — then scrolls.
     lineHeight: 21,
     maxHeight: 21 * 8,
-    // No vertical padding on the input itself — the pill's own paddingVertical is
-    // the only vertical space, so the input content isn't inset from the glass edge
-    // more than the chips are.
-    paddingVertical: 0,
+    // Normal input padding — the pill's negative margin does the tightening, so the
+    // input renders with its natural line box (padding 0 clipped/misaligned on iOS).
+    paddingVertical: 6,
     paddingHorizontal: 2,
   },
   sendChip: {
