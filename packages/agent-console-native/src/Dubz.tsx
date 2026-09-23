@@ -428,7 +428,11 @@ const styles = StyleSheet.create({
     right: 0,
     height: GRABBER_AREA_H,
     alignItems: "center",
-    justifyContent: "center",
+    // Line pinned to the TOP of the (absolute) hit zone, not centred in it — so at
+    // the pill detent the handle is a nub at the top edge and doesn't sit over the
+    // vertically-centred composer content (which read as the composer pushed down).
+    justifyContent: "flex-start",
+    paddingTop: 7,
     zIndex: 2,
   },
   grabber: {
