@@ -63,6 +63,17 @@ const FLING_VELOCITY = 1400;
 const DISMISS_ZONE = 120;
 const DISMISS_MARGIN = 48;
 
+// Last detent the window was left at, remembered across close/reopen (session
+// lifetime): a fraction of maxDrag (0 = full, 0.5 = mid, 1 = pill) plus the
+// keyboard height then, so the reopen can size the detent before the keyboard
+// settles. Module-level so it survives the window unmounting on close.
+let savedDetentFrac = 0;
+let savedKbFull = 0;
+const rememberDetent = (frac: number, kb: number): void => {
+  savedDetentFrac = frac;
+  savedKbFull = kb;
+};
+
 interface DubzApi {
   readonly open: () => void;
   readonly close: () => void;
@@ -119,9 +130,10 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // would composite and kill the glass); `dragY` is the drag-bar offset.
   const [entered, setEntered] = React.useState(false);
   // `lowered` = dragged below full; the tap-catcher then passes touches through.
-  const [lowered, setLowered] = React.useState(false);
-  // `pillMode` = at the min detent; inner glass pill hidden, composer fills width.
-  const [pillMode, setPillMode] = React.useState(false);
+  // `pillMode` = at the min detent. Both seed from the remembered detent so the
+  // window reopens in the state it was left.
+  const [lowered, setLowered] = React.useState(savedDetentFrac > 0.02);
+  const [pillMode, setPillMode] = React.useState(savedDetentFrac >= 0.98);
   const grow = useSharedValue(0);
   const dragY = useSharedValue(0); // 0 = full height; positive = top lowered
   const dragStart = useSharedValue(0);
@@ -144,16 +156,20 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const resizing = useSharedValue(false);
 
   // Grow + fade IN on mount, on the next frame — starting the timing mid-mount /
-  // mid-glass-init dropped the first frames (the entrance jitter).
+  // mid-glass-init dropped the first frames (the entrance jitter). Seed dragY to
+  // the remembered detent (sized from the saved keyboard height, since the live
+  // keyboard hasn't opened yet) so the window grows straight into that detent.
   React.useEffect(() => {
     grow.value = 0;
-    dragY.value = 0;
+    const stableBottom = Math.max(savedKbFull, insets.bottom) + MARGIN;
+    const maxDrag = Math.max(screenH - (insets.top + MARGIN) - stableBottom - MIN_HEIGHT, 0);
+    dragY.value = savedDetentFrac * maxDrag;
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
       setEntered(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [grow, dragY]);
+  }, [grow, dragY, insets.top, insets.bottom, screenH]);
 
   // Exit when closed: fade + shrink out, then unmount via onClosed.
   React.useEffect(() => {
@@ -214,6 +230,8 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
           runOnJS(setLowered)(target > 4);
           runOnJS(setPillMode)(maxDrag > 0 && target >= maxDrag - 4);
+          // Remember this detent so the window reopens where it was left.
+          runOnJS(rememberDetent)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
         })
         .onFinalize(() => {
           resizing.value = false;
@@ -381,7 +399,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
                     multiline
                   />
                   <Pressable
-                    style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.secondary : themeColors.secondaryFill }]}
+                    style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.sendActiveFill : themeColors.sendMutedFill }]}
                     hitSlop={6}
                     accessibilityRole="button"
                     accessibilityLabel="Send"
