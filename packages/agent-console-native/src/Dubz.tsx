@@ -384,8 +384,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingBottom: 0,
   },
+  // Fills the window edge-to-edge; match the window's radius so the two capsules
+  // coincide — at MIN_HEIGHT the composer's own (smaller) radius would otherwise
+  // poke past the window corners and read as a rounded rect, not a pill.
   pillFill: {
     flex: 1,
+    borderRadius: WINDOW_RADIUS,
   },
   pill: {
     flexDirection: "row",
