@@ -480,9 +480,10 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
   },
   plusChip: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    // Same diameter as the send chip so the two ends of the pill match.
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(120,120,128,0.28)",
