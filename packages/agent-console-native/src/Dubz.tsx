@@ -44,9 +44,11 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Smallest height — the "pill" detent. Pill-shaped at the window radius (the
- * grabber overlays the composer here rather than stacking above it). */
-const MIN_HEIGHT = 60;
+/** Smallest height — the "pill" detent. Equal to the composer row's own height
+ * (sendChip 36 + 2×8 padding), so at the min detent the window is exactly the
+ * composer and its symmetric padding centres the bottom-aligned chips. Still a
+ * full capsule at the window radius. */
+const MIN_HEIGHT = 52;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
@@ -455,11 +457,13 @@ const styles = StyleSheet.create({
   pillFill: {
     flex: 1,
   },
-  // The composer row. Chips centred vertically. The glass is a separate faded
-  // background (pillGlass), not this view.
+  // The composer row. Chips ALWAYS bottom-align (so they hold position as the
+  // input grows upward); symmetric vertical padding + the min height matching this
+  // row's height makes that read as centred in the single-line pill. The glass is
+  // a separate faded background (pillGlass), not this view.
   pill: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 8,
     minHeight: 52,
     paddingHorizontal: 8,
@@ -479,6 +483,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
+    // 4px shorter than the send chip; bottom-aligned that leaves it 2px low, so
+    // nudge it up by half the difference to match the send chip's centre.
+    marginBottom: 2,
     backgroundColor: "rgba(120,120,128,0.28)",
   },
   pillInput: {
