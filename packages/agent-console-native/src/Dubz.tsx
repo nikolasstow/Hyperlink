@@ -213,9 +213,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const dismissKb = React.useMemo(
     () =>
       Gesture.Pan()
-        // TEMP: fully disabled to prove whether swipe-to-dismiss is what drops the
-        // keyboard at the min detent. Re-enable once we know.
-        .enabled(false)
         .activeOffsetY(14)
         .failOffsetY(-14)
         .onEnd((e) => {
@@ -275,11 +272,13 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
             {/* Drag bar — pull down to lower the window to a detent (see behind).
-             * At the pill (min) detent the grabber overlays the top of the composer
-             * (absolute, zero layout height) so the window collapses to a true pill
-             * shape instead of stacking grabber-above-composer into a tall rect. */}
+             * ALWAYS floats over the top (absolute, zero layout height) rather than
+             * stacking above the content: that keeps the composer as the only
+             * flow child, so shrinking the window toward the min never squeezes it
+             * below the keyboard-anchored bottom (which collapsed the TextInput's
+             * frame and dropped the keyboard), and the min detent is a true pill. */}
             <GestureDetector gesture={drag}>
-              <View style={[styles.grabberArea, pillMode && styles.grabberAreaPill]}>
+              <View style={styles.grabberArea}>
                 <View style={styles.grabber} />
               </View>
             </GestureDetector>
@@ -353,19 +352,16 @@ const styles = StyleSheet.create({
     borderRadius: WINDOW_RADIUS,
     borderCurve: "continuous",
   },
+  // Floated out of flow (see the render note): adds no height, so the composer is
+  // the only flow child and never gets squeezed as the window shrinks to the pill.
   grabberArea: {
-    height: GRABBER_AREA_H,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  // Pill (min) detent only: lift the grabber out of layout flow and float it over
-  // the composer's top edge, so it adds no height and the window is a true pill.
-  grabberAreaPill: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: GRABBER_AREA_H,
+    alignItems: "center",
+    justifyContent: "center",
     zIndex: 2,
   },
   grabber: {
