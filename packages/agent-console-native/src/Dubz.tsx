@@ -285,6 +285,22 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     return { paddingHorizontal: pad, paddingBottom: pad };
   });
 
+  // The composer's frosted glass fades out over the SAME travel as the margins,
+  // so the frost→clear fade rides the grow/shrink continuously (a discrete
+  // glassEffectStyle switch can't be interpolated, so it never reads as a fade).
+  // At the pill detent the frost is gone and the clear window shows through — no
+  // visible pill-in-pill.
+  const frostStyle = useAnimatedStyle(() => {
+    const fullTop = insets.top + MARGIN;
+    const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
+    const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
+    const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
+    const denom = maxDrag - start;
+    const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    return { opacity: 1 - p };
+  });
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* Transparent tap-catcher — tap outside to dismiss (at full height). Once
@@ -329,25 +345,28 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * at the bottom of the window. Hidden in pill mode. */}
             {pillMode ? null : <View style={styles.conversationArea} />}
 
-            {/* Glass-in-glass: a `regular` glass composer pill inside the clear
-             * window — the bottom-bar design: (+) | input | (send). Its margins
-             * collapse continuously (pillPadStyle) as the window nears the pill
-             * detent so it grows into a full-width pill smoothly. At the detent the
-             * composer fills the window and its glass goes "clear" so it blends into
-             * the clear window (no visible pill-in-pill). It must NOT switch to
-             * "none": that swaps the native view type, remounting the focused
-             * TextInput inside it and dropping the keyboard. "clear" keeps the same
-             * effect view. The pill radius stays at the window radius in every mode
-             * so it's a full capsule throughout — no radius pop at the detent. */}
+            {/* Glass-in-glass: a frosted composer pill inside the clear window —
+             * the bottom-bar design: (+) | input | (send). Its margins collapse
+             * continuously (pillPadStyle) toward the pill detent, and its frosted
+             * background (a separate GlassView) FADES OUT over the same travel
+             * (frostStyle opacity) so the frost→clear fade rides the shrink and the
+             * pill blends into the clear window at the detent — no pill-in-pill. The
+             * pill radius stays at the window radius in every mode, so it's a full
+             * capsule throughout — no radius pop. */}
             <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
-                <GlassView
-                  style={[styles.pill, pillMode && styles.pillFill]}
-                  // Animate the material change so the frost FADES to clear at the
-                  // pill detent (native crossfade) instead of switching instantly.
-                  glassEffectStyle={{ style: pillMode ? "clear" : "regular", animate: true, animationDuration: FADE_S }}
-                  colorScheme={scheme === "dark" ? "dark" : "light"}
-                >
+                <View style={[styles.pill, pillMode && styles.pillFill]}>
+                  {/* Frosted glass background, faded by the drag. Regular glass
+                   * survives an animated-opacity layer (only CLEAR glass dies under
+                   * compositing), and this is a descendant of the window glass, not
+                   * an ancestor, so the window's own clear glass is unaffected. */}
+                  <Reanimated.View style={[StyleSheet.absoluteFill, frostStyle]} pointerEvents="none">
+                    <GlassView
+                      style={styles.pillGlass}
+                      glassEffectStyle="regular"
+                      colorScheme={scheme === "dark" ? "dark" : "light"}
+                    />
+                  </Reanimated.View>
                   <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
                     <Ionicons name="add" size={22} color={colors.secondaryLabel} />
                   </Pressable>
@@ -369,7 +388,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
                   >
                     <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
                   </Pressable>
-                </GlassView>
+                </View>
               </GestureDetector>
             </Reanimated.View>
           </GlassView>
@@ -436,16 +455,22 @@ const styles = StyleSheet.create({
   pillFill: {
     flex: 1,
   },
+  // The composer row. The chips sit at the BOTTOM (flex-end) so they stay put as
+  // the input grows upward. The glass is a separate faded background (pillGlass),
+  // not this view.
   pill: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     gap: 8,
     minHeight: 52,
     paddingHorizontal: 8,
     paddingVertical: 8,
-    // Window radius in every mode: a full capsule throughout, so the shape never
-    // changes between expanded and pill — no radius pop, and it coincides with the
-    // window's own capsule at the min detent.
+  },
+  // Frosted glass background of the composer. Window radius in every mode — a full
+  // capsule throughout, so no radius pop, and it coincides with the window's own
+  // capsule at the min detent.
+  pillGlass: {
+    flex: 1,
     borderRadius: WINDOW_RADIUS,
     borderCurve: "continuous",
   },
