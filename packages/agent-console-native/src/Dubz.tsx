@@ -44,10 +44,10 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Smallest height — the "pill" detent. A full capsule at the window radius, tall
- * enough for the composer (52) with breathing room; the composer keeps its natural
- * height and is centred within it (pillWrapFill), so the chips land at the centre. */
-const MIN_HEIGHT = 60;
+/** Smallest height — the "pill" detent. A full capsule at the window radius, kept
+ * close to the composer's own height so there's little empty space between the
+ * content and the glass edge; the composer is centred within it (pillWrapFill). */
+const MIN_HEIGHT = 50;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
@@ -356,7 +356,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * capsule throughout — no radius pop. */}
             <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
-                <View style={styles.pill}>
+                <View style={[styles.pill, pillMode && styles.pillTightY]}>
                   {/* Frosted glass background, faded by the drag. Regular glass
                    * survives an animated-opacity layer (only CLEAR glass dies under
                    * compositing), and this is a descendant of the window glass, not
@@ -428,11 +428,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: GRABBER_AREA_H,
     alignItems: "center",
-    // Line pinned to the TOP of the (absolute) hit zone, not centred in it — so at
-    // the pill detent the handle is a nub at the top edge and doesn't sit over the
-    // vertically-centred composer content (which read as the composer pushed down).
-    justifyContent: "flex-start",
-    paddingTop: 7,
+    justifyContent: "center",
     zIndex: 2,
   },
   grabber: {
@@ -470,6 +466,12 @@ const styles = StyleSheet.create({
     minHeight: 52,
     paddingHorizontal: 8,
     paddingVertical: 8,
+  },
+  // At the min detent only: tighter vertical padding AND a smaller min height so
+  // the row hugs its content and sits close to the glass edge (less empty space).
+  pillTightY: {
+    paddingVertical: 4,
+    minHeight: 44,
   },
   // Frosted glass background of the composer. Window radius in every mode — a full
   // capsule throughout, so no radius pop, and it coincides with the window's own
