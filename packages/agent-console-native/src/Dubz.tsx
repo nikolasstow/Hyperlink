@@ -46,7 +46,7 @@ const ANIM_MS = 320;
 const FADE_S = (ANIM_MS * 0.55) / 1000;
 /** Smallest height — the "pill" detent. A full capsule at the window radius; the
  * composer keeps its natural height and is centred within it (pillWrapFill). */
-const MIN_HEIGHT = 56;
+const MIN_HEIGHT = 60;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
@@ -282,9 +282,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
     const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
     const pad = COMPOSER_INSET * (1 - p);
-    // Horizontal margin collapses fully toward the pill; the bottom (Y) collapses
-    // only halfway, so the composer keeps some distance from the bottom glass edge.
-    return { paddingHorizontal: pad, paddingBottom: COMPOSER_INSET * (1 - p * 0.5) };
+    // Horizontal margin collapses fully toward the pill; the bottom (Y) decreases by
+    // just 3px, so the composer keeps most of its distance from the bottom glass edge.
+    return { paddingHorizontal: pad, paddingBottom: COMPOSER_INSET - 3 * p };
   });
 
   // The composer's frosted glass fades out over the SAME travel as the margins,
