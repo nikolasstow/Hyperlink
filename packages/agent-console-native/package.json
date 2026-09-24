@@ -60,8 +60,8 @@
     "gen:code-surface": "node scripts/gen-code-surface.mjs",
     "variant:new": "node scripts/new-variant-worktree.mjs",
     "build:dev": "node scripts/build.mjs dev",
-    "build:release": "node scripts/build.mjs release",
-    "build:base": "node scripts/build.mjs base",
+    "build:preview": "node scripts/build.mjs preview",
+    "build:master": "node scripts/build.mjs master",
     "prepare": "node scripts/worktree-setup.mjs"
   },
   "private": true

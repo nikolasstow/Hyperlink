@@ -3,16 +3,16 @@
  *
  *   node scripts/build.mjs dev      # variant · development — dev client (Metro hot
  *                                   #   reload). The day-to-day build.
- *   node scripts/build.mjs release  # variant · preview — this worktree as a real
+ *   node scripts/build.mjs preview  # variant · preview — this worktree as a real
  *                                   #   RELEASE build (no dev client / no hot reload),
  *                                   #   installed as this worktree's own app.
- *   node scripts/build.mjs base     # NON-variant · preview — builds THIS worktree's
+ *   node scripts/build.mjs master   # NON-variant · preview — builds THIS worktree's
  *                                   #   code as the single base app (release), replacing
  *                                   #   the one non-variant install. Works from any
  *                                   #   worktree/branch.
  *
- * dev/release build this worktree's variant (they share its bundle id, so building one
- * replaces the other — one install per worktree). `base` sets the variant marker aside
+ * dev/preview build this worktree's variant (they share its bundle id, so building one
+ * replaces the other — one install per worktree). `master` sets the variant marker aside
  * for the upload so the config resolves to the base id, then restores it.
  */
 import { existsSync, renameSync } from "node:fs";
@@ -25,18 +25,18 @@ const marker = path.join(pkgDir, "app-variant.json");
 
 const MODES = {
   dev: { profile: "development", base: false },
-  release: { profile: "preview", base: false },
-  base: { profile: "preview", base: true },
+  preview: { profile: "preview", base: false },
+  master: { profile: "preview", base: true },
 };
 
 const mode = process.argv[2];
 const cfg = MODES[mode];
 if (cfg === undefined) {
   console.error(
-    "Usage: node scripts/build.mjs <dev|release|base>\n" +
+    "Usage: node scripts/build.mjs <dev|preview|master>\n" +
       "  dev      variant · development — hot-reload dev client (day-to-day)\n" +
-      "  release  variant · preview — this worktree as a real release build\n" +
-      "  base     NON-variant · preview — build THIS worktree's code as the single base app",
+      "  preview  variant · preview — this worktree as a real release build\n" +
+      "  master   NON-variant · preview — build THIS worktree's code as the single base app",
   );
   process.exit(1);
 }
