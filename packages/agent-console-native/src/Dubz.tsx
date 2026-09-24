@@ -36,7 +36,7 @@ import { colors } from "./colors";
 import { useTheme } from "./theme";
 
 /** Gap between the window and the screen edges / the keyboard. */
-const MARGIN = 12;
+const MARGIN = 8;
 /** Corner radius of the glass window. */
 const WINDOW_RADIUS = 30;
 /** Grow/shrink duration (ms) for the window opening and closing. */
