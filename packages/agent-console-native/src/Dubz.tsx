@@ -33,10 +33,13 @@ import Reanimated, { Easing, runOnJS, useAnimatedKeyboard, useAnimatedReaction, 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
+import { getDubzDetent, setDubzDetent } from "./settings";
 import { useTheme } from "./theme";
 
-/** Gap between the window and the screen edges / the keyboard. */
-const MARGIN = 4;
+/** Gap between the window and the screen edges (left/right) / the keyboard. */
+const MARGIN = 12;
+/** Gap between the window's top and the safe-area inset at full height. */
+const TOP_MARGIN = 0;
 /** Corner radius of the glass window. */
 const WINDOW_RADIUS = 30;
 /** Grow/shrink duration (ms) for the window opening and closing. */
@@ -74,6 +77,8 @@ let savedKbFull = 0;
 const rememberDetent = (frac: number, kb: number): void => {
   savedDetentFrac = frac;
   savedKbFull = kb;
+  // Persist so the detent survives an app restart (fire-and-forget).
+  void setDubzDetent({ frac, kbFull: kb });
 };
 
 interface DubzApi {
@@ -93,6 +98,16 @@ export const useDubz = (): DubzApi => {
 
 export const DubzProvider = (props: { readonly children: React.ReactNode }): React.ReactElement => {
   const [isOpen, setIsOpen] = React.useState(false);
+  // Load the persisted detent once, before the user can open the window, so the
+  // first open after an app restart lands where it was left.
+  React.useEffect(() => {
+    void getDubzDetent().then((v) => {
+      if (v !== undefined) {
+        savedDetentFrac = v.frac;
+        savedKbFull = v.kbFull;
+      }
+    });
+  }, []);
   const open = React.useCallback(() => setIsOpen(true), []);
   const close = React.useCallback(() => setIsOpen(false), []);
   const api = React.useMemo<DubzApi>(() => ({ open, close, isOpen }), [open, close, isOpen]);
@@ -168,7 +183,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   React.useEffect(() => {
     grow.value = 0;
     const stableBottom = Math.max(savedKbFull, insets.bottom) + MARGIN;
-    const maxDrag = Math.max(screenH - (insets.top + MARGIN) - stableBottom - MIN_HEIGHT, 0);
+    const maxDrag = Math.max(screenH - (insets.top + TOP_MARGIN) - stableBottom - MIN_HEIGHT, 0);
     dragY.value = savedDetentFrac * maxDrag;
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
@@ -208,7 +223,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           dragStart.value = dragY.value;
         })
         .onUpdate((e) => {
-          const fullTop = topInset + MARGIN;
+          const fullTop = topInset + TOP_MARGIN;
           // Height-based, from the STABLE keyboard height — so the detents are the
           // same whether the keyboard is present or gone.
           const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
@@ -219,7 +234,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           dragY.value = next < 0 ? 0 : next > limit ? limit : next;
         })
         .onEnd((e) => {
-          const fullTop = topInset + MARGIN;
+          const fullTop = topInset + TOP_MARGIN;
           const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
           // Flung down hard, or released past the last detent → dismiss.
@@ -282,7 +297,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // animates from the bottom edge (0 height) up to the full top — so the window
   // unfolds upward from the bottom.
   const windowStyle = useAnimatedStyle(() => {
-    const fullTop = insets.top + MARGIN;
+    const fullTop = insets.top + TOP_MARGIN;
     // Bottom edge rides the LIVE keyboard (sits above it, or above the home
     // indicator when the keyboard is gone).
     const bottomEdge = screenH - (Math.max(kbHeight.value, insets.bottom) + MARGIN);
@@ -304,7 +319,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // instead of popping edge-to-edge the instant the detent latches. Only the last
   // COMPOSER_INSET_RANGE px of travel animate it; higher detents keep the margins.
   const pillPadStyle = useAnimatedStyle(() => {
-    const fullTop = insets.top + MARGIN;
+    const fullTop = insets.top + TOP_MARGIN;
     const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
     const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
     const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
@@ -322,7 +337,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // At the pill detent the frost is gone and the clear window shows through — no
   // visible pill-in-pill.
   const frostStyle = useAnimatedStyle(() => {
-    const fullTop = insets.top + MARGIN;
+    const fullTop = insets.top + TOP_MARGIN;
     const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
     const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
     const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);

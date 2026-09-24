@@ -32,6 +32,7 @@ const REPO_MENU_SORT_KEY = "agent-console-native:repoMenuSort";
 const DEFAULT_PERMISSION_MODE_KEY = "agent-console-native:defaultPermissionMode";
 const SESSION_PERMISSION_MODES_KEY = "agent-console-native:sessionPermissionModes";
 const BACKEND_ADDRESS_KEY = "agent-console-native:backendAddress";
+const DUBZ_DETENT_KEY = "agent-console-native:dubzDetent";
 /** The vite dev server's port. Same host as opencode in every setup so far,
  * so the backend address is derived rather than asked for — one address to
  * type stays one address to type. */
@@ -122,6 +123,26 @@ export const getLastModel = async (): Promise<{ providerID: string; modelID: str
 
 export const setLastModel = (value: { readonly providerID: string; readonly modelID: string }): Promise<void> =>
   AsyncStorage.setItem(LAST_MODEL_KEY, JSON.stringify(value));
+
+/** The Dubz window's last drag detent — a fraction of maxDrag (0 = full, 1 = pill)
+ * plus the keyboard height then — so it reopens where it was left, across restarts. */
+export const getDubzDetent = async (): Promise<{ frac: number; kbFull: number } | undefined> => {
+  const raw = await AsyncStorage.getItem(DUBZ_DETENT_KEY);
+  if (raw === null) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    const frac = (parsed as { frac?: unknown }).frac;
+    const kbFull = (parsed as { kbFull?: unknown }).kbFull;
+    if (typeof frac !== "number" || typeof kbFull !== "number") return undefined;
+    return { frac, kbFull };
+  } catch {
+    return undefined;
+  }
+};
+
+export const setDubzDetent = (value: { readonly frac: number; readonly kbFull: number }): Promise<void> =>
+  AsyncStorage.setItem(DUBZ_DETENT_KEY, JSON.stringify(value));
 
 export const getDefaultWorktreePreference = async (): Promise<DefaultWorktreePreference> => {
   const value = await AsyncStorage.getItem(DEFAULT_WORKTREE_PREF_KEY);
