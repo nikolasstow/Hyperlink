@@ -1,0 +1,15 @@
+{
+  // The variant tooling (Node, run with tsx). Extends the repo root for its strict
+  // compiler options AND its Effect language-service ruleset. Check-only.
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "declaration": false,
+    "declarationMap": false,
+    "verbatimModuleSyntax": true,
+    "allowJs": true
+  },
+  "include": ["./**/*.ts", "../variant.js"],
+  "exclude": []
+}

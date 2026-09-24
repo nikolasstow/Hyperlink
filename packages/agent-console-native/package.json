@@ -41,11 +41,14 @@
     "shiki": "^4.4.2"
   },
   "devDependencies": {
+    "@effect/platform-node": "4.0.0-beta.102",
     "@shikijs/monaco": "4.4.2",
+    "@types/node": "^20.19.40",
     "@types/react": "~19.2.2",
     "esbuild": "^0.28.1",
     "monaco-editor": "0.56.0",
     "sharp": "^0.34.5",
+    "tsx": "^4.21.0",
     "typescript": "~6.0.3",
     "vitest": "^4.1.5"
   },
@@ -55,14 +58,14 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "bundle:check": "expo export --platform ios --output-dir /tmp/agent-console-native-bundle-check",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p scripts/tsconfig.json",
     "test": "vitest run",
     "gen:code-surface": "node scripts/gen-code-surface.mjs",
-    "variant:new": "node scripts/new-variant-worktree.mjs",
-    "build:dev": "node scripts/build.mjs dev",
-    "build:preview": "node scripts/build.mjs preview",
-    "build:master": "node scripts/build.mjs master",
-    "prepare": "node scripts/worktree-setup.mjs"
+    "variant:new": "tsx scripts/new-variant-worktree.ts",
+    "build:dev": "tsx scripts/build.ts dev",
+    "build:preview": "tsx scripts/build.ts preview",
+    "build:master": "tsx scripts/build.ts master",
+    "prepare": "tsx scripts/worktree-setup.ts"
   },
   "private": true
 }

@@ -8,12 +8,11 @@
  * app with its own sandboxed storage — one worktree ⇄ one install ⇄ one local
  * agent, none of them colliding.
  *
- * Selecting a variant (either works; the file wins, so an EAS *cloud* build —
- * which evaluates this on its servers, where our local env isn't present — can
- * still pick it up):
+ * Selecting a variant (the environment wins when set; the file is what an EAS
+ * *cloud* build sees, since it evaluates this on its servers without our env):
  *   - `APP_VARIANT=<name>` in the environment, or
  *   - an `app-variant.json` next to this file: `{ "variant": "<name>" }`
- *     (uncommitted, per-worktree; see scripts/new-variant-worktree.mjs).
+ *     (uncommitted, per-worktree; see scripts/worktree-setup.ts).
  *
  * Variants are a CLEAN CORE app: the native extensions (widgets / Live Activity /
  * Siri intents / notification-service via @bacons/apple-targets + withAppIntents)
@@ -23,25 +22,18 @@
  */
 const fs = require("fs");
 const path = require("path");
-
-/** Reverse-DNS-safe, filesystem-safe slug for a variant name. */
-const slugify = (name) =>
-  name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 24);
+const { slugify, variantIconFile, variantMarkerFile } = require("./variant");
 
 /** The variant from the environment, or from an uncommitted app-variant.json. A
  * MISSING file means "base build" (expected); a MALFORMED file throws loudly. */
 const resolveVariant = () => {
   const fromEnv = process.env.APP_VARIANT;
   if (typeof fromEnv === "string" && fromEnv.trim().length > 0) return fromEnv.trim();
-  const file = path.join(__dirname, "app-variant.json");
+  const file = path.join(__dirname, variantMarkerFile);
   if (!fs.existsSync(file)) return undefined;
   const value = JSON.parse(fs.readFileSync(file, "utf8")).variant;
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`app-variant.json must contain a non-empty "variant" string, got: ${JSON.stringify(value)}`);
+    throw new Error(`${variantMarkerFile} must contain a non-empty "variant" string, got: ${JSON.stringify(value)}`);
   }
   return value.trim();
 };
@@ -81,9 +73,7 @@ module.exports = ({ config }) => {
   const plugins = (config.plugins ?? []).filter((entry) => !EXTENSION_PLUGINS.has(Array.isArray(entry) ? entry[0] : entry));
 
   // Distinctive icon (base + top name banner) if the worktree script generated one.
-  const variantIcon = fs.existsSync(path.join(__dirname, "assets", "variant-icon.png"))
-    ? "./assets/variant-icon.png"
-    : config.icon;
+  const variantIcon = fs.existsSync(path.join(__dirname, variantIconFile)) ? `./${variantIconFile}` : config.icon;
 
   return {
     ...config,
