@@ -52,8 +52,10 @@ const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
  * collapse — the composer eases into a full pill instead of snapping. */
 const COMPOSER_INSET_RANGE = 110;
-/** The top drag-bar area's height. */
-const GRABBER_AREA_H = 30;
+/** The single handle's top inset at larger detents (a line inside the window top). */
+const GRABBER_TOP_EXPANDED = 8;
+/** The handle lifts to this (above the pill) at the min detent, over the glass tab. */
+const TAB_TOP = -24;
 /** Snap-to-detent duration on drag release. */
 const SNAP_MS = 240;
 /** Fling-down velocity (px/s) that dismisses the window. */
@@ -134,10 +136,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // window reopens in the state it was left.
   const [lowered, setLowered] = React.useState(savedDetentFrac > 0.02);
   const [pillMode, setPillMode] = React.useState(savedDetentFrac >= 0.98);
-  // The handle tab animates in/out at the pill detent. `tabShown` keeps it mounted
-  // through the exit; `tabIn` (0→1) drives its slide-up + fade.
-  const [tabShown, setTabShown] = React.useState(savedDetentFrac >= 0.98);
-  const tabIn = useSharedValue(savedDetentFrac >= 0.98 ? 1 : 0);
   const grow = useSharedValue(0);
   const dragY = useSharedValue(0); // 0 = full height; positive = top lowered
   const dragStart = useSharedValue(0);
@@ -174,19 +172,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     });
     return () => cancelAnimationFrame(id);
   }, [grow, dragY, insets.top, insets.bottom, screenH]);
-
-  // Slide the handle tab in when entering the pill detent, out when leaving it —
-  // kept mounted through the exit (tabShown) so it can animate away.
-  React.useEffect(() => {
-    if (pillMode) {
-      setTabShown(true);
-      tabIn.value = withTiming(1, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-    } else {
-      tabIn.value = withTiming(0, { duration: SNAP_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(setTabShown)(false);
-      });
-    }
-  }, [pillMode, tabIn]);
 
   // Exit when closed: fade + shrink out, then unmount via onClosed.
   React.useEffect(() => {
@@ -337,11 +322,30 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     return { opacity: 1 - p };
   });
 
-  // The handle tab slides up from behind the glass and fades in (tabIn 0→1).
-  const tabStyle = useAnimatedStyle(() => ({
-    top: -24 + (1 - tabIn.value) * 22,
-    opacity: tabIn.value,
-  }));
+  // The single handle transitions continuously with the drag: a line just inside
+  // the window top at larger detents that lifts to TAB_TOP (above the pill) as it
+  // nears the min detent — over the same COMPOSER_INSET_RANGE the margins use.
+  const handleStyle = useAnimatedStyle(() => {
+    const fullTop = insets.top + MARGIN;
+    const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
+    const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
+    const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
+    const denom = maxDrag - start;
+    const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    return { top: GRABBER_TOP_EXPANDED + (TAB_TOP - GRABBER_TOP_EXPANDED) * p };
+  });
+  // The tab's glass background fades in as the handle becomes the tab.
+  const tabGlassStyle = useAnimatedStyle(() => {
+    const fullTop = insets.top + MARGIN;
+    const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
+    const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
+    const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
+    const denom = maxDrag - start;
+    const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    return { opacity: p };
+  });
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -359,22 +363,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
        * refraction (no tint, no scrim); the autofocused input pops the keyboard
        * so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
-        {/* Handle tab — at the min detent, its bottom lined up with the glass's top
-         * edge (not extending behind the clear glass). It slides up + fades in
-         * (tabStyle) rather than popping. Drag it to raise the window back up. */}
-        {tabShown ? (
-          <GestureDetector gesture={drag}>
-            <Reanimated.View style={[styles.tabWrap, tabStyle]}>
-              <GlassView
-                style={styles.tabBehind}
-                glassEffectStyle="regular"
-                colorScheme={scheme === "dark" ? "dark" : "light"}
-              >
-                <View style={styles.grabber} />
-              </GlassView>
-            </Reanimated.View>
-          </GestureDetector>
-        ) : null}
         <GlassContainer style={styles.glassContainer}>
           <GlassView
             style={styles.glass}
@@ -387,18 +375,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
             tintColor="rgba(0,0,0,0.18)"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
-            {/* Drag bar inside the glass at the larger detents — floats over the top
-             * (absolute, zero layout height) so the composer stays the only flow
-             * child. At the min detent the handle is the tab behind the glass instead
-             * (above), so this isn't rendered there. */}
-            {tabShown ? null : (
-              <GestureDetector gesture={drag}>
-                <View style={styles.grabberArea}>
-                  <View style={styles.grabber} />
-                </View>
-              </GestureDetector>
-            )}
-
             {/* Conversation area — empty for now; flexes so the composer pill sits
              * at the bottom of the window. Hidden in pill mode. */}
             {pillMode ? null : <View style={styles.conversationArea} />}
@@ -451,6 +427,25 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
             </Reanimated.View>
           </GlassView>
         </GlassContainer>
+
+        {/* Glass tab — a SEPARATE element, fixed just above the pill's top edge,
+         * that fades in (tabGlassStyle) only at the min detent. */}
+        <Reanimated.View style={[styles.tabGlassWrap, tabGlassStyle]} pointerEvents="none">
+          <GlassView
+            style={styles.tabGlass}
+            glassEffectStyle="regular"
+            colorScheme={scheme === "dark" ? "dark" : "light"}
+          />
+        </Reanimated.View>
+
+        {/* The ONE grabber — a line that just moves up and down (handleStyle): a
+         * handle inside the window top at larger detents that floats up over the
+         * glass tab at the min detent. The single drag handle at every detent. */}
+        <GestureDetector gesture={drag}>
+          <Reanimated.View style={[styles.grabHandle, handleStyle]}>
+            <View style={styles.grabber} />
+          </Reanimated.View>
+        </GestureDetector>
       </Reanimated.View>
     </View>
   );
@@ -476,33 +471,33 @@ const styles = StyleSheet.create({
     borderRadius: WINDOW_RADIUS,
     borderCurve: "continuous",
   },
-  // Floated out of flow (see the render note): adds no height, so the composer is
-  // the only flow child and never gets squeezed as the window shrinks to the pill.
-  grabberArea: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: GRABBER_AREA_H,
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2,
-  },
-  // Positioning for the handle tab (top is animated by tabStyle). Centred, absolute
-  // above the pill so its bottom lines up with the glass's top edge.
-  tabWrap: {
+  // The glass tab — a separate element, fixed just above the pill (bottom lined up
+  // with the glass top: top TAB_TOP + height = 0). Rounded top only; fades in via
+  // tabGlassStyle at the min detent.
+  tabGlassWrap: {
     position: "absolute",
     alignSelf: "center",
+    top: TAB_TOP,
+    zIndex: 2,
   },
-  // The glass tab itself. Rounded top only, so it reads as a proper tab.
-  tabBehind: {
+  tabGlass: {
     width: 82,
-    paddingTop: 11,
-    paddingBottom: 8,
-    alignItems: "center",
+    height: -TAB_TOP,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
     borderCurve: "continuous",
+  },
+  // The single grabber handle — its `top` is animated (handleStyle) so it moves
+  // from inside the window top down to over the glass tab. zIndex above the tab so
+  // the line floats over it.
+  grabHandle: {
+    position: "absolute",
+    alignSelf: "center",
+    width: 82,
+    paddingTop: 10,
+    paddingBottom: 8,
+    alignItems: "center",
+    zIndex: 3,
   },
   grabber: {
     width: 40,
