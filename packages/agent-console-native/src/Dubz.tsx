@@ -47,9 +47,10 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Smallest height — the "pill" detent. A full capsule at the window radius; the
- * composer keeps its natural height and is centred within it (pillWrapFill). */
-const MIN_HEIGHT = 58;
+/** Smallest height — the "input detent": a perfect pill sized to the single-line
+ * composer. pill row (send chip 36 + 2×8 padding = 52) + the pill-wrap's bottom
+ * padding (8) = 60, so the window exactly wraps the one-line input (no poke/gap). */
+const MIN_HEIGHT = 60;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
