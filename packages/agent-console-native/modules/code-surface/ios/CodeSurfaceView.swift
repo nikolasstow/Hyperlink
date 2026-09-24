@@ -59,14 +59,16 @@ public final class CodeSurfaceView: ExpoView {
     onSurfaceMessage(["data": body])
   }
 
-  /// Hand the host a failure in the shape the page itself would have sent.
+  /// Tell the host the page is gone.
   ///
-  /// A web view whose page never loaded cannot report anything, and a surface
-  /// that renders nothing while saying nothing is indistinguishable from one
-  /// that is still working. One path for both.
+  /// `loadFailed` rather than `error`, because the two mean different things to
+  /// the host: an `error` is the page reporting something it survived, and this
+  /// is the page not being there at all. A web view whose content process died
+  /// cannot report its own absence, so the failure comes from out here and is
+  /// fatal whenever it arrives.
   private func report(failure reason: String) {
     guard
-      let data = try? JSONSerialization.data(withJSONObject: ["kind": "error", "message": reason]),
+      let data = try? JSONSerialization.data(withJSONObject: ["kind": "loadFailed", "message": reason]),
       let json = String(data: data, encoding: .utf8)
     else { return }
     receive(json)

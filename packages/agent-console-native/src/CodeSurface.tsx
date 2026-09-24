@@ -148,20 +148,33 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   }, []);
 
   /**
+   * The surface is gone. Whichever path found out, the state is the same: no
+   * page, nothing held, and a message on screen instead of an empty frame.
+   * Clearing `ready` also re-arms the deadline, so a surface that comes back
+   * by itself is allowed to.
+   */
+  const fail = React.useCallback((reason: string): void => {
+    held.current = new Set();
+    setReady(false);
+    setLoadError(reason);
+  }, []);
+
+  /**
    * The surface has a deadline. Whatever the cause (a cancelled navigation, a
    * page that threw before it could report it, a content process that never
    * came back), the host says so rather than leaving an empty frame that reads
    * as a slow load. A `ready` after the deadline clears it.
    */
   React.useEffect(() => {
-    if (uri === undefined || ready) return;
+    // A failure that already named itself keeps its own message.
+    if (uri === undefined || ready || loadError !== undefined) return;
     const timer = setTimeout(() => {
       setLoadError("The code surface didn't finish loading.");
     }, READY_TIMEOUT_MS);
     return () => {
       clearTimeout(timer);
     };
-  }, [uri, ready]);
+  }, [uri, ready, loadError]);
 
   /** Record a message as part of the surface's state, and send it if it is up. */
   const apply = React.useCallback(
@@ -235,17 +248,23 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
         case "error":
           // Once the surface is up, an error inside Monaco must not blank the
           // screen: the page keeps whatever it last rendered. Before that it is
-          // fatal, and saying so beats an empty view. This is also how the
-          // native host reports a load that failed, since the web view it owns
-          // has no other way to reach the host.
+          // fatal, and saying so beats an empty view.
           if (!ready) setLoadError(message.message);
+          return;
+        case "loadFailed":
+          // The page is not there, which the native host reports this way
+          // because a dead web view cannot report anything itself. Fatal
+          // whenever it arrives: a content process killed under memory
+          // pressure an hour in leaves the same empty frame as one that never
+          // loaded.
+          fail(message.message);
           return;
         case "contentHeight":
           // The surface fills its container, so the height is advisory here.
           return;
       }
     },
-    [onSelectionChange, onLinkActivated, send, ready],
+    [onSelectionChange, onLinkActivated, send, ready, fail],
   );
 
   const onMessage = React.useCallback(
@@ -299,9 +318,9 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
         onMessage={onMessage}
         // A load that fails has to say so. A cancelled navigation and a dead
         // content process both render as an empty view otherwise.
-        onError={(event) => setLoadError(event.nativeEvent.description || "The code surface could not be loaded.")}
-        onHttpError={(event) => setLoadError(`The code surface returned ${String(event.nativeEvent.statusCode)}.`)}
-        onContentProcessDidTerminate={() => setLoadError("The code surface ran out of memory and was closed by iOS.")}
+        onError={(event) => fail(event.nativeEvent.description || "The code surface could not be loaded.")}
+        onHttpError={(event) => fail(`The code surface returned ${String(event.nativeEvent.statusCode)}.`)}
+        onContentProcessDidTerminate={() => fail("The code surface ran out of memory and was closed by iOS.")}
         javaScriptEnabled
         domStorageEnabled={false}
         // Monaco does its own scrolling and its own zoom handling.

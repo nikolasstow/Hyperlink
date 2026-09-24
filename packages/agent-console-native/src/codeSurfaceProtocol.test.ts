@@ -32,6 +32,7 @@ describe("parseSurfaceMessage", () => {
     });
     expect(parseSurfaceMessage('{"kind":"contentHeight","height":420}')).toEqual({ kind: "contentHeight", height: 420 });
     expect(parseSurfaceMessage('{"kind":"error","message":"boom"}')).toEqual({ kind: "error", message: "boom" });
+    expect(parseSurfaceMessage('{"kind":"loadFailed","message":"gone"}')).toEqual({ kind: "loadFailed", message: "gone" });
     expect(parseSurfaceMessage('{"kind":"selectionChanged","text":"x","startLine":1,"endLine":2}')).toEqual({
       kind: "selectionChanged",
       text: "x",
@@ -50,6 +51,7 @@ describe("parseSurfaceMessage", () => {
   it("drops a known kind whose fields are wrong", () => {
     expect(parseSurfaceMessage('{"kind":"contentHeight","height":"tall"}')).toBeUndefined();
     expect(parseSurfaceMessage('{"kind":"linkActivated"}')).toBeUndefined();
+    expect(parseSurfaceMessage('{"kind":"loadFailed"}')).toBeUndefined();
     expect(parseSurfaceMessage('{"kind":"selectionChanged","text":"x","startLine":1}')).toBeUndefined();
   });
 });

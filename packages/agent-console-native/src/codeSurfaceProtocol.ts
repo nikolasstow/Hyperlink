@@ -93,7 +93,19 @@ export type SurfaceMessage =
    * that is no longer there.
    */
   | { readonly kind: "documentEvicted"; readonly path: string }
-  | { readonly kind: "error"; readonly message: string };
+  /**
+   * Something threw inside the page. The page is still there and still
+   * rendering whatever it last drew, so this is fatal only before `ready`.
+   */
+  | { readonly kind: "error"; readonly message: string }
+  /**
+   * The page itself is gone: it never loaded, or its content process died.
+   *
+   * Only a host sends this, never the page, which by definition cannot report
+   * its own absence. It is fatal whenever it arrives, including long after
+   * `ready`, because nothing is rendering any more.
+   */
+  | { readonly kind: "loadFailed"; readonly message: string };
 
 /** The global the injected script calls. Named once, used by both sides. */
 export const SURFACE_GLOBAL = "__codeSurface";
@@ -140,6 +152,8 @@ export const parseSurfaceMessage = (raw: string): SurfaceMessage | undefined => 
       return typeof parsed.path === "string" ? { kind: "documentEvicted", path: parsed.path } : undefined;
     case "error":
       return typeof parsed.message === "string" ? { kind: "error", message: parsed.message } : undefined;
+    case "loadFailed":
+      return typeof parsed.message === "string" ? { kind: "loadFailed", message: parsed.message } : undefined;
     default:
       return undefined;
   }
