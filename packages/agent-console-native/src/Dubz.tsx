@@ -336,9 +336,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
        * refraction (no tint, no scrim); the autofocused input pops the keyboard
        * so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
-        {/* Handle tab — sits BEHIND the glass and peeks above the pill only at the
-         * min detent, so the glass overlaps its base and it reads as a proper tab
-         * (rounded top only). Drag it to raise the window back up. */}
+        {/* Handle tab — shown only at the min detent, its bottom lined up with the
+         * glass's top edge (not extending behind the clear glass). Rounded top only,
+         * so it reads as a proper tab. Drag it to raise the window back up. */}
         {pillMode ? (
           <GestureDetector gesture={drag}>
             <View style={styles.tabBehind}>
@@ -459,16 +459,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 2,
   },
-  // Handle tab shown only at the min detent. Sits BEHIND the glass (rendered before
-  // the GlassContainer) and is lifted so its top peeks above the pill while the
-  // glass overlaps its base — rounded top only, so it reads as a proper tab.
+  // Handle tab shown only at the min detent. Its bottom lines up with the glass's
+  // top edge — it does NOT extend below/behind the glass (which is clear, so anything
+  // behind it shows through). Rounded top only, so it reads as a proper tab.
   tabBehind: {
     position: "absolute",
-    top: -18,
+    top: -13,
     alignSelf: "center",
     width: 72,
-    paddingTop: 6,
-    paddingBottom: 26,
+    paddingTop: 5,
+    paddingBottom: 3,
     alignItems: "center",
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
