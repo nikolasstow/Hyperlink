@@ -71,6 +71,7 @@ describe("parseHostMessage", () => {
       { kind: "setFont", family: "Berkeley", size: 13, source: "data:font/ttf;base64,AAAA" },
       { kind: "scrollTo", line: 42 },
       { kind: "setReadOnly", readOnly: true },
+      { kind: "announce" },
     ];
     for (const message of messages) expect(roundTrip(message)).toEqual(message);
   });

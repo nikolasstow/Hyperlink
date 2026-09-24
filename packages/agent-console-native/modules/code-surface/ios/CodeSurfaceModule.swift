@@ -27,6 +27,10 @@ public class CodeSurfaceModule: Module {
         view.sourceUrl = url
       }
 
+      Prop("announceScript") { (view: CodeSurfaceView, script: String) in
+        view.announceScript = script
+      }
+
       AsyncFunction("send") { (view: CodeSurfaceView, script: String) in
         view.send(script: script)
       }.runOnQueue(.main)

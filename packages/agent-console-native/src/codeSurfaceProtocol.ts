@@ -72,7 +72,17 @@ export type HostMessage =
    * Phase 1 is this message carrying `false`. The surface is the same Monaco
    * instance either way, which is the whole reason it is built this way.
    */
-  | { readonly kind: "setReadOnly"; readonly readOnly: boolean };
+  | { readonly kind: "setReadOnly"; readonly readOnly: boolean }
+  /**
+   * Say `ready` again if you already have.
+   *
+   * A pooled surface boots before any view claims it, so the `ready` it posts
+   * at boot reaches no one. The native host sends this on every claim: a
+   * booted page answers `ready`, one whose boot failed repeats the `error`, and
+   * one still booting says nothing, because its own `ready` is still to come
+   * and now has someone to hear it.
+   */
+  | { readonly kind: "announce" };
 
 /** The surface to React Native. */
 export type SurfaceMessage =
@@ -213,6 +223,8 @@ export const parseHostMessage = (raw: string): HostMessage | undefined => {
       return typeof parsed.line === "number" ? { kind: "scrollTo", line: parsed.line } : undefined;
     case "setReadOnly":
       return typeof parsed.readOnly === "boolean" ? { kind: "setReadOnly", readOnly: parsed.readOnly } : undefined;
+    case "announce":
+      return { kind: "announce" };
     default:
       return undefined;
   }

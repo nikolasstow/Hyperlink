@@ -61,6 +61,13 @@ const FONT_SIZE = 12.5;
  */
 const READY_TIMEOUT_MS = 15_000;
 
+/**
+ * What the native host evaluates each time it claims a pooled surface. That
+ * surface booted before anyone was listening, so its `ready` is gone; this asks
+ * the page to say it again, and without it a warm surface stays blank.
+ */
+const ANNOUNCE_SCRIPT = toInjectedScript({ kind: "announce" });
+
 export interface CodeSurfaceProps {
   /** Identifies the file. Each path is its own Monaco model in the surface. */
   readonly path: string;
@@ -294,7 +301,13 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   if (CodeSurfaceNativeView !== undefined) {
     return (
       <View style={styles.root}>
-        <CodeSurfaceNativeView ref={native} sourceUrl={uri} style={styles.web} onSurfaceMessage={onMessage} />
+        <CodeSurfaceNativeView
+          ref={native}
+          sourceUrl={uri}
+          announceScript={ANNOUNCE_SCRIPT}
+          style={styles.web}
+          onSurfaceMessage={onMessage}
+        />
       </View>
     );
   }

@@ -128,7 +128,9 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     void codeSurfaceUri()
       .then((uri) => warmCodeSurfaces(WARM_SURFACES, uri))
-      .catch(() => undefined);
+      // Not fatal: a claim on an empty pool builds a surface cold. But a pool
+      // that never warms is a slow first file with no visible cause, so say so.
+      .catch((cause: unknown) => console.error("[code surface] warming the pool failed", cause));
   }, []);
 
   // Filter the visible rows by name. A trimmed, case-insensitive substring

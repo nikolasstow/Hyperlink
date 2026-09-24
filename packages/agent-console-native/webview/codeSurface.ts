@@ -83,6 +83,10 @@ const registeredThemes = new Set<string>();
 let highlighter: HighlighterCore | undefined;
 let editor: monaco.editor.IStandaloneCodeEditor | undefined;
 let readOnly = true;
+/** Set once `start` has finished, which is when `ready` is true to say. */
+let booted = false;
+/** Why `start` failed, kept so an `announce` can repeat it to a later host. */
+let bootError: string | undefined;
 
 /**
  * One file the surface is holding: its model, what it cost, when it was last
@@ -335,6 +339,12 @@ const receive = (raw: string): void => {
         case "setReadOnly":
           setReadOnly(message.readOnly);
           return;
+        case "announce":
+          // A pooled surface's boot-time `ready` went to a web view nobody had
+          // claimed yet. Still booting means that `ready` is still to come.
+          if (booted) post({ kind: "ready" });
+          else if (bootError !== undefined) post({ kind: "error", message: bootError });
+          return;
       }
     } catch (cause: unknown) {
       post({ kind: "error", message: messageOf(cause) });
@@ -399,6 +409,7 @@ const start = async (): Promise<void> => {
     },
   });
 
+  booted = true;
   post({ kind: "ready" });
 };
 
@@ -409,7 +420,10 @@ window.addEventListener("unhandledrejection", (event) =>
   post({ kind: "error", message: messageOf(event.reason) }),
 );
 
-void start().catch((cause: unknown) => post({ kind: "error", message: messageOf(cause) }));
+void start().catch((cause: unknown) => {
+  bootError = messageOf(cause);
+  post({ kind: "error", message: bootError });
+});
 
 declare global {
   interface Window {

@@ -131,12 +131,16 @@ final class SurfacePool {
     // The page talks to the host the same way it does under
     // `react-native-webview`, so the built asset needs no host-specific
     // variant. The shim is installed at document start, before the bundle runs.
+    // A parked surface has no handler until a view claims it, so what the page
+    // posts before then is dropped rather than thrown; the claim's `announce`
+    // (see ``CodeSurfaceView``) is what recovers the `ready` it missed.
     controller.addUserScript(
       WKUserScript(
         source: """
         window.ReactNativeWebView = {
           postMessage: function (message) {
-            window.webkit.messageHandlers.\(Self.messageName).postMessage(String(message));
+            var handler = window.webkit.messageHandlers.\(Self.messageName);
+            if (handler) handler.postMessage(String(message));
           }
         };
         """,

@@ -22,6 +22,11 @@ import { Platform, type ViewProps } from "react-native";
 export interface CodeSurfaceNativeProps extends ViewProps {
   /** The page, as a `file://` URL resolved from the Metro asset. */
   readonly sourceUrl: string;
+  /**
+   * Evaluated each time the view claims a surface: the host message asking the
+   * page to repeat `ready`, which a pooled page posted before anyone listened.
+   */
+  readonly announceScript: string;
   readonly onSurfaceMessage?: (event: { readonly nativeEvent: { readonly data: string } }) => void;
 }
 

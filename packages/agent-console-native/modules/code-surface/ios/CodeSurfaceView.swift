@@ -38,6 +38,20 @@ public final class CodeSurfaceView: ExpoView {
 
   let onSurfaceMessage = EventDispatcher()
 
+  /// The host message that asks the page to say `ready` again, built by
+  /// `codeSurfaceProtocol.ts` so the wire format lives in one place.
+  ///
+  /// Evaluated on every claim. A pooled surface boots before any view has
+  /// claimed it, so the `ready` it posted went to a web view with no handler
+  /// installed; without this a warm surface never tells its new tenant it is up,
+  /// the host never sends the document, and the screen stays blank.
+  var announceScript: String = "" {
+    didSet {
+      guard announceScript != oldValue else { return }
+      announce()
+    }
+  }
+
   /// The code surface page, as a `file://` URL. JavaScript resolves the Metro
   /// asset and passes it down, so the page is built in one place and shipped
   /// once rather than duplicated into the native bundle.
@@ -88,6 +102,12 @@ public final class CodeSurfaceView: ExpoView {
     claimed.webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     addSubview(claimed.webView)
     surface = claimed
+    announce()
+  }
+
+  private func announce() {
+    guard let claimed = surface, !announceScript.isEmpty else { return }
+    claimed.webView.evaluateJavaScript(announceScript, completionHandler: nil)
   }
 
   private func detach() {
