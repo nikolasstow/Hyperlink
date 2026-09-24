@@ -314,7 +314,7 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
         allowingReadAccessToURL={uri.slice(0, uri.lastIndexOf("/") + 1)}
         // Nothing in the page navigates. A tapped link is reported to the host,
         // which decides, so the surface can never be steered somewhere else.
-        onShouldStartLoadWithRequest={(request) => isSurfaceNavigationAllowed(request.url)}
+        onShouldStartLoadWithRequest={(request) => isSurfaceNavigationAllowed(request.url, uri)}
         onMessage={onMessage}
         // A load that fails has to say so. A cancelled navigation and a dead
         // content process both render as an empty view otherwise.

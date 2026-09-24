@@ -334,24 +334,31 @@ export const evictionsFor = (
 };
 
 /**
+ * iOS resolves the symlink before it reports a navigation, so the URL that
+ * comes back is not always the string that was asked for. `/var` is a link to
+ * `/private/var`, and a page asked for at `file:///var/.../surface.html`
+ * arrives as `file:///private/var/.../surface.html`.
+ */
+const withoutPrivatePrefix = (url: string): string => url.replace("file:///private/", "file:///");
+
+/**
  * May the surface navigate to this URL?
  *
- * Only a local file, which in practice means the page loading itself. Nothing
- * in the document navigates: a tapped link is reported to the host, which
- * decides, and the page's content security policy allows no remote origin at
- * all. This is the second lock on that door.
+ * Only to the page it was asked to load, and `about:blank`, which WebKit uses
+ * before anything is there. Nothing in the document navigates on its own: a
+ * tapped link is claimed by the page's link opener and reported to the host,
+ * which decides.
  *
- * It is a scheme test rather than a comparison against the URL the host asked
- * for, and that distinction is the whole reason this function exists. iOS
- * symlinks `/var` to `/private/var`, so a page asked for at
- * `file:///var/.../surface.html` arrives at
- * `file:///private/var/.../surface.html`. An equality check refuses the page's
- * own first load, `react-native-webview` turns that into
- * `WKNavigationActionPolicyCancel`, and the result is a blank view with no
- * error anywhere.
+ * The comparison runs on both URLs with the `/private` prefix taken off,
+ * which is the whole reason this is a function rather than an equality check
+ * at the call site. A bare `===` refuses the page's own first load,
+ * `react-native-webview` turns that into `WKNavigationActionPolicyCancel`, and
+ * the result is a blank view with no error anywhere. A bare scheme test goes
+ * too far the other way: every `file://` URL would be allowed, so a `file://`
+ * link inside a viewed document could replace the editor.
  */
-export const isSurfaceNavigationAllowed = (url: string): boolean =>
-  url === "about:blank" || url.startsWith("file://");
+export const isSurfaceNavigationAllowed = (url: string, surfaceUri: string): boolean =>
+  url === "about:blank" || withoutPrivatePrefix(url) === withoutPrivatePrefix(surfaceUri);
 
 /** The language ids the surface has grammars for. Anything else renders plain. */
 export const SURFACE_LANGUAGES: ReadonlyArray<string> = [

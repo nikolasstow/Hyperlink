@@ -67,11 +67,12 @@ an empty frame.
 
 | Change | Why |
 |--------|-----|
-| `isSurfaceNavigationAllowed` in `codeSurfaceProtocol.ts`, a scheme test | `file://` or `about:blank`. The same door the guard was there to shut: nothing in the page navigates, a tapped link is reported to the host, and the page's CSP allows no remote origin. Tested, since it is pure. |
+| `isSurfaceNavigationAllowed` in `codeSurfaceProtocol.ts` | Still a comparison against the page the host asked for, but with the `/private` prefix taken off both sides, which is the difference that caused this. The first version of the fix was a bare scheme test, and Bugbot was right that it went too far: every `file://` URL would have been allowed, so a `file://` link inside a viewed document could replace the editor. Tested, since it is pure. |
 | `onError` / `onHttpError` / `onContentProcessDidTerminate` on the WebView | The three ways the WebView path can fail out loud. |
 | `SurfaceLoadObserver` in `SurfacePool.swift` | The navigation delegate the pooled web view never had. A failure is remembered, not only announced, because the load begins with no view attached; whichever view claims that surface is told at once. A surface whose page failed is reloaded on claim rather than handed out dead. |
 | An error before `ready` is fatal and shown | After `ready` it is not, and the page keeps whatever it last rendered. |
 | `loadFailed`, a second message kind the page never sends | An `error` is the page reporting something it survived. A web view whose content process died cannot report its own absence, so the host says it instead, and it is fatal whenever it arrives. Without the split, a process killed an hour in was dropped on the floor by the rule above. Found by Cursor Bugbot on the first review of this branch. |
+| `monaco.editor.registerLinkOpener` in the page | The old handler read `closest("a")` off the DOM on mouse down, and Monaco renders a link as a `span.detected-link`, not an anchor. A probe confirms zero anchors in a document whose links the model has decorations for, so that handler never fired. The registered opener returns true, which is what stops Monaco navigating, and reports the link to the host instead. |
 | A fifteen second deadline on `ready` | The one that does not depend on knowing the cause. A late `ready` clears it. |
 
 ---
