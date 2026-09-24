@@ -341,9 +341,13 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
          * so it reads as a proper tab. Drag it to raise the window back up. */}
         {pillMode ? (
           <GestureDetector gesture={drag}>
-            <View style={styles.tabBehind}>
+            <GlassView
+              style={styles.tabBehind}
+              glassEffectStyle="regular"
+              colorScheme={scheme === "dark" ? "dark" : "light"}
+            >
               <View style={styles.grabber} />
-            </View>
+            </GlassView>
           </GestureDetector>
         ) : null}
         <GlassContainer style={styles.glassContainer}>
@@ -473,7 +477,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
     borderCurve: "continuous",
-    backgroundColor: "rgba(120,120,128,0.55)",
   },
   grabber: {
     width: 40,
