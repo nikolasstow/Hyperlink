@@ -464,16 +464,16 @@ const styles = StyleSheet.create({
   // behind it shows through). Rounded top only, so it reads as a proper tab.
   tabBehind: {
     position: "absolute",
-    top: -13,
+    top: -24,
     alignSelf: "center",
-    width: 72,
-    paddingTop: 5,
-    paddingBottom: 3,
+    width: 82,
+    paddingTop: 11,
+    paddingBottom: 8,
     alignItems: "center",
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
     borderCurve: "continuous",
-    backgroundColor: "rgba(120,120,128,0.22)",
+    backgroundColor: "rgba(120,120,128,0.55)",
   },
   grabber: {
     width: 40,
