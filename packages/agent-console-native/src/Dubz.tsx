@@ -146,6 +146,10 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // growing it downward), and the detents are the same with the keyboard present
   // or gone.
   const kbFull = useSharedValue(0);
+  // Drives the handle's position: 0 = the line inside the window top, 1 = lifted
+  // over the glass tab. Animated on RELEASE (when pillMode settles), not during the
+  // drag — so the handle holds still while dragging and slides only after you let go.
+  const handleT = useSharedValue(savedDetentFrac >= 0.98 ? 1 : 0);
   useAnimatedReaction(
     () => kbHeight.value,
     (h) => {
@@ -172,6 +176,12 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     });
     return () => cancelAnimationFrame(id);
   }, [grow, dragY, insets.top, insets.bottom, screenH]);
+
+  // Slide the handle to its new spot only after a drag settles (pillMode changes),
+  // never during the drag itself.
+  React.useEffect(() => {
+    handleT.value = withTiming(pillMode ? 1 : 0, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
+  }, [pillMode, handleT]);
 
   // Exit when closed: fade + shrink out, then unmount via onClosed.
   React.useEffect(() => {
@@ -322,19 +332,11 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     return { opacity: 1 - p };
   });
 
-  // The single handle transitions continuously with the drag: a line just inside
-  // the window top at larger detents that lifts to TAB_TOP (above the pill) as it
-  // nears the min detent — over the same COMPOSER_INSET_RANGE the margins use.
-  const handleStyle = useAnimatedStyle(() => {
-    const fullTop = insets.top + MARGIN;
-    const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
-    const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
-    const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
-    const denom = maxDrag - start;
-    const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
-    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
-    return { top: GRABBER_TOP_EXPANDED + (TAB_TOP - GRABBER_TOP_EXPANDED) * p };
-  });
+  // The handle sits inside the window top and lifts over the glass tab — driven by
+  // handleT, which animates only after a drag settles (see the effect above).
+  const handleStyle = useAnimatedStyle(() => ({
+    top: GRABBER_TOP_EXPANDED + (TAB_TOP - GRABBER_TOP_EXPANDED) * handleT.value,
+  }));
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
