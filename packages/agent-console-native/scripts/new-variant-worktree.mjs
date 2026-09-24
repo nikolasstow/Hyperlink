@@ -81,23 +81,50 @@ writeFileSync(variantFile, `${JSON.stringify({ variant: name }, null, 2)}\n`);
 console.log(`✓ wrote ${path.relative(dest, variantFile)} → variant "${name}" (bundle id …agentconsolenative.${slug})`);
 
 const buildCwd = path.join(dest, PACKAGE_SUBPATH);
-const buildCmd = `${EAS.join(" ")} build -p ios --profile development`;
 
 if (!doBuild) {
   console.log("\nWorktree ready. To build & install this variant:");
-  console.log(`  cd ${buildCwd}`);
-  console.log(`  ${buildCmd}`);
-  console.log("\n(Then install from the EAS build link. Re-run with --build to start it now.)");
+  console.log(`  cd ${dest} && pnpm install`);
+  console.log(`  cd ${buildCwd} && ${EAS.join(" ")} build -p ios --profile development`);
+  console.log("\n(Or re-run this with --build to do both now. Install from the EAS link.)");
   process.exit(0);
 }
 
-// Interactive on purpose: a new variant's bundle id needs its credentials created
-// once, which EAS will only do with a real terminal (it auto-detects a non-TTY as
-// non-interactive and refuses). Run this from your own terminal for that first build.
-console.log(`\n→ ${buildCmd}\n  (in ${buildCwd})`);
-const build = spawnSync(EAS[0], [...EAS.slice(1), "build", "-p", "ios", "--profile", "development"], {
-  cwd: buildCwd,
-  stdio: "inherit",
-  env: { ...process.env, APP_VARIANT: name },
-});
-process.exit(build.status ?? 1);
+// A fresh worktree has no node_modules, and `eas build` needs the project resolvable
+// locally (to evaluate the config + fingerprint). Install first (pnpm store is warm,
+// so this is mostly hardlinks).
+console.log("\n→ pnpm install (in the new worktree)…");
+if (spawnSync("pnpm", ["install"], { cwd: dest, stdio: "inherit" }).status !== 0) {
+  fail("pnpm install failed in the new worktree.");
+}
+
+const env = { ...process.env, APP_VARIANT: name };
+const buildArgs = ["build", "-p", "ios", "--profile", "development", "--no-wait"];
+
+// Try HEADLESS first. This succeeds with no prompts once the ASC API key is
+// assigned to the project's build credentials (`eas credentials -p ios` → App Store
+// Connect API Key), which lets EAS create a new variant's cert + profile silently.
+console.log(`\n→ ${EAS.join(" ")} ${buildArgs.join(" ")} --non-interactive  (in ${buildCwd})`);
+const headless = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs, "--non-interactive"], { cwd: buildCwd, encoding: "utf8", env });
+process.stdout.write(headless.stdout ?? "");
+process.stderr.write(headless.stderr ?? "");
+if (headless.status === 0) process.exit(0);
+
+// Fall back to INTERACTIVE only when the failure is the new bundle id's missing
+// credentials — anything else is a real error, don't silently re-run it.
+const needsCredentials = /interactive mode|couldn.?t find any credentials|Failed to set up credentials/i.test(
+  `${headless.stdout ?? ""}${headless.stderr ?? ""}`,
+);
+if (!needsCredentials) process.exit(headless.status ?? 1);
+
+if (!process.stdin.isTTY) {
+  fail(
+    "This variant's credentials don't exist yet and there's no interactive terminal here.\n" +
+      "Either run this from your own terminal, or wire the ASC key once so builds are headless:\n" +
+      `  ${EAS.join(" ")} credentials -p ios   → App Store Connect API Key → assign "[Expo] EAS Submit"`,
+  );
+}
+console.log('\nℹ New bundle id has no credentials yet — re-running interactively so EAS can create them (uses your ASC key).');
+console.log('   Assign the ASC key once (eas credentials -p ios) and future variants build headless.\n');
+const interactive = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs], { cwd: buildCwd, stdio: "inherit", env });
+process.exit(interactive.status ?? 1);
