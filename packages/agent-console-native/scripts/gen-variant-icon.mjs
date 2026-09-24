@@ -9,8 +9,9 @@ import sharp from "sharp";
 const SIZE = 1024;
 /** Banner height — a slim strip across the top. */
 const BAND_H = 200;
-/** Largest font; long names shrink below this. */
-const MAX_FONT = 96;
+/** Largest font; long names shrink below this. Big enough that short names nearly
+ * fill the band height (little top/bottom space). */
+const MAX_FONT = 150;
 /** Horizontal padding inside the band. */
 const PAD_X = 70;
 /** Approx width of a bold-uppercase glyph in ems (for the fit estimate). */
