@@ -43,7 +43,7 @@ if (cfg === undefined) {
 
 if (!cfg.base) {
   // Build this worktree's variant (keeps app-variant.json in place).
-  process.exitCode = runEasBuild({ profile: cfg.profile, cwd: pkgDir });
+  process.exitCode = await runEasBuild({ profile: cfg.profile, cwd: pkgDir });
 } else {
   // Build the base (non-variant) from this worktree: set the variant marker aside so
   // the config resolves to the base id for the upload, then restore it afterwards.
@@ -52,7 +52,7 @@ if (!cfg.base) {
   const hadMarker = existsSync(marker);
   if (hadMarker) renameSync(marker, aside);
   try {
-    process.exitCode = runEasBuild({ profile: "preview", cwd: pkgDir });
+    process.exitCode = await runEasBuild({ profile: "preview", cwd: pkgDir });
   } finally {
     if (hadMarker) renameSync(aside, marker);
   }

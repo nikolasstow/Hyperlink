@@ -94,4 +94,4 @@ if (!doBuild) {
 
 // A dev-client build for the new variant (hot-reload development). Other modes live
 // in scripts/build.mjs (pnpm build:preview / build:master).
-process.exit(runEasBuild({ profile: "development", cwd: pkgCwd }));
+process.exit(await runEasBuild({ profile: "development", cwd: pkgCwd }));
