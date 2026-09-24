@@ -196,20 +196,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
       if (h > kbFull.value) kbFull.value = h;
     },
   );
-  // At the input detent, keep the window hugging the composer: drive dragY so the
-  // window height equals the measured composer height (clamped between the one-line
-  // pill and the full height). Re-runs as the composer grows/shrinks with the input.
-  useAnimatedReaction(
-    () => ({ on: inputDetent.value, m: measuredComposerH.value, kb: kbFull.value }),
-    (cur) => {
-      if (cur.on !== 1) return;
-      const fullTop = insets.top + TOP_MARGIN;
-      const stableBottom = Math.max(cur.kb, insets.bottom) + MARGIN;
-      const fullHeight = screenH - fullTop - stableBottom;
-      const h = Math.min(Math.max(cur.m, MIN_HEIGHT), fullHeight);
-      dragY.value = withTiming(fullHeight - h, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-    },
-  );
   // True from the moment a resize drag touches down until it finalizes — the
   // composer's swipe-down-to-dismiss gesture ignores its end while this is set,
   // so lowering the window can never also dismiss the keyboard.
@@ -261,6 +247,15 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           resizing.value = true;
         })
         .onStart(() => {
+          // Leaving the input detent: seed dragY from the current (measured) window
+          // height so the drag continues from where the hug left it — no jump.
+          if (inputDetent.value === 1) {
+            const fullTop = topInset + TOP_MARGIN;
+            const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
+            const fullHeight = screenH - fullTop - stableBottom;
+            const h = Math.min(Math.max(measuredComposerH.value, MIN_HEIGHT), fullHeight);
+            dragY.value = fullHeight - h;
+          }
           dragStart.value = dragY.value;
         })
         .onUpdate((e) => {
@@ -301,8 +296,12 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           }
           const isInputDetent = maxDrag > 0 && target >= maxDrag - 4;
           if (isInputDetent) {
-            // The hug reaction drives dragY to the composer height.
-            inputDetent.value = 1;
+            // Animate the window down to the min via dragY, THEN switch windowStyle
+            // to the measured-composer branch — so snapping in from a distance glides
+            // (no jump) and the composer transition finishes during the snap.
+            dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) }, (done) => {
+              if (done) inputDetent.value = 1;
+            });
           } else {
             inputDetent.value = 0;
             dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
@@ -317,7 +316,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
         .onFinalize(() => {
           resizing.value = false;
         }),
-    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbFull, inputDetent, setSettledDetentH, close],
+    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbFull, inputDetent, measuredComposerH, setSettledDetentH, close],
   );
 
   // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
@@ -359,7 +358,16 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     // change as the keyboard opens/closes — only the position (bottomEdge) does.
     const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
     const fullHeight = screenH - stableBottom - fullTop;
-    const height = Math.max(fullHeight * grow.value - dragY.value, 0);
+    // At the input detent the window height is the MEASURED composer height, so it
+    // grows/shrinks with the input's line count. Elsewhere it's the drag height.
+    // The composer measure is a settled value (measuredComposerH is withTiming'd on
+    // layout), and dragY is left untouched at this detent — so the composer's own
+    // frost/margin transition stays done rather than re-running.
+    const target =
+      inputDetent.value === 1
+        ? Math.min(Math.max(measuredComposerH.value, MIN_HEIGHT), fullHeight)
+        : fullHeight - dragY.value;
+    const height = Math.max(target * grow.value, 0);
     return {
       top: bottomEdge - height,
       height,
@@ -449,15 +457,18 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * pill blends into the clear window at the detent — no pill-in-pill. The
              * pill radius stays at the window radius in every mode, so it's a full
              * capsule throughout — no radius pop. */}
-            <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
+            <Reanimated.View style={[styles.pillWrap, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
                 <View
                   style={styles.pill}
-                  // Measure the composer's height (its own content, not the window)
-                  // so the input detent can hug it — grows/shrinks with the lines.
-                  // Set directly (a step value); the hug reaction does the animating.
+                  // Measure the composer's own (natural) height so the input detent's
+                  // window can hug it — grows/shrinks with the line count. Animated
+                  // (withTiming) so the window follows smoothly line-by-line.
                   onLayout={(e) => {
-                    measuredComposerH.value = e.nativeEvent.layout.height + COMPOSER_CHROME;
+                    measuredComposerH.value = withTiming(e.nativeEvent.layout.height + COMPOSER_CHROME, {
+                      duration: SNAP_MS,
+                      easing: Easing.out(Easing.cubic),
+                    });
                   }}
                 >
                   {/* Frosted glass background, faded by the drag. Regular glass
@@ -587,16 +598,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: COMPOSER_INSET,
     paddingBottom: COMPOSER_INSET,
   },
-  // Pill mode: fill the window (padding comes to 0 via the animated style) and keep
-  // the composer at the BOTTOM — filling flips the default to flex-start (top), so
-  // pin it back to flex-end to match the expanded layout.
-  pillWrapFill: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  // The composer row. Chips ALWAYS bottom-align (so they hold position as the
-  // input grows upward); the row is centred within the pill at the min detent
-  // (pillWrapFill) so bottom-aligned chips read as centred there. The glass is a
+  // The composer row. Chips bottom-align (so they hold position as the input grows
+  // upward). At the input detent the window hugs this row's height. The glass is a
   // separate faded background (pillGlass), not this view.
   pill: {
     flexDirection: "row",
