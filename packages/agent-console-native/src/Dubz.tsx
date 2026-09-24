@@ -335,17 +335,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
     return { top: GRABBER_TOP_EXPANDED + (TAB_TOP - GRABBER_TOP_EXPANDED) * p };
   });
-  // The tab's glass background fades in as the handle becomes the tab.
-  const tabGlassStyle = useAnimatedStyle(() => {
-    const fullTop = insets.top + MARGIN;
-    const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
-    const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
-    const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
-    const denom = maxDrag - start;
-    const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
-    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
-    return { opacity: p };
-  });
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -428,15 +417,17 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           </GlassView>
         </GlassContainer>
 
-        {/* Glass tab — a SEPARATE element, fixed just above the pill's top edge,
-         * that fades in (tabGlassStyle) only at the min detent. */}
-        <Reanimated.View style={[styles.tabGlassWrap, tabGlassStyle]} pointerEvents="none">
+        {/* Glass tab — a SEPARATE element, fixed just above the pill's top edge. It
+         * crossfades in/out via the native glassEffectStyle `animate` (none↔regular),
+         * NOT an opacity wrapper: a standalone GlassView under an animated-opacity
+         * ancestor stops rendering its glass. */}
+        <View style={styles.tabGlassWrap} pointerEvents="none">
           <GlassView
             style={styles.tabGlass}
-            glassEffectStyle="regular"
+            glassEffectStyle={{ style: pillMode ? "regular" : "none", animate: true, animationDuration: FADE_S }}
             colorScheme={scheme === "dark" ? "dark" : "light"}
           />
-        </Reanimated.View>
+        </View>
 
         {/* The ONE grabber — a line that just moves up and down (handleStyle): a
          * handle inside the window top at larger detents that floats up over the
