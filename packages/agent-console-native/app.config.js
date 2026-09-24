@@ -80,10 +80,16 @@ module.exports = ({ config }) => {
 
   const plugins = (config.plugins ?? []).filter((entry) => !EXTENSION_PLUGINS.has(Array.isArray(entry) ? entry[0] : entry));
 
+  // Distinctive icon (base + top name banner) if the worktree script generated one.
+  const variantIcon = fs.existsSync(path.join(__dirname, "assets", "variant-icon.png"))
+    ? "./assets/variant-icon.png"
+    : config.icon;
+
   return {
     ...config,
     name: `${config.name} · ${variant}`,
     scheme: `${config.scheme}${slug.replace(/-/g, "")}`,
+    icon: variantIcon,
     ios,
     plugins,
   };

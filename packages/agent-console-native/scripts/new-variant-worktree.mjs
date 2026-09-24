@@ -26,6 +26,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { genVariantIcon } from "./gen-variant-icon.mjs";
 
 const PACKAGE_SUBPATH = "packages/agent-console-native";
 /** The EAS CLI isn't installed globally here — it runs via npx. */
@@ -79,6 +80,15 @@ if (git(...addArgs).status !== 0) fail("git worktree add failed.");
 const variantFile = path.join(dest, PACKAGE_SUBPATH, "app-variant.json");
 writeFileSync(variantFile, `${JSON.stringify({ variant: name }, null, 2)}\n`);
 console.log(`✓ wrote ${path.relative(dest, variantFile)} → variant "${name}" (bundle id …agentconsolenative.${slug})`);
+
+// Distinctive icon: the base icon with a top color banner carrying the name.
+const assetsDir = path.join(dest, PACKAGE_SUBPATH, "assets");
+const { color } = await genVariantIcon({
+  name,
+  baseIcon: path.join(assetsDir, "icon.png"),
+  out: path.join(assetsDir, "variant-icon.png"),
+});
+console.log(`✓ wrote assets/variant-icon.png → banner "${name.toUpperCase()}" (${color})`);
 
 const buildCwd = path.join(dest, PACKAGE_SUBPATH);
 
