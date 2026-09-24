@@ -63,10 +63,14 @@ const TAB_TOP = -24;
 const SNAP_MS = 240;
 /** Fling-down velocity (px/s) that dismisses the window. */
 const FLING_VELOCITY = 1400;
-/** How far past the last detent you can keep pulling, and the release point past
- * which (last detent + margin) the window dismisses instead of snapping back. */
-const DISMISS_ZONE = 120;
-const DISMISS_MARGIN = 48;
+/** Input line box: lineHeight + paddingVertical (6×2). */
+const INPUT_LINE_H = 21;
+const INPUT_PAD_V = 12;
+/** Hard cap on the input — never taller than this many lines. */
+const INPUT_MAX_LINES = 8;
+/** Window height NOT usable by the input (composer padding + chip-row overhead) —
+ * so the input never grows past the glass window. */
+const INPUT_WINDOW_OVERHEAD = 26;
 
 // Last detent the window was left at, remembered across close/reopen (session
 // lifetime): a fraction of maxDrag (0 = full, 0.5 = mid, 1 = pill) plus the
@@ -141,6 +145,13 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   const { height: kbHeight } = useAnimatedKeyboard();
   const { height: screenH } = useWindowDimensions();
   const [text, setText] = React.useState("");
+  // The window's height at the current detent — caps the input so it never grows
+  // past the glass window. Set on mount and on every drag settle.
+  const [settledH, setSettledH] = React.useState(screenH);
+  const inputMaxH = Math.min(
+    INPUT_LINE_H * INPUT_MAX_LINES + INPUT_PAD_V,
+    Math.max(settledH - INPUT_WINDOW_OVERHEAD, INPUT_LINE_H + INPUT_PAD_V),
+  );
 
   // `entered` toggles the native glass none↔clear (its own animate fades it, no
   // opacity); `grow` (0→1) scales the window via LAYOUT (never a transform, which
@@ -185,6 +196,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const stableBottom = Math.max(savedKbFull, insets.bottom) + MARGIN;
     const maxDrag = Math.max(screenH - (insets.top + TOP_MARGIN) - stableBottom - MIN_HEIGHT, 0);
     dragY.value = savedDetentFrac * maxDrag;
+    setSettledH(maxDrag * (1 - savedDetentFrac) + MIN_HEIGHT);
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
       setEntered(true);
@@ -228,21 +240,22 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           // same whether the keyboard is present or gone.
           const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
-          // Allow pulling a bit past the last detent into a dismiss zone.
-          const limit = maxDrag + DISMISS_ZONE;
+          // Clamp to the min detent — can't drag the window past its smallest size.
           const next = dragStart.value + e.translationY;
-          dragY.value = next < 0 ? 0 : next > limit ? limit : next;
+          dragY.value = next < 0 ? 0 : next > maxDrag ? maxDrag : next;
         })
         .onEnd((e) => {
           const fullTop = topInset + TOP_MARGIN;
           const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
-          // Flung down hard, or released past the last detent → dismiss.
-          if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
+          // Flung down hard → dismiss.
+          if (e.velocityY > FLING_VELOCITY) {
             runOnJS(close)();
             return;
           }
-          const detents = [0, maxDrag * 0.5, maxDrag];
+          // Detents (fractions of maxDrag): full, mid, and two more bunched near the
+          // min so you can perch the window low without collapsing it fully.
+          const detents = [0, maxDrag * 0.5, maxDrag * 0.75, maxDrag * 0.9, maxDrag];
           const projected = dragY.value + e.velocityY * 0.08;
           let target = 0;
           let best = 1e9;
@@ -257,13 +270,15 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
           runOnJS(setLowered)(target > 4);
           runOnJS(setPillMode)(maxDrag > 0 && target >= maxDrag - 4);
+          // The window's settled height at this detent → caps the input (below).
+          runOnJS(setSettledH)(maxDrag + MIN_HEIGHT - target);
           // Remember this detent so the window reopens where it was left.
           runOnJS(rememberDetent)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
         })
         .onFinalize(() => {
           resizing.value = false;
         }),
-    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbFull, close],
+    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbFull, close, setSettledH],
   );
 
   // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
@@ -411,7 +426,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
                     <Ionicons name="add" size={22} color={colors.secondaryLabel} />
                   </Pressable>
                   <TextInput
-                    style={styles.pillInput}
+                    style={[styles.pillInput, { maxHeight: inputMaxH }]}
                     value={text}
                     onChangeText={setText}
                     placeholder={`Ask ${AGENT_NAME}…`}
@@ -565,10 +580,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.label,
     fontSize: 16,
-    // Grows upward with each new line (the bottom-anchored pill grows up), capped
-    // at ~8 lines — a fixed lineHeight makes that cap exact — then scrolls.
-    lineHeight: 21,
-    maxHeight: 21 * 8,
+    // Grows upward with each new line (the bottom-anchored pill grows up). The cap
+    // (maxHeight) is DYNAMIC — min(8 lines, window space) — applied inline, so the
+    // input grows/shrinks with the lines AND the window height, then scrolls.
+    lineHeight: INPUT_LINE_H,
     paddingVertical: 6,
     paddingHorizontal: 2,
   },
