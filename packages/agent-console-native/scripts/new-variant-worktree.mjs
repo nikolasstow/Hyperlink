@@ -26,10 +26,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runEasBuild } from "./eas-build.mjs";
 
 const PACKAGE_SUBPATH = "packages/agent-console-native";
-/** The EAS CLI isn't installed globally here — it runs via npx. */
-const EAS = ["npx", "--yes", "eas-cli@24.7.0"];
 /** This script lives at <repoRoot>/packages/agent-console-native/scripts, so the
  * repo (worktree) root is three levels up — computed from the script's own
  * location, so it works no matter where you run it from. */
@@ -89,36 +88,10 @@ if (spawnSync("pnpm", ["install"], { cwd: dest, stdio: "inherit" }).status !== 0
 
 if (!doBuild) {
   console.log(`\n✓ Worktree ready at ${dest} — variant "${slug}".`);
-  console.log(`  Build & install:  cd ${pkgCwd} && ${EAS.join(" ")} build -p ios --profile development`);
+  console.log(`  Dev build:  cd ${pkgCwd} && pnpm build:dev`);
   process.exit(0);
 }
 
-const buildArgs = ["build", "-p", "ios", "--profile", "development", "--no-wait"];
-
-// Try HEADLESS first. This succeeds with no prompts once the ASC API key is
-// assigned to the project's build credentials (`eas credentials -p ios` → App Store
-// Connect API Key), which lets EAS create a new variant's cert + profile silently.
-console.log(`\n→ ${EAS.join(" ")} ${buildArgs.join(" ")} --non-interactive  (in ${pkgCwd})`);
-const headless = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs, "--non-interactive"], { cwd: pkgCwd, encoding: "utf8" });
-process.stdout.write(headless.stdout ?? "");
-process.stderr.write(headless.stderr ?? "");
-if (headless.status === 0) process.exit(0);
-
-// Fall back to INTERACTIVE only when the failure is the new bundle id's missing
-// credentials — anything else is a real error, don't silently re-run it.
-const needsCredentials = /interactive mode|couldn.?t find any credentials|Failed to set up credentials/i.test(
-  `${headless.stdout ?? ""}${headless.stderr ?? ""}`,
-);
-if (!needsCredentials) process.exit(headless.status ?? 1);
-
-if (!process.stdin.isTTY) {
-  fail(
-    "This variant's credentials don't exist yet and there's no interactive terminal here.\n" +
-      "Either run this from your own terminal, or wire the ASC key once so builds are headless:\n" +
-      `  ${EAS.join(" ")} credentials -p ios   → App Store Connect API Key → assign "[Expo] EAS Submit"`,
-  );
-}
-console.log("\nℹ New bundle id has no credentials yet — re-running interactively so EAS can create them (uses your ASC key).");
-console.log("   Assign the ASC key once (eas credentials -p ios) and future variants build headless.\n");
-const interactive = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs], { cwd: pkgCwd, stdio: "inherit" });
-process.exit(interactive.status ?? 1);
+// A dev-client build for the new variant (hot-reload development). Other modes live
+// in scripts/build.mjs (pnpm build:release / build:base).
+process.exit(runEasBuild({ profile: "development", cwd: pkgCwd }));
