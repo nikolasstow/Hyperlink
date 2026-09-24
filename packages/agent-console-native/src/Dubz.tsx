@@ -285,9 +285,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
             runOnJS(close)();
             return;
           }
-          // Detents (fractions of maxDrag): full, mid, and two more near the bottom.
-          // The last (maxDrag) is the INPUT detent, where the window hugs the composer.
-          const detents = [0, maxDrag * 0.5, maxDrag * 0.75, maxDrag * 0.9, maxDrag];
+          // Detents (fractions of maxDrag): full, mid, and the INPUT detent (maxDrag),
+          // where the window hugs the composer.
+          const detents = [0, maxDrag * 0.5, maxDrag];
           const projected = dragY.value + e.velocityY * 0.08;
           let target = 0;
           let best = 1e9;
@@ -379,7 +379,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
     const denom = maxDrag - start;
     const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
-    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    // Pinned fully collapsed at the input detent — so the post-release window hug
+    // (which moves dragY to follow the composer) can't re-run this transition.
+    const p = inputDetent.value === 1 ? 1 : raw < 0 ? 0 : raw > 1 ? 1 : raw;
     // Horizontal margin collapses from 12 toward 2 (not 0) at the pill; the bottom
     // (Y) decreases by 4px, so the composer keeps distance from both glass edges.
     return { paddingHorizontal: COMPOSER_INSET - 10 * p, paddingBottom: COMPOSER_INSET - 4 * p };
@@ -397,7 +399,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
     const denom = maxDrag - start;
     const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
-    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    const p = inputDetent.value === 1 ? 1 : raw < 0 ? 0 : raw > 1 ? 1 : raw;
     return { opacity: 1 - p };
   });
 
@@ -453,11 +455,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
                   style={styles.pill}
                   // Measure the composer's height (its own content, not the window)
                   // so the input detent can hug it — grows/shrinks with the lines.
+                  // Set directly (a step value); the hug reaction does the animating.
                   onLayout={(e) => {
-                    measuredComposerH.value = withTiming(e.nativeEvent.layout.height + COMPOSER_CHROME, {
-                      duration: SNAP_MS,
-                      easing: Easing.out(Easing.cubic),
-                    });
+                    measuredComposerH.value = e.nativeEvent.layout.height + COMPOSER_CHROME;
                   }}
                 >
                   {/* Frosted glass background, faded by the drag. Regular glass
