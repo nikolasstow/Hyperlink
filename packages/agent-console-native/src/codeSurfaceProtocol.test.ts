@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  isSurfaceNavigationAllowed,
   parseHostMessage,
   parseSurfaceMessage,
   SURFACE_GLOBAL,
@@ -31,6 +32,7 @@ describe("parseSurfaceMessage", () => {
     });
     expect(parseSurfaceMessage('{"kind":"contentHeight","height":420}')).toEqual({ kind: "contentHeight", height: 420 });
     expect(parseSurfaceMessage('{"kind":"error","message":"boom"}')).toEqual({ kind: "error", message: "boom" });
+    expect(parseSurfaceMessage('{"kind":"loadFailed","message":"gone"}')).toEqual({ kind: "loadFailed", message: "gone" });
     expect(parseSurfaceMessage('{"kind":"selectionChanged","text":"x","startLine":1,"endLine":2}')).toEqual({
       kind: "selectionChanged",
       text: "x",
@@ -49,6 +51,7 @@ describe("parseSurfaceMessage", () => {
   it("drops a known kind whose fields are wrong", () => {
     expect(parseSurfaceMessage('{"kind":"contentHeight","height":"tall"}')).toBeUndefined();
     expect(parseSurfaceMessage('{"kind":"linkActivated"}')).toBeUndefined();
+    expect(parseSurfaceMessage('{"kind":"loadFailed"}')).toBeUndefined();
     expect(parseSurfaceMessage('{"kind":"selectionChanged","text":"x","startLine":1}')).toBeUndefined();
   });
 });
@@ -232,6 +235,46 @@ describe("monacoThemeName", () => {
     const name = monacoThemeName(`${"x ".repeat(60)}end`);
     expect(LEGAL.test(name)).toBe(true);
     expect(name).not.toContain("--");
+  });
+});
+
+describe("isSurfaceNavigationAllowed", () => {
+  const SURFACE = "file:///var/mobile/Containers/Data/Application/1/Caches/ExponentAsset-abc.html";
+
+  it("allows the page to load itself", () => {
+    expect(isSurfaceNavigationAllowed(SURFACE, SURFACE)).toBe(true);
+  });
+
+  it("allows the same page once iOS has resolved /var to /private/var", () => {
+    // The symlink is why this is not a plain equality check: a plain one
+    // cancels the page's own first load and blanks the view.
+    const resolved = SURFACE.replace("file:///", "file:///private/");
+    expect(isSurfaceNavigationAllowed(resolved, SURFACE)).toBe(true);
+    expect(isSurfaceNavigationAllowed(SURFACE, resolved)).toBe(true);
+  });
+
+  it("allows about:blank, which WebKit uses before anything is loaded", () => {
+    expect(isSurfaceNavigationAllowed("about:blank", SURFACE)).toBe(true);
+  });
+
+  it("refuses another local file, which a link in a viewed document could be", () => {
+    expect(isSurfaceNavigationAllowed("file:///etc/passwd", SURFACE)).toBe(false);
+    expect(isSurfaceNavigationAllowed("file:///var/mobile/other.html", SURFACE)).toBe(false);
+    expect(isSurfaceNavigationAllowed("file:///private/etc/passwd", SURFACE)).toBe(false);
+  });
+
+  it("refuses anything that could leave the device", () => {
+    expect(isSurfaceNavigationAllowed("https://example.com", SURFACE)).toBe(false);
+    expect(isSurfaceNavigationAllowed("http://127.0.0.1:5195/fs/read", SURFACE)).toBe(false);
+    expect(isSurfaceNavigationAllowed("javascript:alert(1)", SURFACE)).toBe(false);
+    expect(isSurfaceNavigationAllowed("data:text/html,<script>1</script>", SURFACE)).toBe(false);
+    expect(isSurfaceNavigationAllowed("", SURFACE)).toBe(false);
+  });
+
+  it("does not let a path of its own confuse the prefix it strips", () => {
+    const withPrivate = "file:///var/mobile/private/surface.html";
+    expect(isSurfaceNavigationAllowed(withPrivate, withPrivate)).toBe(true);
+    expect(isSurfaceNavigationAllowed("file:///var/mobile/surface.html", withPrivate)).toBe(false);
   });
 });
 

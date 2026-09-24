@@ -93,7 +93,19 @@ export type SurfaceMessage =
    * that is no longer there.
    */
   | { readonly kind: "documentEvicted"; readonly path: string }
-  | { readonly kind: "error"; readonly message: string };
+  /**
+   * Something threw inside the page. The page is still there and still
+   * rendering whatever it last drew, so this is fatal only before `ready`.
+   */
+  | { readonly kind: "error"; readonly message: string }
+  /**
+   * The page itself is gone: it never loaded, or its content process died.
+   *
+   * Only a host sends this, never the page, which by definition cannot report
+   * its own absence. It is fatal whenever it arrives, including long after
+   * `ready`, because nothing is rendering any more.
+   */
+  | { readonly kind: "loadFailed"; readonly message: string };
 
 /** The global the injected script calls. Named once, used by both sides. */
 export const SURFACE_GLOBAL = "__codeSurface";
@@ -140,6 +152,8 @@ export const parseSurfaceMessage = (raw: string): SurfaceMessage | undefined => 
       return typeof parsed.path === "string" ? { kind: "documentEvicted", path: parsed.path } : undefined;
     case "error":
       return typeof parsed.message === "string" ? { kind: "error", message: parsed.message } : undefined;
+    case "loadFailed":
+      return typeof parsed.message === "string" ? { kind: "loadFailed", message: parsed.message } : undefined;
     default:
       return undefined;
   }
@@ -318,6 +332,33 @@ export const evictionsFor = (
   }
   return evicted;
 };
+
+/**
+ * iOS resolves the symlink before it reports a navigation, so the URL that
+ * comes back is not always the string that was asked for. `/var` is a link to
+ * `/private/var`, and a page asked for at `file:///var/.../surface.html`
+ * arrives as `file:///private/var/.../surface.html`.
+ */
+const withoutPrivatePrefix = (url: string): string => url.replace("file:///private/", "file:///");
+
+/**
+ * May the surface navigate to this URL?
+ *
+ * Only to the page it was asked to load, and `about:blank`, which WebKit uses
+ * before anything is there. Nothing in the document navigates on its own: a
+ * tapped link is claimed by the page's link opener and reported to the host,
+ * which decides.
+ *
+ * The comparison runs on both URLs with the `/private` prefix taken off,
+ * which is the whole reason this is a function rather than an equality check
+ * at the call site. A bare `===` refuses the page's own first load,
+ * `react-native-webview` turns that into `WKNavigationActionPolicyCancel`, and
+ * the result is a blank view with no error anywhere. A bare scheme test goes
+ * too far the other way: every `file://` URL would be allowed, so a `file://`
+ * link inside a viewed document could replace the editor.
+ */
+export const isSurfaceNavigationAllowed = (url: string, surfaceUri: string): boolean =>
+  url === "about:blank" || withoutPrivatePrefix(url) === withoutPrivatePrefix(surfaceUri);
 
 /** The language ids the surface has grammars for. Anything else renders plain. */
 export const SURFACE_LANGUAGES: ReadonlyArray<string> = [

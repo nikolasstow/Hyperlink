@@ -388,11 +388,15 @@ const start = async (): Promise<void> => {
 
   editor.onDidContentSizeChange(reportHeight);
 
-  // Monaco turns a URL in the text into a link and then asks to open it. The
-  // host decides what that means, because only it can open Safari.
-  editor.onMouseDown((event) => {
-    const url = event.target.element?.closest("a")?.getAttribute("href");
-    if (url !== null && url !== undefined && url.length > 0) post({ kind: "linkActivated", url });
+  // Monaco turns a URL in the text into a link and opens it through its own
+  // opener, which navigates this page. The host decides what a link means,
+  // because only it can open Safari, so the opener is claimed here: returning
+  // true is what stops Monaco navigating.
+  monaco.editor.registerLinkOpener({
+    open: (resource) => {
+      post({ kind: "linkActivated", url: resource.toString() });
+      return true;
+    },
   });
 
   post({ kind: "ready" });
