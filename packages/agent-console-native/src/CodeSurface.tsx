@@ -27,6 +27,7 @@ import {
   type CodeSurfaceHandle,
 } from "../modules/code-surface";
 import {
+  isSurfaceNavigationAllowed,
   parseSurfaceMessage,
   surfaceLanguageOf,
   toInjectedScript,
@@ -47,6 +48,18 @@ const READ_ONLY = true;
 
 /** Matches the chat code blocks, so the two surfaces sit at the same scale. */
 const FONT_SIZE = 12.5;
+
+/**
+ * How long the surface may take to say `ready` before the host calls it a
+ * failure.
+ *
+ * Cold, the page is five and a half megabytes of Monaco and Shiki to parse, and
+ * a loaded device is welcome to several seconds of that. What it is not welcome
+ * to is staying blank forever with nothing said: a blank view is the one
+ * failure that looks like a slow success, and it is the failure this screen has
+ * already shipped once.
+ */
+const READY_TIMEOUT_MS = 15_000;
 
 export interface CodeSurfaceProps {
   /** Identifies the file. Each path is its own Monaco model in the surface. */
@@ -87,6 +100,7 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
 
   const [uri, setUri] = React.useState<string | undefined>(undefined);
   const [assetFailed, setAssetFailed] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | undefined>(undefined);
   const [ready, setReady] = React.useState(false);
 
   const language = React.useMemo(() => surfaceLanguageOf(props.lang), [props.lang]);
@@ -132,6 +146,22 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * The surface has a deadline. Whatever the cause (a cancelled navigation, a
+   * page that threw before it could report it, a content process that never
+   * came back), the host says so rather than leaving an empty frame that reads
+   * as a slow load. A `ready` after the deadline clears it.
+   */
+  React.useEffect(() => {
+    if (uri === undefined || ready) return;
+    const timer = setTimeout(() => {
+      setLoadError("The code surface didn't finish loading.");
+    }, READY_TIMEOUT_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [uri, ready]);
 
   /** Record a message as part of the surface's state, and send it if it is up. */
   const apply = React.useCallback(
@@ -187,6 +217,8 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
           // believed a moment ago.
           held.current = new Set();
           setReady(true);
+          // A surface that came up late is a working surface.
+          setLoadError(undefined);
           for (const message of desired.current) send(message);
           return;
         case "selectionChanged":
@@ -200,15 +232,20 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
           // text again rather than asking for something that is not there.
           held.current = new Set([...held.current].filter((open) => open !== message.path));
           return;
-        case "contentHeight":
         case "error":
-          // The surface fills its container, so height is advisory here, and an
-          // error inside Monaco must not blank the screen: the page keeps
-          // whatever it last rendered.
+          // Once the surface is up, an error inside Monaco must not blank the
+          // screen: the page keeps whatever it last rendered. Before that it is
+          // fatal, and saying so beats an empty view. This is also how the
+          // native host reports a load that failed, since the web view it owns
+          // has no other way to reach the host.
+          if (!ready) setLoadError(message.message);
+          return;
+        case "contentHeight":
+          // The surface fills its container, so the height is advisory here.
           return;
       }
     },
-    [onSelectionChange, onLinkActivated, send],
+    [onSelectionChange, onLinkActivated, send, ready],
   );
 
   const onMessage = React.useCallback(
@@ -219,10 +256,10 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
     [handle],
   );
 
-  if (assetFailed) {
+  if (assetFailed || loadError !== undefined) {
     return (
       <View style={styles.center}>
-        <Text style={styles.message}>Couldn&apos;t load the code surface.</Text>
+        <Text style={styles.message}>{loadError ?? "Couldn't load the code surface."}</Text>
       </View>
     );
   }
@@ -258,8 +295,13 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
         allowingReadAccessToURL={uri.slice(0, uri.lastIndexOf("/") + 1)}
         // Nothing in the page navigates. A tapped link is reported to the host,
         // which decides, so the surface can never be steered somewhere else.
-        onShouldStartLoadWithRequest={(request) => request.url === uri || request.url === "about:blank"}
+        onShouldStartLoadWithRequest={(request) => isSurfaceNavigationAllowed(request.url)}
         onMessage={onMessage}
+        // A load that fails has to say so. A cancelled navigation and a dead
+        // content process both render as an empty view otherwise.
+        onError={(event) => setLoadError(event.nativeEvent.description || "The code surface could not be loaded.")}
+        onHttpError={(event) => setLoadError(`The code surface returned ${String(event.nativeEvent.statusCode)}.`)}
+        onContentProcessDidTerminate={() => setLoadError("The code surface ran out of memory and was closed by iOS.")}
         javaScriptEnabled
         domStorageEnabled={false}
         // Monaco does its own scrolling and its own zoom handling.

@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  isSurfaceNavigationAllowed,
   parseHostMessage,
   parseSurfaceMessage,
   SURFACE_GLOBAL,
@@ -232,6 +233,30 @@ describe("monacoThemeName", () => {
     const name = monacoThemeName(`${"x ".repeat(60)}end`);
     expect(LEGAL.test(name)).toBe(true);
     expect(name).not.toContain("--");
+  });
+});
+
+describe("isSurfaceNavigationAllowed", () => {
+  it("allows the page to load itself", () => {
+    expect(isSurfaceNavigationAllowed("file:///var/mobile/Containers/Data/Caches/ExponentAsset-abc.html")).toBe(true);
+  });
+
+  it("allows the same page once iOS has resolved /var to /private/var", () => {
+    // The symlink is why this is a scheme test and not an equality check: an
+    // equality check cancels the page's own first load and blanks the view.
+    expect(isSurfaceNavigationAllowed("file:///private/var/mobile/Containers/Data/ExponentAsset-abc.html")).toBe(true);
+  });
+
+  it("allows about:blank, which WebKit uses before anything is loaded", () => {
+    expect(isSurfaceNavigationAllowed("about:blank")).toBe(true);
+  });
+
+  it("refuses anything that could leave the device", () => {
+    expect(isSurfaceNavigationAllowed("https://example.com")).toBe(false);
+    expect(isSurfaceNavigationAllowed("http://127.0.0.1:5195/fs/read")).toBe(false);
+    expect(isSurfaceNavigationAllowed("javascript:alert(1)")).toBe(false);
+    expect(isSurfaceNavigationAllowed("data:text/html,<script>1</script>")).toBe(false);
+    expect(isSurfaceNavigationAllowed("")).toBe(false);
   });
 });
 

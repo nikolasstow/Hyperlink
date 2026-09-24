@@ -1,6 +1,35 @@
 import UIKit
 import WebKit
 
+/// Watches one surface's page load so a failure is never silent.
+///
+/// `WKWebView.navigationDelegate` is weak and the load starts in the pool, long
+/// before any view has claimed the surface, so the observer is owned by the
+/// ``Surface`` and the failure is remembered as well as forwarded.
+private final class SurfaceLoadObserver: NSObject, WKNavigationDelegate {
+  weak var surface: Surface?
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    surface?.loaded()
+  }
+
+  func webView(
+    _ webView: WKWebView,
+    didFailProvisionalNavigation navigation: WKNavigation!,
+    withError error: Error
+  ) {
+    surface?.failed(error.localizedDescription)
+  }
+
+  func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    surface?.failed(error.localizedDescription)
+  }
+
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    surface?.failed("The code surface ran out of memory and was closed by iOS.")
+  }
+}
+
 /// A web view that has loaded the code surface, and the content controller it
 /// was built with.
 ///
@@ -12,10 +41,40 @@ import WebKit
 final class Surface {
   let webView: WKWebView
   let controller: WKUserContentController
+  private let observer = SurfaceLoadObserver()
+
+  /// Why the page failed to load, if it did. Remembered rather than only
+  /// announced, because the load begins in the pool and there may be no view
+  /// listening yet.
+  private(set) var failure: String?
+
+  /// Told when the page fails, and told straight away if it already has.
+  var onFailure: ((String) -> Void)? {
+    didSet {
+      if let failure { onFailure?(failure) }
+    }
+  }
 
   init(webView: WKWebView, controller: WKUserContentController) {
     self.webView = webView
     self.controller = controller
+    observer.surface = self
+    webView.navigationDelegate = observer
+  }
+
+  /// Load the page again, for a surface whose last attempt failed.
+  func reload(fileURL: URL) {
+    failure = nil
+    webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+  }
+
+  fileprivate func failed(_ reason: String) {
+    failure = reason
+    onFailure?(reason)
+  }
+
+  fileprivate func loaded() {
+    failure = nil
   }
 }
 
@@ -117,6 +176,9 @@ final class SurfacePool {
   /// A warm surface, or a cold one if the pool was never warmed or is empty.
   func claim(fileURL: URL) -> Surface {
     let surface = idle.popLast() ?? makeSurface(fileURL: fileURL)
+    // A surface whose page failed to load is not warm, it is broken. Hand back
+    // one that is trying again rather than one that will never render.
+    if surface.failure != nil { surface.reload(fileURL: fileURL) }
     surface.webView.removeFromSuperview()
     busy.append(surface)
     return surface

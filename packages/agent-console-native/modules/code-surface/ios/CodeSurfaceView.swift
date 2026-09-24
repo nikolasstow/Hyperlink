@@ -59,6 +59,19 @@ public final class CodeSurfaceView: ExpoView {
     onSurfaceMessage(["data": body])
   }
 
+  /// Hand the host a failure in the shape the page itself would have sent.
+  ///
+  /// A web view whose page never loaded cannot report anything, and a surface
+  /// that renders nothing while saying nothing is indistinguishable from one
+  /// that is still working. One path for both.
+  private func report(failure reason: String) {
+    guard
+      let data = try? JSONSerialization.data(withJSONObject: ["kind": "error", "message": reason]),
+      let json = String(data: data, encoding: .utf8)
+    else { return }
+    receive(json)
+  }
+
   private func attachIfNeeded() {
     guard surface == nil, window != nil, let url = fileURL else { return }
     let claimed = SurfacePool.shared.claim(fileURL: url)
@@ -66,6 +79,9 @@ public final class CodeSurfaceView: ExpoView {
     // adding a second under the same name throws, so the old one goes first.
     claimed.controller.removeScriptMessageHandler(forName: SurfacePool.messageName)
     claimed.controller.add(proxy, name: SurfacePool.messageName)
+    // Set after the handler, and it fires immediately for a surface that has
+    // already failed, so a claim of a broken surface is reported at once.
+    claimed.onFailure = { [weak self] reason in self?.report(failure: reason) }
     claimed.webView.frame = bounds
     claimed.webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     addSubview(claimed.webView)
@@ -75,6 +91,7 @@ public final class CodeSurfaceView: ExpoView {
   private func detach() {
     guard let claimed = surface else { return }
     surface = nil
+    claimed.onFailure = nil
     claimed.controller.removeScriptMessageHandler(forName: SurfacePool.messageName)
     claimed.webView.removeFromSuperview()
     SurfacePool.shared.release(claimed)

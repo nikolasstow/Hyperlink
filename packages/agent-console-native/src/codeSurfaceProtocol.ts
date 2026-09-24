@@ -319,6 +319,26 @@ export const evictionsFor = (
   return evicted;
 };
 
+/**
+ * May the surface navigate to this URL?
+ *
+ * Only a local file, which in practice means the page loading itself. Nothing
+ * in the document navigates: a tapped link is reported to the host, which
+ * decides, and the page's content security policy allows no remote origin at
+ * all. This is the second lock on that door.
+ *
+ * It is a scheme test rather than a comparison against the URL the host asked
+ * for, and that distinction is the whole reason this function exists. iOS
+ * symlinks `/var` to `/private/var`, so a page asked for at
+ * `file:///var/.../surface.html` arrives at
+ * `file:///private/var/.../surface.html`. An equality check refuses the page's
+ * own first load, `react-native-webview` turns that into
+ * `WKNavigationActionPolicyCancel`, and the result is a blank view with no
+ * error anywhere.
+ */
+export const isSurfaceNavigationAllowed = (url: string): boolean =>
+  url === "about:blank" || url.startsWith("file://");
+
 /** The language ids the surface has grammars for. Anything else renders plain. */
 export const SURFACE_LANGUAGES: ReadonlyArray<string> = [
   "bash",
