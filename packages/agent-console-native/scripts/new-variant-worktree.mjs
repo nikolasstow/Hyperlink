@@ -22,11 +22,19 @@
  * which evaluates the config on its servers — picks it up without any env
  * forwarding. `APP_VARIANT` is also exported for the (optional) build here.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PACKAGE_SUBPATH = "packages/agent-console-native";
+/** The EAS CLI isn't installed globally here — it runs via npx. */
+const EAS = ["npx", "--yes", "eas-cli@24.7.0"];
+/** This script lives at <repoRoot>/packages/agent-console-native/scripts, so the
+ * repo (worktree) root is three levels up — computed from the script's own
+ * location, so it works no matter where you run it from. */
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDir, "..", "..", "..");
 
 const args = process.argv.slice(2);
 const doBuild = args.includes("--build");
@@ -50,25 +58,22 @@ const slug = name
   .slice(0, 24);
 if (slug.length === 0) fail(`"${name}" has no usable slug (need at least one alphanumeric character).`);
 
-const git = (...a) => execFileSync("git", a, { encoding: "utf8" }).trim();
+// All git runs against the repo root, so this works from any cwd.
+const git = (...a) => spawnSync("git", ["-C", repoRoot, ...a], { stdio: "inherit" });
 
-// This worktree's root; siblings (other worktrees) live next to it.
-const repoRoot = git("rev-parse", "--show-toplevel");
+// Siblings (other worktrees) live next to this one.
 const dest = path.join(path.dirname(repoRoot), slug);
 if (existsSync(dest)) fail(`${dest} already exists — pick another name or remove it first.`);
 
 // Reuse the branch if it already exists, else create it from base. Use the slug
 // (branch-safe: the variant name may have spaces/caps for display).
 const branch = slug;
-const branchExists = (() => {
-  const r = spawnSync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
-  return r.status === 0;
-})();
+const branchExists =
+  spawnSync("git", ["-C", repoRoot, "show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).status === 0;
 
 console.log(`→ git worktree add ${dest} (${branchExists ? branch : `-b ${branch} ${base}`})`);
 const addArgs = branchExists ? ["worktree", "add", dest, branch] : ["worktree", "add", "-b", branch, dest, base];
-const add = spawnSync("git", addArgs, { stdio: "inherit" });
-if (add.status !== 0) fail("git worktree add failed.");
+if (git(...addArgs).status !== 0) fail("git worktree add failed.");
 
 // Select the variant for that worktree (app.config.js reads this file).
 const variantFile = path.join(dest, PACKAGE_SUBPATH, "app-variant.json");
@@ -76,7 +81,7 @@ writeFileSync(variantFile, `${JSON.stringify({ variant: name }, null, 2)}\n`);
 console.log(`✓ wrote ${path.relative(dest, variantFile)} → variant "${name}" (bundle id …agentconsolenative.${slug})`);
 
 const buildCwd = path.join(dest, PACKAGE_SUBPATH);
-const buildCmd = `APP_VARIANT=${JSON.stringify(name)} eas build -p ios --profile development`;
+const buildCmd = `${EAS.join(" ")} build -p ios --profile development`;
 
 if (!doBuild) {
   console.log("\nWorktree ready. To build & install this variant:");
@@ -86,12 +91,11 @@ if (!doBuild) {
   process.exit(0);
 }
 
-if (spawnSync("which", ["eas"], { stdio: "ignore" }).status !== 0) {
-  fail(`eas CLI not found. Install it, then run:\n  cd ${buildCwd}\n  ${buildCmd}`);
-}
-
+// Interactive on purpose: a new variant's bundle id needs its credentials created
+// once, which EAS will only do with a real terminal (it auto-detects a non-TTY as
+// non-interactive and refuses). Run this from your own terminal for that first build.
 console.log(`\n→ ${buildCmd}\n  (in ${buildCwd})`);
-const build = spawnSync("eas", ["build", "-p", "ios", "--profile", "development"], {
+const build = spawnSync(EAS[0], [...EAS.slice(1), "build", "-p", "ios", "--profile", "development"], {
   cwd: buildCwd,
   stdio: "inherit",
   env: { ...process.env, APP_VARIANT: name },
