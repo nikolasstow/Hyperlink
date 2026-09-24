@@ -336,6 +336,16 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
        * refraction (no tint, no scrim); the autofocused input pops the keyboard
        * so the window sits above it. */}
       <Reanimated.View style={[styles.window, windowStyle]}>
+        {/* Handle tab — sits BEHIND the glass and peeks above the pill only at the
+         * min detent, so the glass overlaps its base and it reads as a proper tab
+         * (rounded top only). Drag it to raise the window back up. */}
+        {pillMode ? (
+          <GestureDetector gesture={drag}>
+            <View style={styles.tabBehind}>
+              <View style={styles.grabber} />
+            </View>
+          </GestureDetector>
+        ) : null}
         <GlassContainer style={styles.glassContainer}>
           <GlassView
             style={styles.glass}
@@ -348,23 +358,17 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
             tintColor="rgba(0,0,0,0.18)"
             colorScheme={scheme === "dark" ? "dark" : "light"}
           >
-            {/* Drag bar — pull down to lower the window to a detent (see behind).
-             * ALWAYS floats over the top (absolute, zero layout height) rather than
-             * stacking above the content: that keeps the composer as the only
-             * flow child, so shrinking the window toward the min never squeezes it
-             * below the keyboard-anchored bottom (which collapsed the TextInput's
-             * frame and dropped the keyboard), and the min detent is a true pill. */}
-            <GestureDetector gesture={drag}>
-              <View style={[styles.grabberArea, pillMode && styles.grabberAreaPill]}>
-                {/* Tab-shaped container: invisible normally; at the min detent it's
-                 * lifted above the pill (grabberAreaPill's negative offset) and given
-                 * a visible fill, so the handle reads as a tab and sits clear of the
-                 * text instead of overlapping it. */}
-                <View style={[styles.grabberTab, pillMode && styles.grabberTabVisible]}>
+            {/* Drag bar inside the glass at the larger detents — floats over the top
+             * (absolute, zero layout height) so the composer stays the only flow
+             * child. At the min detent the handle is the tab behind the glass instead
+             * (above), so this isn't rendered there. */}
+            {pillMode ? null : (
+              <GestureDetector gesture={drag}>
+                <View style={styles.grabberArea}>
                   <View style={styles.grabber} />
                 </View>
-              </View>
-            </GestureDetector>
+              </GestureDetector>
+            )}
 
             {/* Conversation area — empty for now; flexes so the composer pill sits
              * at the bottom of the window. Hidden in pill mode. */}
@@ -455,22 +459,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 2,
   },
-  // Min detent: lift the grabber above the pill's top edge (negative offset) so the
-  // tab pops up clear of the composer content.
-  grabberAreaPill: {
-    top: -16,
-  },
-  // The tab around the grabber line — invisible (no fill) at every detent except…
-  grabberTab: {
-    paddingHorizontal: 16,
+  // Handle tab shown only at the min detent. Sits BEHIND the glass (rendered before
+  // the GlassContainer) and is lifted so its top peeks above the pill while the
+  // glass overlaps its base — rounded top only, so it reads as a proper tab.
+  tabBehind: {
+    position: "absolute",
+    top: -18,
+    alignSelf: "center",
+    width: 72,
     paddingTop: 6,
-    paddingBottom: 8,
-    borderRadius: 12,
-    borderCurve: "continuous",
+    paddingBottom: 26,
     alignItems: "center",
-  },
-  // …the min detent, where it gets a fill so it reads as a handle tab.
-  grabberTabVisible: {
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderCurve: "continuous",
     backgroundColor: "rgba(120,120,128,0.22)",
   },
   grabber: {
