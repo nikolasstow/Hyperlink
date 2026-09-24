@@ -56,7 +56,8 @@
     "bundle:check": "expo export --platform ios --output-dir /tmp/agent-console-native-bundle-check",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "gen:code-surface": "node scripts/gen-code-surface.mjs"
+    "gen:code-surface": "node scripts/gen-code-surface.mjs",
+    "variant:new": "node scripts/new-variant-worktree.mjs"
   },
   "private": true
 }
