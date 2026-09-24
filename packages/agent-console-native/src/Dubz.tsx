@@ -47,10 +47,9 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** Floor of the "input detent" — the one-line pill. The input detent's window
- * hugs the measured composer (grows with the lines) but never shrinks below this.
- * pill row (send chip 36 + 2×8 padding = 52) + pill-wrap bottom padding (8) = 60. */
-const MIN_HEIGHT = 60;
+/** Smallest height — the "pill" detent. A full capsule at the window radius; the
+ * composer keeps its natural height and is centred within it (pillWrapFill). */
+const MIN_HEIGHT = 58;
 /** Composer margin inside the window (expanded); collapses to 0 at the pill. */
 const COMPOSER_INSET = 12;
 /** Drag distance (px before the min detent) over which the composer margins
@@ -64,15 +63,10 @@ const TAB_TOP = -24;
 const SNAP_MS = 240;
 /** Fling-down velocity (px/s) that dismisses the window. */
 const FLING_VELOCITY = 1400;
-/** Input line box (lineHeight) + its paddingVertical (6×2). */
-const INPUT_LINE_H = 21;
-const INPUT_PAD_V = 12;
-/** Hard cap on the input — never taller than this many lines. */
-const INPUT_MAX_LINES = 8;
-/** Window height NOT usable by the input at a fixed detent (composer chrome). */
-const INPUT_OVERHEAD = 24;
-/** Window chrome around the composer at the input detent: window = composer + this. */
-const COMPOSER_CHROME = 8;
+/** How far past the last detent you can keep pulling, and the release point past
+ * which (last detent + margin) the window dismisses instead of snapping back. */
+const DISMISS_ZONE = 120;
+const DISMISS_MARGIN = 48;
 
 // Last detent the window was left at, remembered across close/reopen (session
 // lifetime): a fraction of maxDrag (0 = full, 0.5 = mid, 1 = pill) plus the
@@ -157,28 +151,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // window reopens in the state it was left.
   const [lowered, setLowered] = React.useState(savedDetentFrac > 0.02);
   const [pillMode, setPillMode] = React.useState(savedDetentFrac >= 0.98);
-  // The window height at a FIXED (non-input) detent — caps the input there so it
-  // never exceeds the window. At the input detent the window grows with the input
-  // instead, so the cap is just the line limit.
-  const [settledDetentH, setSettledDetentH] = React.useState(screenH);
   const grow = useSharedValue(0);
   const dragY = useSharedValue(0); // 0 = full height; positive = top lowered
   const dragStart = useSharedValue(0);
-  // The composer's measured height (its pill row + chrome), animated. At the input
-  // detent the window hugs this, so it grows/shrinks as the input gains/loses lines.
-  const measuredComposerH = useSharedValue(MIN_HEIGHT);
-  // 1 while settled at the input detent (window hugs the composer), else 0. A shared
-  // mirror of pillMode so the hug reaction (UI thread) can read it.
-  const inputDetent = useSharedValue(savedDetentFrac >= 0.98 ? 1 : 0);
-  // Input height cap: at the input detent it can climb to the line limit (the window
-  // grows to follow); at a fixed detent it's capped to what fits the window, and
-  // scrolls past that — so the input is never bigger than the glass window.
-  const inputMaxH = pillMode
-    ? INPUT_LINE_H * INPUT_MAX_LINES + INPUT_PAD_V
-    : Math.min(
-        INPUT_LINE_H * INPUT_MAX_LINES + INPUT_PAD_V,
-        Math.max(settledDetentH - INPUT_OVERHEAD, INPUT_LINE_H + INPUT_PAD_V),
-      );
   // The full (resting) keyboard height, tracked as the running max of the live
   // height. The window's HEIGHT is computed from this stable value while its
   // bottom edge rides the LIVE keyboard — so dismissing the keyboard keeps the
@@ -210,8 +185,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const stableBottom = Math.max(savedKbFull, insets.bottom) + MARGIN;
     const maxDrag = Math.max(screenH - (insets.top + TOP_MARGIN) - stableBottom - MIN_HEIGHT, 0);
     dragY.value = savedDetentFrac * maxDrag;
-    // Cap the input for the initial (fixed) detent; the input detent hugs instead.
-    setSettledDetentH(maxDrag * (1 - savedDetentFrac) + MIN_HEIGHT);
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
       setEntered(true);
@@ -247,15 +220,6 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           resizing.value = true;
         })
         .onStart(() => {
-          // Leaving the input detent: seed dragY from the current (measured) window
-          // height so the drag continues from where the hug left it — no jump.
-          if (inputDetent.value === 1) {
-            const fullTop = topInset + TOP_MARGIN;
-            const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
-            const fullHeight = screenH - fullTop - stableBottom;
-            const h = Math.min(Math.max(measuredComposerH.value, MIN_HEIGHT), fullHeight);
-            dragY.value = fullHeight - h;
-          }
           dragStart.value = dragY.value;
         })
         .onUpdate((e) => {
@@ -264,24 +228,20 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           // same whether the keyboard is present or gone.
           const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
           const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
-          // Live-drag uses dragY directly (not the input-detent hug).
-          inputDetent.value = 0;
-          // Clamp to the input detent — can't drag the window past its smallest size.
+          // Allow pulling a bit past the last detent into a dismiss zone.
+          const limit = maxDrag + DISMISS_ZONE;
           const next = dragStart.value + e.translationY;
-          dragY.value = next < 0 ? 0 : next > maxDrag ? maxDrag : next;
+          dragY.value = next < 0 ? 0 : next > limit ? limit : next;
         })
         .onEnd((e) => {
           const fullTop = topInset + TOP_MARGIN;
           const stableBottom = Math.max(kbFull.value, bottomInset) + MARGIN;
-          const fullHeight = screenH - fullTop - stableBottom;
-          const maxDrag = Math.max(fullHeight - MIN_HEIGHT, 0);
-          // Flung down hard → dismiss.
-          if (e.velocityY > FLING_VELOCITY) {
+          const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
+          // Flung down hard, or released past the last detent → dismiss.
+          if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
             runOnJS(close)();
             return;
           }
-          // Detents (fractions of maxDrag): full, mid, and the INPUT detent (maxDrag),
-          // where the window hugs the composer.
           const detents = [0, maxDrag * 0.5, maxDrag];
           const projected = dragY.value + e.velocityY * 0.08;
           let target = 0;
@@ -294,29 +254,16 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
               target = detents[i];
             }
           }
-          const isInputDetent = maxDrag > 0 && target >= maxDrag - 4;
-          if (isInputDetent) {
-            // Animate the window down to the min via dragY, THEN switch windowStyle
-            // to the measured-composer branch — so snapping in from a distance glides
-            // (no jump) and the composer transition finishes during the snap.
-            dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) }, (done) => {
-              if (done) inputDetent.value = 1;
-            });
-          } else {
-            inputDetent.value = 0;
-            dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-            // The window height at this fixed detent — caps the input there.
-            runOnJS(setSettledDetentH)(fullHeight - target);
-          }
+          dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
           runOnJS(setLowered)(target > 4);
-          runOnJS(setPillMode)(isInputDetent);
+          runOnJS(setPillMode)(maxDrag > 0 && target >= maxDrag - 4);
           // Remember this detent so the window reopens where it was left.
           runOnJS(rememberDetent)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
         })
         .onFinalize(() => {
           resizing.value = false;
         }),
-    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbFull, inputDetent, measuredComposerH, setSettledDetentH, close],
+    [screenH, topInset, bottomInset, dragY, dragStart, resizing, kbFull, close],
   );
 
   // Swipe DOWN on the composer pill to dismiss the keyboard (the window then
@@ -358,16 +305,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     // change as the keyboard opens/closes — only the position (bottomEdge) does.
     const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
     const fullHeight = screenH - stableBottom - fullTop;
-    // At the input detent the window height is the MEASURED composer height, so it
-    // grows/shrinks with the input's line count. Elsewhere it's the drag height.
-    // The composer measure is a settled value (measuredComposerH is withTiming'd on
-    // layout), and dragY is left untouched at this detent — so the composer's own
-    // frost/margin transition stays done rather than re-running.
-    const target =
-      inputDetent.value === 1
-        ? Math.min(Math.max(measuredComposerH.value, MIN_HEIGHT), fullHeight)
-        : fullHeight - dragY.value;
-    const height = Math.max(target * grow.value, 0);
+    const height = Math.max(fullHeight * grow.value - dragY.value, 0);
     return {
       top: bottomEdge - height,
       height,
@@ -387,9 +325,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
     const denom = maxDrag - start;
     const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
-    // Pinned fully collapsed at the input detent — so the post-release window hug
-    // (which moves dragY to follow the composer) can't re-run this transition.
-    const p = inputDetent.value === 1 ? 1 : raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
     // Horizontal margin collapses from 12 toward 2 (not 0) at the pill; the bottom
     // (Y) decreases by 4px, so the composer keeps distance from both glass edges.
     return { paddingHorizontal: COMPOSER_INSET - 10 * p, paddingBottom: COMPOSER_INSET - 4 * p };
@@ -407,7 +343,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
     const denom = maxDrag - start;
     const raw = denom <= 0 ? 0 : (dragY.value - start) / denom;
-    const p = inputDetent.value === 1 ? 1 : raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
     return { opacity: 1 - p };
   });
 
@@ -457,20 +393,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
              * pill blends into the clear window at the detent — no pill-in-pill. The
              * pill radius stays at the window radius in every mode, so it's a full
              * capsule throughout — no radius pop. */}
-            <Reanimated.View style={[styles.pillWrap, pillPadStyle]}>
+            <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
               <GestureDetector gesture={dismissKb}>
-                <View
-                  style={styles.pill}
-                  // Measure the composer's own (natural) height so the input detent's
-                  // window can hug it — grows/shrinks with the line count. Animated
-                  // (withTiming) so the window follows smoothly line-by-line.
-                  onLayout={(e) => {
-                    measuredComposerH.value = withTiming(e.nativeEvent.layout.height + COMPOSER_CHROME, {
-                      duration: SNAP_MS,
-                      easing: Easing.out(Easing.cubic),
-                    });
-                  }}
-                >
+                <View style={styles.pill}>
                   {/* Frosted glass background, faded by the drag. Regular glass
                    * survives an animated-opacity layer (only CLEAR glass dies under
                    * compositing), and this is a descendant of the window glass, not
@@ -486,7 +411,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
                     <Ionicons name="add" size={22} color={colors.secondaryLabel} />
                   </Pressable>
                   <TextInput
-                    style={[styles.pillInput, { maxHeight: inputMaxH }]}
+                    style={styles.pillInput}
                     value={text}
                     onChangeText={setText}
                     placeholder={`Ask ${AGENT_NAME}…`}
@@ -598,8 +523,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: COMPOSER_INSET,
     paddingBottom: COMPOSER_INSET,
   },
-  // The composer row. Chips bottom-align (so they hold position as the input grows
-  // upward). At the input detent the window hugs this row's height. The glass is a
+  // Pill mode: fill the window (padding comes to 0 via the animated style) and keep
+  // the composer at the BOTTOM — filling flips the default to flex-start (top), so
+  // pin it back to flex-end to match the expanded layout.
+  pillWrapFill: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  // The composer row. Chips ALWAYS bottom-align (so they hold position as the
+  // input grows upward); the row is centred within the pill at the min detent
+  // (pillWrapFill) so bottom-aligned chips read as centred there. The glass is a
   // separate faded background (pillGlass), not this view.
   pill: {
     flexDirection: "row",
@@ -632,10 +565,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.label,
     fontSize: 16,
-    // Grows upward with each new line. The cap (maxHeight) is applied inline and is
-    // DYNAMIC — the window space at a fixed detent, or the line limit at the input
-    // detent (where the window grows to follow) — so it never exceeds the window.
-    lineHeight: INPUT_LINE_H,
+    // Grows upward with each new line (the bottom-anchored pill grows up), capped
+    // at ~8 lines — a fixed lineHeight makes that cap exact — then scrolls.
+    lineHeight: 21,
+    maxHeight: 21 * 8,
     paddingVertical: 6,
     paddingHorizontal: 2,
   },
