@@ -58,7 +58,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "gen:code-surface": "node scripts/gen-code-surface.mjs",
-    "variant:new": "node scripts/new-variant-worktree.mjs"
+    "variant:new": "node scripts/new-variant-worktree.mjs",
+    "prepare": "node scripts/worktree-setup.mjs"
   },
   "private": true
 }

@@ -23,10 +23,9 @@
  * forwarding. `APP_VARIANT` is also exported for the (optional) build here.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { genVariantIcon } from "./gen-variant-icon.mjs";
 
 const PACKAGE_SUBPATH = "packages/agent-console-native";
 /** The EAS CLI isn't installed globally here — it runs via npx. */
@@ -76,46 +75,31 @@ console.log(`→ git worktree add ${dest} (${branchExists ? branch : `-b ${branc
 const addArgs = branchExists ? ["worktree", "add", dest, branch] : ["worktree", "add", "-b", branch, dest, base];
 if (git(...addArgs).status !== 0) fail("git worktree add failed.");
 
-// Select the variant for that worktree (app.config.js reads this file).
-const variantFile = path.join(dest, PACKAGE_SUBPATH, "app-variant.json");
-writeFileSync(variantFile, `${JSON.stringify({ variant: name }, null, 2)}\n`);
-console.log(`✓ wrote ${path.relative(dest, variantFile)} → variant "${name}" (bundle id …agentconsolenative.${slug})`);
+const pkgCwd = path.join(dest, PACKAGE_SUBPATH);
 
-// Distinctive icon: the base icon with a top color banner carrying the name.
-const assetsDir = path.join(dest, PACKAGE_SUBPATH, "assets");
-const { color } = await genVariantIcon({
-  name,
-  baseIcon: path.join(assetsDir, "icon.png"),
-  out: path.join(assetsDir, "variant-icon.png"),
-});
-console.log(`✓ wrote assets/variant-icon.png → banner "${name.toUpperCase()}" (${color})`);
-
-const buildCwd = path.join(dest, PACKAGE_SUBPATH);
-
-if (!doBuild) {
-  console.log("\nWorktree ready. To build & install this variant:");
-  console.log(`  cd ${dest} && pnpm install`);
-  console.log(`  cd ${buildCwd} && ${EAS.join(" ")} build -p ios --profile development`);
-  console.log("\n(Or re-run this with --build to do both now. Install from the EAS link.)");
-  process.exit(0);
-}
-
-// A fresh worktree has no node_modules, and `eas build` needs the project resolvable
-// locally (to evaluate the config + fingerprint). Install first (pnpm store is warm,
-// so this is mostly hardlinks).
-console.log("\n→ pnpm install (in the new worktree)…");
+// Install deps — this fires the package's `prepare` hook (scripts/worktree-setup.mjs),
+// which is the single source of truth for per-worktree setup: it writes the variant
+// marker + banner icon (a linked worktree becomes a variant named after itself). A
+// worktree made with plain `git worktree add` gets the exact same setup on its own
+// install. Install is also required before a build (eas evaluates the config locally).
+console.log("\n→ pnpm install (runs the worktree-setup prepare hook)…");
 if (spawnSync("pnpm", ["install"], { cwd: dest, stdio: "inherit" }).status !== 0) {
   fail("pnpm install failed in the new worktree.");
 }
 
-const env = { ...process.env, APP_VARIANT: name };
+if (!doBuild) {
+  console.log(`\n✓ Worktree ready at ${dest} — variant "${slug}".`);
+  console.log(`  Build & install:  cd ${pkgCwd} && ${EAS.join(" ")} build -p ios --profile development`);
+  process.exit(0);
+}
+
 const buildArgs = ["build", "-p", "ios", "--profile", "development", "--no-wait"];
 
 // Try HEADLESS first. This succeeds with no prompts once the ASC API key is
 // assigned to the project's build credentials (`eas credentials -p ios` → App Store
 // Connect API Key), which lets EAS create a new variant's cert + profile silently.
-console.log(`\n→ ${EAS.join(" ")} ${buildArgs.join(" ")} --non-interactive  (in ${buildCwd})`);
-const headless = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs, "--non-interactive"], { cwd: buildCwd, encoding: "utf8", env });
+console.log(`\n→ ${EAS.join(" ")} ${buildArgs.join(" ")} --non-interactive  (in ${pkgCwd})`);
+const headless = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs, "--non-interactive"], { cwd: pkgCwd, encoding: "utf8" });
 process.stdout.write(headless.stdout ?? "");
 process.stderr.write(headless.stderr ?? "");
 if (headless.status === 0) process.exit(0);
@@ -134,7 +118,7 @@ if (!process.stdin.isTTY) {
       `  ${EAS.join(" ")} credentials -p ios   → App Store Connect API Key → assign "[Expo] EAS Submit"`,
   );
 }
-console.log('\nℹ New bundle id has no credentials yet — re-running interactively so EAS can create them (uses your ASC key).');
-console.log('   Assign the ASC key once (eas credentials -p ios) and future variants build headless.\n');
-const interactive = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs], { cwd: buildCwd, stdio: "inherit", env });
+console.log("\nℹ New bundle id has no credentials yet — re-running interactively so EAS can create them (uses your ASC key).");
+console.log("   Assign the ASC key once (eas credentials -p ios) and future variants build headless.\n");
+const interactive = spawnSync(EAS[0], [...EAS.slice(1), ...buildArgs], { cwd: pkgCwd, stdio: "inherit" });
 process.exit(interactive.status ?? 1);
