@@ -46,7 +46,9 @@ const fsRoot = (): string => process.env.AGENT_CONSOLE_FS_ROOT ?? homedir();
 /** The configured root, for logging. */
 export const fsRootPath = (): string => fsRoot();
 
-const resolveWithin = (requested: string): Effect.Effect<string, FsError, FileSystem.FileSystem | Path.Path> =>
+/** `requested` resolved (symlinks followed) and confined to the files root.
+ * Shared by every endpoint that takes a path from the network. */
+export const resolveWithin = (requested: string): Effect.Effect<string, FsError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const fs = yield* FileSystem.FileSystem;

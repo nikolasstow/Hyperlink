@@ -19,6 +19,7 @@ import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { api } from "./api";
+import { ExtensionViews } from "./extensionHost/extensionViews";
 import { importFont, inspectFont, readFontFile } from "./fonts";
 import {
   discoverLocalExtensions,
@@ -53,6 +54,19 @@ const fontsHandlers = HttpApiBuilder.group(api, "fonts", (handlers) =>
     .handle("import", ({ payload }) => importFont(payload.url)),
 );
 
+// The service is resolved once, when the group is built, so the handlers close
+// over it rather than asking for it on every request.
+const viewsHandlers = HttpApiBuilder.group(api, "views", (handlers) =>
+  ExtensionViews.pipe(
+    Effect.map((views) =>
+      handlers
+        .handle("list", ({ payload }) => views.views(payload.workspace))
+        .handle("children", ({ payload }) => views.children(payload.workspace, payload.view, payload.parent))
+        .handle("invoke", ({ payload }) => views.invoke(payload.workspace, payload.view, payload.node, payload.command)),
+    ),
+  ),
+);
+
 // A raw route to serve stored (converted) font bytes — binary, so it's an
 // HttpRouter route rather than an HttpApi endpoint. `?id=<fileId>`.
 const fontFileRoute = HttpRouter.add("GET", "/fonts/file", (request) =>
@@ -66,7 +80,9 @@ const fontFileRoute = HttpRouter.add("GET", "/fonts/file", (request) =>
   }),
 );
 
-const apiLive = HttpApiBuilder.layer(api).pipe(Layer.provide([extensionsHandlers, configHandlers, fontsHandlers]));
+const apiLive = HttpApiBuilder.layer(api).pipe(
+  Layer.provide([extensionsHandlers, configHandlers, fontsHandlers, viewsHandlers.pipe(Layer.provide(ExtensionViews.layer))]),
+);
 
 const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 

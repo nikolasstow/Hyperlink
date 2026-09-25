@@ -9,9 +9,10 @@
  * @internal
  */
 import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
+import { ExtensionHostError, InvokeResult, ViewInfo, ViewNode, ViewRequestError, childrenPayload, invokePayload } from "./extensionHost/protocol";
 
 const ThemeContribution = Schema.Struct({
   id: Schema.String,
@@ -113,4 +114,37 @@ const fontsGroup = HttpApiGroup.make("fonts").add(
   }),
 );
 
-export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup).add(fontsGroup);
+/** A bad request is the caller's to fix (400); a host that failed or is down
+ * is not (503). */
+const viewErrors = [ViewRequestError.pipe(HttpApiSchema.status(400)), ExtensionHostError.pipe(HttpApiSchema.status(503))];
+
+/**
+ * Views that extensions contribute (VS Code tree views), run by the extension
+ * host. Every call names the workspace (a repo or worktree folder) whose host
+ * answers it.
+ */
+const viewsGroup = HttpApiGroup.make("views").add(
+  HttpApiEndpoint.post("list", "/views/list", {
+    payload: Schema.Struct({ workspace: Schema.String }),
+    success: Schema.Array(ViewInfo),
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("children", "/views/children", {
+    payload: Schema.Struct({
+      workspace: Schema.String,
+      ...childrenPayload.fields,
+    }),
+    success: Schema.Array(ViewNode),
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("invoke", "/views/invoke", {
+    payload: Schema.Struct({
+      workspace: Schema.String,
+      ...invokePayload.fields,
+    }),
+    success: InvokeResult,
+    error: viewErrors,
+  }),
+);
+
+export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup).add(fontsGroup).add(viewsGroup);
