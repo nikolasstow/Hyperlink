@@ -281,12 +281,13 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   ];
 
   // --- Collapse geometry -----------------------------------------------------
-  // Measured ONCE. The body's own clip animates its height, which re-fires the
-  // inner onLayout with the shrinking (clipped) value — measuring only the
-  // first real layout keeps that from corrupting the geometry and wedging it
-  // collapsed.
+  // The body's own clip animates its height, which re-fires the inner onLayout
+  // with the shrinking (clipped) value; accepting those would corrupt the
+  // geometry and wedge it collapsed. So a measurement is taken only when it
+  // GROWS: the clip can only ever shrink it, so growth is real content arriving
+  // late (the extension-view rows load after the first layout).
   const [bodyHeight, setBodyHeight] = React.useState(DEFAULT_BODY_HEIGHT);
-  const bodyMeasured = React.useRef(false);
+  const bodyMeasured = React.useRef(0);
   const collapsedH = insets.top + BAR_CONTENT_HEIGHT;
   const expandedH = collapsedH + TOP_MARGIN + BODY_TOP_GAP + bodyHeight + BODY_BOTTOM_PAD;
   const collapseDistance = expandedH - collapsedH;
@@ -418,10 +419,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
            * animated height doesn't feed back into the measurement. */}
           <View
             onLayout={(event) => {
-              if (bodyMeasured.current) return;
               const measured = event.nativeEvent.layout.height;
-              if (measured > 0) {
-                bodyMeasured.current = true;
+              if (measured > bodyMeasured.current) {
+                bodyMeasured.current = measured;
                 setBodyHeight(measured);
               }
             }}
