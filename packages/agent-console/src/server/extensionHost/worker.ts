@@ -1,6 +1,6 @@
 /**
- * A host worker's entry point: one worker thread per workspace, running the
- * extension host behind the RPC protocol.
+ * The host worker's entry point: one worker thread running the extension host
+ * (for every workspace) behind the RPC protocol.
  *
  * Extensions run here rather than in the API server for the reason VS Code
  * runs them in a separate extension host: they are other people's code. A
@@ -20,9 +20,8 @@ import { RpcServer } from "effect/unstable/rpc";
 import { makeHost } from "./host";
 import { ExtensionHostRpcs } from "./protocol";
 
-/** What the parent passes at spawn: the workspace and the extension folders. */
+/** What the parent passes at spawn: the extension folders to run. */
 export const hostWorkerData = Schema.Struct({
-  workspace: Schema.String,
   extensions: Schema.Array(Schema.String),
 });
 

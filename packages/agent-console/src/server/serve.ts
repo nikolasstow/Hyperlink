@@ -62,7 +62,9 @@ const viewsHandlers = HttpApiBuilder.group(api, "views", (handlers) =>
       handlers
         .handle("list", ({ payload }) => views.views(payload.workspace))
         .handle("children", ({ payload }) => views.children(payload.workspace, payload.view, payload.parent))
-        .handle("invoke", ({ payload }) => views.invoke(payload.workspace, payload.view, payload.node, payload.command)),
+        .handle("tree", ({ payload }) => views.tree(payload.workspace, payload.view, payload.refresh))
+        .handle("invoke", ({ payload }) => views.invoke(payload.workspace, payload.view, payload.node, payload.command))
+        .handle("warm", ({ payload }) => views.warm(payload.workspaces)),
     ),
   ),
 );

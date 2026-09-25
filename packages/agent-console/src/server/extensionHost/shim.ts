@@ -449,21 +449,47 @@ const recordOpen = (registry: Registry, target: unknown, options: unknown): void
   });
 };
 
+/** A folder the host serves, as the extension sees it. `name` is unique among
+ * the folders: extensions (npm among them) key their trees by it. */
+export interface WorkspaceFolderInfo {
+  readonly path: string;
+  readonly name: string;
+}
+
 export interface ShimOptions {
-  readonly workspaceRoot: string;
+  /** The folders the host serves right now; it grows as workspaces arrive. */
+  readonly folders: () => ReadonlyArray<WorkspaceFolderInfo>;
+  /** Fired when folders are added, as VS Code fires it for a multi-root window. */
+  readonly foldersChanged: EventEmitter<{
+    readonly added: ReadonlyArray<unknown>;
+    readonly removed: ReadonlyArray<unknown>;
+  }>;
   readonly defaults: ReadonlyMap<string, unknown>;
   readonly runtime: ShimRuntime;
   readonly registry: Registry;
 }
 
+/** VS Code's `WorkspaceFolder` for one folder at `index`. */
+export const toWorkspaceFolder = (info: WorkspaceFolderInfo, index: number) => ({
+  uri: Uri.file(info.path),
+  name: info.name,
+  index,
+});
+
 /** Build the `vscode` module object an extension receives. */
 export const makeVscode = (options: ShimOptions) => {
-  const { registry, runtime, workspaceRoot, defaults } = options;
-  const folder = () => ({
-    uri: Uri.file(workspaceRoot),
-    name: workspaceRoot.split("/").at(-1) ?? workspaceRoot,
-    index: 0,
-  });
+  const { registry, runtime, defaults, folders, foldersChanged } = options;
+  const workspaceFolders = () => folders().map(toWorkspaceFolder);
+  /** The folder holding `target` (the deepest one, if folders nest), as VS
+   * Code resolves it; undefined for a path outside every folder. */
+  const folderOf = (target: unknown) => {
+    const path = target instanceof Uri ? target.fsPath : Predicate.hasProperty(target, "uri") && target.uri instanceof Uri ? target.uri.fsPath : undefined;
+    if (path === undefined) return undefined;
+    return workspaceFolders()
+      .filter((folder) => path === folder.uri.fsPath || path.startsWith(`${folder.uri.fsPath}/`))
+      .sort((a, b) => b.uri.fsPath.length - a.uri.fsPath.length)
+      .at(0);
+  };
 
   const configuration = (section?: string) => {
     const fullKey = (key: string) => (section === undefined ? key : `${section}.${key}`);
@@ -687,13 +713,13 @@ export const makeVscode = (options: ShimOptions) => {
     }),
     workspace: recorded(registry, "workspace", {
       get workspaceFolders() {
-        return [folder()];
+        return workspaceFolders();
       },
-      getWorkspaceFolder: () => folder(),
+      getWorkspaceFolder: folderOf,
       isTrusted: true,
       getConfiguration: configuration,
       onDidChangeConfiguration: noEvent,
-      onDidChangeWorkspaceFolders: noEvent,
+      onDidChangeWorkspaceFolders: foldersChanged.event,
       onDidChangeTextDocument: noEvent,
       onDidSaveTextDocument: noEvent,
       createFileSystemWatcher: () =>
@@ -703,10 +729,17 @@ export const makeVscode = (options: ShimOptions) => {
           onDidDelete: noEvent,
           dispose: () => undefined,
         }),
+      // A bare pattern searches every folder, as VS Code does; a relative one
+      // searches its base.
       findFiles: (include: string | RelativePattern, _exclude?: unknown, max?: number) =>
         runtime.runPromise(
           typeof include === "string"
-            ? findFiles(workspaceRoot, include, max)
+            ? Effect.forEach(folders(), (folder) => findFiles(folder.path, include, max)).pipe(
+                Effect.map((found) => {
+                  const all = found.flat();
+                  return max === undefined ? all : all.slice(0, max);
+                }),
+              )
             : findFiles(include.base, include.pattern, max),
         ),
       fs: recorded(registry, "workspace.fs", {

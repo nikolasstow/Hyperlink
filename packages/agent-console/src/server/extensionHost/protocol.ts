@@ -92,19 +92,53 @@ export class ViewRequestError extends Schema.TaggedErrorClass<ViewRequestError>(
 export const HostCallError = Schema.Union([ExtensionHostError, ViewRequestError]);
 export type HostCallError = typeof HostCallError.Type;
 
+/** Every request names the workspace (a repo or worktree folder) it is about:
+ * one host serves all of them, VS Code's multi-root window. */
+export const viewsPayload = Schema.Struct({
+  workspace: Schema.String,
+});
+
 export const childrenPayload = Schema.Struct({
+  workspace: Schema.String,
   view: Schema.String,
   parent: Schema.optionalKey(Schema.String),
 });
 
+/** A whole tree for one workspace. `refresh` is how fresh it must be:
+ * - `none`: whatever the extension has (instant);
+ * - `ifChanged`: re-read only if a file behind the rows it last returned
+ *   changed (a few stats; the cheap revalidation a cache wants);
+ * - `force`: run the view's own refresh command (npm's `npm.refresh`), which
+ *   re-scans everything (pull to refresh).
+ */
+export const treePayload = Schema.Struct({
+  workspace: Schema.String,
+  view: Schema.String,
+  refresh: Schema.Literals(["none", "ifChanged", "force"]),
+});
+export type TreeRefresh = (typeof treePayload.Type)["refresh"];
+
 export const invokePayload = Schema.Struct({
+  workspace: Schema.String,
   view: Schema.String,
   node: Schema.String,
   command: Schema.String,
 });
 
+export const warmPayload = Schema.Struct({
+  workspaces: Schema.Array(Schema.String),
+});
+
+/** One row of a whole tree, flat with its parent's id (absent at the top), so
+ * the tree needs no recursive schema. In depth-first order. */
+export class TreeEntry extends Schema.Class<TreeEntry>("TreeEntry")({
+  parent: Schema.optionalKey(Schema.String),
+  node: ViewNode,
+}) {}
+
 export class ExtensionHostRpcs extends RpcGroup.make(
   Rpc.make("Views", {
+    payload: viewsPayload,
     success: Schema.Array(ViewInfo),
     error: HostCallError,
   }),
@@ -113,9 +147,19 @@ export class ExtensionHostRpcs extends RpcGroup.make(
     success: Schema.Array(ViewNode),
     error: HostCallError,
   }),
+  Rpc.make("Tree", {
+    payload: treePayload,
+    success: Schema.Array(TreeEntry),
+    error: HostCallError,
+  }),
   Rpc.make("Invoke", {
     payload: invokePayload,
     success: InvokeResult,
+    error: HostCallError,
+  }),
+  Rpc.make("Warm", {
+    payload: warmPayload,
+    success: Schema.Void,
     error: HostCallError,
   }),
 ) {}

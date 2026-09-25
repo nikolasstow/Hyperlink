@@ -14,8 +14,8 @@
 import { Duration, Effect, FileSystem, ManagedRuntime, Option, Path, Predicate, Ref, Result, Schema } from "effect";
 import { NodeServices } from "@effect/platform-node";
 import { importedNames, installVscodeModule } from "./loader";
-import { Completed, ExtensionHostError, OpenFile, RunTask, ViewAction, ViewInfo, ViewNode, ViewRequestError, type InvokeResult } from "./protocol";
-import { ProcessExecution, ShellExecution, Task, Uri, makeRegistry, makeVscode, type Registry } from "./shim";
+import { Completed, ExtensionHostError, OpenFile, RunTask, TreeEntry, ViewAction, ViewInfo, ViewNode, ViewRequestError, type InvokeResult, type TreeRefresh } from "./protocol";
+import { EventEmitter, ProcessExecution, ShellExecution, Task, Uri, makeRegistry, makeVscode, toWorkspaceFolder, type Registry, type WorkspaceFolderInfo } from "./shim";
 import { matchesWhen } from "./when";
 
 // ── Manifest ───────────────────────────────────────────────────────────────────
@@ -240,25 +240,53 @@ const text = (value: string | { readonly label: string } | { readonly value: str
   value === undefined ? undefined : Predicate.isString(value) ? value : "label" in value ? value.label : value.value;
 
 /** How long after a command resolves its fire-and-forget effects are still
- * attributed to it. */
+ * attributed to it, and how often that window is checked. A command whose
+ * effect has already landed returns at once; only one that has produced
+ * nothing yet waits, and only until something lands. */
 const settleWindow = Duration.millis(250);
+const settleStep = Duration.millis(10);
+
+/** How deep a whole-tree walk goes, and how many rows it returns at most. */
+const maxTreeDepth = 6;
+const maxTreeRows = 5000;
 
 // ── The host ───────────────────────────────────────────────────────────────────
 
 export interface HostOptions {
-  readonly workspace: string;
   readonly extensions: ReadonlyArray<string>;
 }
 
-/** Activate the extensions and return the protocol's handlers. */
+/** A row the host produced, with the live element it came from. */
+interface Produced {
+  readonly element: unknown;
+  readonly node: ViewNode;
+}
+
+/**
+ * Activate the extensions and return the protocol's handlers.
+ *
+ * One host serves every workspace as a folder of one multi-root window, the
+ * way VS Code runs one extension host per window: a host is a runtime and an
+ * extension's state, and one per repo would cost that many times over.
+ * Folders join as requests name them, firing `onDidChangeWorkspaceFolders` so
+ * extensions pick them up.
+ */
 export const makeHost = (options: HostOptions) =>
   Effect.gen(function* () {
     const loaded = yield* Effect.forEach(options.extensions, loadManifest);
     const registry = makeRegistry();
     const shimRuntime = ManagedRuntime.make(NodeServices.layer);
     yield* Effect.addFinalizer(() => shimRuntime.disposeEffect);
+    const folders = yield* Ref.make<ReadonlyArray<WorkspaceFolderInfo>>([]);
+    const foldersChanged = new EventEmitter<{
+      readonly added: ReadonlyArray<unknown>;
+      readonly removed: ReadonlyArray<unknown>;
+    }>();
     const vscode = makeVscode({
-      workspaceRoot: options.workspace,
+      // VS Code's `workspaceFolders` is a synchronous read, so the shim reads
+      // the Ref unsafely here; every write goes through `addFolders`.
+      folders: () => Ref.getUnsafe(folders),
+      foldersChanged,
       defaults: settingDefaults(loaded),
       runtime: shimRuntime,
       registry,
@@ -286,7 +314,46 @@ export const makeHost = (options: HostOptions) =>
           extension,
         })),
     );
-    const ownerOf = (view: string) => Option.fromUndefinedOr(declared.find((entry) => entry.view.id === view));
+    const ownerOf = (view: string) =>
+      Option.match(Option.fromUndefinedOr(declared.find((entry) => entry.view.id === view)), {
+        onNone: () => Effect.fail(rejected("UnknownView", `no manifest declares ${view}`)),
+        onSome: Effect.succeed,
+      });
+
+    // ── Folders ──
+
+    /** Add workspaces as folders. A folder's name is its directory's name, or
+     * that with its parent's on a clash, since extensions key trees by name. */
+    const addFolders = (paths: ReadonlyArray<string>) =>
+      Ref.modify(folders, (current): readonly [ReadonlyArray<WorkspaceFolderInfo>, ReadonlyArray<WorkspaceFolderInfo>] => {
+        const added = [...new Set(paths)]
+          .filter((candidate) => !current.some((folder) => folder.path === candidate))
+          .reduce<ReadonlyArray<WorkspaceFolderInfo>>((acc, candidate) => {
+            const taken = (name: string) => [...current, ...acc].some((folder) => folder.name === name);
+            const base = path.basename(candidate);
+            const withParent = `${base} (${path.basename(path.dirname(candidate))})`;
+            const name = !taken(base) ? base : !taken(withParent) ? withParent : candidate;
+            return [...acc, { path: candidate, name }];
+          }, []);
+        return [added, [...current, ...added]];
+      }).pipe(
+        Effect.tap((added) =>
+          added.length === 0
+            ? Effect.void
+            : Ref.get(folders).pipe(
+                Effect.flatMap((all) =>
+                  Effect.sync(() =>
+                    foldersChanged.fire({
+                      added: added.map((folder) => toWorkspaceFolder(folder, all.findIndex((entry) => entry.path === folder.path))),
+                      removed: [],
+                    }),
+                  ),
+                ),
+              ),
+        ),
+      );
+
+    // ── Rows ──
 
     /** Rows handed out so far, by id, and the id counter. */
     const state = yield* Ref.make<{
@@ -337,34 +404,12 @@ export const makeHost = (options: HostOptions) =>
       return isTreeProvider(found) ? Effect.succeed(found) : Effect.fail(rejected("UnknownView", `no tree view ${view}`));
     };
 
-    const Views = () =>
-      Effect.succeed(
-        declared
-          .filter((entry) => isTreeProvider(registry.treeViews.get(entry.view.id)))
-          .map(
-            (entry) =>
-              new ViewInfo({
-                id: entry.view.id,
-                name: entry.extension.localize(entry.view.name ?? entry.view.id),
-                extension: entry.extension.id,
-              }),
-          ),
-      );
-
-    const Children = (payload: { readonly view: string; readonly parent?: string }) =>
+    /** The rows under `parent` (the top level when undefined), as data. */
+    const produce = (view: string, parent: unknown) =>
       Effect.gen(function* () {
-        const tree = yield* provider(payload.view);
-        const owner = yield* Option.match(ownerOf(payload.view), {
-          onNone: () => Effect.fail(rejected("UnknownView", `no manifest declares ${payload.view}`)),
-          onSome: Effect.succeed,
-        });
-        const parentRow = payload.parent === undefined ? Option.none<Row>() : yield* rowById(payload.parent);
-        if (payload.parent !== undefined && Option.isNone(parentRow)) return yield* rejected("UnknownNode", `unknown row ${payload.parent}`);
-        const parentElement = Option.match(parentRow, {
-          onNone: () => undefined,
-          onSome: (row) => row.element,
-        });
-        const raw = yield* call("getChildren", () => tree.getChildren(parentElement));
+        const tree = yield* provider(view);
+        const owner = yield* ownerOf(view);
+        const raw = yield* call("getChildren", () => tree.getChildren(parent));
         const elements = Array.isArray(raw) ? raw : [];
         return yield* Effect.forEach(elements, (element) =>
           Effect.gen(function* () {
@@ -372,10 +417,10 @@ export const makeHost = (options: HostOptions) =>
             const item = yield* Schema.decodeUnknownEffect(treeItemSchema)(itemRaw).pipe(
               Effect.mapError((cause) => failure("ProviderFailed", `a tree item did not decode: ${cause.message}`)),
             );
-            const actions = actionsFor(owner.extension, payload.view, item.contextValue);
+            const actions = actionsFor(owner.extension, view, item.contextValue);
             const openCommand = item.command;
-            const id = yield* remember(payload.view, element, {
-              view: payload.view,
+            const id = yield* remember(view, element, {
+              view,
               element,
               actions,
               open:
@@ -387,35 +432,188 @@ export const makeHost = (options: HostOptions) =>
                     }),
             });
             const resourcePath = item.resourceUri instanceof Uri ? item.resourceUri.fsPath : undefined;
-            const resource = resourcePath?.split("/").at(-1);
             const description = Predicate.isString(item.description) ? item.description : undefined;
             const tooltip = text(item.tooltip);
             const icon = iconName(item.iconPath);
-            return new ViewNode({
-              id,
-              label: text(item.label) ?? resource ?? "",
-              ...(description === undefined ? {} : { description }),
-              ...(tooltip === undefined ? {} : { tooltip }),
-              ...(icon === undefined ? {} : { icon }),
-              ...(item.contextValue === undefined ? {} : { contextValue: item.contextValue }),
-              ...(resourcePath === undefined ? {} : { resource: resourcePath }),
-              collapsible: (item.collapsibleState ?? 0) > 0,
-              ...(openCommand === undefined
-                ? {}
-                : {
-                    open: new ViewAction({
-                      command: openCommand.command,
-                      title: openCommand.title ?? "Open",
-                      inline: false,
+            const produced: Produced = {
+              element,
+              node: new ViewNode({
+                id,
+                label: text(item.label) ?? resourcePath?.split("/").at(-1) ?? "",
+                ...(description === undefined ? {} : { description }),
+                ...(tooltip === undefined ? {} : { tooltip }),
+                ...(icon === undefined ? {} : { icon }),
+                ...(item.contextValue === undefined ? {} : { contextValue: item.contextValue }),
+                ...(resourcePath === undefined ? {} : { resource: resourcePath }),
+                collapsible: (item.collapsibleState ?? 0) > 0,
+                ...(openCommand === undefined
+                  ? {}
+                  : {
+                      open: new ViewAction({
+                        command: openCommand.command,
+                        title: openCommand.title ?? "Open",
+                        inline: false,
+                      }),
                     }),
-                  }),
-              actions,
-            });
+                actions,
+              }),
+            };
+            return produced;
           }),
         );
       });
 
-    const Invoke = (payload: { readonly view: string; readonly node: string; readonly command: string }) =>
+    /**
+     * One workspace's top rows. A multi-root view puts a row per folder at the
+     * top whose resource is the folder (npm does); that row's children are the
+     * workspace's rows. With a single folder there is no folder row, and the
+     * top rows inside the workspace are its own.
+     */
+    const workspaceRoots = (view: string, workspace: string) =>
+      Effect.gen(function* () {
+        const top = yield* produce(view, undefined);
+        const own = top.find((entry) => entry.node.resource === workspace);
+        if (own !== undefined) return yield* produce(view, own.element);
+        const all = yield* Ref.get(folders);
+        return top.filter((entry) =>
+          entry.node.resource === undefined ? all.length === 1 : entry.node.resource.startsWith(`${workspace}/`),
+        );
+      });
+
+    /** Depth-first, flat, each row with its parent's id. */
+    const flatten = (view: string, entries: ReadonlyArray<Produced>, parent: string | undefined, depth: number): Effect.Effect<ReadonlyArray<TreeEntry>, ExtensionHostError | ViewRequestError> =>
+      Effect.forEach(entries, (entry) => {
+        const row = new TreeEntry({
+          ...(parent === undefined ? {} : { parent }),
+          node: entry.node,
+        });
+        return entry.node.collapsible && depth < maxTreeDepth
+          ? produce(view, entry.element).pipe(
+              Effect.flatMap((children) => flatten(view, children, entry.node.id, depth + 1)),
+              Effect.map((below) => [row, ...below]),
+            )
+          : Effect.succeed([row]);
+      }).pipe(Effect.map((nested) => nested.flat().slice(0, maxTreeRows)));
+
+    /** Run a view's own refresh: the `view/title` command its manifest shows
+     * for this view with a refresh icon or a `.refresh` id. */
+    const refreshView = (view: string) =>
+      Effect.gen(function* () {
+        const owner = yield* ownerOf(view);
+        const context = new Map<string, unknown>([...registry.contextKeys, ["view", view]]);
+        const commands = owner.extension.manifest.contributes?.commands ?? [];
+        const refreshers = (owner.extension.manifest.contributes?.menus?.["view/title"] ?? []).flatMap((entry) => {
+          const command = entry.command;
+          if (command === undefined || !Result.getOrElse(matchesWhen(entry.when, context), () => false)) return [];
+          const icon = iconName(commands.find((candidate) => candidate.command === command)?.icon);
+          return icon === "codicon:refresh" || command.endsWith(".refresh") ? [command] : [];
+        });
+        yield* Effect.forEach(refreshers, (command) => call(command, () => vscode.commands.executeCommand(command)), { discard: true });
+      });
+
+    const viewIds = () => declared.map((entry) => entry.view.id).filter((id) => isTreeProvider(registry.treeViews.get(id)));
+
+    // ── Handlers ──
+
+    /** The views with something to show for this workspace (npm's, only
+     * where there is a package.json). */
+    const Views = (payload: { readonly workspace: string }) =>
+      addFolders([payload.workspace]).pipe(
+        Effect.andThen(
+          Effect.forEach(viewIds(), (view) =>
+            workspaceRoots(view, payload.workspace).pipe(
+              Effect.map((roots): ReadonlyArray<ViewInfo> => {
+                const entry = declared.find((candidate) => candidate.view.id === view);
+                return roots.length === 0 || entry === undefined
+                  ? []
+                  : [
+                      new ViewInfo({
+                        id: view,
+                        name: entry.extension.localize(entry.view.name ?? view),
+                        extension: entry.extension.id,
+                      }),
+                    ];
+              }),
+            ),
+          ),
+        ),
+        Effect.map((found) => found.flat()),
+      );
+
+    const Children = (payload: { readonly workspace: string; readonly view: string; readonly parent?: string }) =>
+      Effect.gen(function* () {
+        yield* addFolders([payload.workspace]);
+        if (payload.parent === undefined) {
+          const roots = yield* workspaceRoots(payload.view, payload.workspace);
+          return roots.map((entry) => entry.node);
+        }
+        const parent = yield* rowById(payload.parent);
+        if (Option.isNone(parent)) return yield* rejected("UnknownNode", `unknown row ${payload.parent}`);
+        const children = yield* produce(payload.view, parent.value.element);
+        return children.map((entry) => entry.node);
+      });
+
+    /** Modification times of the files behind each tree last returned, by
+     * `view workspace`: what `ifChanged` compares against. */
+    const seen = yield* Ref.make<ReadonlyMap<string, ReadonlyMap<string, number>>>(new Map());
+
+    /** The files behind a tree's rows, with their modification times. Rows
+     * whose resource is a directory or is gone are left out. */
+    const fingerprint = (rows: ReadonlyArray<TreeEntry>) =>
+      Effect.forEach(
+        [...new Set(rows.flatMap((row) => (row.node.resource === undefined ? [] : [row.node.resource])))],
+        (resource) =>
+          fs.stat(resource).pipe(
+            Effect.map((info): ReadonlyArray<readonly [string, number]> =>
+              info.type === "File" ? [[resource, Option.match(info.mtime, { onNone: () => 0, onSome: (date) => date.getTime() })]] : [],
+            ),
+            Effect.orElseSucceed((): ReadonlyArray<readonly [string, number]> => []),
+          ),
+      ).pipe(Effect.map((pairs) => new Map(pairs.flat())));
+
+    /** Whether any file behind the last tree for this key changed or vanished. */
+    const changedSince = (key: string) =>
+      Ref.get(seen).pipe(
+        Effect.flatMap((all) => {
+          const previous = all.get(key);
+          if (previous === undefined) return Effect.succeed(true);
+          return Effect.forEach([...previous], ([file, mtime]) =>
+            fs.stat(file).pipe(
+              Effect.map((info) => Option.match(info.mtime, { onNone: () => 0, onSome: (date) => date.getTime() }) !== mtime),
+              Effect.orElseSucceed(() => true),
+            ),
+          ).pipe(Effect.map((changes) => changes.some(Boolean)));
+        }),
+      );
+
+    const Tree = (payload: { readonly workspace: string; readonly view: string; readonly refresh: TreeRefresh }) =>
+      Effect.gen(function* () {
+        yield* addFolders([payload.workspace]);
+        const key = `${payload.view} ${payload.workspace}`;
+        const stale =
+          payload.refresh === "force" ? true : payload.refresh === "ifChanged" ? yield* changedSince(key) : false;
+        if (stale && payload.refresh !== "none") yield* refreshView(payload.view);
+        const roots = yield* workspaceRoots(payload.view, payload.workspace);
+        const rows = yield* flatten(payload.view, roots, undefined, 0);
+        const files = yield* fingerprint(rows);
+        yield* Ref.update(seen, (all) => new Map([...all, [key, files]]));
+        return rows;
+      });
+
+    /** Join these workspaces and walk their trees now, so the extension's own
+     * caches (npm's script search) are hot before anyone asks. */
+    const Warm = (payload: { readonly workspaces: ReadonlyArray<string> }) =>
+      addFolders(payload.workspaces).pipe(
+        Effect.andThen(
+          Effect.forEach(
+            payload.workspaces,
+            (workspace) => Effect.forEach(viewIds(), (view) => Tree({ workspace, view, refresh: "none" }), { discard: true }),
+            { discard: true },
+          ),
+        ),
+      );
+
+    const Invoke = (payload: { readonly workspace: string; readonly view: string; readonly node: string; readonly command: string }) =>
       Effect.gen(function* () {
         const found = yield* rowById(payload.node);
         if (Option.isNone(found) || found.value.view !== payload.view) return yield* rejected("UnknownNode", `unknown row ${payload.node}`);
@@ -434,12 +632,15 @@ export const makeHost = (options: HostOptions) =>
         });
         yield* call(payload.command, () => vscode.commands.executeCommand(payload.command, ...args));
         // Commands often fire and forget (npm's debug starts an async lookup,
-        // then calls another command without awaiting it), so what a command
-        // set off can land after it resolves. Give it a moment to land.
-        yield* Effect.sleep(settleWindow);
+        // then calls another command without awaiting it). Return as soon as
+        // an effect has landed; wait out the window only while none has.
+        const landed = () => registry.executedTasks.length > tasksBefore || registry.opened.length > opensBefore;
+        const settle = (remaining: number): Effect.Effect<void> =>
+          landed() || remaining <= 0 ? Effect.void : Effect.sleep(settleStep).pipe(Effect.andThen(settle(remaining - 1)));
+        yield* settle(Math.ceil(Duration.toMillis(settleWindow) / Duration.toMillis(settleStep)));
 
         const task = registry.executedTasks.slice(tasksBefore).at(-1);
-        if (task instanceof Task) return yield* toRunTask(task, options.workspace);
+        if (task instanceof Task) return yield* toRunTask(task, payload.workspace);
         const opened = registry.opened.slice(opensBefore).at(-1);
         if (opened !== undefined) {
           const result: InvokeResult = new OpenFile({
@@ -464,7 +665,9 @@ export const makeHost = (options: HostOptions) =>
     return {
       Views,
       Children,
+      Tree,
       Invoke,
+      Warm,
     };
   });
 

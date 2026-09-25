@@ -12,7 +12,7 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
-import { ExtensionHostError, InvokeResult, ViewInfo, ViewNode, ViewRequestError, childrenPayload, invokePayload } from "./extensionHost/protocol";
+import { ExtensionHostError, InvokeResult, TreeEntry, ViewInfo, ViewNode, ViewRequestError, childrenPayload, invokePayload, treePayload, warmPayload } from "./extensionHost/protocol";
 
 const ThemeContribution = Schema.Struct({
   id: Schema.String,
@@ -130,19 +130,23 @@ const viewsGroup = HttpApiGroup.make("views").add(
     error: viewErrors,
   }),
   HttpApiEndpoint.post("children", "/views/children", {
-    payload: Schema.Struct({
-      workspace: Schema.String,
-      ...childrenPayload.fields,
-    }),
+    payload: childrenPayload,
     success: Schema.Array(ViewNode),
     error: viewErrors,
   }),
+  HttpApiEndpoint.post("tree", "/views/tree", {
+    payload: treePayload,
+    success: Schema.Array(TreeEntry),
+    error: viewErrors,
+  }),
   HttpApiEndpoint.post("invoke", "/views/invoke", {
-    payload: Schema.Struct({
-      workspace: Schema.String,
-      ...invokePayload.fields,
-    }),
+    payload: invokePayload,
     success: InvokeResult,
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("warm", "/views/warm", {
+    payload: warmPayload,
+    success: Schema.Void,
     error: viewErrors,
   }),
 );

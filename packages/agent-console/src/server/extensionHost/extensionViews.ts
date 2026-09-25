@@ -1,11 +1,12 @@
 /**
  * Extension views, served: the API server's side of the extension host.
  *
- * One host worker per workspace (a repo or worktree folder), started on first
- * use and kept while in use, then released after `idleTimeToLive`. The worker
- * runs the extensions; this side only routes calls to it, confines workspaces
- * to the files root, and puts a deadline on every call, because a worker that
- * has died leaves its caller waiting forever otherwise.
+ * One host worker for every workspace (a repo or worktree folder), started
+ * with the server so it is warm before anyone asks: VS Code's one extension
+ * host per window, the window being every folder the app shows. The worker
+ * runs the extensions; this side routes calls to it, confines workspaces to
+ * the files root, and puts a deadline on every call, because a worker that has
+ * died leaves its caller waiting forever otherwise.
  *
  * Which extensions a host runs: for now VS Code's built-in `npm` extension,
  * taken from an installed VS Code-family app, since built-ins ship inside the
@@ -15,17 +16,14 @@
  */
 import { NodeServices, NodeWorker } from "@effect/platform-node";
 import { Worker } from "node:worker_threads";
-import { Context, Duration, Effect, FileSystem, Layer, Option, Path, RcMap } from "effect";
+import { Context, Duration, Effect, FileSystem, Layer, Option, Path } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { resolveWithin } from "../fs";
-import { ExtensionHostError, ExtensionHostRpcs, ViewRequestError } from "./protocol";
+import { ExtensionHostError, ExtensionHostRpcs, ViewRequestError, type TreeRefresh } from "./protocol";
 
 /** How long one host call may take, activation included on a cold start. */
 const callDeadline = Duration.seconds(30);
-
-/** A host with no callers is torn down after this. */
-const idleTimeToLive = Duration.minutes(10);
 
 /** Where VS Code-family apps keep their built-in extensions. */
 const builtinRoots: ReadonlyArray<string> = [
@@ -62,28 +60,23 @@ const make = Effect.gen(function* () {
   const extensions = yield* locateBuiltins;
   const bootstrap = new URL("./bootstrap.mjs", import.meta.url);
 
-  // A new host per workspace. The worker layer is built into the RcMap entry's
-  // own scope, so the worker lives exactly as long as the entry: an
-  // `Effect.provide` here would tear it down as soon as the client was made.
-  const hosts = yield* RcMap.make({
-    lookup: (workspace: string) =>
-      Layer.build(
-        RpcClient.layerProtocolWorker({ size: 1 }).pipe(
-          Layer.provide(
-            NodeWorker.layer(
-              () =>
-                new Worker(bootstrap, {
-                  workerData: {
-                    workspace,
-                    extensions,
-                  },
-                }),
-            ),
-          ),
+  // The host starts now, with the service, and lives as long as it: its layer
+  // is built into the service's own scope.
+  const protocol = yield* Layer.build(
+    RpcClient.layerProtocolWorker({ size: 1 }).pipe(
+      Layer.provide(
+        NodeWorker.layer(
+          () =>
+            new Worker(bootstrap, {
+              workerData: {
+                extensions,
+              },
+            }),
         ),
-      ).pipe(Effect.flatMap((context) => RpcClient.make(ExtensionHostRpcs).pipe(Effect.provideContext(context)))),
-    idleTimeToLive,
-  });
+      ),
+    ),
+  );
+  const client = yield* RpcClient.make(ExtensionHostRpcs).pipe(Effect.provideContext(protocol));
 
   const workspaceOf = (requested: string) =>
     resolveWithin(requested).pipe(
@@ -96,17 +89,14 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  /** Run one call against the workspace's host, under the deadline. A
-   * transport failure (the worker died, a message did not decode) and a missed
-   * deadline both come back as a host error the client can show. */
-  const withHost = <A, E>(requested: string, run: (client: RpcClient.FromGroup<typeof ExtensionHostRpcs, RpcClientError>) => Effect.Effect<A, E>) =>
-    workspaceOf(requested).pipe(
-      Effect.flatMap((workspace) => RcMap.get(hosts, workspace)),
-      Effect.flatMap(run),
-      Effect.scoped,
+  /** One call to the host, under the deadline. A transport failure (the
+   * worker died, a message did not decode) and a missed deadline both come
+   * back as a host error the client can show. */
+  const withDeadline = <A, E>(what: string, call: Effect.Effect<A, E>) =>
+    call.pipe(
       Effect.timeoutOrElse({
         duration: callDeadline,
-        orElse: () => Effect.fail(hostError("Timeout", `the extension host for ${requested} did not answer within ${Duration.format(callDeadline)}`)),
+        orElse: () => Effect.fail(hostError("Timeout", `the extension host did not answer ${what} within ${Duration.format(callDeadline)}`)),
       }),
       Effect.mapError((cause) =>
         cause instanceof ExtensionHostError || cause instanceof ViewRequestError
@@ -116,21 +106,53 @@ const make = Effect.gen(function* () {
     );
 
   return {
-    views: (workspace: string) => withHost(workspace, (client) => client.Views()),
+    views: (workspace: string) =>
+      workspaceOf(workspace).pipe(Effect.flatMap((resolved) => withDeadline("views", client.Views({ workspace: resolved })))),
     children: (workspace: string, view: string, parent: string | undefined) =>
-      withHost(workspace, (client) =>
-        client.Children({
-          view,
-          ...(parent === undefined ? {} : { parent }),
-        }),
+      workspaceOf(workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            "children",
+            client.Children({
+              workspace: resolved,
+              view,
+              ...(parent === undefined ? {} : { parent }),
+            }),
+          ),
+        ),
+      ),
+    tree: (workspace: string, view: string, refresh: TreeRefresh) =>
+      workspaceOf(workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            "tree",
+            client.Tree({
+              workspace: resolved,
+              view,
+              refresh,
+            }),
+          ),
+        ),
       ),
     invoke: (workspace: string, view: string, node: string, command: string) =>
-      withHost(workspace, (client) =>
-        client.Invoke({
-          view,
-          node,
-          command,
-        }),
+      workspaceOf(workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            command,
+            client.Invoke({
+              workspace: resolved,
+              view,
+              node,
+              command,
+            }),
+          ),
+        ),
+      ),
+    /** Register workspaces and walk their views now, so the first look at any
+     * of them is served from warm caches. */
+    warm: (workspaces: ReadonlyArray<string>) =>
+      Effect.forEach(workspaces, workspaceOf).pipe(
+        Effect.flatMap((resolved) => withDeadline("warm", client.Warm({ workspaces: resolved }))),
       ),
   };
 });
