@@ -38,6 +38,7 @@ const viewNode = Schema.Struct({
   contextValue: Schema.optionalKey(Schema.String),
   resource: Schema.optionalKey(Schema.String),
   collapsible: Schema.Boolean,
+  expanded: Schema.Boolean,
   open: Schema.optionalKey(viewAction),
   actions: Schema.Array(viewAction),
 });
@@ -74,15 +75,32 @@ const post = (url: string, body: object) =>
 export const listViews = async (apiBase: string, workspace: string): Promise<ReadonlyArray<ViewInfo>> =>
   Schema.decodeUnknownSync(Schema.Array(viewInfo))(await post(`${base(apiBase)}/views/list`, { workspace }));
 
-/** A view's rows under `parent`, or its top level. */
-export const viewChildren = async (apiBase: string, workspace: string, view: string, parent: string | undefined): Promise<ReadonlyArray<ViewNode>> =>
-  Schema.decodeUnknownSync(Schema.Array(viewNode))(
-    await post(`${base(apiBase)}/views/children`, {
+const treeEntry = Schema.Struct({
+  parent: Schema.optionalKey(Schema.String),
+  node: viewNode,
+});
+export type TreeEntry = typeof treeEntry.Type;
+
+/** How fresh a tree must be: `none` is whatever the host has, `ifChanged`
+ * re-reads only if a file behind it changed (cheap), `force` re-scans. */
+export type TreeRefresh = "none" | "ifChanged" | "force";
+
+/** A view's whole tree for a workspace, flat in depth-first order, each row
+ * with its parent's id. */
+export const viewTree = async (apiBase: string, workspace: string, view: string, refresh: TreeRefresh): Promise<ReadonlyArray<TreeEntry>> =>
+  Schema.decodeUnknownSync(Schema.Array(treeEntry))(
+    await post(`${base(apiBase)}/views/tree`, {
       workspace,
       view,
-      ...(parent === undefined ? {} : { parent }),
+      refresh,
     }),
   );
+
+/** Have the host take on these workspaces and walk their views now, so later
+ * reads of them are served from warm caches. */
+export const warmViews = async (apiBase: string, workspaces: ReadonlyArray<string>): Promise<void> => {
+  await post(`${base(apiBase)}/views/warm`, { workspaces });
+};
 
 /** Run one of a row's actions and learn what it asked for. */
 export const invokeViewAction = async (apiBase: string, workspace: string, view: string, node: string, command: string): Promise<InvokeResult> =>

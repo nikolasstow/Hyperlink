@@ -44,6 +44,8 @@ export class ViewNode extends Schema.Class<ViewNode>("ViewNode")({
    * file, which is how a client should read it too. */
   resource: Schema.optionalKey(Schema.String),
   collapsible: Schema.Boolean,
+  /** Starts expanded, as the extension asked (`TreeItemCollapsibleState.Expanded`). */
+  expanded: Schema.Boolean,
   open: Schema.optionalKey(ViewAction),
   actions: Schema.Array(ViewAction),
 }) {}

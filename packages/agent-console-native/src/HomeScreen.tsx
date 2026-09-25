@@ -39,6 +39,8 @@ import {
 import type { ModelOption } from "./models";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
+import { prefetchWorkspaces } from "./extensionViewsStore";
+import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
@@ -55,7 +57,7 @@ type Row =
   | { readonly kind: "repo"; readonly group: RepoGroup };
 
 export const HomeScreen = (props: Props): React.ReactElement => {
-  const { client, backend, rootDir } = useAppContext();
+  const { client, backend, rootDir, address } = useAppContext();
   const groupSize = useGroupSize();
   // Only stream / lazily load previews while Home is on screen — the chat holds
   // its own stream when open.
@@ -168,6 +170,13 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // `activityAt` when the stream has seen something, else the REST update time.
   const isUnread = (session: Session): boolean =>
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
+
+  // Warm every repo's and worktree's extension views now, while this list is
+  // being read, so a repo's menu and its views open with nothing to wait for.
+  React.useEffect(() => {
+    const workspaces = scanned.flatMap((repo) => repo.worktrees.map((worktree) => worktree.path));
+    if (workspaces.length > 0) prefetchWorkspaces(getApiAddress(address), workspaces);
+  }, [scanned, address]);
 
   const sortedByRecent = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
   const recent = sortedByRecent.slice(0, groupSize);

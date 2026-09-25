@@ -446,6 +446,7 @@ export const makeHost = (options: HostOptions) =>
                 ...(item.contextValue === undefined ? {} : { contextValue: item.contextValue }),
                 ...(resourcePath === undefined ? {} : { resource: resourcePath }),
                 collapsible: (item.collapsibleState ?? 0) > 0,
+                expanded: item.collapsibleState === 2,
                 ...(openCommand === undefined
                   ? {}
                   : {

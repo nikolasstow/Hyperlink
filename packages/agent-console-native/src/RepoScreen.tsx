@@ -34,7 +34,8 @@ import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useTheme } from "./theme";
-import { listViews, type ViewInfo } from "./extensionViewsClient";
+import type { ViewInfo } from "./extensionViewsClient";
+import { ensureWorkspace, reloadWorkspace, useWorkspaceViews } from "./extensionViewsStore";
 import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
 import { getApiAddress } from "./settings";
 import { abortSession, promptRenameSession } from "./sessionActions";
@@ -188,26 +189,20 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const menu = repoMenuFor(isRepo);
 
   // Views the backend's extension host offers for this folder (npm's scripts,
-  // when there is a package.json). A failure shows as its own row rather than
-  // the section quietly missing.
-  const [extensionViews, setExtensionViews] = React.useState<
-    { readonly kind: "loading" } | { readonly kind: "ready"; readonly views: ReadonlyArray<ViewInfo> } | { readonly kind: "failed"; readonly message: string }
-  >({ kind: "loading" });
-  const loadExtensionViews = React.useCallback((): void => {
-    setExtensionViews({ kind: "loading" });
-    listViews(getApiAddress(address), dir).then(
-      (views) => setExtensionViews({ kind: "ready", views }),
-      (error: unknown) => setExtensionViews({ kind: "failed", message: error instanceof Error ? error.message : String(error) }),
-    );
-  }, [address, dir]);
+  // where there is a package.json). Home prefetched them, so they are normally
+  // here on first render; a folder opened another way loads now. A failure
+  // shows as its own row rather than the section quietly missing.
+  const apiBase = getApiAddress(address);
+  const extensionViews = useWorkspaceViews(dir);
   React.useEffect(() => {
-    loadExtensionViews();
-  }, [loadExtensionViews]);
+    ensureWorkspace(apiBase, dir);
+  }, [apiBase, dir]);
+  const loadExtensionViews = (): void => reloadWorkspace(apiBase, dir);
 
   const menuEntries: ReadonlyArray<MenuEntry> = [
     ...menu,
     ...(extensionViews.kind === "ready"
-      ? extensionViews.views.map((view): MenuEntry => ({ label: view.name, icon: "list.bullet.rectangle", view }))
+      ? extensionViews.value.map((view): MenuEntry => ({ label: view.name, icon: "list.bullet.rectangle", view }))
       : extensionViews.kind === "failed"
         ? [retryEntry(extensionViews.message)]
         : []),

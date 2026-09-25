@@ -18,14 +18,17 @@
 import * as React from "react";
 import { Button, ContextMenu, Host, HStack, Image, ProgressView, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
-import { ActivityIndicator, Alert, DynamicColorIOS, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, DynamicColorIOS, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
 import { isRunIcon, symbolForIcon } from "./codicons";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
-import { invokeViewAction, startTask, viewChildren, type InvokeResult, type ViewAction, type ViewNode } from "./extensionViewsClient";
+import { invokeViewAction, startTask, type InvokeResult, type TreeEntry, type ViewAction, type ViewNode } from "./extensionViewsClient";
+import { ensureWorkspace, revalidateTree, useViewTree } from "./extensionViewsStore";
+import { codeSurfaceUri } from "./codeSurfaceAsset";
+import { warmCodeSurfaces } from "../modules/code-surface";
 import type { RootStackParamList } from "./RootNavigator";
 import { iconForFile } from "./fileIcon";
 import { SetiIcon } from "./SetiIcon";
@@ -39,19 +42,20 @@ const CHEVRON_COL = 20;
 const ICON_COL = 30;
 const DIVIDER = DynamicColorIOS({ light: "rgba(60,60,67,0.4)", dark: "rgba(120,120,128,0.5)" });
 
-type Load =
-  | { readonly kind: "loading" }
-  | { readonly kind: "ready"; readonly ids: ReadonlyArray<string> }
-  | { readonly kind: "failed"; readonly message: string };
-
-interface Tree {
-  readonly nodes: ReadonlyMap<string, ViewNode>;
+/** The tree as the store has it (flat, parent ids), indexed for drawing. */
+interface Indexed {
   /** Children per parent id; the top level is under `rootKey`. */
-  readonly children: ReadonlyMap<string, Load>;
-  readonly expanded: ReadonlySet<string>;
+  readonly children: ReadonlyMap<string, ReadonlyArray<ViewNode>>;
 }
 
 const rootKey = "";
+
+const indexTree = (entries: ReadonlyArray<TreeEntry>): Indexed => ({
+  children: entries.reduce(
+    (map, entry) => new Map([...map, [entry.parent ?? rootKey, [...(map.get(entry.parent ?? rootKey) ?? []), entry.node]]]),
+    new Map<string, ReadonlyArray<ViewNode>>(),
+  ),
+});
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -69,20 +73,13 @@ const menuActionsOf = (node: ViewNode): ReadonlyArray<ViewAction> => {
 interface VisibleRow {
   readonly node: ViewNode;
   readonly depth: number;
-  readonly load: Load | undefined;
 }
 
 /** The rows on screen: the top level, and the children of expanded rows. */
-const visibleRows = (tree: Tree, parent: string, depth: number): ReadonlyArray<VisibleRow> => {
-  const load = tree.children.get(parent);
-  if (load?.kind !== "ready") return [];
-  return load.ids.flatMap((id) => {
-    const node = tree.nodes.get(id);
-    if (node === undefined) return [];
-    const row: VisibleRow = { node, depth, load: tree.children.get(id) };
-    return tree.expanded.has(id) ? [row, ...visibleRows(tree, id, depth + 1)] : [row];
-  });
-};
+const visibleRows = (tree: Indexed, expanded: ReadonlySet<string>, parent: string, depth: number): ReadonlyArray<VisibleRow> =>
+  (tree.children.get(parent) ?? []).flatMap((node) =>
+    expanded.has(node.id) ? [{ node, depth }, ...visibleRows(tree, expanded, node.id, depth + 1)] : [{ node, depth }],
+  );
 
 /** The icon theme's glyph for a row that stands for a file: VS Code's cue is a
  * generic file or folder icon plus the file's path. */
@@ -107,7 +104,7 @@ const Row = (props: {
   readonly onOpen: () => void;
   readonly onAction: (action: ViewAction) => void;
 }): React.ReactElement => {
-  const { node, depth, load } = props.row;
+  const { node, depth } = props.row;
   const play = playActionOf(node);
   const menu = menuActionsOf(node);
   const glyph = fileGlyphOf(node);
@@ -122,15 +119,8 @@ const Row = (props: {
         onTapGesture(node.collapsible ? props.onToggle : props.onOpen),
       ]}
     >
-      {node.collapsible && props.expanded && load?.kind === "loading" ? (
-        <ProgressView modifiers={[frame({ width: CHEVRON_COL })]} />
-      ) : node.collapsible ? (
-        <Image
-          systemName={load?.kind === "failed" ? "exclamationmark.triangle.fill" : props.expanded ? "chevron.down" : "chevron.right"}
-          size={12}
-          color={load?.kind === "failed" ? colors.warning : colors.tint}
-          modifiers={[frame({ width: CHEVRON_COL })]}
-        />
+      {node.collapsible ? (
+        <Image systemName={props.expanded ? "chevron.down" : "chevron.right"} size={12} color={colors.tint} modifiers={[frame({ width: CHEVRON_COL })]} />
       ) : (
         <UIText modifiers={[frame({ width: CHEVRON_COL })]}>{""}</UIText>
       )}
@@ -173,7 +163,6 @@ const Row = (props: {
           </ContextMenu>
         )}
       </Host>
-      {load?.kind === "failed" && props.expanded ? <Text style={[styles.inlineError, { marginLeft: 12 + depth * INDENT + CHEVRON_COL + ICON_COL + 20 }]}>{load.message}</Text> : null}
       <View style={[styles.separator, { marginLeft: 12 + depth * INDENT + CHEVRON_COL + ICON_COL + 20 }]} />
     </View>
   );
@@ -185,53 +174,42 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   const { address, backend } = useAppContext();
   const apiBase = getApiAddress(address);
   const headerHeight = useHeaderHeight();
-  const [tree, setTree] = React.useState<Tree>({
-    nodes: new Map(),
-    children: new Map([[rootKey, { kind: "loading" }]]),
-    expanded: new Set(),
-  });
+  const { width } = useWindowDimensions();
+  const load = useViewTree(dir, view);
+  const tree = React.useMemo(() => indexTree(load.kind === "ready" ? load.value : []), [load]);
+  const [expanded, setExpanded] = React.useState<ReadonlySet<string> | undefined>(undefined);
   const [busy, setBusy] = React.useState<string | undefined>(undefined);
 
   React.useLayoutEffect(() => {
     navigation.setOptions({ title });
   }, [navigation, title]);
 
-  /** Fetch one level (the top level for `rootKey`) into the tree. */
-  const load = React.useCallback(
-    (parent: string): void => {
-      setTree((current) => ({ ...current, children: new Map([...current.children, [parent, { kind: "loading" }]]) }));
-      viewChildren(apiBase, dir, view, parent === rootKey ? undefined : parent).then(
-        (nodes) =>
-          setTree((current) => ({
-            ...current,
-            nodes: new Map([...current.nodes, ...nodes.map((node): readonly [string, ViewNode] => [node.id, node])]),
-            children: new Map([...current.children, [parent, { kind: "ready", ids: nodes.map((node) => node.id) }]]),
-          })),
-        (error: unknown) =>
-          setTree((current) => ({
-            ...current,
-            children: new Map([...current.children, [parent, { kind: "failed", message: messageOf(error) }]]),
-          })),
-      );
-    },
-    [apiBase, dir, view],
-  );
-
+  // Cached rows are already on screen; bring them up to date behind them.
+  // `ifChanged` costs the host a few file stats when nothing moved.
   React.useEffect(() => {
-    load(rootKey);
-  }, [load]);
+    ensureWorkspace(apiBase, dir);
+    void revalidateTree(apiBase, dir, view, "ifChanged");
+  }, [apiBase, dir, view]);
+
+  // Opening a script opens the viewer; have the editor warm before that tap.
+  React.useEffect(() => {
+    void codeSurfaceUri()
+      .then((uri) => warmCodeSurfaces(1, uri))
+      .catch((cause: unknown) => console.error("[code surface] warming the pool failed", cause));
+  }, []);
+
+  /** Rows start as the extension asked (expanded or not) until toggled. */
+  const initiallyExpanded = React.useMemo(
+    () => new Set([...tree.children.values()].flat().filter((node) => node.expanded).map((node) => node.id)),
+    [tree],
+  );
+  const open = expanded ?? initiallyExpanded;
 
   const toggle = (node: ViewNode): void => {
-    const opening = !tree.expanded.has(node.id);
-    setTree((current) => {
-      const expanded = new Set(current.expanded);
-      if (opening) expanded.add(node.id);
-      else expanded.delete(node.id);
-      return { ...current, expanded };
-    });
-    // First open, or a retry after a failed load.
-    const existing = tree.children.get(node.id);
-    if (opening && (existing === undefined || existing.kind === "failed")) load(node.id);
+    const next = new Set(open);
+    if (next.has(node.id)) next.delete(node.id);
+    else next.add(node.id);
+    setExpanded(next);
   };
 
   /** Carry out what an action asked for. */
@@ -263,37 +241,36 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
       .finally(() => setBusy(undefined));
   };
 
-  const { width } = useWindowDimensions();
-  const top = tree.children.get(rootKey);
-  const rows = visibleRows(tree, rootKey, 0);
+  const rows = visibleRows(tree, open, rootKey, 0);
 
   return (
     <View style={styles.root}>
-      {top?.kind === "loading" ? (
+      {load.kind === "loading" ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
           <ActivityIndicator color={colors.secondaryLabel} />
         </View>
-      ) : top?.kind === "failed" ? (
+      ) : load.kind === "failed" ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
           <Text style={styles.message}>Couldn’t load {title}.</Text>
-          <Text style={styles.detail}>{top.message}</Text>
-          <TouchableOpacity onPress={() => load(rootKey)}>
+          <Text style={styles.detail}>{load.message}</Text>
+          <TouchableOpacity onPress={() => void revalidateTree(apiBase, dir, view, "force")}>
             <Text style={styles.retry}>Try Again</Text>
           </TouchableOpacity>
         </View>
-      ) : rows.length === 0 ? (
-        <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-          <Text style={styles.message}>Nothing here.</Text>
-        </View>
       ) : (
-        <ScrollView contentInsetAdjustmentBehavior="automatic">
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void revalidateTree(apiBase, dir, view, "force")} />}
+        >
+          {load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded scripts. Refreshing failed: {load.error}</Text>}
+          {rows.length === 0 ? <Text style={[styles.message, styles.emptyNote]}>Nothing here.</Text> : null}
           {rows.map((row) => (
             <Row
               key={row.node.id}
               row={row}
               width={width}
               busy={busy === row.node.id}
-              expanded={tree.expanded.has(row.node.id)}
+              expanded={open.has(row.node.id)}
               onToggle={() => toggle(row.node)}
               onOpen={() => {
                 if (row.node.open !== undefined) run(row.node, row.node.open);
@@ -326,11 +303,15 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: DIVIDER,
   },
-  inlineError: {
-    color: colors.secondaryLabel,
+  staleNote: {
+    color: colors.warning,
     fontSize: 12,
-    paddingBottom: 8,
-    paddingRight: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  emptyNote: {
+    textAlign: "center",
+    marginTop: 24,
   },
   message: {
     color: colors.secondaryLabel,
