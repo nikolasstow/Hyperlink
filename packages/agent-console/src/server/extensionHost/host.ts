@@ -11,7 +11,7 @@
  *
  * @internal
  */
-import { Effect, FileSystem, ManagedRuntime, Option, Path, Predicate, Ref, Result, Schema } from "effect";
+import { Duration, Effect, FileSystem, ManagedRuntime, Option, Path, Predicate, Ref, Result, Schema } from "effect";
 import { NodeServices } from "@effect/platform-node";
 import { importedNames, installVscodeModule } from "./loader";
 import { Completed, ExtensionHostError, OpenFile, RunTask, ViewAction, ViewInfo, ViewNode, ViewRequestError, type InvokeResult } from "./protocol";
@@ -239,6 +239,10 @@ const iconName = (icon: unknown): string | undefined => {
 const text = (value: string | { readonly label: string } | { readonly value: string } | undefined): string | undefined =>
   value === undefined ? undefined : Predicate.isString(value) ? value : "label" in value ? value.label : value.value;
 
+/** How long after a command resolves its fire-and-forget effects are still
+ * attributed to it. */
+const settleWindow = Duration.millis(250);
+
 // ── The host ───────────────────────────────────────────────────────────────────
 
 export interface HostOptions {
@@ -421,11 +425,16 @@ export const makeHost = (options: HostOptions) =>
         const tasksBefore = registry.executedTasks.length;
         const opensBefore = registry.opened.length;
         const messagesBefore = registry.messages.length;
+        const missingBefore = new Set(registry.missing);
         const args = Option.match(opening, {
           onNone: () => [row.element],
           onSome: (open) => open.args,
         });
         yield* call(payload.command, () => vscode.commands.executeCommand(payload.command, ...args));
+        // Commands often fire and forget (npm's debug starts an async lookup,
+        // then calls another command without awaiting it), so what a command
+        // set off can land after it resolves. Give it a moment to land.
+        yield* Effect.sleep(settleWindow);
 
         const task = registry.executedTasks.slice(tasksBefore).at(-1);
         if (task instanceof Task) return yield* toRunTask(task, options.workspace);
@@ -436,6 +445,13 @@ export const makeHost = (options: HostOptions) =>
             ...(opened.line === undefined ? {} : { line: opened.line }),
           });
           return result;
+        }
+        // The command reached for API the host does not implement (a debugger,
+        // a terminal) and produced nothing we act on: say so, instead of
+        // reporting a success that did nothing.
+        const unimplemented = [...registry.missing].filter((name) => !missingBefore.has(name));
+        if (unimplemented.length > 0) {
+          return yield* failure("Unsupported", `${payload.command} needs editor features this host does not have: ${unimplemented.join(", ")}`);
         }
         const result: InvokeResult = new Completed({
           messages: registry.messages.slice(messagesBefore).map((message) => String(message.text)),
