@@ -34,7 +34,9 @@ import { ThemeImportValuesScreen } from "./ThemeImportValuesScreen";
 import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
 import { ThemeTokensScreen } from "./ThemeTokensScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
+import { ExtensionViewScreen } from "./ExtensionViewScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
+import { ProcessOutputScreen } from "./ProcessOutputScreen";
 import { RepoScreen } from "./RepoScreen";
 import { SessionListScreen } from "./SessionListScreen";
 
@@ -70,7 +72,13 @@ export type RootStackParamList = {
   // context. Pushed again per folder when drilling in.
   FileExplorer: { repo: string; dir: string };
   // A minimal read-only view of the file at `path`; `name` is the nav-bar title.
-  FileViewer: { path: string; name: string };
+  // `line` (1-based) scrolls to it, as an extension opening a file asks.
+  FileViewer: { path: string; name: string; line?: number };
+  // A tree view an extension contributes (npm's scripts), for the workspace
+  // `dir`; `view` is its id, `title` its name.
+  ExtensionView: { repo: string; dir: string; view: string; title: string };
+  // Live output of a process on the backend's process runner.
+  ProcessOutput: { id: string; title: string; commandLine: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -317,6 +325,30 @@ export const RootNavigator = (): React.ReactElement => {
             headerTitle: () => <HeaderTitlePill title={route.params.name} />,
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           })}
+        />
+        <Stack.Screen
+          name="ExtensionView"
+          component={ExtensionViewScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          }}
+        />
+        <Stack.Screen
+          name="ProcessOutput"
+          component={ProcessOutputScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          }}
         />
       </Stack.Navigator>
     </NavigationContainer>

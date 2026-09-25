@@ -85,13 +85,14 @@ export const request = async (url: string, init?: RequestInit): Promise<unknown>
   const res = await fetch(url, init);
   const text = await res.text();
   if (!res.ok) {
-    // The server sends a JSON error ({ reason, detail }); surface what we can.
+    // The server sends a JSON error ({ reason, detail } or { reason, message });
+    // surface what we can.
     let detail = text;
     try {
       const parsed: unknown = JSON.parse(text);
       if (typeof parsed === "object" && parsed !== null && "reason" in parsed) {
         const reason = parsed.reason;
-        const d = "detail" in parsed ? parsed.detail : undefined;
+        const d = "detail" in parsed ? parsed.detail : "message" in parsed ? parsed.message : undefined;
         detail = `${String(reason)}${typeof d === "string" ? `: ${d}` : ""}`;
       }
     } catch {

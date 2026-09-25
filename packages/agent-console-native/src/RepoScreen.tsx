@@ -34,7 +34,9 @@ import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useTheme } from "./theme";
-import { repoMenuFor } from "./repoMenu";
+import { listViews, type ViewInfo } from "./extensionViewsClient";
+import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
+import { getApiAddress } from "./settings";
 import { abortSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
 import { useSessionActivity } from "./useSessionActivity";
@@ -48,6 +50,19 @@ import { getSetupDate, loadReads } from "./sessionReads";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
+
+/** A repo menu row: a fixed entry, an extension's view, or the retry row
+ * shown when extension views could not be listed. */
+type MenuEntry = RepoMenuItem & {
+  readonly view?: ViewInfo;
+  readonly retry?: boolean;
+};
+
+const retryEntry = (message: string): MenuEntry => ({
+  label: `Extension views unavailable: ${message}`,
+  icon: "exclamationmark.triangle",
+  retry: true,
+});
 
 type Props = NativeStackScreenProps<RootStackParamList, "Repo">;
 
@@ -78,7 +93,7 @@ const EMPTY_ACTIVITY: ReadonlyMap<string, number> = new Map();
 
 export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
-  const { client, backend, rootDir } = useAppContext();
+  const { client, backend, rootDir, address } = useAppContext();
   const insets = useSafeAreaInsets();
   const { colors: themeColors } = useTheme();
   const perGroup = useGroupSize();
@@ -171,6 +186,32 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const repoSessions = group?.sessions ?? [];
   const worktreeCount = group?.worktrees.size ?? 0;
   const menu = repoMenuFor(isRepo);
+
+  // Views the backend's extension host offers for this folder (npm's scripts,
+  // when there is a package.json). A failure shows as its own row rather than
+  // the section quietly missing.
+  const [extensionViews, setExtensionViews] = React.useState<
+    { readonly kind: "loading" } | { readonly kind: "ready"; readonly views: ReadonlyArray<ViewInfo> } | { readonly kind: "failed"; readonly message: string }
+  >({ kind: "loading" });
+  const loadExtensionViews = React.useCallback((): void => {
+    setExtensionViews({ kind: "loading" });
+    listViews(getApiAddress(address), dir).then(
+      (views) => setExtensionViews({ kind: "ready", views }),
+      (error: unknown) => setExtensionViews({ kind: "failed", message: error instanceof Error ? error.message : String(error) }),
+    );
+  }, [address, dir]);
+  React.useEffect(() => {
+    loadExtensionViews();
+  }, [loadExtensionViews]);
+
+  const menuEntries: ReadonlyArray<MenuEntry> = [
+    ...menu,
+    ...(extensionViews.kind === "ready"
+      ? extensionViews.views.map((view): MenuEntry => ({ label: view.name, icon: "list.bullet.rectangle", view }))
+      : extensionViews.kind === "failed"
+        ? [retryEntry(extensionViews.message)]
+        : []),
+  ];
 
   // Unread = updated since you last opened it AND since app setup (so a fresh
   // install doesn't treat every pre-existing session as unread).
@@ -391,7 +432,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
           <View style={styles.menuSeparator} />
 
-          {menu.map((item, index) => (
+          {menuEntries.map((item, index) => (
             <Pressable
               key={item.label}
               style={styles.menuRow}
@@ -399,6 +440,10 @@ export const RepoScreen = (props: Props): React.ReactElement => {
                 if (item.label === "Files") {
                   clearForward();
                   props.navigation.navigate("FileExplorer", { repo: name, dir });
+                } else if (item.view !== undefined) {
+                  props.navigation.navigate("ExtensionView", { repo: name, dir, view: item.view.id, title: item.view.name });
+                } else if (item.retry === true) {
+                  loadExtensionViews();
                 }
               }}
             >

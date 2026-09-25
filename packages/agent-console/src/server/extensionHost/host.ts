@@ -386,7 +386,8 @@ export const makeHost = (options: HostOptions) =>
                       args: openCommand.arguments ?? [],
                     }),
             });
-            const resource = item.resourceUri instanceof Uri ? item.resourceUri.fsPath.split("/").at(-1) : undefined;
+            const resourcePath = item.resourceUri instanceof Uri ? item.resourceUri.fsPath : undefined;
+            const resource = resourcePath?.split("/").at(-1);
             const description = Predicate.isString(item.description) ? item.description : undefined;
             const tooltip = text(item.tooltip);
             const icon = iconName(item.iconPath);
@@ -397,6 +398,7 @@ export const makeHost = (options: HostOptions) =>
               ...(tooltip === undefined ? {} : { tooltip }),
               ...(icon === undefined ? {} : { icon }),
               ...(item.contextValue === undefined ? {} : { contextValue: item.contextValue }),
+              ...(resourcePath === undefined ? {} : { resource: resourcePath }),
               collapsible: (item.collapsibleState ?? 0) > 0,
               ...(openCommand === undefined
                 ? {}

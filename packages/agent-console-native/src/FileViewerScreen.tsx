@@ -41,7 +41,7 @@ const openLink = (url: string): void => {
 };
 
 export const FileViewerScreen = (props: Props): React.ReactElement => {
-  const { path, name } = props.route.params;
+  const { path, name, line } = props.route.params;
   const { backend } = useAppContext();
   const headerHeight = useHeaderHeight();
   const [state, setState] = React.useState<State>({ kind: "loading" });
@@ -79,6 +79,7 @@ export const FileViewerScreen = (props: Props): React.ReactElement => {
               path={path}
               text={state.kind === "text" ? state.text : undefined}
               lang={lang}
+              {...(line === undefined ? {} : { scrollToLine: line })}
               onLinkActivated={openLink}
             />
           </View>

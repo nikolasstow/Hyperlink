@@ -39,6 +39,10 @@ export class ViewNode extends Schema.Class<ViewNode>("ViewNode")({
   tooltip: Schema.optionalKey(Schema.String),
   icon: Schema.optionalKey(Schema.String),
   contextValue: Schema.optionalKey(Schema.String),
+  /** The file the row stands for, when it has one. With a generic file or
+   * folder icon this is VS Code's cue to use the icon theme's icon for that
+   * file, which is how a client should read it too. */
+  resource: Schema.optionalKey(Schema.String),
   collapsible: Schema.Boolean,
   open: Schema.optionalKey(ViewAction),
   actions: Schema.Array(ViewAction),
