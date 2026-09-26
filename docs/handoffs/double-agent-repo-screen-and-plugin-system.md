@@ -94,6 +94,9 @@ The menu items are themselves **pages** (§4) — "Files" and "Docs" are built-i
 
 ### 3.2 Favorites
 
+> **2026-09-25: Favorites *is* the menu** (§21.1). There is no separate Favorites section:
+> favoriting a page adds it to the repo menu, and the menu is edited like any favorites list.
+
 - Repo-scoped list of pinned **page shortcuts**.
 - A page is favoritable when it takes a repo (§4.4) — favoriting binds the shortcut to *this* repo, so tapping it opens that page already scoped to the repo.
 - **Section hidden when empty.**
@@ -120,8 +123,19 @@ Every page declares how it relates to a repo. Working name: **requirement** (the
 - **`repo: "required"`** — a **repo page**. Only usable when there's a repo to pass. Cannot be opened from a bare home context. Favoritable per repo.
 - **`repo: "optional"`** — the page has a single **main page** that adapts: given a repo it renders the repo-scoped view; with no repo it renders the no-repo view (the thing you'd want arriving from Home). This is how one page serves both Home and a repo.
 - **`repo: "none"`** — global page, no repo.
+- **A file from a repo** (added 2026-09-25) — the page works on one file (a custom markdown editor,
+  say). It needs the repo *and* the file, so the file is part of what opens it.
 
-A page that *can* take a repo (`required` or `optional`-with-repo) is **favoritable** into that repo's Favorites.
+**Requirements decide where a page can go** (owner, restated 2026-09-25). A favorite carries
+whatever the page requires, so a page can be placed wherever those requirements can be met:
+
+| Page requires | Can be placed | What the favorite carries |
+|---|---|---|
+| nothing | any repo's menu (this, all, or specific repos); Home later | nothing |
+| a repo | repo menus: this repo (default), all repos, or specific repos | the repo it opens in |
+| a file from a repo | only that file's repo, as the page *with* the file | the repo and the file |
+
+A page whose requirements a place cannot meet is not offered there; nothing else decides it.
 
 ### 4.3 Installing & binding to repos
 
@@ -339,6 +353,8 @@ Owner-stated unless marked *Proposed*. Proposed items are not binding until appr
 - **Edit mode**: an **Edit Menu** option in the repo screen's 3-dot menu. In edit mode the list
   can be **rearranged by dragging**, and a **separator** can be added and dragged into place.
 - **Git** replaces Commits / PRs / Issues as menu rows: one **Git** page that holds them.
+- **Favorites is the menu.** The menu *is* the repo's favorites list: Files, Docs, Git and Tools
+  are its defaults, favoriting a page adds it here, and edit mode reorders it.
 
 ### 21.2 Favorites
 
@@ -347,16 +363,19 @@ Owner-stated unless marked *Proposed*. Proposed items are not binding until appr
 - Favoriting shows a **checklist of where** the favorite appears: **this repo (default)**, **all
   repos**, or **specific repos**.
 - **Home** favorites: later. Some pages will be favoritable to Home, some not.
-- **Not every page is favoritable.** A page that needs an input to work (a plugin page that edits a
-  file, say) cannot be favorited bare, but **can be favorited *with* its input**: open the README
-  in a custom markdown editor, favorite it, and the repo's menu gets an item that opens that page
-  on that file.
+- **Where a page can be favorited follows from its requirements (§4.2).** A page that requires a
+  file from a repo cannot be favorited bare, but can be favorited *with* the file: open the README
+  in a custom markdown editor, favorite it, and that repo's menu gets an item that opens that page
+  on that file. Such a favorite belongs to the file's repo by the same rule, since only there can
+  its requirement be met.
 
 ### 21.3 Tools page (replaces per-extension tool toggles)
 
 - Instead of a settings toggle per extension for whether it adds tools, a **Tools** page (in the
-  menu) lists the enabled tools, **organized into groups by AI**, so choosing a tool is
-  *category first, then the tool*, not scanning a flat list.
+  menu) lists the enabled tools, **organized into groups**, so choosing a tool is *category first,
+  then the tool*, not scanning a flat list.
+- **Group labels:** our own defaults where one fits; an **LLM names a group only when no default
+  does**. Laya then routes at use time, category then tool.
 - An **Add Tools** button opens suggestions **pulled from every source**: VS Code extensions,
   npm, and the other places tools come from.
 - This supersedes the per-extension / per-tool toggles proposed in
@@ -373,20 +392,15 @@ Owner-stated unless marked *Proposed*. Proposed items are not binding until appr
 
 ### 21.5 NPM
 
-- The NPM feature should be **a proper NPM plugin** of our own rather than VS Code's built-in npm
-  extension run through the extension host. The extension host stays for extensions generally;
-  NPM is the first plugin.
+- The NPM feature becomes **a proper NPM plugin** of our own rather than VS Code's built-in npm
+  extension run through the extension host. The extension host stays for extensions generally.
+- **Order:** keep the current NPM view (VS Code's npm through the host) for now; rewrite the NPM
+  backend so it does not depend on VS Code's npm; then make it a proper plugin and add features.
 
-### 21.6 Open questions
+### 21.6 Resolved (2026-09-25)
 
-1. **Favorites in the layout.** The §21.1 list shows Files · Docs · Git · Tools, a *Plugins*
-   line between separators, then NPM and more plugins. Where does the Favorites section sit, and
-   is *Plugins* a heading for the plugin pages below it or a row that opens the plugin list?
-2. *Proposed:* **who names the tool groups.** Laya picks well among labelled options but cannot
-   invent labels, so an LLM names the groups and files each tool when tools are added, and Laya
-   routes at use time (category, then tool), as measured in `dubz-suggestions-decisions.md`.
-3. **The NPM view that exists today** (VS Code's npm extension through the host): keep it until the
-   NPM plugin lands, or pull it now.
-4. **Favorite scope for a favorite with an input.** A file lives in one repo, so "all repos" does
-   not apply to it; *Proposed:* such favorites are always this-repo.
-
+1. Favorites is the menu (§21.1).
+2. Group labels: defaults first, an LLM only when none fits (§21.3).
+3. The current NPM view stays until the NPM backend is rewritten (§21.5).
+4. Where a favorite can go is decided by the page's requirements (§4.2), including a page with a
+   file, which belongs to that file's repo.
