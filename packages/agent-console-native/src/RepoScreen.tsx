@@ -18,7 +18,7 @@ import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
-import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { Extrapolation, interpolate, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -51,6 +51,10 @@ import { getSetupDate, loadReads } from "./sessionReads";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
+
+/** Release speed (points per millisecond) above which a release between the
+ * header's detents counts as a flick and goes the way it was flicked. */
+const DETENT_FLICK = 0.2;
 
 /** A repo menu row: a fixed entry, an extension's view, or the retry row
  * shown when extension views could not be listed. */
@@ -290,9 +294,34 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const glassFadeInPx = GLASS_FADE_IN.map((f) => f * collapseDistance);
 
   const scrollY = useSharedValue(0);
-  const onScroll = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
-  });
+  // The header has two detents, open (0) and closed (collapseDistance). A
+  // release between them goes straight to one, on the UI thread in the same
+  // frame, with the system's quick scroll animation: a flick picks its
+  // direction, a slow release the nearer detent. (Native snapToOffsets got
+  // there too, but at scrolling's glide speed, which reads as sluggish.) A
+  // fling that coasts to a stop between them settles the same way. Past the
+  // closed detent the list scrolls freely.
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const settle = (y: number, velocity: number): void => {
+    "worklet";
+    if (y <= 0.5 || y >= collapseDistance - 0.5) return;
+    const target = velocity > DETENT_FLICK ? collapseDistance : velocity < -DETENT_FLICK ? 0 : y > collapseDistance / 2 ? collapseDistance : 0;
+    scrollTo(scrollRef, 0, target, true);
+  };
+  const onScroll = useAnimatedScrollHandler(
+    {
+      onScroll: (event) => {
+        scrollY.value = event.contentOffset.y;
+      },
+      onEndDrag: (event) => {
+        settle(event.contentOffset.y, event.velocity?.y ?? 0);
+      },
+      onMomentumEnd: (event) => {
+        settle(event.contentOffset.y, 0);
+      },
+    },
+    [collapseDistance],
+  );
 
   const headerStyle = useAnimatedStyle(() => ({
     height: interpolate(scrollY.value, [0, collapseDistance], [expandedH, collapsedH], Extrapolation.CLAMP),
@@ -338,11 +367,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       <Animated.ScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
-        // The header has two detents, open (0) and closed (collapseDistance): a
-        // scroll that comes to rest between them settles on the nearer one,
-        // natively. Past the closed detent the list scrolls freely.
-        snapToOffsets={[0, collapseDistance]}
-        snapToEnd={false}
+        ref={scrollRef}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
         contentContainerStyle={{
           // Tall enough to reach the closed detent even with few sessions;
