@@ -65,15 +65,15 @@ const FLIGHT_MAX_MS = 420;
 
 /** How much of the throw's speed is left when it lands (points per ms), and
  * the bounds on it: enough to show a rebound, never a wild one. */
-const LANDING_FRACTION = 0.35;
-const LANDING_MIN = 0.15;
-const LANDING_MAX = 0.8;
+const LANDING_FRACTION = 0.45;
+const LANDING_MIN = 0.45;
+const LANDING_MAX = 1.1;
 
 /** The landing: a light, underdamped spring that starts at the detent with
  * the landing speed, so it rebounds past it once and settles. */
 const LANDING_SPRING = {
-  dampingRatio: 0.5,
-  duration: 380,
+  dampingRatio: 0.45,
+  duration: 420,
 };
 
 /**
@@ -356,17 +356,27 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const springY = useSharedValue(0);
   /** The velocity of the release that is now coasting. */
   const releaseVelocity = useSharedValue(0);
-  // TEMP DIAGNOSTIC (header detents): the lowest offset the spring reached, and
+  // TEMP DIAGNOSTIC (header detents): the lowest value the throw reached, and
   // frames where the scroll view disagreed with it (UIKit still coasting).
   const lowest = useSharedValue(0);
   const disagreements = useSharedValue(0);
 
+  // React Native clamps a programmatic scroll at the top (seen on device: an
+  // opening throw never went below 0), so the part of the rebound past the top
+  // is drawn the way iOS draws its own top rubber band: the scroll holds at 0
+  // and the content is pushed down by the overshoot, opening a gap under the
+  // header that closes as it settles.
   useAnimatedReaction(
     () => (settlingTo.value >= 0 ? springY.value : null),
     (y) => {
-      if (y !== null) scrollTo(scrollRef, 0, y, false);
+      if (y === null) return;
+      lowest.value = Math.min(lowest.value, y);
+      scrollTo(scrollRef, 0, Math.max(y, 0), false);
     },
   );
+  const overshootStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: settlingTo.value >= 0 ? Math.max(0, -springY.value) : 0 }],
+  }));
 
   const settle = (y: number, velocity: number): void => {
     "worklet";
@@ -401,7 +411,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       onScroll: (event) => {
         scrollY.value = event.contentOffset.y;
         if (settlingTo.value >= 0) {
-          lowest.value = Math.min(lowest.value, event.contentOffset.y);
           if (Math.abs(event.contentOffset.y - springY.value) > 3) disagreements.value += 1;
         }
       },
@@ -488,6 +497,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           paddingBottom: composerHeight + keyboardHeight + 24,
         }}
       >
+        <Animated.View style={overshootStyle}>
         {repoSessions.length === 0 ? (
           <Text style={styles.empty}>No sessions in this {isRepo ? "repo" : "workspace"} yet.</Text>
         ) : (
@@ -523,6 +533,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
             )}
           </>
         )}
+        </Animated.View>
       </Animated.ScrollView>
 
       {/* Top blur feather over the scrolling content, behind the glass header. */}
