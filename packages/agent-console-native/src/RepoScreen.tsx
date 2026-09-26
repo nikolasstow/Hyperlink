@@ -67,10 +67,16 @@ const FLIGHT_MAX_MS = 420;
  * the bounds on it: enough to show a rebound, never a wild one. */
 const LANDING_FRACTION = 0.45;
 const LANDING_MIN = 0.45;
-const LANDING_MAX = 1.1;
+const LANDING_MAX = 1.4;
 
 /** A flight always launches at least this many times faster than it lands. */
 const LAUNCH_OVER_LANDING = 1.8;
+
+/** Collapsing, the header's weight: its acceleration (points per ms²), which
+ * brings a full collapse down in about a third of a second, and the share of
+ * its impact speed that the landing gives back as the rebound. */
+const COLLAPSE_GRAVITY = 0.0055;
+const COLLAPSE_RESTITUTION = 0.42;
 
 /** The rebound after landing: a damped spring's motion (stiffness 300, mass
  * 1, damping ratio 0.45), started at the detent with the landing speed, so it
@@ -352,6 +358,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const thrownLaunch = useSharedValue(0);
   const thrownLanding = useSharedValue(0);
   const thrownFlightMs = useSharedValue(0);
+  /** Whether the running flight falls (collapsing: accelerates under its own
+   * weight) or is thrown (opening: eases out against friction). */
+  const thrownFalls = useSharedValue(false);
   /** The velocity of the release that is now coasting. */
   const releaseVelocity = useSharedValue(0);
   // TEMP DIAGNOSTIC (header detents): how far the throw went past its detent.
@@ -370,8 +379,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     const landing = thrownLanding.value;
     const direction = thrownDirection.value;
     if (t <= flightMs) {
-      const deceleration = (launch - landing) / flightMs;
-      return thrownFrom.value + direction * (launch * t - (deceleration * t * t) / 2);
+      // Falling, it gains speed at a steady rate; thrown, it loses it.
+      const along = thrownFalls.value ? launch * t + (COLLAPSE_GRAVITY * t * t) / 2 : launch * t - (((launch - landing) / flightMs) * t * t) / 2;
+      return thrownFrom.value + direction * along;
     }
     const s = (t - flightMs) / 1000;
     return settlingTo.value + direction * ((landing * 1000) / REBOUND_OMEGA) * Math.exp(-REBOUND_DECAY * s) * Math.sin(REBOUND_OMEGA * s);
@@ -403,12 +413,22 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     const distance = Math.abs(target - y);
     // Speeds in points per millisecond, toward the detent.
     const thrown = Math.max(0, velocity * direction);
-    const landing = Math.min(Math.max(thrown * LANDING_FRACTION, LANDING_MIN), LANDING_MAX);
+    const falls = target === collapseDistance;
+    // Collapsing, the header falls under its own weight: it gains speed all
+    // the way down and lands at what the fall built up, so the energy for the
+    // bounce comes from the collapse, not the push. The impact keeps a share of
+    // that speed (restitution) for the rebound. Opening, it is thrown: it
+    // leaves at the push's speed and eases out against friction, landing with
+    // a little left.
+    const impact = Math.sqrt(thrown * thrown + 2 * COLLAPSE_GRAVITY * distance);
+    const landing = falls
+      ? Math.min(impact * COLLAPSE_RESTITUTION, LANDING_MAX)
+      : Math.min(Math.max(thrown * LANDING_FRACTION, LANDING_MIN), LANDING_MAX);
     // Thrown too gently to arrive in time, it leaves just fast enough to; and
-    // it always leaves faster than it lands, so the flight eases out rather
-    // than speeding up (a gentle throw under the landing floor did).
-    const launch = Math.max(thrown, (2 * distance) / FLIGHT_MAX_MS - landing, landing * LAUNCH_OVER_LANDING);
-    const flightMs = (2 * distance) / (launch + landing);
+    // it always leaves faster than it lands, so the flight eases out.
+    const launch = falls ? thrown : Math.max(thrown, (2 * distance) / FLIGHT_MAX_MS - landing, landing * LAUNCH_OVER_LANDING);
+    const flightMs = falls ? (impact - thrown) / COLLAPSE_GRAVITY : (2 * distance) / (launch + landing);
+    thrownFalls.value = falls;
     thrownFrom.value = y;
     thrownDirection.value = direction;
     thrownLaunch.value = launch;
