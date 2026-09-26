@@ -18,7 +18,7 @@ import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
-import Animated, { cancelAnimation, Extrapolation, interpolate, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { cancelAnimation, Easing, Extrapolation, interpolate, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -69,27 +69,16 @@ const LANDING_FRACTION = 0.45;
 const LANDING_MIN = 0.45;
 const LANDING_MAX = 1.1;
 
-/** The landing: a light, underdamped spring that starts at the detent with
- * the landing speed, so it rebounds past it once and settles. */
-const LANDING_SPRING = {
-  dampingRatio: 0.45,
-  duration: 420,
-};
-
-/**
- * The flight's easing: the path of something launched at `launch` and slowed
- * at a steady rate to `landing` (both in points per ms) over the flight. As a
- * fraction of the distance at a fraction `u` of the time, it starts at the
- * launch speed and eases out; it is increasing everywhere, since the speed
- * never falls below the landing speed.
- */
-const frictionFlight = (launch: number, landing: number) => {
-  "worklet";
-  return (u: number): number => {
-    "worklet";
-    return (2 * launch * u - (launch - landing) * u * u) / (launch + landing);
-  };
-};
+/** The rebound after landing: a damped spring's motion (stiffness 300, mass
+ * 1, damping ratio 0.45), started at the detent with the landing speed, so it
+ * overshoots once, swings back a little and settles. Angular frequency and
+ * decay rate per second, and the time until it is within half a percent. */
+const REBOUND_STIFFNESS = 300;
+const REBOUND_DAMPING_RATIO = 0.45;
+const REBOUND_NATURAL = Math.sqrt(REBOUND_STIFFNESS);
+const REBOUND_OMEGA = REBOUND_NATURAL * Math.sqrt(1 - REBOUND_DAMPING_RATIO ** 2);
+const REBOUND_DECAY = REBOUND_DAMPING_RATIO * REBOUND_NATURAL;
+const REBOUND_SETTLE_MS = Math.ceil((Math.log(200) / REBOUND_DECAY) * 1000);
 
 // TEMP DIAGNOSTIC (header detents): remove once confirmed on device.
 const logDetent = (message: string): void => console.log(`[detent] ${message}`);
@@ -350,16 +339,40 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   // started (taking over at release loses to the coasting that follows it);
   // a release with no speed does not coast and is taken over at once.
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  /** The detent the spring is heading for, or -1 when none is running. */
+  /** The detent a throw is heading for, or -1 when none is running. */
   const settlingTo = useSharedValue(-1);
-  /** Where the spring has the scroll view this frame. */
-  const springY = useSharedValue(0);
+  /** Milliseconds into the running throw; a linear clock the curve reads. */
+  const clock = useSharedValue(0);
+  /** The running throw's shape: start, direction, speeds (pt/ms), flight time. */
+  const thrownFrom = useSharedValue(0);
+  const thrownDirection = useSharedValue(1);
+  const thrownLaunch = useSharedValue(0);
+  const thrownLanding = useSharedValue(0);
+  const thrownFlightMs = useSharedValue(0);
   /** The velocity of the release that is now coasting. */
   const releaseVelocity = useSharedValue(0);
-  // TEMP DIAGNOSTIC (header detents): the lowest value the throw reached, and
-  // frames where the scroll view disagreed with it (UIKit still coasting).
+  // TEMP DIAGNOSTIC (header detents): how far the throw went past its detent.
   const lowest = useSharedValue(0);
-  const disagreements = useSharedValue(0);
+  const highest = useSharedValue(0);
+
+  /** Where the throw has the header `t` ms in: the friction flight, then the
+   * damped rebound around the detent (a damped spring's exact motion, started
+   * at the detent with the landing speed). Computed here rather than with
+   * Reanimated's withSpring, which skips an animation whose start is already
+   * its target: a rebound's case, so it never moved. */
+  const throwPosition = (t: number): number => {
+    "worklet";
+    const flightMs = thrownFlightMs.value;
+    const launch = thrownLaunch.value;
+    const landing = thrownLanding.value;
+    const direction = thrownDirection.value;
+    if (t <= flightMs) {
+      const deceleration = (launch - landing) / flightMs;
+      return thrownFrom.value + direction * (launch * t - (deceleration * t * t) / 2);
+    }
+    const s = (t - flightMs) / 1000;
+    return settlingTo.value + direction * ((landing * 1000) / REBOUND_OMEGA) * Math.exp(-REBOUND_DECAY * s) * Math.sin(REBOUND_OMEGA * s);
+  };
 
   // React Native clamps a programmatic scroll at the top (seen on device: an
   // opening throw never went below 0), so the part of the rebound past the top
@@ -367,15 +380,16 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   // and the content is pushed down by the overshoot, opening a gap under the
   // header that closes as it settles.
   useAnimatedReaction(
-    () => (settlingTo.value >= 0 ? springY.value : null),
+    () => (settlingTo.value >= 0 ? throwPosition(clock.value) : null),
     (y) => {
       if (y === null) return;
       lowest.value = Math.min(lowest.value, y);
+      highest.value = Math.max(highest.value, y);
       scrollTo(scrollRef, 0, Math.max(y, 0), false);
     },
   );
   const overshootStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: settlingTo.value >= 0 ? Math.max(0, -springY.value) : 0 }],
+    transform: [{ translateY: settlingTo.value >= 0 ? Math.max(0, -throwPosition(clock.value)) : 0 }],
   }));
 
   const settle = (y: number, velocity: number): void => {
@@ -390,33 +404,34 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     // Thrown too gently to arrive in time, it leaves just fast enough to.
     const launch = Math.max(thrown, (2 * distance) / FLIGHT_MAX_MS - landing);
     const flightMs = (2 * distance) / (launch + landing);
+    thrownFrom.value = y;
+    thrownDirection.value = direction;
+    thrownLaunch.value = launch;
+    thrownLanding.value = landing;
+    thrownFlightMs.value = flightMs;
     lowest.value = y;
-    disagreements.value = 0;
+    highest.value = y;
     runOnJS(logDetent)(
       `throw y=${y.toFixed(1)} v=${velocity.toFixed(2)} -> ${target.toFixed(1)}: launch ${launch.toFixed(2)} land ${landing.toFixed(2)} in ${flightMs.toFixed(0)}ms`,
     );
-    springY.value = y;
+    const totalMs = flightMs + REBOUND_SETTLE_MS;
+    clock.value = 0;
     settlingTo.value = target;
-    springY.value = withSequence(
-      withTiming(target, { duration: flightMs, easing: frictionFlight(launch, landing) }),
-      withSpring(target, { ...LANDING_SPRING, velocity: direction * landing * 1000 }, (finished) => {
-        if (finished !== true) return;
-        runOnJS(logDetent)(`landed at ${target.toFixed(1)}; lowest ${lowest.value.toFixed(1)}; disagreeing frames ${disagreements.value}`);
-        settlingTo.value = -1;
-      }),
-    );
+    clock.value = withTiming(totalMs, { duration: totalMs, easing: Easing.linear }, (finished) => {
+      if (finished !== true) return;
+      runOnJS(logDetent)(`landed at ${target.toFixed(1)}; lowest ${lowest.value.toFixed(1)}; highest ${highest.value.toFixed(1)}`);
+      scrollTo(scrollRef, 0, target, false);
+      settlingTo.value = -1;
+    });
   };
   const onScroll = useAnimatedScrollHandler(
     {
       onScroll: (event) => {
         scrollY.value = event.contentOffset.y;
-        if (settlingTo.value >= 0) {
-          if (Math.abs(event.contentOffset.y - springY.value) > 3) disagreements.value += 1;
-        }
       },
       onBeginDrag: () => {
-        // A touch takes the scroll back from the spring.
-        cancelAnimation(springY);
+        // A touch catches the throw where it is.
+        cancelAnimation(clock);
         settlingTo.value = -1;
       },
       onEndDrag: (event) => {
