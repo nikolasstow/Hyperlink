@@ -69,6 +69,9 @@ const LANDING_FRACTION = 0.45;
 const LANDING_MIN = 0.45;
 const LANDING_MAX = 1.1;
 
+/** A flight always launches at least this many times faster than it lands. */
+const LAUNCH_OVER_LANDING = 1.8;
+
 /** The rebound after landing: a damped spring's motion (stiffness 300, mass
  * 1, damping ratio 0.45), started at the detent with the landing speed, so it
  * overshoots once, swings back a little and settles. Angular frequency and
@@ -401,8 +404,10 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     // Speeds in points per millisecond, toward the detent.
     const thrown = Math.max(0, velocity * direction);
     const landing = Math.min(Math.max(thrown * LANDING_FRACTION, LANDING_MIN), LANDING_MAX);
-    // Thrown too gently to arrive in time, it leaves just fast enough to.
-    const launch = Math.max(thrown, (2 * distance) / FLIGHT_MAX_MS - landing);
+    // Thrown too gently to arrive in time, it leaves just fast enough to; and
+    // it always leaves faster than it lands, so the flight eases out rather
+    // than speeding up (a gentle throw under the landing floor did).
+    const launch = Math.max(thrown, (2 * distance) / FLIGHT_MAX_MS - landing, landing * LAUNCH_OVER_LANDING);
     const flightMs = (2 * distance) / (launch + landing);
     thrownFrom.value = y;
     thrownDirection.value = direction;
