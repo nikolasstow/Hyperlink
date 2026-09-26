@@ -18,7 +18,7 @@ import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
-import Animated, { Extrapolation, interpolate, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { cancelAnimation, Extrapolation, interpolate, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -59,6 +59,13 @@ const DETENT_FLICK = 0.2;
 /** Release speed below which UIKit does not coast, so a release can be
  * settled at once rather than when coasting begins. */
 const DETENT_COASTING = 0.05;
+
+/** The detent spring: underdamped, so it overshoots and eases back, on about
+ * the timing of UIKit's own bounces. */
+const DETENT_SPRING = {
+  dampingRatio: 0.72,
+  duration: 450,
+};
 
 // TEMP DIAGNOSTIC (header detents): remove once confirmed on device.
 const logDetent = (message: string): void => console.log(`[detent] ${message}`);
@@ -302,58 +309,82 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
   const scrollY = useSharedValue(0);
   // The header has two detents, open (0) and closed (collapseDistance). A
-  // release between them goes to one with the system's quick animated scroll,
-  // on the UI thread: a flick goes the way it was flicked, a slow release to
-  // the nearer detent, and a fling that coasts to a stop between them settles
-  // the same way. Past the closed detent the list scrolls freely.
+  // release between them springs to one, Apple-style: an underdamped spring
+  // that carries the release's velocity, overshoots its detent (opening, the
+  // content pulls past the top) and eases back. The spring runs on the UI
+  // thread and moves the scroll view to its value every frame. A flick goes
+  // the way it was flicked, a slow release to the nearer detent, and a fling
+  // that coasts to a stop between them springs the same way. A touch cancels
+  // it. Past the closed detent the list scrolls freely.
   //
-  // Timing is the whole trick. A release with speed makes UIKit coast *after*
-  // onEndDrag, and that coasting overrides an animated scroll started there
-  // (the header jumped back and glided). So a flick is settled at
-  // onMomentumBegin, once the coasting it replaces has started; only a release
-  // with no speed, which does not coast, is settled at onEndDrag. The snap's
-  // own momentum-end is ignored so it cannot turn itself around.
+  // A flick is taken over at onMomentumBegin, once UIKit's coasting has
+  // started (taking over at release loses to the coasting that follows it);
+  // a release with no speed does not coast and is taken over at once.
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
-  /** The detent a settle is animating to, or -1 when none is. */
+  /** The detent the spring is heading for, or -1 when none is running. */
   const settlingTo = useSharedValue(-1);
+  /** Where the spring has the scroll view this frame. */
+  const springY = useSharedValue(0);
   /** The velocity of the release that is now coasting. */
   const releaseVelocity = useSharedValue(0);
+  // TEMP DIAGNOSTIC (header detents): the lowest offset the spring reached, and
+  // frames where the scroll view disagreed with it (UIKit still coasting).
+  const lowest = useSharedValue(0);
+  const disagreements = useSharedValue(0);
+
+  useAnimatedReaction(
+    () => (settlingTo.value >= 0 ? springY.value : null),
+    (y) => {
+      if (y !== null) scrollTo(scrollRef, 0, y, false);
+    },
+  );
+
   const settle = (y: number, velocity: number): void => {
     "worklet";
     if (y <= 0.5 || y >= collapseDistance - 0.5) return;
     const target = velocity > DETENT_FLICK ? collapseDistance : velocity < -DETENT_FLICK ? 0 : y > collapseDistance / 2 ? collapseDistance : 0;
+    lowest.value = y;
+    disagreements.value = 0;
+    runOnJS(logDetent)(`spring y=${y.toFixed(1)} v=${velocity.toFixed(2)} -> ${target.toFixed(1)}`);
+    springY.value = y;
     settlingTo.value = target;
-    // TEMP DIAGNOSTIC (header detents): remove once confirmed on device.
-    runOnJS(logDetent)(`settle y=${y.toFixed(1)} v=${velocity.toFixed(2)} -> ${target.toFixed(1)}`);
-    scrollTo(scrollRef, 0, target, true);
+    springY.value = withSpring(target, { ...DETENT_SPRING, velocity: velocity * 1000 }, (finished) => {
+      if (finished !== true) return;
+      runOnJS(logDetent)(`spring done at ${target.toFixed(1)}; lowest ${lowest.value.toFixed(1)}; disagreeing frames ${disagreements.value}`);
+      settlingTo.value = -1;
+    });
   };
   const onScroll = useAnimatedScrollHandler(
     {
       onScroll: (event) => {
         scrollY.value = event.contentOffset.y;
+        if (settlingTo.value >= 0) {
+          lowest.value = Math.min(lowest.value, event.contentOffset.y);
+          if (Math.abs(event.contentOffset.y - springY.value) > 3) disagreements.value += 1;
+        }
       },
       onBeginDrag: () => {
+        // A touch takes the scroll back from the spring.
+        cancelAnimation(springY);
         settlingTo.value = -1;
       },
       onEndDrag: (event) => {
         const velocity = event.velocity?.y ?? 0;
         releaseVelocity.value = velocity;
-        runOnJS(logDetent)(`release y=${event.contentOffset.y.toFixed(1)} v=${velocity.toFixed(2)}`);
         if (Math.abs(velocity) < DETENT_COASTING) settle(event.contentOffset.y, 0);
       },
       onMomentumBegin: (event) => {
-        runOnJS(logDetent)(`coast y=${event.contentOffset.y.toFixed(1)}`);
-        if (settlingTo.value < 0) settle(event.contentOffset.y, releaseVelocity.value);
+        if (settlingTo.value >= 0) return;
+        // Stop UIKit's coasting where it stands: an animated scroll halts it
+        // (seen on device), and to the current offset it does not move.
+        scrollTo(scrollRef, 0, event.contentOffset.y, true);
+        settle(event.contentOffset.y, releaseVelocity.value);
       },
       onMomentumEnd: (event) => {
-        const y = event.contentOffset.y;
-        runOnJS(logDetent)(`rest y=${y.toFixed(1)}`);
-        if (settlingTo.value >= 0) {
-          // Our own snap finished (or was superseded); never re-settle from it.
-          if (Math.abs(y - settlingTo.value) < 1) settlingTo.value = -1;
-          return;
-        }
-        settle(y, 0);
+        // The spring moves the scroll view without momentum events; one while
+        // it runs is the coasting it replaced ending. Only a fling that
+        // coasted to a stop between the detents on its own springs from here.
+        if (settlingTo.value < 0) settle(event.contentOffset.y, 0);
       },
     },
     [collapseDistance],
