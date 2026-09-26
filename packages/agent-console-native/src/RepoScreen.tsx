@@ -17,7 +17,7 @@
 import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
@@ -96,6 +96,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const { name, dir, isRepo } = props.route.params;
   const { client, backend, rootDir, address } = useAppContext();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { colors: themeColors } = useTheme();
   const perGroup = useGroupSize();
   const isFocused = useIsFocused();
@@ -337,8 +338,16 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       <Animated.ScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
+        // The header has two detents, open (0) and closed (collapseDistance): a
+        // scroll that comes to rest between them settles on the nearer one,
+        // natively. Past the closed detent the list scrolls freely.
+        snapToOffsets={[0, collapseDistance]}
+        snapToEnd={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
         contentContainerStyle={{
+          // Tall enough to reach the closed detent even with few sessions;
+          // otherwise the header could stop half-collapsed.
+          minHeight: windowHeight + collapseDistance,
           paddingTop: expandedH + 12,
           // Reserve room for the floating composer (measured) so the last session
           // clears it, plus the keyboard when it's up.
