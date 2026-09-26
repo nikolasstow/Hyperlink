@@ -56,6 +56,13 @@ import { useGroupSize } from "./useGroupSize";
  * header's detents counts as a flick and goes the way it was flicked. */
 const DETENT_FLICK = 0.2;
 
+/** Release speed below which UIKit does not coast, so a release can be
+ * settled at once rather than when coasting begins. */
+const DETENT_COASTING = 0.05;
+
+// TEMP DIAGNOSTIC (header detents): remove once confirmed on device.
+const logDetent = (message: string): void => console.log(`[detent] ${message}`);
+
 /** A repo menu row: a fixed entry, an extension's view, or the retry row
  * shown when extension views could not be listed. */
 type MenuEntry = RepoMenuItem & {
@@ -295,17 +302,29 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
   const scrollY = useSharedValue(0);
   // The header has two detents, open (0) and closed (collapseDistance). A
-  // release between them goes straight to one, on the UI thread in the same
-  // frame, with the system's quick scroll animation: a flick picks its
-  // direction, a slow release the nearer detent. (Native snapToOffsets got
-  // there too, but at scrolling's glide speed, which reads as sluggish.) A
-  // fling that coasts to a stop between them settles the same way. Past the
-  // closed detent the list scrolls freely.
+  // release between them goes to one with the system's quick animated scroll,
+  // on the UI thread: a flick goes the way it was flicked, a slow release to
+  // the nearer detent, and a fling that coasts to a stop between them settles
+  // the same way. Past the closed detent the list scrolls freely.
+  //
+  // Timing is the whole trick. A release with speed makes UIKit coast *after*
+  // onEndDrag, and that coasting overrides an animated scroll started there
+  // (the header jumped back and glided). So a flick is settled at
+  // onMomentumBegin, once the coasting it replaces has started; only a release
+  // with no speed, which does not coast, is settled at onEndDrag. The snap's
+  // own momentum-end is ignored so it cannot turn itself around.
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  /** The detent a settle is animating to, or -1 when none is. */
+  const settlingTo = useSharedValue(-1);
+  /** The velocity of the release that is now coasting. */
+  const releaseVelocity = useSharedValue(0);
   const settle = (y: number, velocity: number): void => {
     "worklet";
     if (y <= 0.5 || y >= collapseDistance - 0.5) return;
     const target = velocity > DETENT_FLICK ? collapseDistance : velocity < -DETENT_FLICK ? 0 : y > collapseDistance / 2 ? collapseDistance : 0;
+    settlingTo.value = target;
+    // TEMP DIAGNOSTIC (header detents): remove once confirmed on device.
+    runOnJS(logDetent)(`settle y=${y.toFixed(1)} v=${velocity.toFixed(2)} -> ${target.toFixed(1)}`);
     scrollTo(scrollRef, 0, target, true);
   };
   const onScroll = useAnimatedScrollHandler(
@@ -313,11 +332,28 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       onScroll: (event) => {
         scrollY.value = event.contentOffset.y;
       },
+      onBeginDrag: () => {
+        settlingTo.value = -1;
+      },
       onEndDrag: (event) => {
-        settle(event.contentOffset.y, event.velocity?.y ?? 0);
+        const velocity = event.velocity?.y ?? 0;
+        releaseVelocity.value = velocity;
+        runOnJS(logDetent)(`release y=${event.contentOffset.y.toFixed(1)} v=${velocity.toFixed(2)}`);
+        if (Math.abs(velocity) < DETENT_COASTING) settle(event.contentOffset.y, 0);
+      },
+      onMomentumBegin: (event) => {
+        runOnJS(logDetent)(`coast y=${event.contentOffset.y.toFixed(1)}`);
+        if (settlingTo.value < 0) settle(event.contentOffset.y, releaseVelocity.value);
       },
       onMomentumEnd: (event) => {
-        settle(event.contentOffset.y, 0);
+        const y = event.contentOffset.y;
+        runOnJS(logDetent)(`rest y=${y.toFixed(1)}`);
+        if (settlingTo.value >= 0) {
+          // Our own snap finished (or was superseded); never re-settle from it.
+          if (Math.abs(y - settlingTo.value) < 1) settlingTo.value = -1;
+          return;
+        }
+        settle(y, 0);
       },
     },
     [collapseDistance],
