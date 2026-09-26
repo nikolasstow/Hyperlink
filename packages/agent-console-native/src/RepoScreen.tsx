@@ -18,7 +18,7 @@ import type { Session } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
-import Animated, { cancelAnimation, Extrapolation, interpolate, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { cancelAnimation, Extrapolation, interpolate, runOnJS, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -60,11 +60,35 @@ const DETENT_FLICK = 0.2;
  * settled at once rather than when coasting begins. */
 const DETENT_COASTING = 0.05;
 
-/** The detent spring: underdamped, so it overshoots and eases back, on about
- * the timing of UIKit's own bounces. */
-const DETENT_SPRING = {
-  dampingRatio: 0.72,
-  duration: 450,
+/** A thrown header's flight: at most this long, however gently it was let go. */
+const FLIGHT_MAX_MS = 420;
+
+/** How much of the throw's speed is left when it lands (points per ms), and
+ * the bounds on it: enough to show a rebound, never a wild one. */
+const LANDING_FRACTION = 0.35;
+const LANDING_MIN = 0.15;
+const LANDING_MAX = 0.8;
+
+/** The landing: a light, underdamped spring that starts at the detent with
+ * the landing speed, so it rebounds past it once and settles. */
+const LANDING_SPRING = {
+  dampingRatio: 0.5,
+  duration: 380,
+};
+
+/**
+ * The flight's easing: the path of something launched at `launch` and slowed
+ * at a steady rate to `landing` (both in points per ms) over the flight. As a
+ * fraction of the distance at a fraction `u` of the time, it starts at the
+ * launch speed and eases out; it is increasing everywhere, since the speed
+ * never falls below the landing speed.
+ */
+const frictionFlight = (launch: number, landing: number) => {
+  "worklet";
+  return (u: number): number => {
+    "worklet";
+    return (2 * launch * u - (launch - landing) * u * u) / (launch + landing);
+  };
 };
 
 // TEMP DIAGNOSTIC (header detents): remove once confirmed on device.
@@ -309,13 +333,18 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
   const scrollY = useSharedValue(0);
   // The header has two detents, open (0) and closed (collapseDistance). A
-  // release between them springs to one, Apple-style: an underdamped spring
-  // that carries the release's velocity, overshoots its detent (opening, the
-  // content pulls past the top) and eases back. The spring runs on the UI
-  // thread and moves the scroll view to its value every frame. A flick goes
-  // the way it was flicked, a slow release to the nearer detent, and a fling
-  // that coasts to a stop between them springs the same way. A touch cancels
-  // it. Past the closed detent the list scrolls freely.
+  // release between them is thrown to one, the way a flicked iOS list moves:
+  //   - flight: it leaves at the release's speed and loses energy to friction
+  //     at a steady rate, so it is fast first and eases out (a constant
+  //     deceleration, the path of anything thrown against friction);
+  //   - landing: it reaches the detent still moving a little, and that last
+  //     energy goes into a small damped rebound past it before it settles
+  //     (opening, the content pulls past the top and settles at 0).
+  // It runs on the UI thread and moves the scroll view every frame. A flick
+  // goes the way it was flicked, a slow release to the nearer detent (thrown
+  // with just enough speed to get there in time), and a fling that coasts to a
+  // stop between them is thrown the same way. A touch catches it. Past the
+  // closed detent the list scrolls freely.
   //
   // A flick is taken over at onMomentumBegin, once UIKit's coasting has
   // started (taking over at release loses to the coasting that follows it);
@@ -343,16 +372,29 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     "worklet";
     if (y <= 0.5 || y >= collapseDistance - 0.5) return;
     const target = velocity > DETENT_FLICK ? collapseDistance : velocity < -DETENT_FLICK ? 0 : y > collapseDistance / 2 ? collapseDistance : 0;
+    const direction = target > y ? 1 : -1;
+    const distance = Math.abs(target - y);
+    // Speeds in points per millisecond, toward the detent.
+    const thrown = Math.max(0, velocity * direction);
+    const landing = Math.min(Math.max(thrown * LANDING_FRACTION, LANDING_MIN), LANDING_MAX);
+    // Thrown too gently to arrive in time, it leaves just fast enough to.
+    const launch = Math.max(thrown, (2 * distance) / FLIGHT_MAX_MS - landing);
+    const flightMs = (2 * distance) / (launch + landing);
     lowest.value = y;
     disagreements.value = 0;
-    runOnJS(logDetent)(`spring y=${y.toFixed(1)} v=${velocity.toFixed(2)} -> ${target.toFixed(1)}`);
+    runOnJS(logDetent)(
+      `throw y=${y.toFixed(1)} v=${velocity.toFixed(2)} -> ${target.toFixed(1)}: launch ${launch.toFixed(2)} land ${landing.toFixed(2)} in ${flightMs.toFixed(0)}ms`,
+    );
     springY.value = y;
     settlingTo.value = target;
-    springY.value = withSpring(target, { ...DETENT_SPRING, velocity: velocity * 1000 }, (finished) => {
-      if (finished !== true) return;
-      runOnJS(logDetent)(`spring done at ${target.toFixed(1)}; lowest ${lowest.value.toFixed(1)}; disagreeing frames ${disagreements.value}`);
-      settlingTo.value = -1;
-    });
+    springY.value = withSequence(
+      withTiming(target, { duration: flightMs, easing: frictionFlight(launch, landing) }),
+      withSpring(target, { ...LANDING_SPRING, velocity: direction * landing * 1000 }, (finished) => {
+        if (finished !== true) return;
+        runOnJS(logDetent)(`landed at ${target.toFixed(1)}; lowest ${lowest.value.toFixed(1)}; disagreeing frames ${disagreements.value}`);
+        settlingTo.value = -1;
+      }),
+    );
   };
   const onScroll = useAnimatedScrollHandler(
     {
