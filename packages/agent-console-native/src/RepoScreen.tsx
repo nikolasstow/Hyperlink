@@ -89,9 +89,6 @@ const REBOUND_OMEGA = REBOUND_NATURAL * Math.sqrt(1 - REBOUND_DAMPING_RATIO ** 2
 const REBOUND_DECAY = REBOUND_DAMPING_RATIO * REBOUND_NATURAL;
 const REBOUND_SETTLE_MS = Math.ceil((Math.log(200) / REBOUND_DECAY) * 1000);
 
-// TEMP DIAGNOSTIC (header detents): remove once confirmed on device.
-const logDetent = (message: string): void => console.log(`[detent] ${message}`);
-
 /** A repo menu row: a fixed entry, an extension's view, or the retry row
  * shown when extension views could not be listed. */
 type MenuEntry = RepoMenuItem & {
@@ -363,9 +360,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const thrownFalls = useSharedValue(false);
   /** The velocity of the release that is now coasting. */
   const releaseVelocity = useSharedValue(0);
-  // TEMP DIAGNOSTIC (header detents): how far the throw went past its detent.
-  const lowest = useSharedValue(0);
-  const highest = useSharedValue(0);
 
   /** Where the throw has the header `t` ms in: the friction flight, then the
    * damped rebound around the detent (a damped spring's exact motion, started
@@ -396,8 +390,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     () => (settlingTo.value >= 0 ? throwPosition(clock.value) : null),
     (y) => {
       if (y === null) return;
-      lowest.value = Math.min(lowest.value, y);
-      highest.value = Math.max(highest.value, y);
       scrollTo(scrollRef, 0, Math.max(y, 0), false);
     },
   );
@@ -434,17 +426,11 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     thrownLaunch.value = launch;
     thrownLanding.value = landing;
     thrownFlightMs.value = flightMs;
-    lowest.value = y;
-    highest.value = y;
-    runOnJS(logDetent)(
-      `throw y=${y.toFixed(1)} v=${velocity.toFixed(2)} -> ${target.toFixed(1)}: launch ${launch.toFixed(2)} land ${landing.toFixed(2)} in ${flightMs.toFixed(0)}ms`,
-    );
     const totalMs = flightMs + REBOUND_SETTLE_MS;
     clock.value = 0;
     settlingTo.value = target;
     clock.value = withTiming(totalMs, { duration: totalMs, easing: Easing.linear }, (finished) => {
       if (finished !== true) return;
-      runOnJS(logDetent)(`landed at ${target.toFixed(1)}; lowest ${lowest.value.toFixed(1)}; highest ${highest.value.toFixed(1)}`);
       scrollTo(scrollRef, 0, target, false);
       settlingTo.value = -1;
     });
