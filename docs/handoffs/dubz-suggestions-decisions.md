@@ -326,6 +326,11 @@ reachable (the agent can still ask for any tool), so a wrong pick narrows nothin
 
 ### P10. Settings
 
+> **Superseded in part (2026-09-25):** per-source and per-tool toggles give way to a **Tools
+> page** that groups tools by AI and adds them from suggestions across every source, and an
+> extension's tools are chosen on its install results screen. See
+> `double-agent-repo-screen-and-plugin-system.md` §21.3 and §21.4.
+
 - **Suggestions**: on or off, globally.
 - **Per source**: turn off everything from one extension, all package scripts, or all skills.
 - **Per tool**: turn off one tool (ESLint's *fix all* without turning off ESLint).

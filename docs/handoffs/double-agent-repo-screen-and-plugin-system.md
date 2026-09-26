@@ -83,6 +83,9 @@ Before wiring the real repo screen, build the header alone: the Reanimated scrol
 
 ### 3.1 Menu (built-in repo views)
 
+> **Superseded in part (2026-09-25), see §21:** the menu becomes Files · Docs · Git · Tools, then
+> the plugin pages; Commits / PRs / Issues move into one **Git** page; the list is user-editable.
+
 - **Files** — file explorer first. Roadmap: explorer → file **viewer** → full **IDE**. Ship the explorer, expand later.
 - **Docs** — see §6 (requires the docs package ported to native).
 - **Commits / PRs / GitHub** — show read-only info in-app; for anything that *does* something, **link out to GitHub / the GitHub app** until native features exist. Link-out is the accepted stand-in, not a failure state.
@@ -215,7 +218,7 @@ Repo identity: reuse whatever `settings.ts`/`repoScan.ts` already use to identif
 3. **"Identical to chat top bar"** — the brief says "mostly." Enumerate any intended differences, or hold to pixel-identical as acceptance.
 4. **Requirement naming** — `repo: "required" | "optional" | "none"` is a placeholder for the brief's "requirements or some other name." Lock a name.
 5. **Script execution host** (§5) — processes plugin on vite backend vs worker vs opencode permission.
-6. **Menu vs Favorites vs Plugins overlap** — the Menu items are built-in pages; can they be favorited too, or is Favorites only for plugin/optional pages? Define the boundary.
+6. **Menu vs Favorites vs Plugins overlap** — RESOLVED (§21): any page can be favorited if it can be opened from what the favorite carries; a page that needs an input (a file) is favorited *with* that input.
 7. **"Hide plugins from header"** — global or per-repo?
 8. **Home screen parity** — Home also gets a 3-dot with **+ Plugin**; does Home get its own (smaller) version of this header, or stay as-is? The brief implies Home stays the composer/repo-list and only shares the +Plugin action.
 
@@ -310,3 +313,80 @@ Notification robustness (done 2026-09-07): the push event-stream watcher had a s
 ## 20. Framework direction — DoubleAgent on Last.ts (PLANNED, not top priority)
 
 The plan is to build DoubleAgent (and native apps generally) on **Last.ts** (the Effect+React framework, `packages/last-ts`) rather than hand-rolled React Native — maximizing Effect usage per the "what would Effect do" rule. Last.ts's spine is platform-agnostic: `View` (View DI), `Last` (provider/runtime + Layer DI edge), `AtomReact` (Atom↔React reactivity), `Route`/`Page`/`Router` (typed routes + file-router codegen). Only the **host** is web-bound: `Waku` (RSC), `Document`, `History`, `Link` (DOM). So the work is a **native host adapter**: map `Route`/`Page` → React Navigation, `View`/`Last` → RN + the Effect dual-runtime, keep `AtomReact` for state; the current `packages/agent-console-native` screens migrate onto it over time. Endgame: one Effect framework spanning web + native (see [[reference-effect-react-rsc-template]], [[project-ui-framework]]). Not a top priority — do it deliberately, likely once the app's feature surface stabilizes, so the migration is onto settled screens.
+
+---
+
+## 21. Menu, Git, Tools and favorites (DECISIONS, 2026-09-25)
+
+Owner-stated unless marked *Proposed*. Proposed items are not binding until approved.
+
+### 21.1 The repo menu
+
+- **Layout** (owner):
+
+  ```
+  Files
+  Docs
+  Git
+  Tools
+  ───────
+  Plugins
+  ───────
+  NPM
+  … More Plugins
+  ```
+
+- **Edit mode**: an **Edit Menu** option in the repo screen's 3-dot menu. In edit mode the list
+  can be **rearranged by dragging**, and a **separator** can be added and dragged into place.
+- **Git** replaces Commits / PRs / Issues as menu rows: one **Git** page that holds them.
+
+### 21.2 Favorites
+
+- Plugins can add pages; pages can be **favorited** into the menu's Favorites (§3.2, §4.5 stand).
+- Git's sub-pages (PRs, Commits, Issues) are favoritable **from the 3-dot menu** on that page.
+- Favoriting shows a **checklist of where** the favorite appears: **this repo (default)**, **all
+  repos**, or **specific repos**.
+- **Home** favorites: later. Some pages will be favoritable to Home, some not.
+- **Not every page is favoritable.** A page that needs an input to work (a plugin page that edits a
+  file, say) cannot be favorited bare, but **can be favorited *with* its input**: open the README
+  in a custom markdown editor, favorite it, and the repo's menu gets an item that opens that page
+  on that file.
+
+### 21.3 Tools page (replaces per-extension tool toggles)
+
+- Instead of a settings toggle per extension for whether it adds tools, a **Tools** page (in the
+  menu) lists the enabled tools, **organized into groups by AI**, so choosing a tool is
+  *category first, then the tool*, not scanning a flat list.
+- An **Add Tools** button opens suggestions **pulled from every source**: VS Code extensions,
+  npm, and the other places tools come from.
+- This supersedes the per-extension / per-tool toggles proposed in
+  `dubz-suggestions-decisions.md` P10.
+
+### 21.4 Extension install flow
+
+- After an extension is installed, the host scans it for everything usable (tools, themes, and the
+  other contribution kinds) and a **results screen** shows what it found; you choose which tools
+  to enable and what else to take.
+- Installing a **theme** extension asks, on that screen, whether to **set it as your theme**, so
+  there is no trip to Appearance.
+- The results screen is **mostly reused** by Add Tools (§21.3).
+
+### 21.5 NPM
+
+- The NPM feature should be **a proper NPM plugin** of our own rather than VS Code's built-in npm
+  extension run through the extension host. The extension host stays for extensions generally;
+  NPM is the first plugin.
+
+### 21.6 Open questions
+
+1. **Favorites in the layout.** The §21.1 list shows Files · Docs · Git · Tools, a *Plugins*
+   line between separators, then NPM and more plugins. Where does the Favorites section sit, and
+   is *Plugins* a heading for the plugin pages below it or a row that opens the plugin list?
+2. *Proposed:* **who names the tool groups.** Laya picks well among labelled options but cannot
+   invent labels, so an LLM names the groups and files each tool when tools are added, and Laya
+   routes at use time (category, then tool), as measured in `dubz-suggestions-decisions.md`.
+3. **The NPM view that exists today** (VS Code's npm extension through the host): keep it until the
+   NPM plugin lands, or pull it now.
+4. **Favorite scope for a favorite with an input.** A file lives in one repo, so "all repos" does
+   not apply to it; *Proposed:* such favorites are always this-repo.
+
