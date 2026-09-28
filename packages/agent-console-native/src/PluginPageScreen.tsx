@@ -72,15 +72,17 @@ const Rows = (props: { readonly rows: ReadonlyArray<SectionRow>; readonly chevro
   <>
     {props.rows.map((row, index) => {
       const chevron = props.chevron === true && index === props.rows.length - 1 ? <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} /> : null;
+      // A stacked row's chevron is centered on the row as a whole, beside
+      // both its label and its value.
       return row.stacked ? (
         <View key={row.label} style={[styles.stackedRow, index > 0 && styles.rowBorder]}>
-          <View style={styles.stackedTop}>
+          <View style={styles.stackedText}>
             <Text style={styles.factLabel}>{row.label}</Text>
-            {chevron}
+            <Text style={[styles.stackedValue, row.mono && styles.mono]} selectable={props.chevron !== true}>
+              {row.value}
+            </Text>
           </View>
-          <Text style={[styles.stackedValue, row.mono && styles.mono]} selectable={props.chevron !== true}>
-            {row.value}
-          </Text>
+          {chevron}
         </View>
       ) : (
         <View key={row.label} style={[styles.row, index > 0 && styles.rowBorder]}>
@@ -123,17 +125,15 @@ const PinTile = (props: {
 }): React.ReactElement => (
   <Pressable style={styles.tile} onPress={props.onPress} {...(props.onLongPress === undefined ? {} : { onLongPress: props.onLongPress })}>
     <View style={styles.tileTop}>
-      <SystemIcon name={props.icon} size={18} color={colors.tint} />
-      {props.busy ? <ActivityIndicator color={colors.secondaryLabel} /> : props.playable ? <SystemIcon name="play.fill" size={14} color={colors.tint} /> : null}
-    </View>
-    <View style={styles.tileText}>
+      <SystemIcon name={props.icon} size={16} color={colors.tint} />
       <Text style={styles.tileTitle} numberOfLines={2}>
         {props.title}
       </Text>
-      <Text style={[styles.pinDetail, styles.mono]} numberOfLines={1}>
-        {props.subtitle}
-      </Text>
+      {props.busy ? <ActivityIndicator color={colors.secondaryLabel} /> : props.playable ? <SystemIcon name="play.fill" size={14} color={colors.tint} /> : null}
     </View>
+    <Text style={[styles.pinDetail, styles.mono]} numberOfLines={1}>
+      {props.subtitle}
+    </Text>
   </Pressable>
 );
 
@@ -484,8 +484,14 @@ const styles = StyleSheet.create({
     minHeight: 46,
   },
   stackedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  stackedText: {
+    flex: 1,
     gap: 4,
   },
   rowBorder: {
@@ -528,7 +534,7 @@ const styles = StyleSheet.create({
   tile: {
     width: "48%",
     flexGrow: 1,
-    height: 96,
+    minHeight: 72,
     padding: 12,
     borderRadius: 14,
     backgroundColor: colors.cardBackground,
@@ -536,13 +542,11 @@ const styles = StyleSheet.create({
   },
   tileTop: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-  },
-  tileText: {
-    gap: 2,
+    gap: 8,
   },
   tileTitle: {
+    flex: 1,
     color: colors.label,
     fontSize: 15,
     fontWeight: "500",
@@ -566,11 +570,6 @@ const styles = StyleSheet.create({
     color: colors.secondaryLabel,
     fontSize: 16,
     textAlign: "right",
-  },
-  stackedTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
   },
   stackedValue: {
     color: colors.secondaryLabel,

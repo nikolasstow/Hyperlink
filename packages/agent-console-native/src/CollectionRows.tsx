@@ -82,9 +82,12 @@ export const ItemRow = (props: {
       ) : (
         <UIText modifiers={[frame({ width: CHEVRON_COL })]}>{""}</UIText>
       )}
-      {props.icon === undefined ? null : <Image systemName={props.icon} size={17} color={colors.secondaryLabel} modifiers={[frame({ width: ICON_COL })]} />}
       <VStack alignment="leading" spacing={2}>
-        <UIText modifiers={[font({ size: 15 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title}</UIText>
+        {/* The icon sits on the title's line, not centered on the block. */}
+        <HStack spacing={8} alignment="center">
+          {props.icon === undefined ? null : <Image systemName={props.icon} size={15} color={colors.secondaryLabel} />}
+          <UIText modifiers={[font({ size: 15 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title}</UIText>
+        </HStack>
         <UIText modifiers={[font({ size: 12, family: "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.name}</UIText>
         {props.detail === undefined ? null : (
           <UIText modifiers={[font({ size: 12 }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.detail}</UIText>
@@ -100,7 +103,7 @@ export const ItemRow = (props: {
       <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }}>
         {withMenu(props.selecting ? [] : props.menu, trigger)}
       </Host>
-      <Separator inset={12 + props.depth * INDENT + CHEVRON_COL + (props.icon === undefined ? 0 : ICON_COL) + 20} />
+      <Separator inset={12 + props.depth * INDENT + CHEVRON_COL + 10} />
     </View>
   );
 };
@@ -178,24 +181,25 @@ export const Tile = (props: {
       spacing={8}
       modifiers={[
         padding({ all: 12 }),
-        frame({ width: props.width, height: 96, alignment: "topLeading" }),
+        frame({ width: props.width, height: 80, alignment: "topLeading" }),
         background(colors.cardBackground),
         cornerRadius(14),
         onTapGesture(props.onPress),
       ]}
     >
-      <HStack spacing={6} alignment="center">
+      {/* The icon sits on the title's line. */}
+      <HStack spacing={8} alignment="center">
         {props.selecting === true ? (
-          <Image systemName={props.selected === true ? "checkmark.circle.fill" : "circle"} size={18} color={props.selected === true ? colors.tint : colors.secondaryLabel} />
+          <Image systemName={props.selected === true ? "checkmark.circle.fill" : "circle"} size={16} color={props.selected === true ? colors.tint : colors.secondaryLabel} />
         ) : props.icon === undefined ? null : (
-          <Image systemName={props.icon} size={18} color={colors.tint} />
+          <Image systemName={props.icon} size={16} color={colors.tint} />
         )}
+        <UIText modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
         <Spacer />
         {props.count === undefined ? null : <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel)]}>{String(props.count)}</UIText>}
         {props.onRun === undefined || props.selecting === true ? null : props.busy === true ? <ProgressView /> : <Button systemImage="play.fill" onPress={props.onRun} />}
       </HStack>
       <Spacer />
-      <UIText modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
       <UIText modifiers={[font({ size: 12, family: props.onRun === undefined ? undefined : "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.subtitle}</UIText>
     </VStack>
   );
