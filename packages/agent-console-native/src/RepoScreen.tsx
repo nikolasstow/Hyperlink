@@ -617,7 +617,10 @@ export const RepoScreen = (props: Props): React.ReactElement => {
                   clearForward();
                   props.navigation.navigate("FileExplorer", { repo: name, dir });
                 } else if (item.view !== undefined) {
-                  props.navigation.navigate("ExtensionView", { repo: name, dir, view: item.view.id, title: item.view.name });
+                  const { view } = item;
+                  if (view.kind === "summary") props.navigation.navigate("PluginSummary", { repo: name, dir, page: view.id, title: view.name });
+                  else if (view.kind === "collection") props.navigation.navigate("Collection", { repo: name, dir, page: view.id, title: view.name, view: { kind: "home" } });
+                  else props.navigation.navigate("ExtensionView", { repo: name, dir, view: view.id, title: view.name });
                 } else if (item.retry === true) {
                   loadExtensionViews();
                 }

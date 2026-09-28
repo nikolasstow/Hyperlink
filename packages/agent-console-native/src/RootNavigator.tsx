@@ -36,7 +36,9 @@ import { ThemeImportValuesScreen } from "./ThemeImportValuesScreen";
 import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
 import { ThemeTokensScreen } from "./ThemeTokensScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
+import { CollectionScreen, type CollectionView } from "./CollectionScreen";
 import { ExtensionViewScreen } from "./ExtensionViewScreen";
+import { PluginSummaryScreen } from "./PluginSummaryScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
 import { RepoScreen } from "./RepoScreen";
@@ -79,6 +81,10 @@ export type RootStackParamList = {
   // A tree view an extension contributes (npm's scripts), for the workspace
   // `dir`; `view` is its id, `title` its name.
   ExtensionView: { repo: string; dir: string; view: string; title: string };
+  // A plugin's summary page (NPM's), and a plugin's collection page (its
+  // Scripts) in one of its views: home, a filter, or an index of all.
+  PluginSummary: { repo: string; dir: string; page: string; title: string };
+  Collection: { repo: string; dir: string; page: string; title: string; view: CollectionView };
   // Live output of a process on the backend's process runner.
   ProcessOutput: { id: string; title: string; commandLine: string };
   // The plugin manager, and one installed plugin (`name` is the nav title).
@@ -336,6 +342,27 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="ExtensionView"
           component={ExtensionViewScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          }}
+        />
+        <Stack.Screen
+          name="PluginSummary"
+          component={PluginSummaryScreen}
+          options={{
+            headerShown: true,
+            headerLargeTitle: true,
+            headerBackButtonDisplayMode: "minimal",
+          }}
+        />
+        <Stack.Screen
+          name="Collection"
+          component={CollectionScreen}
           options={{
             headerShown: true,
             headerTransparent: true,

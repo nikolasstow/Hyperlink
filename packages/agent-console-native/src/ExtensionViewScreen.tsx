@@ -25,7 +25,8 @@ import { useAppContext } from "./AppContext";
 import { isRunIcon, symbolForIcon } from "./codicons";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
-import { invokeViewAction, startTask, type InvokeResult, type TreeEntry, type ViewAction, type ViewNode } from "./extensionViewsClient";
+import { invokeViewAction, type TreeEntry, type ViewAction, type ViewNode } from "./extensionViewsClient";
+import { followResult } from "./followResult";
 import { ensureWorkspace, revalidateTree, useViewTree } from "./extensionViewsStore";
 import { codeSurfaceUri } from "./codeSurfaceAsset";
 import { warmCodeSurfaces } from "../modules/code-surface";
@@ -212,31 +213,10 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
     setExpanded(next);
   };
 
-  /** Carry out what an action asked for. */
-  const follow = async (result: InvokeResult, action: ViewAction): Promise<void> => {
-    switch (result._tag) {
-      case "RunTask": {
-        const id = await startTask(apiBase, result);
-        navigation.navigate("ProcessOutput", { id, title: result.name, commandLine: [result.command, ...result.args].join(" ") });
-        return;
-      }
-      case "OpenFile":
-        navigation.navigate("FileViewer", {
-          path: result.path,
-          name: result.path.split("/").at(-1) ?? result.path,
-          ...(result.line === undefined ? {} : { line: result.line }),
-        });
-        return;
-      case "Completed":
-        if (result.messages.length > 0) Alert.alert(action.title, result.messages.join("\n"));
-        return;
-    }
-  };
-
   const run = (node: ViewNode, action: ViewAction): void => {
     setBusy(node.id);
     invokeViewAction(apiBase, dir, view, node.id, action.command)
-      .then((result) => follow(result, action))
+      .then((result) => followResult(navigation, apiBase, result, action.title))
       .catch((error: unknown) => Alert.alert(`Couldn’t ${action.title.toLowerCase()} ${node.label}`, messageOf(error)))
       .finally(() => setBusy(undefined));
   };

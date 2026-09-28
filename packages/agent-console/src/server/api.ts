@@ -14,7 +14,23 @@ import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
 import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";
 import { ProcessRequestError, ProcessStartError, processSpec } from "./processes/runner";
-import { ExtensionHostError, InvokeResult, TreeEntry, ViewInfo, ViewNode, ViewRequestError, childrenPayload, invokePayload, treePayload, warmPayload } from "./extensionHost/protocol";
+import { CollectionState, CollectionStateIoError, CollectionStateRequestError, collectionChangePayload, collectionStatePayload } from "./collections/state";
+import {
+  CollectionContent,
+  ExtensionHostError,
+  InvokeResult,
+  Summary,
+  TreeEntry,
+  ViewInfo,
+  ViewNode,
+  ViewRequestError,
+  childrenPayload,
+  collectionInvokePayload,
+  invokePayload,
+  pagePayload,
+  treePayload,
+  warmPayload,
+} from "./extensionHost/protocol";
 
 const ThemeContribution = Schema.Struct({
   id: Schema.String,
@@ -120,6 +136,10 @@ const fontsGroup = HttpApiGroup.make("fonts").add(
  * is not (503). */
 const viewErrors = [ViewRequestError.pipe(HttpApiSchema.status(400)), ExtensionHostError.pipe(HttpApiSchema.status(503))];
 
+/** A collection state request that cannot be taken is the caller's (400);
+ * failing to read or write it is the server's (500). */
+const stateErrors = [CollectionStateRequestError.pipe(HttpApiSchema.status(400)), CollectionStateIoError.pipe(HttpApiSchema.status(500))];
+
 /**
  * Views that extensions contribute (VS Code tree views), run by the extension
  * host. Every call names the workspace (a repo or worktree folder) whose host
@@ -154,6 +174,39 @@ const viewsGroup = HttpApiGroup.make("views").add(
 );
 
 /**
+ * Plugin pages the app draws natively: summaries and collections, run by the
+ * extension host like views. A collection's state (the user's categories and
+ * pins) is the server's, beside the plugin's items.
+ */
+const pagesGroup = HttpApiGroup.make("pages").add(
+  HttpApiEndpoint.post("summary", "/pages/summary", {
+    payload: pagePayload,
+    success: Summary,
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("collection", "/pages/collection", {
+    payload: pagePayload,
+    success: CollectionContent,
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("collectionInvoke", "/pages/collection/invoke", {
+    payload: collectionInvokePayload,
+    success: InvokeResult,
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("collectionState", "/pages/collection/state", {
+    payload: collectionStatePayload,
+    success: CollectionState,
+    error: stateErrors,
+  }),
+  HttpApiEndpoint.post("collectionChange", "/pages/collection/change", {
+    payload: collectionChangePayload,
+    success: CollectionState,
+    error: stateErrors,
+  }),
+);
+
+/**
  * The process runner (processes/runner.ts): start a program in one of the
  * app's workspaces, stop it. Its output streams from `GET /processes/stream`,
  * a raw route (server-sent events), beside this API.
@@ -184,5 +237,6 @@ export const api = HttpApi.make("agent-console")
   .add(configGroup)
   .add(fontsGroup)
   .add(viewsGroup)
+  .add(pagesGroup)
   .add(processesGroup)
   .add(pluginsGroup);

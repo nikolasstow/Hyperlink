@@ -14,11 +14,17 @@ import { Schema } from "effect";
 import { fetch as streamingFetch } from "expo/fetch";
 import { base, request } from "./extensionsClient";
 
+/** How a page is drawn: a tree (every VS Code view), a plugin's summary, or
+ * a plugin's collection (pagesClient). */
+export const pageKind = Schema.Literals(["tree", "summary", "collection"]);
+export type PageKind = typeof pageKind.Type;
+
 const viewInfo = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   extension: Schema.String,
   icon: Schema.optionalKey(Schema.String),
+  kind: pageKind,
 });
 export type ViewInfo = typeof viewInfo.Type;
 
@@ -53,7 +59,7 @@ const runTask = Schema.TaggedStruct("RunTask", {
 });
 export type RunTask = typeof runTask.Type;
 
-const invokeResult = Schema.Union([
+export const invokeResult = Schema.Union([
   runTask,
   Schema.TaggedStruct("OpenFile", {
     path: Schema.String,

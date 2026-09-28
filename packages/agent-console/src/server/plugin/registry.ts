@@ -8,6 +8,7 @@
  * @internal
  */
 import { Context, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { PageKind } from "../extensionHost/protocol";
 import { manifestFile, pluginManifest } from "./manifest";
 
 /** The plugins that ship with the backend, as folders under ../plugins. */
@@ -31,6 +32,7 @@ export class InstalledPlugin extends Schema.Class<InstalledPlugin>("InstalledPlu
       title: Schema.String,
       icon: Schema.optionalKey(Schema.String),
       requirement: Schema.Literals(["none", "repo", "file"]),
+      kind: PageKind,
     }),
   ),
 }) {}
@@ -61,6 +63,7 @@ const make = Effect.gen(function* () {
               title: page.title,
               ...(page.icon === undefined ? {} : { icon: page.icon }),
               requirement: page.requirement,
+              kind: page.kind,
             })),
           }),
       ),

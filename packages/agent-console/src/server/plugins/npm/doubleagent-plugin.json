@@ -1,8 +1,8 @@
 {
   "id": "doubleagent.npm",
   "name": "NPM",
-  "version": "0.1.0",
-  "description": "The workspace's packages and their scripts: run a script, install dependencies, open package.json at a script.",
+  "version": "0.2.0",
+  "description": "The repo's package.json and its scripts: run, edit, duplicate and add scripts, sorted into categories you can pin.",
   "main": "./plugin.ts",
   "contributes": {
     "pages": [
@@ -11,9 +11,17 @@
         "title": "NPM",
         "icon": "sf:shippingbox",
         "requirement": "repo",
-        "kind": "tree"
+        "kind": "summary"
+      },
+      {
+        "id": "scripts",
+        "title": "Scripts",
+        "icon": "codicon:terminal",
+        "requirement": "repo",
+        "kind": "collection",
+        "parent": "npm"
       }
     ]
   },
-  "permissions": ["processes"]
+  "permissions": ["processes", "write"]
 }

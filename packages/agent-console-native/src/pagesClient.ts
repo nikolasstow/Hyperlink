@@ -1,0 +1,213 @@
+/**
+ * Client for plugin pages the app draws natively (`/pages/*` on the Effect API
+ * server): a summary, and a collection with the user's categories and pins
+ * beside it.
+ *
+ * Same conventions as extensionViewsClient: plain `fetch`, `Schema`-decoded
+ * responses, a non-2xx surfaced with the server's message. The schemas mirror
+ * `packages/agent-console/src/server/extensionHost/protocol.ts` and
+ * `collections/state.ts`, the wire contract's source of truth.
+ *
+ * @internal
+ */
+import { Schema } from "effect";
+import { base, request } from "./extensionsClient";
+import { invokeResult, pageKind, type InvokeResult, type TreeRefresh } from "./extensionViewsClient";
+
+const viewAction = Schema.Struct({
+  command: Schema.String,
+  title: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+  inline: Schema.Boolean,
+});
+
+const pageLink = Schema.Struct({
+  page: Schema.String,
+  title: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+  kind: pageKind,
+});
+export type PageLink = typeof pageLink.Type;
+
+const summary = Schema.Struct({
+  title: Schema.String,
+  sections: Schema.Array(
+    Schema.Struct({
+      title: Schema.optionalKey(Schema.String),
+      rows: Schema.Array(
+        Schema.Struct({
+          label: Schema.String,
+          value: Schema.String,
+          mono: Schema.Boolean,
+        }),
+      ),
+    }),
+  ),
+  links: Schema.Array(pageLink),
+});
+export type Summary = typeof summary.Type;
+
+const formField = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  kind: Schema.Literals(["text", "code", "choice", "group"]),
+  value: Schema.String,
+  placeholder: Schema.optionalKey(Schema.String),
+  options: Schema.Array(
+    Schema.Struct({
+      value: Schema.String,
+      label: Schema.String,
+    }),
+  ),
+});
+export type FormField = typeof formField.Type;
+
+const formSpec = Schema.Struct({
+  command: Schema.String,
+  title: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+  submitTitle: Schema.String,
+  fields: Schema.Array(formField),
+});
+export type FormSpec = typeof formSpec.Type;
+
+const collectionGroup = Schema.Struct({
+  key: Schema.String,
+  title: Schema.String,
+  detail: Schema.optionalKey(Schema.String),
+  icon: Schema.optionalKey(Schema.String),
+  resource: Schema.optionalKey(Schema.String),
+  actions: Schema.Array(viewAction),
+});
+export type CollectionGroup = typeof collectionGroup.Type;
+
+const collectionItem = Schema.Struct({
+  key: Schema.String,
+  title: Schema.String,
+  name: Schema.String,
+  detail: Schema.optionalKey(Schema.String),
+  icon: Schema.optionalKey(Schema.String),
+  group: Schema.String,
+  categories: Schema.Array(Schema.String),
+  run: Schema.optionalKey(viewAction),
+  actions: Schema.Array(viewAction),
+  forms: Schema.Array(formSpec),
+});
+export type CollectionItem = typeof collectionItem.Type;
+
+const collectionContent = Schema.Struct({
+  groups: Schema.Array(collectionGroup),
+  items: Schema.Array(collectionItem),
+  categories: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+      icon: Schema.optionalKey(Schema.String),
+    }),
+  ),
+  groupsTitle: Schema.String,
+  create: Schema.optionalKey(formSpec),
+});
+export type CollectionContent = typeof collectionContent.Type;
+
+const pin = Schema.Union([
+  Schema.TaggedStruct("PinnedItem", {
+    id: Schema.String,
+    item: Schema.String,
+  }),
+  Schema.TaggedStruct("PinnedFilter", {
+    id: Schema.String,
+    name: Schema.optionalKey(Schema.String),
+    group: Schema.optionalKey(Schema.String),
+    category: Schema.optionalKey(Schema.String),
+  }),
+]);
+export type Pin = typeof pin.Type;
+export type PinnedFilter = Extract<Pin, { readonly _tag: "PinnedFilter" }>;
+
+const collectionState = Schema.Struct({
+  categories: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      name: Schema.String,
+    }),
+  ),
+  assignments: Schema.Record(Schema.String, Schema.Array(Schema.String)),
+  pins: Schema.Array(pin),
+});
+export type CollectionState = typeof collectionState.Type;
+
+/** One change to a collection's state (collections/state.ts `CollectionChange`). */
+export type CollectionChange =
+  | { readonly _tag: "CreateCategory"; readonly name: string }
+  | { readonly _tag: "RenameCategory"; readonly id: string; readonly name: string }
+  | { readonly _tag: "DeleteCategory"; readonly id: string }
+  | { readonly _tag: "Assign"; readonly assignments: Readonly<Record<string, ReadonlyArray<string>>> }
+  | { readonly _tag: "PinItem"; readonly item: string }
+  | { readonly _tag: "PinFilter"; readonly name?: string; readonly group?: string; readonly category?: string }
+  | { readonly _tag: "UpdateFilter"; readonly id: string; readonly name: string; readonly group?: string; readonly category?: string }
+  | { readonly _tag: "Unpin"; readonly id: string };
+
+/** What a collection action belongs to. */
+export type CollectionTarget = { readonly _tag: "Item"; readonly key: string } | { readonly _tag: "Group"; readonly key: string } | { readonly _tag: "Whole" };
+
+const post = (url: string, body: object) =>
+  request(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+export const fetchSummary = async (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<Summary> =>
+  Schema.decodeUnknownSync(summary)(
+    await post(`${base(apiBase)}/pages/summary`, {
+      workspace,
+      page,
+      refresh,
+    }),
+  );
+
+export const fetchCollection = async (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<CollectionContent> =>
+  Schema.decodeUnknownSync(collectionContent)(
+    await post(`${base(apiBase)}/pages/collection`, {
+      workspace,
+      page,
+      refresh,
+    }),
+  );
+
+export const fetchCollectionState = async (apiBase: string, workspace: string, page: string): Promise<CollectionState> =>
+  Schema.decodeUnknownSync(collectionState)(
+    await post(`${base(apiBase)}/pages/collection/state`, {
+      workspace,
+      page,
+    }),
+  );
+
+export const changeCollectionState = async (apiBase: string, workspace: string, page: string, change: CollectionChange): Promise<CollectionState> =>
+  Schema.decodeUnknownSync(collectionState)(
+    await post(`${base(apiBase)}/pages/collection/change`, {
+      workspace,
+      page,
+      change,
+    }),
+  );
+
+/** Run a collection action (with a form's values) and learn what it asked for. */
+export const invokeCollection = async (
+  apiBase: string,
+  workspace: string,
+  page: string,
+  target: CollectionTarget,
+  command: string,
+  values: Readonly<Record<string, string>>,
+): Promise<InvokeResult> =>
+  Schema.decodeUnknownSync(invokeResult)(
+    await post(`${base(apiBase)}/pages/collection/invoke`, {
+      workspace,
+      page,
+      target,
+      command,
+      values,
+    }),
+  );

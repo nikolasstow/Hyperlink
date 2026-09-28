@@ -22,7 +22,7 @@ import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { resolveWithin } from "../fs";
 import { PluginRegistry } from "../plugin/registry";
 import { Workspaces } from "../workspaces";
-import { ExtensionHostError, ExtensionHostRpcs, ViewRequestError, type TreeRefresh } from "./protocol";
+import { ExtensionHostError, ExtensionHostRpcs, ViewRequestError, type collectionInvokePayload, type TreeRefresh } from "./protocol";
 
 /** How long one host call may take, activation included on a cold start. */
 const callDeadline = Duration.seconds(30);
@@ -157,6 +157,44 @@ const make = Effect.gen(function* () {
               view,
               node,
               command,
+            }),
+          ),
+        ),
+      ),
+    summary: (workspace: string, page: string, refresh: TreeRefresh) =>
+      workspaceOf(workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            "summary",
+            client.Summary({
+              workspace: resolved,
+              page,
+              refresh,
+            }),
+          ),
+        ),
+      ),
+    collection: (workspace: string, page: string, refresh: TreeRefresh) =>
+      workspaceOf(workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            "collection",
+            client.Collection({
+              workspace: resolved,
+              page,
+              refresh,
+            }),
+          ),
+        ),
+      ),
+    collectionInvoke: (payload: typeof collectionInvokePayload.Type) =>
+      workspaceOf(payload.workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            payload.command,
+            client.CollectionInvoke({
+              ...payload,
+              workspace: resolved,
             }),
           ),
         ),

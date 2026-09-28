@@ -14,10 +14,36 @@
 import { Duration, Effect, FileSystem, ManagedRuntime, Option, Path, Predicate, Ref, Result, Schema } from "effect";
 import { NodeServices } from "@effect/platform-node";
 import { importedNames, installVscodeModule } from "./loader";
-import { Completed, ExtensionHostError, OpenFile, RunTask, TreeEntry, ViewAction, ViewInfo, ViewNode, ViewRequestError, type InvokeResult, type TreeRefresh } from "./protocol";
+import {
+  Completed,
+  ExtensionHostError,
+  OpenFile,
+  RunTask,
+  TreeEntry,
+  ViewAction,
+  ViewInfo,
+  ViewNode,
+  ViewRequestError,
+  type CollectionContent,
+  type CollectionTarget,
+  type InvokeResult,
+  type Summary,
+  type TreeRefresh,
+} from "./protocol";
 import { EventEmitter, ProcessExecution, ShellExecution, Task, Uri, makeRegistry, makeVscode, toWorkspaceFolder, type Registry, type WorkspaceFolderInfo } from "./shim";
 import type { PluginAction } from "../plugin/api";
-import { flattenPluginTree, loadPlugin, runPluginAction, treePages, type PluginTreePage } from "./pluginViews";
+import {
+  flattenPluginTree,
+  loadPlugin,
+  pluginPages,
+  runPluginAction,
+  targetKey,
+  toCollection,
+  toSummary,
+  type CollectionRuns,
+  type PluginPageEntry,
+  type PluginTreePage,
+} from "./pluginPages";
 import { matchesWhen } from "./when";
 
 // ── Manifest ───────────────────────────────────────────────────────────────────
@@ -311,8 +337,12 @@ export const makeHost = (options: HostOptions) =>
       sources.flatMap((source) => importedNames(source)),
     ).pipe(Effect.mapError((cause) => failure("ActivationFailed", cause.message)));
     yield* Effect.forEach(loaded, (extension) => activate(extension, registry), { discard: true });
-    const pluginPages = treePages(yield* Effect.forEach(options.plugins, loadPlugin));
-    const pluginPageOf = (view: string) => pluginPages.find((page) => page.viewId === view);
+    const pages = pluginPages(yield* Effect.forEach(options.plugins, loadPlugin));
+    const pageOf = (view: string) => pages.find((page) => page.viewId === view);
+    const pluginPageOf = (view: string) => {
+      const page = pageOf(view);
+      return page?.kind === "tree" ? page : undefined;
+    };
 
     /** Every view declared by a loaded manifest, with its owner. */
     const declared = loaded.flatMap((extension) =>
@@ -541,6 +571,7 @@ export const makeHost = (options: HostOptions) =>
                         id: view,
                         name: entry.extension.localize(entry.view.name ?? view),
                         extension: entry.extension.id,
+                        kind: "tree",
                       }),
                     ];
               }),
@@ -548,7 +579,7 @@ export const makeHost = (options: HostOptions) =>
           ),
         ),
         Effect.flatMap((found) =>
-          Effect.forEach(pluginPages, (page) => pluginViewInfo(page, payload.workspace)).pipe(Effect.map((plugins) => [...found.flat(), ...plugins.flat()])),
+          Effect.forEach(pages, (page) => pluginViewInfo(page, payload.workspace)).pipe(Effect.map((plugins) => [...found.flat(), ...plugins.flat()])),
         ),
       );
 
@@ -574,11 +605,11 @@ export const makeHost = (options: HostOptions) =>
      * `view workspace`: what `ifChanged` compares against. */
     const seen = yield* Ref.make<ReadonlyMap<string, ReadonlyMap<string, number>>>(new Map());
 
-    /** The files behind a tree's rows, with their modification times. Rows
-     * whose resource is a directory or is gone are left out. */
-    const fingerprint = (rows: ReadonlyArray<TreeEntry>) =>
+    /** Files with their modification times. A directory or a file that is
+     * gone is left out. */
+    const fingerprintFiles = (resources: ReadonlyArray<string>) =>
       Effect.forEach(
-        [...new Set(rows.flatMap((row) => (row.node.resource === undefined ? [] : [row.node.resource])))],
+        [...new Set(resources)],
         (resource) =>
           fs.stat(resource).pipe(
             Effect.map((info): ReadonlyArray<readonly [string, number]> =>
@@ -587,6 +618,9 @@ export const makeHost = (options: HostOptions) =>
             Effect.orElseSucceed((): ReadonlyArray<readonly [string, number]> => []),
           ),
       ).pipe(Effect.map((pairs) => new Map(pairs.flat())));
+
+    /** The files behind a tree's rows, with their modification times. */
+    const fingerprint = (rows: ReadonlyArray<TreeEntry>) => fingerprintFiles(rows.flatMap((row) => (row.node.resource === undefined ? [] : [row.node.resource])));
 
     /** Whether any file behind the last tree for this key changed or vanished. */
     const changedSince = (key: string) =>
@@ -649,25 +683,152 @@ export const makeHost = (options: HostOptions) =>
         return entries;
       });
 
-    /** A plugin page's info for a workspace, if its tree has anything there.
-     * A page that needs a file has no menu entry of its own (§4.2). */
-    const pluginViewInfo = (page: PluginTreePage, workspace: string) =>
-      page.page.requirement === "file"
+    /** Plugin summaries and collections as last built, by `view workspace`,
+     * served again until stale by the same rules as trees. A collection's
+     * actions are kept beside it. */
+    const summaries = yield* Ref.make<ReadonlyMap<string, Summary>>(new Map());
+    const collections = yield* Ref.make<
+      ReadonlyMap<
+        string,
+        {
+          readonly content: CollectionContent;
+          readonly runs: CollectionRuns;
+        }
+      >
+    >(new Map());
+
+    /** Serve `cache[key]` unless `refresh` says it is stale; else build it,
+     * record the files behind it, and keep it. */
+    const cached = <A, R>(
+      cache: Ref.Ref<ReadonlyMap<string, A>>,
+      key: string,
+      refresh: TreeRefresh,
+      build: Effect.Effect<{ readonly value: A; readonly resources: ReadonlyArray<string> }, ExtensionHostError, R>,
+    ) =>
+      Effect.gen(function* () {
+        const current = (yield* Ref.get(cache)).get(key);
+        const stale = current === undefined || refresh === "force" ? true : refresh === "ifChanged" ? yield* changedSince(key) : false;
+        if (!stale && current !== undefined) return current;
+        const built = yield* build;
+        const files = yield* fingerprintFiles(built.resources);
+        yield* Ref.update(seen, (all) => new Map([...all, [key, files]]));
+        yield* Ref.update(cache, (all) => new Map([...all, [key, built.value]]));
+        return built.value;
+      });
+
+    const providerFailed = (page: PluginPageEntry) => (cause: { readonly message: string }) =>
+      new ExtensionHostError({
+        reason: "ProviderFailed",
+        message: `${page.viewId}: ${cause.message}`,
+      });
+
+    const pluginSummary = (page: Extract<PluginPageEntry, { readonly kind: "summary" }>, workspace: string, refresh: TreeRefresh) =>
+      cached(
+        summaries,
+        `${page.viewId} ${workspace}`,
+        refresh,
+        page.summary.summary({ workspace }).pipe(
+          Effect.mapError(providerFailed(page)),
+          Effect.flatMap((content) =>
+            toSummary(page, content).pipe(
+              Effect.map((value) => ({
+                value,
+                resources: content.resources,
+              })),
+            ),
+          ),
+        ),
+      );
+
+    const pluginCollection = (page: Extract<PluginPageEntry, { readonly kind: "collection" }>, workspace: string, refresh: TreeRefresh) =>
+      cached(
+        collections,
+        `${page.viewId} ${workspace}`,
+        refresh,
+        page.collection.content({ workspace }).pipe(
+          Effect.mapError(providerFailed(page)),
+          Effect.flatMap((content) =>
+            toCollection(page, content).pipe(
+              Effect.map((value) => ({
+                value,
+                resources: content.groups.flatMap((group) => (group.resource === undefined ? [] : [group.resource])),
+              })),
+            ),
+          ),
+        ),
+      );
+
+    /** A plugin page's title for a workspace, if the page has anything
+     * there. */
+    const pageTitle = (page: PluginPageEntry, workspace: string): Effect.Effect<Option.Option<string>, ExtensionHostError, FileSystem.FileSystem | Path.Path> => {
+      const titled = (has: boolean, title: string) => (has ? Option.some(title) : Option.none());
+      switch (page.kind) {
+        case "tree":
+          return pluginTree(page, workspace, "none").pipe(Effect.map((entries) => titled(entries.length > 0, page.page.title)));
+        case "summary":
+          return pluginSummary(page, workspace, "none").pipe(Effect.map((summary) => titled(summary.sections.length > 0, summary.title)));
+        case "collection":
+          return pluginCollection(page, workspace, "none").pipe(Effect.map((collection) => titled(collection.content.items.length > 0, page.page.title)));
+      }
+    };
+
+    /** A plugin page's menu entry for a workspace, if it has anything there.
+     * A page that needs a file has no menu entry of its own (§4.2), nor does
+     * one that opens from another page. */
+    const pluginViewInfo = (page: PluginPageEntry, workspace: string) =>
+      page.page.requirement === "file" || page.page.parent !== undefined
         ? Effect.succeed<ReadonlyArray<ViewInfo>>([])
-        : pluginTree(page, workspace, "none").pipe(
-            Effect.map((entries): ReadonlyArray<ViewInfo> =>
-              entries.length === 0
-                ? []
-                : [
+        : pageTitle(page, workspace).pipe(
+            Effect.map((title): ReadonlyArray<ViewInfo> =>
+              Option.isSome(title)
+                ? [
                     new ViewInfo({
                       id: page.viewId,
-                      name: page.page.title,
+                      name: title.value,
                       extension: page.plugin.manifest.id,
                       ...(page.page.icon === undefined ? {} : { icon: page.page.icon }),
+                      kind: page.kind,
                     }),
-                  ],
+                  ]
+                : [],
             ),
           );
+
+    const unknownPage = (view: string, kind: string) => rejected("UnknownView", `no plugin page ${view} of kind ${kind}`);
+
+    const SummaryRpc = (payload: { readonly workspace: string; readonly page: string; readonly refresh: TreeRefresh }) =>
+      Effect.gen(function* () {
+        const page = pageOf(payload.page);
+        if (page?.kind !== "summary") return yield* unknownPage(payload.page, "summary");
+        return yield* pluginSummary(page, payload.workspace, payload.refresh);
+      });
+
+    const CollectionRpc = (payload: { readonly workspace: string; readonly page: string; readonly refresh: TreeRefresh }) =>
+      Effect.gen(function* () {
+        const page = pageOf(payload.page);
+        if (page?.kind !== "collection") return yield* unknownPage(payload.page, "collection");
+        return (yield* pluginCollection(page, payload.workspace, payload.refresh)).content;
+      });
+
+    /** Run a collection action: only one the collection offers on that
+     * target, as last served. */
+    const CollectionInvoke = (payload: {
+      readonly workspace: string;
+      readonly page: string;
+      readonly target: CollectionTarget;
+      readonly command: string;
+      readonly values: Readonly<Record<string, string>>;
+    }) =>
+      Effect.gen(function* () {
+        const page = pageOf(payload.page);
+        if (page?.kind !== "collection") return yield* unknownPage(payload.page, "collection");
+        const collection = yield* pluginCollection(page, payload.workspace, "none");
+        const actions = collection.runs.get(targetKey(payload.target));
+        if (actions === undefined) return yield* rejected("UnknownNode", `${payload.page} has no ${targetKey(payload.target)}`);
+        const run = actions.get(payload.command);
+        if (run === undefined) return yield* rejected("UnknownCommand", `${payload.command} is not offered on ${targetKey(payload.target)}`);
+        return yield* runPluginAction(run(payload.values));
+      });
 
     const Tree = (payload: { readonly workspace: string; readonly view: string; readonly refresh: TreeRefresh }) =>
       Effect.gen(function* () {
@@ -693,9 +854,13 @@ export const makeHost = (options: HostOptions) =>
           Effect.forEach(
             payload.workspaces,
             (workspace) =>
-              Effect.forEach([...viewIds(), ...pluginPages.map((page) => page.viewId)], (view) => Tree({ workspace, view, refresh: "none" }), {
-                discard: true,
-              }),
+              Effect.all(
+                [
+                  Effect.forEach(viewIds(), (view) => Tree({ workspace, view, refresh: "none" }), { discard: true }),
+                  Effect.forEach(pages, (page) => pageTitle(page, workspace), { discard: true }),
+                ],
+                { discard: true },
+              ),
             { discard: true },
           ),
         ),
@@ -757,6 +922,9 @@ export const makeHost = (options: HostOptions) =>
       Children,
       Tree,
       Invoke,
+      Summary: SummaryRpc,
+      Collection: CollectionRpc,
+      CollectionInvoke,
       Warm,
     };
   });

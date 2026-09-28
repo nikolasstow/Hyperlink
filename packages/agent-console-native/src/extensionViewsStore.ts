@@ -14,6 +14,7 @@
  */
 import * as React from "react";
 import { listViews, viewTree, warmViews, type TreeEntry, type TreeRefresh, type ViewInfo } from "./extensionViewsClient";
+import { prefetchPage } from "./pagesStore";
 
 export type Load<A> =
   | { readonly kind: "loading" }
@@ -77,13 +78,13 @@ const loadTree = (apiBase: string, workspace: string, view: string, refresh: Tre
     }
   });
 
-/** A workspace's views, then every view's tree. */
+/** A workspace's views, then every view's tree or page. */
 const loadWorkspace = (apiBase: string, workspace: string): Promise<void> =>
   once(`views ${workspace}`, async () => {
     try {
       const views = await listViews(apiBase, workspace);
       update(workspace, (entry) => ({ ...entry, views: { kind: "ready", value: views, refreshing: false } }));
-      await Promise.all(views.map((view) => loadTree(apiBase, workspace, view.id, "none")));
+      await Promise.all(views.map((view) => (view.kind === "tree" ? loadTree(apiBase, workspace, view.id, "none") : prefetchPage(apiBase, workspace, view.id, view.kind))));
     } catch (error: unknown) {
       update(workspace, (entry) => ({ ...entry, views: { kind: "failed", message: messageOf(error) } }));
     }

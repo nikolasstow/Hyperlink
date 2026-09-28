@@ -19,6 +19,7 @@ import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { api } from "./api";
+import { CollectionStates } from "./collections/state";
 import { ExtensionViews } from "./extensionHost/extensionViews";
 import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
@@ -68,6 +69,19 @@ const viewsHandlers = HttpApiBuilder.group(api, "views", (handlers) =>
         .handle("tree", ({ payload }) => views.tree(payload.workspace, payload.view, payload.refresh))
         .handle("invoke", ({ payload }) => views.invoke(payload.workspace, payload.view, payload.node, payload.command))
         .handle("warm", ({ payload }) => views.warm(payload.workspaces)),
+    ),
+  ),
+);
+
+const pagesHandlers = HttpApiBuilder.group(api, "pages", (handlers) =>
+  Effect.all([ExtensionViews, CollectionStates]).pipe(
+    Effect.map(([views, states]) =>
+      handlers
+        .handle("summary", ({ payload }) => views.summary(payload.workspace, payload.page, payload.refresh))
+        .handle("collection", ({ payload }) => views.collection(payload.workspace, payload.page, payload.refresh))
+        .handle("collectionInvoke", ({ payload }) => views.collectionInvoke(payload))
+        .handle("collectionState", ({ payload }) => states.get(payload.workspace, payload.page))
+        .handle("collectionChange", ({ payload }) => states.apply(payload.workspace, payload.page, payload.change)),
     ),
   ),
 );
@@ -128,6 +142,7 @@ const workspacesLive = Workspaces.layer;
 // shows).
 const registryLive = PluginRegistry.layer.pipe(Layer.provide(NodeServices.layer));
 const viewsLive = ExtensionViews.layer.pipe(Layer.provide([workspacesLive, registryLive]));
+const statesLive = CollectionStates.layer.pipe(Layer.provide(registryLive));
 const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
 
 const apiLive = HttpApiBuilder.layer(api).pipe(
@@ -136,6 +151,7 @@ const apiLive = HttpApiBuilder.layer(api).pipe(
     configHandlers,
     fontsHandlers,
     viewsHandlers.pipe(Layer.provide(viewsLive)),
+    pagesHandlers.pipe(Layer.provide([viewsLive, statesLive])),
     processesHandlers.pipe(Layer.provide(runnerLive)),
     pluginsHandlers.pipe(Layer.provide(registryLive)),
   ]),

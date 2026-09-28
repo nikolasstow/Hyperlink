@@ -13,7 +13,14 @@
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 
-/** A view an extension contributes and has registered a provider for. */
+/** How the app draws a page: a tree of rows (every VS Code view), a summary
+ * of facts with links to the plugin's other pages, or a collection (items in
+ * groups and categories, filtered and pinned by the user). */
+export const PageKind = Schema.Literals(["tree", "summary", "collection"]);
+export type PageKind = typeof PageKind.Type;
+
+/** A view an extension contributes and has registered a provider for, or a
+ * plugin page. */
 export class ViewInfo extends Schema.Class<ViewInfo>("ViewInfo")({
   id: Schema.String,
   name: Schema.String,
@@ -21,6 +28,7 @@ export class ViewInfo extends Schema.Class<ViewInfo>("ViewInfo")({
   extension: Schema.String,
   /** `codicon:<name>` or `sf:<SF Symbol>`, when the contributor gave one. */
   icon: Schema.optionalKey(Schema.String),
+  kind: PageKind,
 }) {}
 
 /** Something a row offers: a command, titled and iconed from the manifest.
@@ -141,6 +149,137 @@ export class TreeEntry extends Schema.Class<TreeEntry>("TreeEntry")({
   node: ViewNode,
 }) {}
 
+// ── Plugin pages ──────────────────────────────────────────────────────────────
+// Pages a plugin fills with data (plugin/api.ts): summaries and collections.
+// Actions are addressed by what they belong to (an item, a group, or the
+// collection itself) and their command; a form's action carries its values.
+
+/** A page reached from another page of its plugin (a summary's links). */
+export class PageLink extends Schema.Class<PageLink>("PageLink")({
+  page: Schema.String,
+  title: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+  kind: PageKind,
+}) {}
+
+export class SummaryRow extends Schema.Class<SummaryRow>("SummaryRow")({
+  label: Schema.String,
+  value: Schema.String,
+  /** Code-like (a version, a command), drawn monospaced. */
+  mono: Schema.Boolean,
+}) {}
+
+export class SummarySection extends Schema.Class<SummarySection>("SummarySection")({
+  title: Schema.optionalKey(Schema.String),
+  rows: Schema.Array(SummaryRow),
+}) {}
+
+/** A summary page: sections of facts, then links to the plugin's pages that
+ * open from here. */
+export class Summary extends Schema.Class<Summary>("Summary")({
+  /** The page's title for this workspace, over the manifest's. */
+  title: Schema.String,
+  sections: Schema.Array(SummarySection),
+  links: Schema.Array(PageLink),
+}) {}
+
+export const FormFieldKind = Schema.Literals(["text", "code", "choice", "group"]);
+
+export class FormOption extends Schema.Class<FormOption>("FormOption")({
+  value: Schema.String,
+  label: Schema.String,
+}) {}
+
+/** One field of a form: free text, code (monospaced, no autocorrect), a
+ * choice among `options`, or one of the collection's groups (the app starts
+ * it on the group the user is looking at). `value` is what it starts with. */
+export class FormField extends Schema.Class<FormField>("FormField")({
+  id: Schema.String,
+  label: Schema.String,
+  kind: FormFieldKind,
+  value: Schema.String,
+  placeholder: Schema.optionalKey(Schema.String),
+  options: Schema.Array(FormOption),
+}) {}
+
+/** An action that asks for values first, drawn as a slide-up sheet. */
+export class FormSpec extends Schema.Class<FormSpec>("FormSpec")({
+  command: Schema.String,
+  title: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+  submitTitle: Schema.String,
+  fields: Schema.Array(FormField),
+}) {}
+
+/** A category the plugin assigns by default. */
+export class CollectionCategory extends Schema.Class<CollectionCategory>("CollectionCategory")({
+  id: Schema.String,
+  name: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+}) {}
+
+/** A group of items (a package of scripts). `resource` is the file behind
+ * it, whose changes make the collection stale. */
+export class CollectionGroup extends Schema.Class<CollectionGroup>("CollectionGroup")({
+  key: Schema.String,
+  title: Schema.String,
+  detail: Schema.optionalKey(Schema.String),
+  icon: Schema.optionalKey(Schema.String),
+  resource: Schema.optionalKey(Schema.String),
+  actions: Schema.Array(ViewAction),
+}) {}
+
+/** One item (a script). `title` is for people; `name` is what it is really
+ * called. `categories` are the plugin's defaults, which the user's own
+ * assignment replaces. `run` is the play button; tapping the item does it. */
+export class CollectionItem extends Schema.Class<CollectionItem>("CollectionItem")({
+  key: Schema.String,
+  title: Schema.String,
+  name: Schema.String,
+  detail: Schema.optionalKey(Schema.String),
+  icon: Schema.optionalKey(Schema.String),
+  group: Schema.String,
+  categories: Schema.Array(Schema.String),
+  run: Schema.optionalKey(ViewAction),
+  actions: Schema.Array(ViewAction),
+  forms: Schema.Array(FormSpec),
+}) {}
+
+/** A collection as the plugin has it; the user's categories and pins are
+ * kept beside it by the server (collections/state.ts). `create` is the form
+ * for a new item. */
+export class CollectionContent extends Schema.Class<CollectionContent>("CollectionContent")({
+  groups: Schema.Array(CollectionGroup),
+  items: Schema.Array(CollectionItem),
+  categories: Schema.Array(CollectionCategory),
+  /** What its groups are called, as a heading ("Packages"). */
+  groupsTitle: Schema.String,
+  create: Schema.optionalKey(FormSpec),
+}) {}
+
+export const pagePayload = Schema.Struct({
+  workspace: Schema.String,
+  page: Schema.String,
+  refresh: Schema.Literals(["none", "ifChanged", "force"]),
+});
+
+/** What a collection action belongs to. */
+export const CollectionTarget = Schema.Union([
+  Schema.TaggedStruct("Item", { key: Schema.String }),
+  Schema.TaggedStruct("Group", { key: Schema.String }),
+  Schema.TaggedStruct("Whole", {}),
+]);
+export type CollectionTarget = typeof CollectionTarget.Type;
+
+export const collectionInvokePayload = Schema.Struct({
+  workspace: Schema.String,
+  page: Schema.String,
+  target: CollectionTarget,
+  command: Schema.String,
+  /** A form's values, by field id. */
+  values: Schema.Record(Schema.String, Schema.String),
+});
+
 export class ExtensionHostRpcs extends RpcGroup.make(
   Rpc.make("Views", {
     payload: viewsPayload,
@@ -159,6 +298,21 @@ export class ExtensionHostRpcs extends RpcGroup.make(
   }),
   Rpc.make("Invoke", {
     payload: invokePayload,
+    success: InvokeResult,
+    error: HostCallError,
+  }),
+  Rpc.make("Summary", {
+    payload: pagePayload,
+    success: Summary,
+    error: HostCallError,
+  }),
+  Rpc.make("Collection", {
+    payload: pagePayload,
+    success: CollectionContent,
+    error: HostCallError,
+  }),
+  Rpc.make("CollectionInvoke", {
+    payload: collectionInvokePayload,
     success: InvokeResult,
     error: HostCallError,
   }),

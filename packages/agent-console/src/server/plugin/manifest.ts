@@ -7,6 +7,7 @@
  * @internal
  */
 import { Schema } from "effect";
+import { PageKind } from "../extensionHost/protocol";
 
 export const manifestFile = "doubleagent-plugin.json";
 
@@ -19,10 +20,14 @@ export const pluginPage = Schema.Struct({
   /** `codicon:<name>` or `sf:<SF Symbol>`. */
   icon: Schema.optionalKey(Schema.String),
   requirement: pageRequirement,
-  /** How the app draws it. `tree`: a view the plugin fills (`view`, or the
-   * page's own id). */
-  kind: Schema.Literals(["tree"]),
+  /** How the app draws it (protocol.ts `PageKind`), filled by the plugin's
+   * view, summary or collection of the same name (`view`, or the page's own
+   * id). */
+  kind: PageKind,
   view: Schema.optionalKey(Schema.String),
+  /** The page this one opens from. A page with a parent is reached through
+   * it (a summary's links), not from the menu. */
+  parent: Schema.optionalKey(Schema.String),
 });
 export type PluginPage = typeof pluginPage.Type;
 
