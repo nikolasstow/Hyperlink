@@ -12,6 +12,7 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
+import { ProcessRequestError, ProcessStartError, processSpec } from "./processes/runner";
 import { ExtensionHostError, InvokeResult, TreeEntry, ViewInfo, ViewNode, ViewRequestError, childrenPayload, invokePayload, treePayload, warmPayload } from "./extensionHost/protocol";
 
 const ThemeContribution = Schema.Struct({
@@ -151,4 +152,22 @@ const viewsGroup = HttpApiGroup.make("views").add(
   }),
 );
 
-export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup).add(fontsGroup).add(viewsGroup);
+/**
+ * The process runner (processes/runner.ts): start a program in one of the
+ * app's workspaces, stop it. Its output streams from `GET /processes/stream`,
+ * a raw route (server-sent events), beside this API.
+ */
+const processesGroup = HttpApiGroup.make("processes").add(
+  HttpApiEndpoint.post("start", "/processes/start", {
+    payload: processSpec,
+    success: Schema.Struct({ id: Schema.String }),
+    error: [ProcessRequestError.pipe(HttpApiSchema.status(400)), ProcessStartError.pipe(HttpApiSchema.status(500))],
+  }),
+  HttpApiEndpoint.post("stop", "/processes/stop", {
+    payload: Schema.Struct({ id: Schema.String }),
+    success: Schema.Struct({ ok: Schema.Boolean }),
+    error: ProcessRequestError.pipe(HttpApiSchema.status(400)),
+  }),
+);
+
+export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup).add(fontsGroup).add(viewsGroup).add(processesGroup);

@@ -20,6 +20,7 @@ import { Context, Duration, Effect, FileSystem, Layer, Option, Path } from "effe
 import { RpcClient } from "effect/unstable/rpc";
 import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { resolveWithin } from "../fs";
+import { Workspaces } from "../workspaces";
 import { ExtensionHostError, ExtensionHostRpcs, ViewRequestError, type TreeRefresh } from "./protocol";
 
 /** How long one host call may take, activation included on a cold start. */
@@ -89,8 +90,13 @@ const make = Effect.gen(function* () {
   );
   const client = yield* RpcClient.make(ExtensionHostRpcs).pipe(Effect.provideContext(protocol));
 
+  const workspaces = yield* Workspaces;
+  /** A requested workspace, resolved and confined to the files root, and
+   * registered as one of the app's workspaces (what the process runner may
+   * run in). */
   const workspaceOf = (requested: string) =>
     resolveWithin(requested).pipe(
+      Effect.tap((resolved) => workspaces.register([resolved])),
       Effect.mapError(
         (cause) =>
           new ViewRequestError({

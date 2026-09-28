@@ -171,7 +171,7 @@ const Row = (props: {
 export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   const { dir, view, title } = props.route.params;
   const { navigation } = props;
-  const { address, backend } = useAppContext();
+  const { address } = useAppContext();
   const apiBase = getApiAddress(address);
   const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
@@ -216,7 +216,7 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   const follow = async (result: InvokeResult, action: ViewAction): Promise<void> => {
     switch (result._tag) {
       case "RunTask": {
-        const id = await startTask(backend, result);
+        const id = await startTask(apiBase, result);
         navigation.navigate("ProcessOutput", { id, title: result.name, commandLine: [result.command, ...result.args].join(" ") });
         return;
       }

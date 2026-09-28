@@ -14,6 +14,7 @@ import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { followProcess, stopProcess } from "./extensionViewsClient";
 import type { RootStackParamList } from "./RootNavigator";
+import { getApiAddress } from "./settings";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProcessOutput">;
 
@@ -33,7 +34,8 @@ interface Line {
 export const ProcessOutputScreen = (props: Props): React.ReactElement => {
   const { id, title, commandLine } = props.route.params;
   const { navigation } = props;
-  const { backend } = useAppContext();
+  const { address } = useAppContext();
+  const apiBase = getApiAddress(address);
   const headerHeight = useHeaderHeight();
   const scroll = React.useRef<ScrollView>(null);
   const [lines, setLines] = React.useState<ReadonlyArray<Line>>([]);
@@ -42,7 +44,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     const controller = new AbortController();
     followProcess(
-      backend,
+      apiBase,
       id,
       (event) => {
         if (event.kind === "line") setLines((current) => [...current, { text: event.text, stderr: event.stderr }].slice(-MAX_LINES));
@@ -53,7 +55,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
       if (!controller.signal.aborted) setStatus({ kind: "lost", message: error instanceof Error ? error.message : String(error) });
     });
     return () => controller.abort();
-  }, [backend, id]);
+  }, [apiBase, id]);
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -63,7 +65,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
           ? () => (
               <TouchableOpacity
                 onPress={() => {
-                  stopProcess(backend, id).catch((error: unknown) => Alert.alert("Couldn’t stop it", error instanceof Error ? error.message : String(error)));
+                  stopProcess(apiBase, id).catch((error: unknown) => Alert.alert("Couldn’t stop it", error instanceof Error ? error.message : String(error)));
                 }}
               >
                 <Text style={styles.stop}>Stop</Text>
@@ -71,7 +73,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
             )
           : undefined,
     });
-  }, [navigation, title, status.kind, backend, id]);
+  }, [navigation, title, status.kind, apiBase, id]);
 
   return (
     <View style={styles.root}>

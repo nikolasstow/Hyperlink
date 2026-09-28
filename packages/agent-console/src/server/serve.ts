@@ -14,12 +14,14 @@
  * @internal
  */
 import { createServer } from "node:http";
-import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
+import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { api } from "./api";
 import { ExtensionViews } from "./extensionHost/extensionViews";
+import { ProcessRunner } from "./processes/runner";
+import { Workspaces } from "./workspaces";
 import { importFont, inspectFont, readFontFile } from "./fonts";
 import {
   discoverLocalExtensions,
@@ -69,6 +71,38 @@ const viewsHandlers = HttpApiBuilder.group(api, "views", (handlers) =>
   ),
 );
 
+const processesHandlers = HttpApiBuilder.group(api, "processes", (handlers) =>
+  ProcessRunner.pipe(
+    Effect.map((runner) =>
+      handlers
+        .handle("start", ({ payload }) => runner.start(payload))
+        .handle("stop", ({ payload }) => runner.stop(payload.id).pipe(Effect.as({ ok: true }))),
+    ),
+  ),
+);
+
+// A process's output as server-sent events: `?id=<process id>`. Raw, since
+// it streams. 404 for an unknown process.
+const processStreamRoute = HttpRouter.add("GET", "/processes/stream", (request) =>
+  Effect.gen(function* () {
+    const id = new URL(request.url, "http://localhost").searchParams.get("id");
+    if (id === null) return HttpServerResponse.empty({ status: 400 });
+    const runner = yield* ProcessRunner;
+    return yield* runner.follow(id).pipe(
+      Effect.map((body) =>
+        HttpServerResponse.stream(body, {
+          contentType: "text/event-stream",
+          headers: {
+            "cache-control": "no-cache, no-transform",
+            "x-accel-buffering": "no",
+          },
+        }),
+      ),
+      Effect.catchTag("ProcessRequestError", () => Effect.succeed(HttpServerResponse.empty({ status: 404 }))),
+    );
+  }),
+);
+
 // A raw route to serve stored (converted) font bytes — binary, so it's an
 // HttpRouter route rather than an HttpApi endpoint. `?id=<fileId>`.
 const fontFileRoute = HttpRouter.add("GET", "/fonts/file", (request) =>
@@ -82,12 +116,23 @@ const fontFileRoute = HttpRouter.add("GET", "/fonts/file", (request) =>
   }),
 );
 
+// One Workspaces for both: the views register the app's workspaces, the
+// runner checks against them.
+const workspacesLive = Workspaces.layer;
+const viewsLive = ExtensionViews.layer.pipe(Layer.provide(workspacesLive));
+const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
+
 const apiLive = HttpApiBuilder.layer(api).pipe(
-  Layer.provide([extensionsHandlers, configHandlers, fontsHandlers, viewsHandlers.pipe(Layer.provide(ExtensionViews.layer))]),
+  Layer.provide([extensionsHandlers, configHandlers, fontsHandlers, viewsHandlers.pipe(Layer.provide(viewsLive)), processesHandlers.pipe(Layer.provide(runnerLive))]),
 );
 
 const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 
-const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute)).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port })));
+// The stream route needs the runner per request, so it is provided to the
+// served router as a whole (the same instance the API's handlers use).
+const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute)).pipe(
+  Layer.provide(runnerLive),
+  Layer.provide(NodeHttpServer.layer(createServer, { port })),
+);
 
 NodeRuntime.runMain(Layer.launch(serverLive));

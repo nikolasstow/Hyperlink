@@ -236,7 +236,11 @@ Repo identity: reuse whatever `settings.ts`/`repoScan.ts` already use to identif
 2. **Scroll-linked glass opacity** — RESOLVED (§2.3): animate RN **containers** (opacity/height/transform) on the UI thread, not SwiftUI `glassEffect` internals — avoids the bridge risk entirely.
 3. **"Identical to chat top bar"** — the brief says "mostly." Enumerate any intended differences, or hold to pixel-identical as acceptance.
 4. **Requirement naming** — `repo: "required" | "optional" | "none"` is a placeholder for the brief's "requirements or some other name." Lock a name.
-5. **Script execution host** (§5) — processes plugin on vite backend vs worker vs opencode permission.
+5. **Script execution host** (§5) — RESOLVED (owner, 2026-09-28): a process runner on the Effect
+   API server (`packages/agent-console/src/server/processes/runner.ts`). It starts only an
+   allowlisted program (pnpm, npm, yarn, bun, npx, node, git, eas), argv only (never a shell), in
+   a folder that resolves inside one of the workspaces the app registered (Home registers every
+   discovered repo and worktree). Output streams as server-sent events and is logged per process.
 6. **Menu vs Favorites vs Plugins overlap** — RESOLVED (§21): any page can be favorited if it can be opened from what the favorite carries; a page that needs an input (a file) is favorited *with* that input.
 7. **"Hide plugins from header"** — global or per-repo?
 8. **Home screen parity** — Home also gets a 3-dot with **+ Plugin**; does Home get its own (smaller) version of this header, or stay as-is? The brief implies Home stays the composer/repo-list and only shares the +Plugin action.

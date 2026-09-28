@@ -1,7 +1,7 @@
 /**
  * Client for extension views (VS Code tree views run by the backend's extension
  * host, `/views/*` on the Effect API server) and for the process runner that
- * runs what their actions ask for (`/processes` on the vite backend).
+ * runs what their actions ask for (`/processes/*`, on the same server).
  *
  * Same conventions as extensionsClient: plain `fetch` with a string body,
  * `Schema`-decoded responses, and a non-2xx surfaced with the server's message.
@@ -115,23 +115,25 @@ export const invokeViewAction = async (apiBase: string, workspace: string, view:
   );
 
 // ── Process runner ─────────────────────────────────────────────────────────────
+// The backend's process runner on the Effect API server (processes/runner.ts):
+// it runs a program in one of the app's workspaces, never elsewhere.
 
-const processSummary = Schema.Struct({
+const processStarted = Schema.Struct({
   id: Schema.String,
 });
 
-/** Start a task on the backend's process runner; returns the process id. */
-export const startTask = async (backend: string, task: RunTask): Promise<string> =>
-  Schema.decodeUnknownSync(processSummary)(
-    await post(`${base(backend)}/processes`, {
+/** Start a task on the process runner; returns the process id. */
+export const startTask = async (apiBase: string, task: RunTask): Promise<string> =>
+  Schema.decodeUnknownSync(processStarted)(
+    await post(`${base(apiBase)}/processes/start`, {
       command: task.command,
       args: task.args,
       cwd: task.cwd,
     }),
   ).id;
 
-export const stopProcess = async (backend: string, id: string): Promise<void> => {
-  await post(`${base(backend)}/processes/${encodeURIComponent(id)}/stop`, {});
+export const stopProcess = async (apiBase: string, id: string): Promise<void> => {
+  await post(`${base(apiBase)}/processes/stop`, { id });
 };
 
 const streamLine = Schema.Struct({
@@ -153,8 +155,8 @@ export type ProcessEvent =
  * (React Native's own `fetch` buffers the whole response). Resolves when the
  * stream ends; rejects if it cannot be read, and `signal` stops it.
  */
-export const followProcess = async (backend: string, id: string, onEvent: (event: ProcessEvent) => void, signal: AbortSignal): Promise<void> => {
-  const response = await streamingFetch(`${base(backend)}/processes/${encodeURIComponent(id)}/stream`, { signal });
+export const followProcess = async (apiBase: string, id: string, onEvent: (event: ProcessEvent) => void, signal: AbortSignal): Promise<void> => {
+  const response = await streamingFetch(`${base(apiBase)}/processes/stream?id=${encodeURIComponent(id)}`, { signal });
   if (!response.ok || response.body === null) throw new Error(`${response.status} could not follow the process`);
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
