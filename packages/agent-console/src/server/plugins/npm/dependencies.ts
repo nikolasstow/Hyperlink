@@ -266,9 +266,9 @@ const versionField: PluginFormField = {
 /** Install into a package the form asks for, as the kind it asks for. */
 const installForm = (workspace: string, keys: ReadonlyArray<string>, name: string): PluginForm => ({
   command: "npm.install",
-  title: name.length === 0 ? "Install Package" : `Install ${name}`,
-  icon: "codicon:add",
-  submitTitle: "Install",
+  title: name.length === 0 ? "Add Package" : `Add ${name}`,
+  icon: "sf:shippingbox",
+  submitTitle: "Add",
   fields: [
     {
       id: "package",
@@ -304,8 +304,8 @@ const installForm = (workspace: string, keys: ReadonlyArray<string>, name: strin
 export const installIntoForm = (workspace: string, key: string, kind: Kind, command: string, title: string): PluginForm => ({
   command,
   title,
-  icon: "codicon:add",
-  submitTitle: "Install",
+  icon: kind.icon,
+  submitTitle: "Add",
   fields: [nameField(""), versionField],
   submit: (values) =>
     Effect.gen(function* () {

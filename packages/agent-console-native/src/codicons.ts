@@ -59,6 +59,19 @@ const sfSymbols: ReadonlyArray<SFSymbol> = [
   "square.stack.3d.up",
   "arrow.triangle.branch",
   "arrow.triangle.merge",
+  "checklist",
+  "checkmark.seal",
+  "cylinder",
+  "icloud.and.arrow.up",
+  "link",
+  "paperplane",
+  "play.circle",
+  "plus.square.on.square",
+  "questionmark.circle",
+  "safari",
+  "sparkles",
+  "text.alignleft",
+  "wand.and.stars",
 ];
 
 /** The SF Symbol for an icon the host sent: `codicon:<name>`, `sf:<name>`, or

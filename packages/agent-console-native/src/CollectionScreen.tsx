@@ -579,7 +579,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
     ]);
 
   const newCategory = (): void =>
-    Alert.prompt("New Category", "Put scripts in it from a script’s menu, or select several.", (name) =>
+    Alert.prompt("Add Category", "Put scripts in it from a script’s menu, or select several.", (name) =>
       change("make the category", changeCollection(apiBase, dir, page, { _tag: "CreateCategory", name })),
     );
 
@@ -791,11 +791,34 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
             label: create.title,
             icon: {
               type: "sfSymbol",
-              name: "plus",
+              name: symbolForIcon(create.icon),
             },
             onPress: () => openForm(create, { _tag: "Whole" }, filter?.group),
           },
         ];
+  // The + menu: what can be added here.
+  const addMenu: NativeStackHeaderItem = {
+    type: "menu",
+    label: "Add",
+    icon: {
+      type: "sfSymbol",
+      name: "plus",
+    },
+    menu: {
+      items: [
+        ...createAction,
+        {
+          type: "action",
+          label: "Add Category",
+          icon: {
+            type: "sfSymbol",
+            name: "tag",
+          },
+          onPress: newCategory,
+        },
+      ],
+    },
+  };
   const moreMenu: NativeStackHeaderItem = {
     type: "menu",
     label: "More",
@@ -825,16 +848,6 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
           state: grid ? "on" : "off",
           onPress: () => setCollectionDisplay(page, "grid"),
         },
-        ...createAction,
-        {
-          type: "action",
-          label: "New Category",
-          icon: {
-            type: "sfSymbol",
-            name: "tag",
-          },
-          onPress: newCategory,
-        },
         {
           type: "action",
           label: "Select",
@@ -855,7 +868,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   React.useLayoutEffect(() => {
     navigation.setOptions({
       title: screenTitle,
-      unstable_headerRightItems: () => (selection === undefined ? [...pinButton, moreMenu] : [doneButton]),
+      unstable_headerRightItems: () => (selection === undefined ? [...pinButton, addMenu, moreMenu] : [doneButton]),
       headerSearchBarOptions: {
         placeholder: data?.content.search?.placeholder ?? `Search ${title}`,
         hideWhenScrolling: false,
@@ -1031,9 +1044,11 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
 };
 
 const styles = StyleSheet.create({
+  // Grouped gray, so white rows and grid tiles stand out from it (white
+  // tiles on a white page were invisible).
   root: {
     flex: 1,
-    backgroundColor: colors.systemBackground,
+    backgroundColor: colors.background,
   },
   center: {
     alignItems: "center",

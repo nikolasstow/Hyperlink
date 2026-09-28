@@ -266,12 +266,14 @@ export const PageBlock = Schema.Union([FactsBlock, LinkBlock, PinnedBlock, CardB
 export type PageBlock = typeof PageBlock.Type;
 
 /** A page organized into blocks, top to bottom, with what its 3-dot menu
- * offers (forms, addressed as the block `menu`). */
+ * offers and what its + menu adds (forms, both addressed as the block
+ * `menu`). */
 export class PageSections extends Schema.Class<PageSections>("PageSections")({
   /** The page's title for this workspace, over the manifest's. */
   title: Schema.String,
   blocks: Schema.Array(PageBlock),
   menu: Schema.Array(FormSpec),
+  add: Schema.Array(FormSpec),
 }) {}
 
 /** The block a page's 3-dot menu forms are addressed by. */

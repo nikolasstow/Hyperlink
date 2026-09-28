@@ -107,6 +107,7 @@ const pageSections = Schema.Struct({
   title: Schema.String,
   blocks: Schema.Array(pageBlock),
   menu: Schema.Array(formSpec),
+  add: Schema.Array(formSpec),
 });
 
 /** The block a page's 3-dot menu forms are addressed by. */

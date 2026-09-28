@@ -166,9 +166,9 @@ const workspaceYamlGlobs = (text: string): ReadonlyArray<string> =>
  * pnpm-workspace.yaml does not take it in yet. */
 const createPackageForm = (workspace: string): PluginForm => ({
   command: "npm.createPackage",
-  title: "New Workspace Package",
-  icon: "codicon:add",
-  submitTitle: "Create",
+  title: "Add Workspace Package",
+  icon: "sf:square.stack.3d.up",
+  submitTitle: "Add",
   fields: [
     {
       id: "name",
@@ -349,8 +349,8 @@ const installForms = (workspace: string, key: string): ReadonlyArray<PluginForm>
   const dependencies = kindByField("dependencies");
   const dev = kindByField("devDependencies");
   return [
-    ...(dependencies === undefined ? [] : [installIntoForm(workspace, key, dependencies, "npm.installDependency", "Install Dependency")]),
-    ...(dev === undefined ? [] : [installIntoForm(workspace, key, dev, "npm.installDevDependency", "Install Dev Dependency")]),
+    ...(dependencies === undefined ? [] : [installIntoForm(workspace, key, dependencies, "npm.installDependency", "Add Dependency")]),
+    ...(dev === undefined ? [] : [installIntoForm(workspace, key, dev, "npm.installDevDependency", "Add Dev Dependency")]),
   ];
 };
 
@@ -365,7 +365,8 @@ export const npmPage = (workspace: string, params: Readonly<Record<string, strin
       const content: PluginSectionsContent = {
         title: titleOf(pkg, workspace),
         blocks: [aboutBlock(pkg, workspace), packagesBlock(packages, pkg), pinnedBlock(pkg, suggestedScripts([pkg], 4))],
-        menu: [editDetailsForm(workspace, pkg), ...installForms(workspace, pkg.key)],
+        menu: [editDetailsForm(workspace, pkg)],
+        add: installForms(workspace, pkg.key),
         resources: [pkg.file],
       };
       return content;
@@ -379,7 +380,8 @@ export const npmPage = (workspace: string, params: Readonly<Record<string, strin
       // The page is named for the repo's own package manager.
       title: card.manager.toUpperCase(),
       blocks: [...(root === undefined ? [] : [aboutBlock(root, workspace)]), packagesBlock(packages, undefined), pinnedBlock(undefined, suggestions), card.block],
-      menu: [...(root === undefined ? [] : [editDetailsForm(workspace, root), ...installForms(workspace, root.key)]), createPackageForm(workspace)],
+      menu: root === undefined ? [] : [editDetailsForm(workspace, root)],
+      add: [...(root === undefined ? [] : installForms(workspace, root.key)), createPackageForm(workspace)],
       resources: packages.map((pkg) => pkg.file),
     };
     return content;
@@ -405,7 +407,7 @@ export const workspacePage = (workspace: string) =>
             })),
           },
         ],
-        menu: [createPackageForm(workspace)],
+        add: [createPackageForm(workspace)],
         resources: packages.map((pkg) => pkg.file),
       };
     }),

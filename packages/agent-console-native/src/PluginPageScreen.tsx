@@ -7,7 +7,8 @@
  *   own line below its label), then buttons to other pages, in one card.
  * - **Link**: a button to another of the plugin's pages (All Details).
  * - **Pinned**: the user's pins on one of the plugin's collections (pinned
- *   scripts), each runnable from here, with a button to the whole collection.
+ *   scripts), always a grid, each runnable from here, with a button to the
+ *   whole collection; the plugin's suggestions while nothing is pinned.
  * - **Card**: facts about something that opens its page (the package
  *   manager, opening Packages), with its own actions (an update).
  *
@@ -16,7 +17,8 @@
 import * as React from "react";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
-import type { NativeStackHeaderItemMenuAction, NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { NativeStackHeaderItem, NativeStackHeaderItemMenuAction, NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { SFSymbol } from "sf-symbols-typescript";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
@@ -35,6 +37,29 @@ import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
 type Navigation = Props["navigation"];
+
+/** A header menu of a page's forms, each opening its sheet. */
+const formsMenu = (label: string, icon: SFSymbol, forms: ReadonlyArray<FormSpec>, open: (form: FormSpec) => void): NativeStackHeaderItem => ({
+  type: "menu",
+  label,
+  icon: {
+    type: "sfSymbol",
+    name: icon,
+  },
+  menu: {
+    items: forms.map(
+      (spec): NativeStackHeaderItemMenuAction => ({
+        type: "action",
+        label: spec.title,
+        icon: {
+          type: "sfSymbol",
+          name: symbolForIcon(spec.icon),
+        },
+        onPress: () => open(spec),
+      }),
+    ),
+  },
+});
 
 /** A page opened from the menu is about nothing beyond its workspace. */
 const noParams: Readonly<Record<string, string>> = {};
@@ -76,6 +101,32 @@ const LinkRow = (props: {
     <Text style={styles.linkTitle}>{props.title}</Text>
     {props.detail === undefined ? null : <Text style={styles.linkDetail}>{props.detail}</Text>}
     <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} />
+  </Pressable>
+);
+
+/** One pinned (or suggested) script or filter, as a grid tile. */
+const PinTile = (props: {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly icon: SFSymbol;
+  readonly busy: boolean;
+  readonly playable: boolean;
+  readonly onPress: () => void;
+  readonly onLongPress?: () => void;
+}): React.ReactElement => (
+  <Pressable style={styles.tile} onPress={props.onPress} {...(props.onLongPress === undefined ? {} : { onLongPress: props.onLongPress })}>
+    <View style={styles.tileTop}>
+      <SystemIcon name={props.icon} size={18} color={colors.tint} />
+      {props.busy ? <ActivityIndicator color={colors.secondaryLabel} /> : props.playable ? <SystemIcon name="play.fill" size={14} color={colors.tint} /> : null}
+    </View>
+    <View style={styles.tileText}>
+      <Text style={styles.tileTitle} numberOfLines={2}>
+        {props.title}
+      </Text>
+      <Text style={[styles.pinDetail, styles.mono]} numberOfLines={1}>
+        {props.subtitle}
+      </Text>
+    </View>
   </Pressable>
 );
 
@@ -124,46 +175,32 @@ const PinnedCard = (props: {
       },
     ]);
 
-  return (
-    <View>
-      <Text style={styles.sectionLabel}>{block.title}</Text>
-      <View style={styles.card}>
-        {load.kind === "loading" ? (
-          <View style={styles.row}>
-            <ActivityIndicator color={colors.secondaryLabel} />
-          </View>
-        ) : load.kind === "failed" ? (
-          <View style={styles.row}>
-            <Text style={styles.hint}>Couldn’t load pins: {load.message}</Text>
-          </View>
-        ) : data === undefined || (pins.length === 0 && suggested.length === 0) ? (
-          <View style={styles.row}>
-            <Text style={styles.hint}>{block.empty}</Text>
-          </View>
-        ) : pins.length === 0 ? (
-          <>
-            {suggested.map((item, index) => (
-              <Pressable key={item.key} style={[styles.row, index > 0 && styles.rowBorder]} onPress={() => runItem(item.key, item.title)}>
-                <SystemIcon name="terminal" size={18} color={colors.secondaryLabel} />
-                <View style={styles.pinText}>
-                  <Text style={styles.linkTitle}>{item.title}</Text>
-                  <Text style={[styles.pinDetail, styles.mono]}>{item.name}</Text>
-                </View>
-                {busy === item.key ? <ActivityIndicator color={colors.secondaryLabel} /> : <SystemIcon name="play.fill" size={15} color={colors.tint} />}
-              </Pressable>
-            ))}
-            <View style={[styles.row, styles.rowBorder]}>
-              <Text style={styles.hint}>{block.suggestionsNote}</Text>
-            </View>
-          </>
-        ) : (
-          pins.map((pin, index) => {
+  const tiles: ReadonlyArray<React.ReactElement> =
+    data === undefined
+      ? []
+      : pins.length === 0
+        ? suggested.map((item) => (
+            <PinTile
+              key={item.key}
+              title={item.title}
+              subtitle={item.name}
+              icon="terminal"
+              busy={busy === item.key}
+              playable={item.run !== undefined}
+              onPress={() => runItem(item.key, item.title)}
+            />
+          ))
+        : pins.map((pin) => {
             const title = pinTitle(data.content, data.state, pin);
             if (pin._tag === "PinnedFilter") {
               return (
-                <Pressable
+                <PinTile
                   key={pin.id}
-                  style={[styles.row, index > 0 && styles.rowBorder]}
+                  title={title}
+                  subtitle={filterTitle(data.content, data.state, pin)}
+                  icon="line.3.horizontal.decrease.circle"
+                  busy={false}
+                  playable={false}
                   onPress={() =>
                     navigation.push("Collection", {
                       repo: props.repo,
@@ -178,31 +215,47 @@ const PinnedCard = (props: {
                     })
                   }
                   onLongPress={() => unpin(pin.id, title)}
-                >
-                  <SystemIcon name="line.3.horizontal.decrease.circle" size={18} color={colors.tint} />
-                  <View style={styles.pinText}>
-                    <Text style={styles.linkTitle}>{title}</Text>
-                    <Text style={styles.pinDetail}>{filterTitle(data.content, data.state, pin)}</Text>
-                  </View>
-                  <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} />
-                </Pressable>
+                />
               );
             }
             const item = data.content.items.find((candidate) => candidate.key === pin.item);
-            const run = item?.run;
             return (
-              <Pressable key={pin.id} style={[styles.row, index > 0 && styles.rowBorder]} onPress={() => runItem(pin.item, title)} onLongPress={() => unpin(pin.id, title)}>
-                <SystemIcon name="terminal" size={18} color={colors.secondaryLabel} />
-                <View style={styles.pinText}>
-                  <Text style={styles.linkTitle}>{title}</Text>
-                  <Text style={[styles.pinDetail, styles.mono]}>{item === undefined ? "No longer in package.json" : item.name}</Text>
-                </View>
-                {busy === pin.item ? <ActivityIndicator color={colors.secondaryLabel} /> : run === undefined ? null : <SystemIcon name="play.fill" size={15} color={colors.tint} />}
-              </Pressable>
+              <PinTile
+                key={pin.id}
+                title={title}
+                subtitle={item === undefined ? "No longer in package.json" : item.name}
+                icon="terminal"
+                busy={busy === pin.item}
+                playable={item?.run !== undefined}
+                onPress={() => runItem(pin.item, title)}
+                onLongPress={() => unpin(pin.id, title)}
+              />
             );
-          })
-        )}
-        <LinkRow title={block.viewAll} icon={block.collection.icon} border onPress={() => openLink(navigation, props.repo, dir, block.collection)} />
+          });
+
+  // Always a grid: pins (or suggestions) as two-column tiles, then the note
+  // and the way to all of them.
+  return (
+    <View>
+      <Text style={styles.sectionLabel}>{block.title}</Text>
+      {load.kind === "loading" ? (
+        <View style={[styles.card, styles.row]}>
+          <ActivityIndicator color={colors.secondaryLabel} />
+        </View>
+      ) : load.kind === "failed" ? (
+        <View style={[styles.card, styles.row]}>
+          <Text style={styles.hint}>Couldn’t load pins: {load.message}</Text>
+        </View>
+      ) : tiles.length === 0 ? (
+        <View style={[styles.card, styles.row]}>
+          <Text style={styles.hint}>{block.empty}</Text>
+        </View>
+      ) : (
+        <View style={styles.grid}>{tiles}</View>
+      )}
+      {pins.length === 0 && suggested.length > 0 ? <Text style={styles.note}>{block.suggestionsNote}</Text> : null}
+      <View style={[styles.card, styles.linkCard]}>
+        <LinkRow title={block.viewAll} icon={block.collection.icon} onPress={() => openLink(navigation, props.repo, dir, block.collection)} />
       </View>
     </View>
   );
@@ -235,37 +288,18 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
 
   const shownTitle = load.kind === "ready" ? load.value.title : title;
   const menu = React.useMemo((): ReadonlyArray<FormSpec> => (load.kind === "ready" ? load.value.menu : []), [load]);
+  const add = React.useMemo((): ReadonlyArray<FormSpec> => (load.kind === "ready" ? load.value.add : []), [load]);
   React.useLayoutEffect(() => {
     navigation.setOptions({
       title: shownTitle,
-      unstable_headerRightItems: () =>
-        menu.length === 0
-          ? []
-          : [
-              {
-                type: "menu",
-                label: "More",
-                icon: {
-                  type: "sfSymbol",
-                  name: "ellipsis",
-                },
-                menu: {
-                  items: menu.map(
-                    (spec): NativeStackHeaderItemMenuAction => ({
-                      type: "action",
-                      label: spec.title,
-                      icon: {
-                        type: "sfSymbol",
-                        name: symbolForIcon(spec.icon),
-                      },
-                      onPress: () => setForm(spec),
-                    }),
-                  ),
-                },
-              },
-            ],
+      // The + menu adds (a dependency, a package); the 3-dot menu has the
+      // rest. Each only when the page offers something for it.
+      unstable_headerRightItems: () => [
+        ...(add.length === 0 ? [] : [formsMenu("Add", "plus", add, setForm)]),
+        ...(menu.length === 0 ? [] : [formsMenu("More", "ellipsis", menu, setForm)]),
+      ],
     });
-  }, [navigation, shownTitle, menu]);
+  }, [navigation, shownTitle, menu, add]);
 
   if (load.kind !== "ready") {
     return (
@@ -479,9 +513,38 @@ const styles = StyleSheet.create({
   tinted: {
     color: colors.tint,
   },
-  pinText: {
-    flex: 1,
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  tile: {
+    width: "48%",
+    flexGrow: 1,
+    height: 96,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.cardBackground,
+    justifyContent: "space-between",
+  },
+  tileTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  tileText: {
     gap: 2,
+  },
+  tileTitle: {
+    color: colors.label,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  note: {
+    color: colors.secondaryLabel,
+    fontSize: 13,
+    marginTop: 8,
+    marginHorizontal: 4,
   },
   pinDetail: {
     color: colors.secondaryLabel,

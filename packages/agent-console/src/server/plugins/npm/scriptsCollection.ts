@@ -115,8 +115,8 @@ const scriptItem = (pkg: Package, name: string, command: string): PluginItem => 
  * is now. */
 const addScript = (workspace: string, keys: ReadonlyArray<string>): PluginForm => ({
   command: "npm.add",
-  title: "New Script",
-  icon: "codicon:add",
+  title: "Add Script",
+  icon: "codicon:terminal",
   submitTitle: "Add",
   fields: [
     {

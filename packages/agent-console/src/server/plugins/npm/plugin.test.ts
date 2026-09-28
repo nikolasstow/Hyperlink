@@ -284,7 +284,8 @@ describe("npm plugin: the NPM page", () => {
       "Pinned scripts suggesting .#build .#test .#prebuild",
       "Card pnpm -> packages: Version=10.33.4, Latest=10.40.0, Dependencies=0, Dev Dependencies=1, Workspace Packages=2 [Update to 10.40.0]",
     ]);
-    expect(npm.menu?.map((form) => form.title)).toEqual(["Edit Package Details", "Install Dependency", "Install Dev Dependency", "New Workspace Package"]);
+    expect(npm.menu?.map((form) => form.title)).toEqual(["Edit Package Details"]);
+    expect(npm.add?.map((form) => form.title)).toEqual(["Add Dependency", "Add Dev Dependency", "Add Workspace Package"]);
   });
 
   it("is the same page for one workspace package, scoped to it", async () => {
@@ -295,7 +296,8 @@ describe("npm plugin: the NPM page", () => {
       "Facts Packages:  | Dependencies 0 -> packages(group=tools,category=dependencies) | Development Dependencies 0 -> packages(group=tools,category=dev)",
       "Pinned scripts(group=tools) suggesting ",
     ]);
-    expect(tools.menu?.map((form) => form.title)).toEqual(["Edit Package Details", "Install Dependency", "Install Dev Dependency"]);
+    expect(tools.menu?.map((form) => form.title)).toEqual(["Edit Package Details"]);
+    expect(tools.add?.map((form) => form.title)).toEqual(["Add Dependency", "Add Dev Dependency"]);
   });
 
   it("lists the workspace packages, each opening its own page", async () => {
@@ -350,7 +352,7 @@ describe("npm plugin: the NPM page", () => {
         const path = yield* Path.Path;
         yield* fs.writeFileString(path.join(app, "pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n");
         const npm = yield* pageFor("npm")(app);
-        const create = npm.menu?.find((form) => form.command === "npm.createPackage");
+        const create = npm.add?.find((form) => form.command === "npm.createPackage");
         if (create === undefined) return yield* Effect.die("no create form");
         const made = yield* create.submit({
           name: "@x/new",
@@ -377,7 +379,7 @@ describe("npm plugin: the NPM page", () => {
         const path = yield* Path.Path;
         yield* fs.writeFileString(path.join(app, "pnpm-workspace.yaml"), "packages:\n  - 'tools'\n");
         const npm = yield* pageFor("npm")(app);
-        const install = npm.menu?.find((form) => form.command === "npm.installDevDependency");
+        const install = npm.add?.find((form) => form.command === "npm.installDevDependency");
         if (install === undefined) return yield* Effect.die("no install form");
         return yield* install.submit({
           name: "zod",

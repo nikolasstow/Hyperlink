@@ -281,6 +281,7 @@ export const toSections = (
         title: content.title ?? entry.page.title,
         blocks,
         menu: (content.menu ?? []).map(formData),
+        add: (content.add ?? []).map(formData),
       }).pipe(Effect.mapError((cause) => providerFailure(`${entry.viewId}: its page is malformed: ${cause.message}`))),
     ),
     Effect.map((page) => ({
@@ -289,7 +290,7 @@ export const toSections = (
         ...content.blocks.flatMap((block): ReadonlyArray<readonly [string, ReadonlyMap<string, CollectionRun>]> =>
           block._tag === "Card" || block._tag === "Actions" ? [[block.key, runsOf(block.actions ?? [], [])]] : [],
         ),
-        [pageMenuBlock, runsOf([], content.menu ?? [])],
+        [pageMenuBlock, runsOf([], [...(content.menu ?? []), ...(content.add ?? [])])],
       ]),
     })),
   );

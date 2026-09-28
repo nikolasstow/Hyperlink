@@ -214,7 +214,7 @@ export const CategoriesSheet = (props: {
   };
 
   const create = (): void =>
-    Alert.prompt("New Category", undefined, (name) =>
+    Alert.prompt("Add Category", undefined, (name) =>
       run(
         props.onCreate(name).then((id) => {
           if (id !== undefined) setChoices((current) => new Map([...current, [id, true]]));
@@ -253,7 +253,7 @@ export const CategoriesSheet = (props: {
               })}
               <Pressable style={[styles.choice, props.categories.length > 0 && styles.rowBorder]} onPress={create}>
                 <SystemIcon name="plus" size={17} color={colors.tint} />
-                <Text style={[styles.choiceLabel, styles.tinted]}>New Category…</Text>
+                <Text style={[styles.choiceLabel, styles.tinted]}>Add Category…</Text>
               </Pressable>
             </View>
           </ScrollView>

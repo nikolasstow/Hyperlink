@@ -489,8 +489,11 @@ Owner-stated unless marked *Proposed*.
      pinned, it shows the best suited scripts** until there are pins.
   4. **The package manager**, a card: its details, **updating it**, and **numbers of what is
      installed**. It opens the Packages page (§23.2).
-- **The 3-dot menu**: **Edit Package Details**, **Install Dependency**, **Install Dev
-  Dependency**, **Create New Workspace Package**.
+- **Pinned is always a grid.**
+- **A + menu next to the 3-dot menu** holds what adds: **Add Dependency**, **Add Dev
+  Dependency**, **Add Workspace Package**, each with its own icon (not a plus). The **3-dot
+  menu** keeps **Edit Package Details**. Pages say **Add**, not "Install" or "New"; the Scripts
+  and Packages pages' + menus hold Add Script / Add Package and Add Category.
 - **A workspace package opens to the same page, for that package**: its details, its packages
   (dependencies and dev dependencies), its scripts, and the rest, all scoped to it.
 - **A dependency opens its own page**: whether **an update is available**, **Update**,

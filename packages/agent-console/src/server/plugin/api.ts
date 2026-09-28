@@ -162,6 +162,8 @@ export interface PluginSectionsContent {
   readonly blocks: ReadonlyArray<PluginBlock>;
   /** What the page's 3-dot menu offers. */
   readonly menu?: ReadonlyArray<PluginForm>;
+  /** What the page's + menu adds (a dependency, a package). */
+  readonly add?: ReadonlyArray<PluginForm>;
   /** The files the page was read from: when one changes, it is stale. */
   readonly resources: ReadonlyArray<string>;
 }
