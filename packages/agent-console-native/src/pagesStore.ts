@@ -1,9 +1,9 @@
 /**
- * Plugin pages (summaries and collections), prefetched and cached like
+ * Plugin pages (sectionPages and collections), prefetched and cached like
  * extension views, so no page waits on the host.
  *
- * When a workspace's views load (extensionViewsStore), each summary and
- * collection page in its menu is fetched here, and a summary's linked pages
+ * When a workspace's views load (extensionViewsStore), each sectioned and
+ * collection page in its menu is fetched here, and a page's linked pages
  * after it. Screens render from here at once and revalidate behind it.
  *
  * A collection is two things: the plugin's items, and the user's categories
@@ -19,11 +19,11 @@ import {
   changeCollectionState,
   fetchCollection,
   fetchCollectionState,
-  fetchSummary,
+  fetchSections,
   type CollectionChange,
   type CollectionContent,
   type CollectionState,
-  type Summary,
+  type PageSections,
 } from "./pagesClient";
 
 const listeners = new Set<() => void>();
@@ -49,7 +49,7 @@ const makeCache = <A,>(): Cache<A> => {
   };
 };
 
-const summaries = makeCache<Summary>();
+const sectionPages = makeCache<PageSections>();
 const contents = makeCache<CollectionContent>();
 const states = makeCache<CollectionState>();
 
@@ -92,12 +92,12 @@ export const loadCollection = (apiBase: string, workspace: string, page: string,
   });
 };
 
-/** A summary, then the pages it links to, so they are warm before a tap. */
-export const loadSummary = (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<void> => {
+/** A sectioned page, then the pages it links to, so they are warm before a tap. */
+export const loadSections = (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<void> => {
   const key = keyOf(workspace, page);
-  return once(`summary ${key} ${refresh}`, async () => {
-    await loadInto(summaries, key, `fetch summary ${key} ${refresh}`, () => fetchSummary(apiBase, workspace, page, refresh));
-    const loaded = summaries.get(key);
+  return once(`sections ${key} ${refresh}`, async () => {
+    await loadInto(sectionPages, key, `fetch sections ${key} ${refresh}`, () => fetchSections(apiBase, workspace, page, refresh));
+    const loaded = sectionPages.get(key);
     if (loaded?.kind !== "ready") return;
     await Promise.all(loaded.value.links.map((link) => prefetchPage(apiBase, workspace, link.page, link.kind)));
   });
@@ -105,7 +105,7 @@ export const loadSummary = (apiBase: string, workspace: string, page: string, re
 
 /** Bring a menu page into the cache, if it is one kept here. */
 export const prefetchPage = (apiBase: string, workspace: string, page: string, kind: PageKind): Promise<void> =>
-  kind === "summary" ? loadSummary(apiBase, workspace, page, "none") : kind === "collection" ? loadCollection(apiBase, workspace, page, "none") : Promise.resolve();
+  kind === "sections" ? loadSections(apiBase, workspace, page, "none") : kind === "collection" ? loadCollection(apiBase, workspace, page, "none") : Promise.resolve();
 
 /**
  * Change a collection's state on the server; the state it answers with
@@ -125,8 +125,8 @@ const subscribe = (listener: () => void): (() => void) => {
 
 const loading: { readonly kind: "loading" } = { kind: "loading" };
 
-export const useSummary = (workspace: string, page: string): Load<Summary> =>
-  React.useSyncExternalStore(subscribe, () => summaries.get(keyOf(workspace, page)) ?? loading);
+export const useSections = (workspace: string, page: string): Load<PageSections> =>
+  React.useSyncExternalStore(subscribe, () => sectionPages.get(keyOf(workspace, page)) ?? loading);
 
 /** A collection with its state: ready once both are, failed if either is. */
 export interface CollectionData {

@@ -161,12 +161,12 @@ const make = Effect.gen(function* () {
           ),
         ),
       ),
-    summary: (workspace: string, page: string, refresh: TreeRefresh) =>
+    sections: (workspace: string, page: string, refresh: TreeRefresh) =>
       workspaceOf(workspace).pipe(
         Effect.flatMap((resolved) =>
           withDeadline(
-            "summary",
-            client.Summary({
+            "sections",
+            client.PageSections({
               workspace: resolved,
               page,
               refresh,

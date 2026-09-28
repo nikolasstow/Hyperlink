@@ -14,9 +14,9 @@ import { Schema } from "effect";
 import { fetch as streamingFetch } from "expo/fetch";
 import { base, request } from "./extensionsClient";
 
-/** How a page is drawn: a tree (every VS Code view), a plugin's summary, or
+/** How a page is drawn: a tree (every VS Code view), a plugin's page of sections, or
  * a plugin's collection (pagesClient). */
-export const pageKind = Schema.Literals(["tree", "summary", "collection"]);
+export const pageKind = Schema.Literals(["tree", "sections", "collection"]);
 export type PageKind = typeof pageKind.Type;
 
 const viewInfo = Schema.Struct({

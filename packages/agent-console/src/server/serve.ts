@@ -77,7 +77,7 @@ const pagesHandlers = HttpApiBuilder.group(api, "pages", (handlers) =>
   Effect.all([ExtensionViews, CollectionStates]).pipe(
     Effect.map(([views, states]) =>
       handlers
-        .handle("summary", ({ payload }) => views.summary(payload.workspace, payload.page, payload.refresh))
+        .handle("sections", ({ payload }) => views.sections(payload.workspace, payload.page, payload.refresh))
         .handle("collection", ({ payload }) => views.collection(payload.workspace, payload.page, payload.refresh))
         .handle("collectionInvoke", ({ payload }) => views.collectionInvoke(payload))
         .handle("collectionState", ({ payload }) => states.get(payload.workspace, payload.page))

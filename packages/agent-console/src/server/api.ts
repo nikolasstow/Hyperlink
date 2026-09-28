@@ -19,7 +19,7 @@ import {
   CollectionContent,
   ExtensionHostError,
   InvokeResult,
-  Summary,
+  PageSections,
   TreeEntry,
   ViewInfo,
   ViewNode,
@@ -174,14 +174,14 @@ const viewsGroup = HttpApiGroup.make("views").add(
 );
 
 /**
- * Plugin pages the app draws natively: summaries and collections, run by the
+ * Plugin pages the app draws natively: sectionPages and collections, run by the
  * extension host like views. A collection's state (the user's categories and
  * pins) is the server's, beside the plugin's items.
  */
 const pagesGroup = HttpApiGroup.make("pages").add(
-  HttpApiEndpoint.post("summary", "/pages/summary", {
+  HttpApiEndpoint.post("sections", "/pages/sections", {
     payload: pagePayload,
-    success: Summary,
+    success: PageSections,
     error: viewErrors,
   }),
   HttpApiEndpoint.post("collection", "/pages/collection", {

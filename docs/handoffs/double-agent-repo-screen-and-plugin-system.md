@@ -479,9 +479,10 @@ Owner-stated unless marked *Proposed*.
 
 ### 23.1 The repo's NPM page
 
-- The page is a **summary of package.json**: the project's details (name, version, and the rest),
-  the **package manager and its version**, and similar, then **subsections**: **Packages**,
-  **Scripts**, and the other features (§23.4).
+- It is just **the NPM page, organized** (not a separate summary): package.json's details (name,
+  version, and the rest), the **package manager and its version**, and similar, then its
+  **subsections**: **Packages**, **Scripts**, and the other features (§23.4).
+- It is titled for the repo's package manager: **PNPM** in a pnpm repo.
 
 ### 23.2 Packages
 

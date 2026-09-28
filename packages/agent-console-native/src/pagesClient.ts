@@ -1,6 +1,6 @@
 /**
  * Client for plugin pages the app draws natively (`/pages/*` on the Effect API
- * server): a summary, and a collection with the user's categories and pins
+ * server): a page organized into sections, and a collection with the user's categories and pins
  * beside it.
  *
  * Same conventions as extensionViewsClient: plain `fetch`, `Schema`-decoded
@@ -29,7 +29,7 @@ const pageLink = Schema.Struct({
 });
 export type PageLink = typeof pageLink.Type;
 
-const summary = Schema.Struct({
+const pageSections = Schema.Struct({
   title: Schema.String,
   sections: Schema.Array(
     Schema.Struct({
@@ -45,7 +45,7 @@ const summary = Schema.Struct({
   ),
   links: Schema.Array(pageLink),
 });
-export type Summary = typeof summary.Type;
+export type PageSections = typeof pageSections.Type;
 
 const formField = Schema.Struct({
   id: Schema.String,
@@ -158,9 +158,9 @@ const post = (url: string, body: object) =>
     body: JSON.stringify(body),
   });
 
-export const fetchSummary = async (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<Summary> =>
-  Schema.decodeUnknownSync(summary)(
-    await post(`${base(apiBase)}/pages/summary`, {
+export const fetchSections = async (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<PageSections> =>
+  Schema.decodeUnknownSync(pageSections)(
+    await post(`${base(apiBase)}/pages/sections`, {
       workspace,
       page,
       refresh,

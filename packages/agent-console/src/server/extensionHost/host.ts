@@ -27,7 +27,7 @@ import {
   type CollectionContent,
   type CollectionTarget,
   type InvokeResult,
-  type Summary,
+  type PageSections,
   type TreeRefresh,
 } from "./protocol";
 import { EventEmitter, ProcessExecution, ShellExecution, Task, Uri, makeRegistry, makeVscode, toWorkspaceFolder, type Registry, type WorkspaceFolderInfo } from "./shim";
@@ -39,7 +39,7 @@ import {
   runPluginAction,
   targetKey,
   toCollection,
-  toSummary,
+  toSections,
   type CollectionRuns,
   type PluginPageEntry,
   type PluginTreePage,
@@ -683,10 +683,10 @@ export const makeHost = (options: HostOptions) =>
         return entries;
       });
 
-    /** Plugin summaries and collections as last built, by `view workspace`,
+    /** Plugin sectionPages and collections as last built, by `view workspace`,
      * served again until stale by the same rules as trees. A collection's
      * actions are kept beside it. */
-    const summaries = yield* Ref.make<ReadonlyMap<string, Summary>>(new Map());
+    const sectionPages = yield* Ref.make<ReadonlyMap<string, PageSections>>(new Map());
     const collections = yield* Ref.make<
       ReadonlyMap<
         string,
@@ -722,15 +722,15 @@ export const makeHost = (options: HostOptions) =>
         message: `${page.viewId}: ${cause.message}`,
       });
 
-    const pluginSummary = (page: Extract<PluginPageEntry, { readonly kind: "summary" }>, workspace: string, refresh: TreeRefresh) =>
+    const pluginSections = (page: Extract<PluginPageEntry, { readonly kind: "sections" }>, workspace: string, refresh: TreeRefresh) =>
       cached(
-        summaries,
+        sectionPages,
         `${page.viewId} ${workspace}`,
         refresh,
-        page.summary.summary({ workspace }).pipe(
+        page.sections.content({ workspace }).pipe(
           Effect.mapError(providerFailed(page)),
           Effect.flatMap((content) =>
-            toSummary(page, content).pipe(
+            toSections(page, content).pipe(
               Effect.map((value) => ({
                 value,
                 resources: content.resources,
@@ -765,8 +765,8 @@ export const makeHost = (options: HostOptions) =>
       switch (page.kind) {
         case "tree":
           return pluginTree(page, workspace, "none").pipe(Effect.map((entries) => titled(entries.length > 0, page.page.title)));
-        case "summary":
-          return pluginSummary(page, workspace, "none").pipe(Effect.map((summary) => titled(summary.sections.length > 0, summary.title)));
+        case "sections":
+          return pluginSections(page, workspace, "none").pipe(Effect.map((content) => titled(content.sections.length > 0, content.title)));
         case "collection":
           return pluginCollection(page, workspace, "none").pipe(Effect.map((collection) => titled(collection.content.items.length > 0, page.page.title)));
       }
@@ -796,11 +796,11 @@ export const makeHost = (options: HostOptions) =>
 
     const unknownPage = (view: string, kind: string) => rejected("UnknownView", `no plugin page ${view} of kind ${kind}`);
 
-    const SummaryRpc = (payload: { readonly workspace: string; readonly page: string; readonly refresh: TreeRefresh }) =>
+    const SectionsRpc = (payload: { readonly workspace: string; readonly page: string; readonly refresh: TreeRefresh }) =>
       Effect.gen(function* () {
         const page = pageOf(payload.page);
-        if (page?.kind !== "summary") return yield* unknownPage(payload.page, "summary");
-        return yield* pluginSummary(page, payload.workspace, payload.refresh);
+        if (page?.kind !== "sections") return yield* unknownPage(payload.page, "sections");
+        return yield* pluginSections(page, payload.workspace, payload.refresh);
       });
 
     const CollectionRpc = (payload: { readonly workspace: string; readonly page: string; readonly refresh: TreeRefresh }) =>
@@ -922,7 +922,7 @@ export const makeHost = (options: HostOptions) =>
       Children,
       Tree,
       Invoke,
-      Summary: SummaryRpc,
+      PageSections: SectionsRpc,
       Collection: CollectionRpc,
       CollectionInvoke,
       Warm,

@@ -38,7 +38,7 @@ import { ThemeTokensScreen } from "./ThemeTokensScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
 import { CollectionScreen, type CollectionView } from "./CollectionScreen";
 import { ExtensionViewScreen } from "./ExtensionViewScreen";
-import { PluginSummaryScreen } from "./PluginSummaryScreen";
+import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
 import { RepoScreen } from "./RepoScreen";
@@ -81,9 +81,9 @@ export type RootStackParamList = {
   // A tree view an extension contributes (npm's scripts), for the workspace
   // `dir`; `view` is its id, `title` its name.
   ExtensionView: { repo: string; dir: string; view: string; title: string };
-  // A plugin's summary page (NPM's), and a plugin's collection page (its
+  // A plugin's page organized into sections (NPM's), and a plugin's collection page (its
   // Scripts) in one of its views: home, a filter, or an index of all.
-  PluginSummary: { repo: string; dir: string; page: string; title: string };
+  PluginPage: { repo: string; dir: string; page: string; title: string };
   Collection: { repo: string; dir: string; page: string; title: string; view: CollectionView };
   // Live output of a process on the backend's process runner.
   ProcessOutput: { id: string; title: string; commandLine: string };
@@ -352,8 +352,8 @@ export const RootNavigator = (): React.ReactElement => {
           }}
         />
         <Stack.Screen
-          name="PluginSummary"
-          component={PluginSummaryScreen}
+          name="PluginPage"
+          component={PluginPageScreen}
           options={{
             headerShown: true,
             headerLargeTitle: true,

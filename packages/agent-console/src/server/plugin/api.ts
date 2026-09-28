@@ -5,7 +5,8 @@
  * natively (docs/handoffs/double-agent-repo-screen-and-plugin-system.md §22.2):
  *
  * - a **view**, a tree of nodes, the same rows VS Code extension views become;
- * - a **summary**, sections of facts with links to the plugin's other pages;
+ * - **sections**, a page organized into sections of facts, with links to the
+ *   plugin's other pages;
  * - a **collection**, items in groups that the user sorts into categories,
  *   filters and pins (the app and server keep that part).
  *
@@ -73,34 +74,34 @@ export interface PluginView {
   readonly tree: (context: PluginContext) => Effect.Effect<ReadonlyArray<PluginNode>, PluginError, PluginServices>;
 }
 
-// ── Summaries ─────────────────────────────────────────────────────────────────
+// ── Sectioned pages ────────────────────────────────────────────────────────────
 
-export interface PluginSummaryRow {
+export interface PluginSectionRow {
   readonly label: string;
   readonly value: string;
   /** Code-like (a version, a command), drawn monospaced. */
   readonly mono?: boolean;
 }
 
-export interface PluginSummarySection {
+export interface PluginSection {
   readonly title?: string;
-  readonly rows: ReadonlyArray<PluginSummaryRow>;
+  readonly rows: ReadonlyArray<PluginSectionRow>;
 }
 
-export interface PluginSummaryContent {
+export interface PluginSectionsContent {
   /** The page's title for this workspace, when it depends on what is there
    * ("PNPM" for a pnpm repo); the manifest's title otherwise. */
   readonly title?: string;
-  readonly sections: ReadonlyArray<PluginSummarySection>;
-  /** The files the summary was read from: when one changes, it is stale. */
+  readonly sections: ReadonlyArray<PluginSection>;
+  /** The files the page was read from: when one changes, it is stale. */
   readonly resources: ReadonlyArray<string>;
 }
 
-export interface PluginSummary {
-  /** The summary for a workspace; no sections means the page has nothing
+export interface PluginSectionsPage {
+  /** The page for a workspace; no sections means the page has nothing
    * there (and is not offered in that workspace's menu). Its links are the
    * plugin's pages whose `parent` is this one, from the manifest. */
-  readonly summary: (context: PluginContext) => Effect.Effect<PluginSummaryContent, PluginError, PluginServices>;
+  readonly content: (context: PluginContext) => Effect.Effect<PluginSectionsContent, PluginError, PluginServices>;
 }
 
 // ── Collections ───────────────────────────────────────────────────────────────
@@ -191,7 +192,7 @@ export interface PluginCollection {
  * the id a manifest page names (its `view`, or its own id). */
 export interface PluginDefinition {
   readonly views?: Readonly<Record<string, PluginView>>;
-  readonly summaries?: Readonly<Record<string, PluginSummary>>;
+  readonly sectionPages?: Readonly<Record<string, PluginSectionsPage>>;
   readonly collections?: Readonly<Record<string, PluginCollection>>;
 }
 

@@ -21,12 +21,12 @@ export const pluginPage = Schema.Struct({
   icon: Schema.optionalKey(Schema.String),
   requirement: pageRequirement,
   /** How the app draws it (protocol.ts `PageKind`), filled by the plugin's
-   * view, summary or collection of the same name (`view`, or the page's own
+   * view, sections or collection of the same name (`view`, or the page's own
    * id). */
   kind: PageKind,
   view: Schema.optionalKey(Schema.String),
   /** The page this one opens from. A page with a parent is reached through
-   * it (a summary's links), not from the menu. */
+   * it (a sectioned page's links), not from the menu. */
   parent: Schema.optionalKey(Schema.String),
 });
 export type PluginPage = typeof pluginPage.Type;

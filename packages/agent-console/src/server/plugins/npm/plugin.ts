@@ -2,7 +2,7 @@
  * NPM: the repo's package.json, its packages, and their scripts
  * (docs/handoffs/double-agent-repo-screen-and-plugin-system.md §23).
  *
- * - The **NPM** page summarizes the root package.json: the project, its
+ * - The **NPM** page, organized: the root package.json's project, its
  *   package manager and version, and the workspace in numbers, with the
  *   plugin's other pages below.
  * - **Scripts** is every package's scripts as a collection: packages are its
@@ -18,7 +18,7 @@
  * @internal
  */
 import { Effect, FileSystem, Option, Path, Schema } from "effect";
-import { Completed, definePlugin, OpenFile, PluginError, RunTask, type PluginAction, type PluginForm, type PluginFormField, type PluginGroup, type PluginItem, type PluginSummaryRow } from "../../plugin/api";
+import { Completed, definePlugin, OpenFile, PluginError, RunTask, type PluginAction, type PluginForm, type PluginFormField, type PluginGroup, type PluginItem, type PluginSectionRow } from "../../plugin/api";
 import { changeScripts, readScripts, writeScripts, type ScriptChange } from "./packageJson";
 import { categorize, scriptCategories, titleOf } from "./scripts";
 
@@ -332,7 +332,7 @@ const addScript = (workspace: string, keys: ReadonlyArray<string>): PluginForm =
 
 const count = (record: Readonly<Record<string, string>> | undefined) => Object.keys(record ?? {}).length;
 
-const summary = (workspace: string) =>
+const npmPage = (workspace: string) =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const packages = yield* packagesIn(workspace);
@@ -345,13 +345,13 @@ const summary = (workspace: string) =>
     }
     const declared = root?.json.packageManager === undefined ? undefined : declaredManager(root.json.packageManager);
     const manager = declared?.name ?? (yield* packageManagerFor(workspace, undefined));
-    const row = (label: string, value: string, mono = false): PluginSummaryRow => ({
+    const row = (label: string, value: string, mono = false): PluginSectionRow => ({
       label,
       value,
       mono,
     });
-    const optional = (label: string, value: string | undefined, mono = false): ReadonlyArray<PluginSummaryRow> => (value === undefined ? [] : [row(label, value, mono)]);
-    const project: ReadonlyArray<PluginSummaryRow> =
+    const optional = (label: string, value: string | undefined, mono = false): ReadonlyArray<PluginSectionRow> => (value === undefined ? [] : [row(label, value, mono)]);
+    const project: ReadonlyArray<PluginSectionRow> =
       root === undefined
         ? []
         : [
@@ -388,9 +388,9 @@ const summary = (workspace: string) =>
   });
 
 export default definePlugin({
-  summaries: {
+  sectionPages: {
     npm: {
-      summary: ({ workspace }) => summary(workspace),
+      content: ({ workspace }) => npmPage(workspace),
     },
   },
   collections: {

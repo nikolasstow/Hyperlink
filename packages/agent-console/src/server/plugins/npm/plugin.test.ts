@@ -46,10 +46,10 @@ const scriptsFor = (workspace: string) => {
   return collection.content({ workspace });
 };
 
-const summaryFor = (workspace: string) => {
-  const summary = plugin.summaries?.["npm"];
-  if (summary === undefined) throw new Error("the npm summary is missing");
-  return summary.summary({ workspace });
+const sectionsFor = (workspace: string) => {
+  const npm = plugin.sectionPages?.["npm"];
+  if (npm === undefined) throw new Error("the npm page is missing");
+  return npm.content({ workspace });
 };
 
 const run = <A>(effect: Effect.Effect<A, unknown, FileSystem.FileSystem | Path.Path | Scope.Scope>) =>
@@ -200,10 +200,11 @@ describe("npm plugin: scripts", () => {
   });
 });
 
-describe("npm plugin: summary", () => {
-  it("summarizes the root package.json and its package manager", async () => {
-    const summary = await run(fixture.pipe(Effect.flatMap(summaryFor)));
-    expect(summary.sections.map((section) => [section.title ?? "", section.rows.map((row) => `${row.label}=${row.value}`)])).toEqual([
+describe("npm plugin: the NPM page", () => {
+  it("shows the root package.json and its package manager", async () => {
+    const npm = await run(fixture.pipe(Effect.flatMap(sectionsFor)));
+    expect(npm.title).toBe("PNPM");
+    expect(npm.sections.map((section) => [section.title ?? "", section.rows.map((row) => `${row.label}=${row.value}`)])).toEqual([
       ["", ["Name=app", "Version=1.2.3"]],
       ["Package Manager", ["Manager=pnpm", "Version=10.33.4"]],
       ["Workspace", ["Packages=2", "Scripts=4", "Dependencies=0", "Dev Dependencies=1"]],
@@ -211,12 +212,12 @@ describe("npm plugin: summary", () => {
   });
 
   it("is empty where there is no package", async () => {
-    const summary = await run(
+    const npm = await run(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        return yield* summaryFor(yield* fs.makeTempDirectoryScoped());
+        return yield* sectionsFor(yield* fs.makeTempDirectoryScoped());
       }),
     );
-    expect(summary.sections).toEqual([]);
+    expect(npm.sections).toEqual([]);
   });
 });

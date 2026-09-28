@@ -6,7 +6,7 @@
  *   Code extension's tree view becomes, so the `/views` protocol and the
  *   app's native tree screen serve both. Row ids come from the nodes' keys, so
  *   a row keeps its id across refreshes.
- * - A summary becomes sections of facts, with links to the plugin's pages
+ * - A sectioned page becomes its sections of facts, with links to the plugin's pages
  *   that open from it.
  * - A collection becomes its groups and items, each action addressed by what
  *   it belongs to and its command.
@@ -25,13 +25,13 @@ import type {
   PluginForm,
   PluginNode,
   PluginServices,
-  PluginSummary,
-  PluginSummaryContent,
+  PluginSectionsPage,
+  PluginSectionsContent,
   PluginView,
 } from "../plugin/api";
 import type { PluginError } from "../plugin/api";
 import { manifestFile, pluginManifest, type PluginManifest, type PluginPage } from "../plugin/manifest";
-import { CollectionContent, ExtensionHostError, PageLink, Summary, TreeEntry, ViewAction, ViewNode, type CollectionTarget, type InvokeResult } from "./protocol";
+import { CollectionContent, ExtensionHostError, PageLink, PageSections, TreeEntry, ViewAction, ViewNode, type CollectionTarget, type InvokeResult } from "./protocol";
 
 export interface LoadedPlugin {
   readonly dir: string;
@@ -50,11 +50,11 @@ export type PluginPageEntry =
       readonly view: PluginView;
     }
   | {
-      readonly kind: "summary";
+      readonly kind: "sections";
       readonly viewId: string;
       readonly page: PluginPage;
       readonly plugin: LoadedPlugin;
-      readonly summary: PluginSummary;
+      readonly sections: PluginSectionsPage;
     }
   | {
       readonly kind: "collection";
@@ -86,17 +86,17 @@ const isRecordOf =
 
 const isPluginView = (value: unknown): value is PluginView => Predicate.hasProperty(value, "tree") && Predicate.isFunction(value.tree);
 
-const isPluginSummary = (value: unknown): value is PluginSummary => Predicate.hasProperty(value, "summary") && Predicate.isFunction(value.summary);
+const isPluginSectionsPage = (value: unknown): value is PluginSectionsPage => Predicate.hasProperty(value, "content") && Predicate.isFunction(value.content) && !Predicate.hasProperty(value, "categories");
 
 const isPluginCollection = (value: unknown): value is PluginCollection =>
   Predicate.hasProperty(value, "content") && Predicate.isFunction(value.content) && Predicate.hasProperty(value, "categories") && Array.isArray(value.categories);
 
-/** A module's default export, if it is a plugin: records of views, summaries
+/** A module's default export, if it is a plugin: records of views, sectionPages
  * and collections, each optional. */
 const isPluginDefinition = (value: unknown): value is PluginDefinition =>
   Predicate.isObject(value) &&
   isRecordOf(isPluginView)(Predicate.hasProperty(value, "views") ? value.views : undefined) &&
-  isRecordOf(isPluginSummary)(Predicate.hasProperty(value, "summaries") ? value.summaries : undefined) &&
+  isRecordOf(isPluginSectionsPage)(Predicate.hasProperty(value, "sectionPages") ? value.sectionPages : undefined) &&
   isRecordOf(isPluginCollection)(Predicate.hasProperty(value, "collections") ? value.collections : undefined);
 
 /** A page with what fills it, if the plugin defines it. */
@@ -109,9 +109,9 @@ const pageEntry = (plugin: LoadedPlugin, page: PluginPage): PluginPageEntry | un
       const view = definition.views?.[name];
       return view === undefined ? undefined : { kind: "tree", viewId, page, plugin, view };
     }
-    case "summary": {
-      const summary = definition.summaries?.[name];
-      return summary === undefined ? undefined : { kind: "summary", viewId, page, plugin, summary };
+    case "sections": {
+      const sections = definition.sectionPages?.[name];
+      return sections === undefined ? undefined : { kind: "sections", viewId, page, plugin, sections };
     }
     case "collection": {
       const collection = definition.collections?.[name];
@@ -178,9 +178,9 @@ export const linksOf = (entry: PluginPageEntry): ReadonlyArray<PageLink> =>
         }),
     );
 
-/** A summary as the app draws it. */
-export const toSummary = (entry: PluginPageEntry, content: PluginSummaryContent): Effect.Effect<Summary, ExtensionHostError> =>
-  Schema.decodeUnknownEffect(Summary)({
+/** A sectioned page as the app draws it. */
+export const toSections = (entry: PluginPageEntry, content: PluginSectionsContent): Effect.Effect<PageSections, ExtensionHostError> =>
+  Schema.decodeUnknownEffect(PageSections)({
     title: content.title ?? entry.page.title,
     sections: content.sections.map((section) => ({
       ...(section.title === undefined ? {} : { title: section.title }),
@@ -191,7 +191,7 @@ export const toSummary = (entry: PluginPageEntry, content: PluginSummaryContent)
       })),
     })),
     links: linksOf(entry),
-  }).pipe(Effect.mapError((cause) => providerFailure(`${entry.viewId}: its summary is malformed: ${cause.message}`)));
+  }).pipe(Effect.mapError((cause) => providerFailure(`${entry.viewId}: its sections are malformed: ${cause.message}`)));
 
 /** What an action does, given a form's values (plain actions ignore them). */
 export type CollectionRun = (values: Readonly<Record<string, string>>) => Effect.Effect<InvokeResult, PluginError, PluginServices>;

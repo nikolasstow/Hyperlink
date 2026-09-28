@@ -13,10 +13,10 @@
 import { Schema } from "effect";
 import { Rpc, RpcGroup } from "effect/unstable/rpc";
 
-/** How the app draws a page: a tree of rows (every VS Code view), a summary
+/** How the app draws a page: a tree of rows (every VS Code view), sections
  * of facts with links to the plugin's other pages, or a collection (items in
  * groups and categories, filtered and pinned by the user). */
-export const PageKind = Schema.Literals(["tree", "summary", "collection"]);
+export const PageKind = Schema.Literals(["tree", "sections", "collection"]);
 export type PageKind = typeof PageKind.Type;
 
 /** A view an extension contributes and has registered a provider for, or a
@@ -150,11 +150,11 @@ export class TreeEntry extends Schema.Class<TreeEntry>("TreeEntry")({
 }) {}
 
 // ── Plugin pages ──────────────────────────────────────────────────────────────
-// Pages a plugin fills with data (plugin/api.ts): summaries and collections.
+// Pages a plugin fills with data (plugin/api.ts): sectionPages and collections.
 // Actions are addressed by what they belong to (an item, a group, or the
 // collection itself) and their command; a form's action carries its values.
 
-/** A page reached from another page of its plugin (a summary's links). */
+/** A page reached from another page of its plugin (a sectioned page's links). */
 export class PageLink extends Schema.Class<PageLink>("PageLink")({
   page: Schema.String,
   title: Schema.String,
@@ -162,24 +162,24 @@ export class PageLink extends Schema.Class<PageLink>("PageLink")({
   kind: PageKind,
 }) {}
 
-export class SummaryRow extends Schema.Class<SummaryRow>("SummaryRow")({
+export class SectionRow extends Schema.Class<SectionRow>("SectionRow")({
   label: Schema.String,
   value: Schema.String,
   /** Code-like (a version, a command), drawn monospaced. */
   mono: Schema.Boolean,
 }) {}
 
-export class SummarySection extends Schema.Class<SummarySection>("SummarySection")({
+export class PageSection extends Schema.Class<PageSection>("PageSection")({
   title: Schema.optionalKey(Schema.String),
-  rows: Schema.Array(SummaryRow),
+  rows: Schema.Array(SectionRow),
 }) {}
 
-/** A summary page: sections of facts, then links to the plugin's pages that
+/** A page organized into sections: facts, then links to the plugin's pages that
  * open from here. */
-export class Summary extends Schema.Class<Summary>("Summary")({
+export class PageSections extends Schema.Class<PageSections>("PageSections")({
   /** The page's title for this workspace, over the manifest's. */
   title: Schema.String,
-  sections: Schema.Array(SummarySection),
+  sections: Schema.Array(PageSection),
   links: Schema.Array(PageLink),
 }) {}
 
@@ -301,9 +301,9 @@ export class ExtensionHostRpcs extends RpcGroup.make(
     success: InvokeResult,
     error: HostCallError,
   }),
-  Rpc.make("Summary", {
+  Rpc.make("PageSections", {
     payload: pagePayload,
-    success: Summary,
+    success: PageSections,
     error: HostCallError,
   }),
   Rpc.make("Collection", {

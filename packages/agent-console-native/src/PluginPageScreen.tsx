@@ -1,5 +1,5 @@
 /**
- * A plugin's summary page, drawn natively: sections of facts (the NPM page's
+ * A plugin's page organized into sections, drawn natively: facts (the NPM page's
  * package.json details, §23.1), then the plugin's pages that open from here
  * (Scripts).
  *
@@ -14,25 +14,25 @@ import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
 import { colors } from "./colors";
 import { ensureWorkspace } from "./extensionViewsStore";
-import { loadSummary, useSummary } from "./pagesStore";
+import { loadSections, useSections } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 
-type Props = NativeStackScreenProps<RootStackParamList, "PluginSummary">;
+type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
 
-export const PluginSummaryScreen = (props: Props): React.ReactElement => {
+export const PluginPageScreen = (props: Props): React.ReactElement => {
   const { repo, dir, page, title } = props.route.params;
   const { navigation } = props;
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const load = useSummary(dir, page);
+  const load = useSections(dir, page);
 
   React.useEffect(() => {
     ensureWorkspace(apiBase, dir);
-    void loadSummary(apiBase, dir, page, "ifChanged");
+    void loadSections(apiBase, dir, page, "ifChanged");
   }, [apiBase, dir, page]);
 
   const shownTitle = load.kind === "ready" ? load.value.title : title;
@@ -49,7 +49,7 @@ export const PluginSummaryScreen = (props: Props): React.ReactElement => {
           <>
             <Text style={styles.message}>Couldn’t load {title}.</Text>
             <Text style={styles.detail}>{load.message}</Text>
-            <TouchableOpacity onPress={() => void loadSummary(apiBase, dir, page, "force")}>
+            <TouchableOpacity onPress={() => void loadSections(apiBase, dir, page, "force")}>
               <Text style={styles.retry}>Try Again</Text>
             </TouchableOpacity>
           </>
@@ -58,24 +58,24 @@ export const PluginSummaryScreen = (props: Props): React.ReactElement => {
     );
   }
 
-  const summary = load.value;
+  const content = load.value;
   return (
     <ScrollView
       style={styles.root}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-      refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void loadSummary(apiBase, dir, page, "force")} />}
+      refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void loadSections(apiBase, dir, page, "force")} />}
     >
-      {load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded summary. Refreshing failed: {load.error}</Text>}
-      {summary.links.length === 0 ? null : (
+      {load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded page. Refreshing failed: {load.error}</Text>}
+      {content.links.length === 0 ? null : (
         <View style={[styles.card, styles.firstCard]}>
-          {summary.links.map((link, index) => (
+          {content.links.map((link, index) => (
             <Pressable
               key={link.page}
               style={[styles.row, index > 0 && styles.rowBorder]}
               onPress={() => {
                 if (link.kind === "collection") navigation.navigate("Collection", { repo, dir, page: link.page, title: link.title, view: { kind: "home" } });
-                else if (link.kind === "summary") navigation.push("PluginSummary", { repo, dir, page: link.page, title: link.title });
+                else if (link.kind === "sections") navigation.push("PluginPage", { repo, dir, page: link.page, title: link.title });
                 else navigation.navigate("ExtensionView", { repo, dir, view: link.page, title: link.title });
               }}
             >
@@ -86,7 +86,7 @@ export const PluginSummaryScreen = (props: Props): React.ReactElement => {
           ))}
         </View>
       )}
-      {summary.sections.map((section, sectionIndex) => (
+      {content.sections.map((section, sectionIndex) => (
         <View key={section.title ?? `section ${sectionIndex}`}>
           {section.title === undefined ? <View style={styles.gap} /> : <Text style={styles.sectionLabel}>{section.title}</Text>}
           <View style={styles.card}>
