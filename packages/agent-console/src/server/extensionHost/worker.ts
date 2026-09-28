@@ -23,6 +23,7 @@ import { ExtensionHostRpcs } from "./protocol";
 /** What the parent passes at spawn: the extension folders to run. */
 export const hostWorkerData = Schema.Struct({
   extensions: Schema.Array(Schema.String),
+  plugins: Schema.Array(Schema.String),
 });
 
 const handlers = ExtensionHostRpcs.toLayer(

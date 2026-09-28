@@ -18,6 +18,7 @@ const viewInfo = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   extension: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
 });
 export type ViewInfo = typeof viewInfo.Type;
 

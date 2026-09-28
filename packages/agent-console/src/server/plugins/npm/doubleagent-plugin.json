@@ -1,0 +1,19 @@
+{
+  "id": "doubleagent.npm",
+  "name": "NPM",
+  "version": "0.1.0",
+  "description": "The workspace's packages and their scripts: run a script, install dependencies, open package.json at a script.",
+  "main": "./plugin.ts",
+  "contributes": {
+    "pages": [
+      {
+        "id": "npm",
+        "title": "NPM",
+        "icon": "sf:shippingbox",
+        "requirement": "repo",
+        "kind": "tree"
+      }
+    ]
+  },
+  "permissions": ["processes"]
+}

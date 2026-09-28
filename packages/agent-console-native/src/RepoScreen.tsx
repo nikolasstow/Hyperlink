@@ -34,6 +34,7 @@ import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useTheme } from "./theme";
+import { symbolForIcon } from "./codicons";
 import type { ViewInfo } from "./extensionViewsClient";
 import { ensureWorkspace, reloadWorkspace, useWorkspaceViews } from "./extensionViewsStore";
 import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
@@ -240,7 +241,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const menuEntries: ReadonlyArray<MenuEntry> = [
     ...menu,
     ...(extensionViews.kind === "ready"
-      ? extensionViews.value.map((view): MenuEntry => ({ label: view.name, icon: "list.bullet.rectangle", view }))
+      ? extensionViews.value.map((view): MenuEntry => ({ label: view.name, icon: view.icon === undefined ? "list.bullet.rectangle" : symbolForIcon(view.icon), view }))
       : extensionViews.kind === "failed"
         ? [retryEntry(extensionViews.message)]
         : []),

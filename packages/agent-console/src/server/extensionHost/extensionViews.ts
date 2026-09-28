@@ -31,8 +31,12 @@ const builtinRoots: ReadonlyArray<string> = [
   "/Applications/Visual Studio Code.app/Contents/Resources/app/extensions",
 ];
 
-/** The built-in extensions every host runs. */
-const builtins: ReadonlyArray<string> = ["npm"];
+/** The VS Code built-in extensions every host runs. None by default now: npm
+ * is our own plugin (§22), and the host stays for extensions a user installs. */
+const builtins: ReadonlyArray<string> = [];
+
+/** The plugins that ship with the backend, as folders beside this module. */
+const builtinPlugins: ReadonlyArray<string> = ["npm"];
 
 const hostError = (reason: ExtensionHostError["reason"], message: string) =>
   new ExtensionHostError({
@@ -58,6 +62,12 @@ const locateBuiltins = Effect.gen(function* () {
 
 const make = Effect.gen(function* () {
   const extensions = yield* locateBuiltins;
+  const path = yield* Path.Path;
+  const plugins = yield* Effect.forEach(builtinPlugins, (name) =>
+    path.fromFileUrl(new URL(`../plugins/${name}`, import.meta.url)).pipe(
+      Effect.mapError((cause) => hostError("HostUnavailable", `built-in plugin ${name}: ${cause.message}`)),
+    ),
+  );
   const bootstrap = new URL("./bootstrap.mjs", import.meta.url);
 
   // The host starts now, with the service, and lives as long as it: its layer
@@ -70,6 +80,7 @@ const make = Effect.gen(function* () {
             new Worker(bootstrap, {
               workerData: {
                 extensions,
+                plugins,
               },
             }),
         ),

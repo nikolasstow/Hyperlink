@@ -16,6 +16,8 @@ import { NodeServices } from "@effect/platform-node";
 import { importedNames, installVscodeModule } from "./loader";
 import { Completed, ExtensionHostError, OpenFile, RunTask, TreeEntry, ViewAction, ViewInfo, ViewNode, ViewRequestError, type InvokeResult, type TreeRefresh } from "./protocol";
 import { EventEmitter, ProcessExecution, ShellExecution, Task, Uri, makeRegistry, makeVscode, toWorkspaceFolder, type Registry, type WorkspaceFolderInfo } from "./shim";
+import type { PluginAction } from "../plugin/api";
+import { flattenPluginTree, loadPlugin, runPluginAction, treePages, type PluginTreePage } from "./pluginViews";
 import { matchesWhen } from "./when";
 
 // ── Manifest ───────────────────────────────────────────────────────────────────
@@ -217,6 +219,9 @@ interface Row {
     readonly command: string;
     readonly args: ReadonlyArray<unknown>;
   }>;
+  /** A plugin row's actions, as the Effects they run (an extension row's
+   * actions are its commands instead). */
+  readonly runs?: ReadonlyMap<string, PluginAction["run"]>;
 }
 
 const call = (what: string, run: () => unknown) =>
@@ -254,6 +259,8 @@ const maxTreeRows = 5000;
 
 export interface HostOptions {
   readonly extensions: ReadonlyArray<string>;
+  /** Plugin folders (each with a doubleagent-plugin.json). */
+  readonly plugins: ReadonlyArray<string>;
 }
 
 /** A row the host produced, with the live element it came from. */
@@ -304,6 +311,8 @@ export const makeHost = (options: HostOptions) =>
       sources.flatMap((source) => importedNames(source)),
     ).pipe(Effect.mapError((cause) => failure("ActivationFailed", cause.message)));
     yield* Effect.forEach(loaded, (extension) => activate(extension, registry), { discard: true });
+    const pluginPages = treePages(yield* Effect.forEach(options.plugins, loadPlugin));
+    const pluginPageOf = (view: string) => pluginPages.find((page) => page.viewId === view);
 
     /** Every view declared by a loaded manifest, with its owner. */
     const declared = loaded.flatMap((extension) =>
@@ -538,11 +547,18 @@ export const makeHost = (options: HostOptions) =>
             ),
           ),
         ),
-        Effect.map((found) => found.flat()),
+        Effect.flatMap((found) =>
+          Effect.forEach(pluginPages, (page) => pluginViewInfo(page, payload.workspace)).pipe(Effect.map((plugins) => [...found.flat(), ...plugins.flat()])),
+        ),
       );
 
     const Children = (payload: { readonly workspace: string; readonly view: string; readonly parent?: string }) =>
       Effect.gen(function* () {
+        const plugin = pluginPageOf(payload.view);
+        if (plugin !== undefined) {
+          const entries = yield* pluginTree(plugin, payload.workspace, "none");
+          return entries.filter((entry) => entry.parent === payload.parent).map((entry) => entry.node);
+        }
         yield* addFolders([payload.workspace]);
         if (payload.parent === undefined) {
           const roots = yield* workspaceRoots(payload.view, payload.workspace);
@@ -587,8 +603,76 @@ export const makeHost = (options: HostOptions) =>
         }),
       );
 
+    /** Plugin trees as last built, by `view workspace`: a plugin builds its
+     * whole tree at once, so the host keeps it and serves it again until it
+     * is stale by the same rules as an extension's (`ifChanged`, `force`). */
+    const pluginTrees = yield* Ref.make<ReadonlyMap<string, ReadonlyArray<TreeEntry>>>(new Map());
+
+    const pluginTree = (page: PluginTreePage, workspace: string, refresh: TreeRefresh) =>
+      Effect.gen(function* () {
+        const key = `${page.viewId} ${workspace}`;
+        const built = yield* Ref.get(pluginTrees);
+        const cached = built.get(key);
+        const stale =
+          cached === undefined || refresh === "force" ? true : refresh === "ifChanged" ? yield* changedSince(key) : false;
+        if (!stale && cached !== undefined) return cached;
+        const nodes = yield* page.view.tree({ workspace }).pipe(
+          Effect.mapError(
+            (cause) =>
+              new ExtensionHostError({
+                reason: "ProviderFailed",
+                message: `${page.viewId}: ${cause.message}`,
+              }),
+          ),
+        );
+        const rows = yield* flattenPluginTree(page.viewId, workspace, nodes, undefined, "");
+        yield* Ref.update(state, (current) => ({
+          ...current,
+          rows: new Map([
+            ...current.rows,
+            ...rows.map((row): readonly [string, Row] => [
+              row.entry.node.id,
+              {
+                view: page.viewId,
+                element: undefined,
+                actions: [...(row.entry.node.open === undefined ? [] : [row.entry.node.open]), ...row.entry.node.actions],
+                open: Option.none(),
+                runs: row.runs,
+              },
+            ]),
+          ]),
+        }));
+        const entries = rows.map((row) => row.entry);
+        const files = yield* fingerprint(entries);
+        yield* Ref.update(seen, (all) => new Map([...all, [key, files]]));
+        yield* Ref.update(pluginTrees, (all) => new Map([...all, [key, entries]]));
+        return entries;
+      });
+
+    /** A plugin page's info for a workspace, if its tree has anything there.
+     * A page that needs a file has no menu entry of its own (§4.2). */
+    const pluginViewInfo = (page: PluginTreePage, workspace: string) =>
+      page.page.requirement === "file"
+        ? Effect.succeed<ReadonlyArray<ViewInfo>>([])
+        : pluginTree(page, workspace, "none").pipe(
+            Effect.map((entries): ReadonlyArray<ViewInfo> =>
+              entries.length === 0
+                ? []
+                : [
+                    new ViewInfo({
+                      id: page.viewId,
+                      name: page.page.title,
+                      extension: page.plugin.manifest.id,
+                      ...(page.page.icon === undefined ? {} : { icon: page.page.icon }),
+                    }),
+                  ],
+            ),
+          );
+
     const Tree = (payload: { readonly workspace: string; readonly view: string; readonly refresh: TreeRefresh }) =>
       Effect.gen(function* () {
+        const plugin = pluginPageOf(payload.view);
+        if (plugin !== undefined) return yield* pluginTree(plugin, payload.workspace, payload.refresh);
         yield* addFolders([payload.workspace]);
         const key = `${payload.view} ${payload.workspace}`;
         const stale =
@@ -608,7 +692,10 @@ export const makeHost = (options: HostOptions) =>
         Effect.andThen(
           Effect.forEach(
             payload.workspaces,
-            (workspace) => Effect.forEach(viewIds(), (view) => Tree({ workspace, view, refresh: "none" }), { discard: true }),
+            (workspace) =>
+              Effect.forEach([...viewIds(), ...pluginPages.map((page) => page.viewId)], (view) => Tree({ workspace, view, refresh: "none" }), {
+                discard: true,
+              }),
             { discard: true },
           ),
         ),
@@ -622,6 +709,8 @@ export const makeHost = (options: HostOptions) =>
         const opening = Option.filter(row.open, (open) => open.command === payload.command);
         const offered = Option.isSome(opening) || row.actions.some((action) => action.command === payload.command);
         if (!offered) return yield* rejected("UnknownCommand", `${payload.command} is not offered on this row`);
+        const pluginRun = row.runs?.get(payload.command);
+        if (pluginRun !== undefined) return yield* runPluginAction(pluginRun);
 
         const tasksBefore = registry.executedTasks.length;
         const opensBefore = registry.opened.length;

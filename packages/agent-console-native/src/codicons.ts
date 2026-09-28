@@ -41,9 +41,30 @@ const byName: Readonly<Record<string, SFSymbol>> = {
   wrench: "wrench.and.screwdriver",
 };
 
-/** The SF Symbol for an icon the host sent (`codicon:<name>`, or a file path,
- * which has no symbol and gets the neutral glyph). */
+/**
+ * SF Symbols a plugin may name directly (`sf:<name>`). A name from a manifest
+ * is a string from outside, and the symbol type is compile-time only, so it is
+ * matched against this list rather than asserted; add names as plugins use them.
+ */
+const sfSymbols: ReadonlyArray<SFSymbol> = [
+  ...Object.values(byName),
+  "book",
+  "cube",
+  "folder.badge.gearshape",
+  "hammer",
+  "list.bullet.rectangle",
+  "puzzlepiece.extension",
+  "shippingbox",
+  "shippingbox.fill",
+  "square.stack.3d.up",
+  "arrow.triangle.branch",
+  "arrow.triangle.merge",
+];
+
+/** The SF Symbol for an icon the host sent: `codicon:<name>`, `sf:<name>`, or
+ * a file path, which has no symbol. Anything unknown gets the neutral glyph. */
 export const symbolForIcon = (icon: string | undefined): SFSymbol => {
+  if (icon?.startsWith("sf:") === true) return sfSymbols.find((symbol) => symbol === icon.slice("sf:".length)) ?? "circle.dashed";
   const name = icon?.startsWith("codicon:") === true ? icon.slice("codicon:".length) : undefined;
   return (name === undefined ? undefined : byName[name]) ?? "circle.dashed";
 };

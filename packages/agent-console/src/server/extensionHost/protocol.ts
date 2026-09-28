@@ -17,7 +17,10 @@ import { Rpc, RpcGroup } from "effect/unstable/rpc";
 export class ViewInfo extends Schema.Class<ViewInfo>("ViewInfo")({
   id: Schema.String,
   name: Schema.String,
+  /** The extension or plugin that contributes it. */
   extension: Schema.String,
+  /** `codicon:<name>` or `sf:<SF Symbol>`, when the contributor gave one. */
+  icon: Schema.optionalKey(Schema.String),
 }) {}
 
 /** Something a row offers: a command, titled and iconed from the manifest.
