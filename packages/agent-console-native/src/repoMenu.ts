@@ -1,11 +1,11 @@
 /**
- * The repo/workspace action menu — the "Files · Docs · Commits · Pull Requests"
- * set shown in the repo screen's header and, via the repo card's long-press, on
+ * The repo/workspace action menu — the "Files · Docs · Git" set shown in the repo screen's header and, via the repo card's long-press, on
  * Home. One definition so the header and the card can't drift.
  *
  * A git checkout gets the full set; a workspace (a non-git session folder) only
- * gets Files and Docs. Actions aren't wired yet — these sections are future work,
- * so the entries are placeholders in both surfaces for now.
+ * gets Files and Docs. Git is one entry: its page holds commits, pull requests
+ * and issues (docs/handoffs/double-agent-repo-screen-and-plugin-system.md
+ * §21.1). Docs and Git are not wired yet; their pages are future work.
  *
  * @internal
  */
@@ -19,11 +19,10 @@ export type RepoMenuItem = {
 export const REPO_MENU: ReadonlyArray<RepoMenuItem> = [
   { label: "Files", icon: "folder" },
   { label: "Docs", icon: "book" },
-  { label: "Commits", icon: "arrow.triangle.branch" },
-  { label: "Pull Requests", icon: "arrow.triangle.merge" },
+  { label: "Git", icon: "arrow.triangle.branch" },
 ];
 
-/** A workspace isn't a git checkout, so no Commits / PRs. */
+/** A workspace isn't a git checkout, so no Git. */
 export const WORKSPACE_MENU: ReadonlyArray<RepoMenuItem> = [
   { label: "Files", icon: "folder" },
   { label: "Docs", icon: "book" },

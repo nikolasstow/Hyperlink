@@ -9,7 +9,7 @@
  * real `expo-glass-effect` GlassView keeps rendering throughout. See
  * docs/handoffs/double-agent-repo-screen-and-plugin-system.md.
  *
- * A "repo" is a git checkout (menu: Files · Docs · Commits · Pull Requests); a
+ * A "repo" is a git checkout (menu: Files · Docs · Git); a
  * "workspace" is a non-git session folder (menu: Files · Docs only).
  *
  * @internal
