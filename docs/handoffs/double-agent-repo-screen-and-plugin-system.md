@@ -490,9 +490,10 @@ Owner-stated unless marked *Proposed*.
 
 ### 23.3 Scripts
 
-- The page is just **Scripts**: no tab bar and no separate "organized" view. **List or grid** (simple
-  two columns) is switched from an item in the **3-dot menu**.
-- **Categories:** every script has a category. The owner can **make their own**. AI assigns the
+- The page is just **Scripts**: no tab bar and no separate "organized" view. **List or grid** is
+  switched from an item in the **3-dot menu**. **List is the tree view** (rows that expand in
+  place, like Files' list view); grid is simple two columns.
+- **Categories:** a script can be in **several categories**. The owner can **make their own**. AI assigns the
   rest (the Dubz flow below), with labels from the LLM wherever there is no default (§21).
 - **Filtering:** by **category**, and by **package** in a monorepo.
 - **The page, top to bottom:**
@@ -541,3 +542,25 @@ What pnpm and npm offer that a GUI makes easier:
 - **Licenses:** every dependency's license.
 - **Binaries:** what `node_modules/.bin` offers, to run with `exec`.
 
+
+---
+
+## 24. Repo report card and session summaries (DECISIONS, 2026-09-28)
+
+Owner-stated. Not built yet.
+
+### 24.1 The repo report card
+
+- A **card below the repo menu**: the repo's report card, the status of things at a glance.
+- It shows **commits**, **issues**, and a **breakdown of the repo's overall plan** with its status
+  (items checked off).
+- **Tapping it opens it in Dubz**, expanded, with more information.
+
+### 24.2 Session cards: summaries, not the last message
+
+- Session cards **show a summary of what the session is working on**, weighted to the most recent
+  work, instead of the last message.
+- **Dubz manages those summaries** and keeps them up to date.
+- **Only when there is an unread message** does the card show the most recent message, in a
+  **bubble at the bottom**. With more than one unread, the **count** sits on the bubble's right
+  side (in a circle or similar).
