@@ -22,7 +22,7 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackHeaderItem, NativeStackHeaderItemMenuAction, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
@@ -48,6 +48,7 @@ import { ItemRow, NodeRow, SectionHeader, SeeAllRow, Tile, type MenuAction } fro
 import { CategoriesSheet, FormSheet, type GroupOption } from "./CollectionSheets";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { SkeletonGrid, SkeletonList } from "./Skeleton";
 import { followResult } from "./followResult";
 import { confirmFirst, openLink } from "./openPage";
 import { rememberPinScope, pinScopeFor, preloadPinScope } from "./pinScope";
@@ -432,19 +433,18 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
 
   /**
    * Pin items where the last pin went (a workspace package's page, the
-   * repo's, or both), then raise the toast that says so and can change it.
-   * A root package's script has one page to show on, so it just pins.
+   * repo's, or both), then raise the toast that says so. It comes up for
+   * every pin, so where it goes can always be changed.
    */
   const pinItems = async (items: ReadonlyArray<CollectionItem>): Promise<void> => {
     const labels = data?.content.pinScopes;
-    const scoped = labels === undefined ? [] : items.filter((item) => item.group !== ".");
-    const scope = scoped.length === 0 ? "both" : pinScopeFor(page);
+    const scope = labels === undefined ? "both" : pinScopeFor(page);
     const pinned = await items.reduce<Promise<CollectionState | undefined>>(
-      (previous, item) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "PinItem", item: item.key, scope: scoped.includes(item) ? scope : "both" })),
+      (previous, item) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "PinItem", item: item.key, scope })),
       Promise.resolve(undefined),
     );
-    if (labels === undefined || pinned === undefined || scoped.length === 0) return;
-    const ids = pinned.pins.flatMap((pin) => (pin._tag === "PinnedItem" && scoped.some((item) => item.key === pin.item) ? [pin.id] : []));
+    if (labels === undefined || pinned === undefined) return;
+    const ids = pinned.pins.flatMap((pin) => (pin._tag === "PinnedItem" && items.some((item) => item.key === pin.item) ? [pin.id] : []));
     setToast({
       subject: {
         id: ids.join(" "),
@@ -1015,9 +1015,11 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   return (
     <View style={styles.root}>
       {load.kind === "loading" ? (
-        <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-          <ActivityIndicator color={colors.secondaryLabel} />
-        </View>
+        grid ? (
+          <SkeletonGrid top={headerHeight} />
+        ) : (
+          <SkeletonList top={headerHeight} />
+        )
       ) : load.kind === "failed" ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
           <Text style={styles.message}>Couldn’t load {title}.</Text>

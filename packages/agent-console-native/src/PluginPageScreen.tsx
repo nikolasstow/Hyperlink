@@ -33,6 +33,7 @@ import { FormSheet } from "./CollectionSheets";
 import { changeCollection, loadCollection, loadSections, useCollection, useSections } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
+import { SkeletonPage } from "./Skeleton";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
@@ -315,20 +316,22 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
     });
   }, [navigation, shownTitle, menu, add]);
 
-  if (load.kind !== "ready") {
+  if (load.kind === "loading") {
+    return (
+      <View style={styles.root}>
+        <SkeletonPage top={headerHeight} />
+      </View>
+    );
+  }
+
+  if (load.kind === "failed") {
     return (
       <View style={[styles.root, styles.center, { paddingTop: headerHeight + 40 }]}>
-        {load.kind === "loading" ? (
-          <ActivityIndicator color={colors.secondaryLabel} />
-        ) : (
-          <>
-            <Text style={styles.message}>Couldn’t load {title}.</Text>
-            <Text style={styles.detail}>{load.message}</Text>
-            <TouchableOpacity onPress={() => void loadSections(apiBase, dir, page, params, "force")}>
-              <Text style={styles.retry}>Try Again</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <Text style={styles.message}>Couldn’t load {title}.</Text>
+        <Text style={styles.detail}>{load.message}</Text>
+        <TouchableOpacity onPress={() => void loadSections(apiBase, dir, page, params, "force")}>
+          <Text style={styles.retry}>Try Again</Text>
+        </TouchableOpacity>
       </View>
     );
   }

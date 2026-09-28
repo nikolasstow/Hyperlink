@@ -530,8 +530,10 @@ Owner-stated unless marked *Proposed*.
 - **Pinning a script raises a toast** at the bottom, on glass: **"Pin to Workspace Package ⌄"**
   (or Repo, or both: whatever was chosen last). It goes away on its own; **tapping it expands
   it** to choose **Workspace Package**, **Repo**, or **Both**, which is where the pin shows (the
-  package's page, the repo's NPM page, or both) and is remembered for the next pin. A root
-  package's script just pins, since its package is the repo.
+  package's page, the repo's NPM page, or both) and is remembered for the next pin. **The toast
+  comes up for every pin**, so where it goes can always be changed.
+- **Loading shows skeletons** (the page's shape in soft gray), not a spinner, when there is
+  nothing cached to show.
 - **Pinning a filter saves it to Pinned:**
   - open a package, select a category, and pin it to get that category in that package;
   - open a category for the whole repo and pin it to get everything in that category.

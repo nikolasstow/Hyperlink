@@ -18,7 +18,7 @@
 import * as React from "react";
 import { Button, ContextMenu, Host, HStack, Image, ProgressView, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
-import { ActivityIndicator, Alert, DynamicColorIOS, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { Alert, DynamicColorIOS, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
@@ -33,6 +33,7 @@ import { warmCodeSurfaces } from "../modules/code-surface";
 import type { RootStackParamList } from "./RootNavigator";
 import { iconForFile } from "./fileIcon";
 import { SetiIcon } from "./SetiIcon";
+import { SkeletonList } from "./Skeleton";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { getApiAddress } from "./settings";
 
@@ -226,9 +227,7 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   return (
     <View style={styles.root}>
       {load.kind === "loading" ? (
-        <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-          <ActivityIndicator color={colors.secondaryLabel} />
-        </View>
+        <SkeletonList top={headerHeight} />
       ) : load.kind === "failed" ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
           <Text style={styles.message}>Couldn’t load {title}.</Text>
