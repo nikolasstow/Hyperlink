@@ -18,7 +18,7 @@
 import * as React from "react";
 import { Button, ContextMenu, Host, HStack, Image, ProgressView, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
-import { ActivityIndicator, Alert, DynamicColorIOS, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, DynamicColorIOS, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
@@ -258,15 +258,21 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
+        // Virtualized: only the rows on screen are built. Each row is a SwiftUI
+        // view with its own context menu, and a monorepo's tree runs to
+        // hundreds of rows; building them all froze the screen for seconds
+        // before it could open.
+        <FlatList
+          data={rows}
+          keyExtractor={(row) => row.node.id}
           contentInsetAdjustmentBehavior="automatic"
+          initialNumToRender={16}
+          windowSize={7}
           refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void revalidateTree(apiBase, dir, view, "force")} />}
-        >
-          {load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded scripts. Refreshing failed: {load.error}</Text>}
-          {rows.length === 0 ? <Text style={[styles.message, styles.emptyNote]}>Nothing here.</Text> : null}
-          {rows.map((row) => (
+          ListHeaderComponent={load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded scripts. Refreshing failed: {load.error}</Text>}
+          ListEmptyComponent={<Text style={[styles.message, styles.emptyNote]}>Nothing here.</Text>}
+          renderItem={({ item: row }) => (
             <Row
-              key={row.node.id}
               row={row}
               width={width}
               busy={busy === row.node.id}
@@ -277,8 +283,8 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
               }}
               onAction={(action) => run(row.node, action)}
             />
-          ))}
-        </ScrollView>
+          )}
+        />
       )}
       <EdgeBlurBars variant="top" />
     </View>

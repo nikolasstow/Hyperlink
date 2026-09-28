@@ -110,8 +110,10 @@ const openAt = (file: string, line: number | undefined, title: string): PluginAc
   ),
 });
 
-/** One package.json as a node: its scripts below it. */
-const packageNode = (file: string, workspace: string) =>
+/** One package.json as a node: its scripts below it. Open on arrival only
+ * when it is the workspace's only package; a monorepo's dozens of packages
+ * (hundreds of scripts) arrive as a list of packages to open. */
+const packageNode = (file: string, workspace: string, only: boolean) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -153,7 +155,7 @@ const packageNode = (file: string, workspace: string) =>
       ...(pkg.name === undefined ? {} : { description: pkg.name }),
       icon: "codicon:file",
       resource: file,
-      expanded: true,
+      expanded: only,
       open: openAt(file, undefined, "Open"),
       actions: [
         {
@@ -180,7 +182,7 @@ export default definePlugin({
   views: {
     npm: {
       tree: ({ workspace }) =>
-        findPackages(workspace, 0).pipe(Effect.flatMap((files) => Effect.forEach(files, (file) => packageNode(file, workspace)))),
+        findPackages(workspace, 0).pipe(Effect.flatMap((files) => Effect.forEach(files, (file) => packageNode(file, workspace, files.length === 1)))),
     },
   },
 });
