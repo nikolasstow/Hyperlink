@@ -581,3 +581,20 @@ Owner-stated. Not built yet.
 - **Only when there is an unread message** does the card show the most recent message, in a
   **bubble at the bottom**. With more than one unread, the **count** sits on the bubble's right
   side (in a circle or similar).
+
+---
+
+## 25. Tasks (DECISIONS, 2026-09-28)
+
+Owner-stated. Not built yet.
+
+- **Work is organized into tasks rather than sessions**, and **a task is a GitHub issue**: the aim
+  is to have all work inside issues.
+- **Naming:** the app calls them **Tasks** everywhere, except on the Git page (to be added later),
+  where they are **Issues**.
+- **Creating a task is a page tool Dubz can use** (pages have details and tools Dubz can use,
+  §23.3). Since Dubz sees it, **one of its suggestions can be creating a new task**:
+  - **Tapping the suggestion opens the form**, to fill in by hand, or to type in the input and
+    have **Dubz fill it out**.
+  - **Asking for the same thing without tapping the suggestion goes straight to the form, already
+    filled out**, and the request can be followed up with changes.
