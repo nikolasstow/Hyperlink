@@ -16,6 +16,7 @@
 import { NodeRuntime, NodeServices, NodeWorkerRunner } from "@effect/platform-node";
 import { workerData } from "node:worker_threads";
 import { Effect, Layer, Schema } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import { RpcServer } from "effect/unstable/rpc";
 import { makeHost } from "./host";
 import { ExtensionHostRpcs } from "./protocol";
@@ -37,7 +38,8 @@ RpcServer.layer(ExtensionHostRpcs).pipe(
   Layer.provide(handlers),
   Layer.provide(RpcServer.layerProtocolWorkerRunner),
   Layer.provide(NodeWorkerRunner.layer),
-  Layer.provide(NodeServices.layer),
+  // Plugins that declare the `network` permission reach the web through it.
+  Layer.provide([NodeServices.layer, FetchHttpClient.layer]),
   Layer.launch,
   NodeRuntime.runMain,
 );

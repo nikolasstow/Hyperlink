@@ -23,6 +23,7 @@ import {
   type CollectionChange,
   type CollectionContent,
   type CollectionState,
+  type PageLink,
   type PageSections,
 } from "./pagesClient";
 
@@ -92,14 +93,18 @@ export const loadCollection = (apiBase: string, workspace: string, page: string,
   });
 };
 
-/** A sectioned page, then the pages it links to, so they are warm before a tap. */
+/** A page organized into blocks, then the pages its blocks open (its
+ * buttons, pins and cards), so they are warm before a tap. */
 export const loadSections = (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<void> => {
   const key = keyOf(workspace, page);
   return once(`sections ${key} ${refresh}`, async () => {
     await loadInto(sectionPages, key, `fetch sections ${key} ${refresh}`, () => fetchSections(apiBase, workspace, page, refresh));
     const loaded = sectionPages.get(key);
     if (loaded?.kind !== "ready") return;
-    await Promise.all(loaded.value.links.map((link) => prefetchPage(apiBase, workspace, link.page, link.kind)));
+    const linked = loaded.value.blocks.flatMap((block): ReadonlyArray<PageLink> =>
+      block._tag === "Link" ? [block.link] : block._tag === "Pinned" ? [block.collection] : block._tag === "Card" && block.opens !== undefined ? [block.opens] : [],
+    );
+    await Promise.all(linked.map((link) => prefetchPage(apiBase, workspace, link.page, link.kind)));
   });
 };
 

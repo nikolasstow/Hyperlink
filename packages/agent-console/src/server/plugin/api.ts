@@ -5,8 +5,8 @@
  * natively (docs/handoffs/double-agent-repo-screen-and-plugin-system.md §22.2):
  *
  * - a **view**, a tree of nodes, the same rows VS Code extension views become;
- * - **sections**, a page organized into sections of facts, with links to the
- *   plugin's other pages;
+ * - **sections**, a page organized into blocks: facts, buttons to its other
+ *   pages, the user's pins on a collection, and cards;
  * - a **collection**, items in groups that the user sorts into categories,
  *   filters and pins (the app and server keep that part).
  *
@@ -21,17 +21,19 @@
  * @internal
  */
 import { Data, type Effect, type FileSystem, type Path } from "effect";
+import type { HttpClient } from "effect/unstable/http";
 import type { InvokeResult } from "../extensionHost/protocol";
 
-export { Completed, OpenFile, RunTask } from "../extensionHost/protocol";
+export { Completed, OpenFile, OpenUrl, RunTask } from "../extensionHost/protocol";
 
 /** Why a plugin could not produce a page or run an action. */
 export class PluginError extends Data.TaggedError("PluginError")<{
   readonly message: string;
 }> {}
 
-/** The services a plugin's Effects may use. */
-export type PluginServices = FileSystem.FileSystem | Path.Path;
+/** The services a plugin's Effects may use. The HTTP client is for plugins
+ * whose manifest declares the `network` permission. */
+export type PluginServices = FileSystem.FileSystem | Path.Path | HttpClient.HttpClient;
 
 /** What a page is being asked about. */
 export interface PluginContext {
@@ -74,33 +76,64 @@ export interface PluginView {
   readonly tree: (context: PluginContext) => Effect.Effect<ReadonlyArray<PluginNode>, PluginError, PluginServices>;
 }
 
-// ── Sectioned pages ────────────────────────────────────────────────────────────
+// ── Pages organized into sections ─────────────────────────────────────────────
 
 export interface PluginSectionRow {
   readonly label: string;
   readonly value: string;
   /** Code-like (a version, a command), drawn monospaced. */
   readonly mono?: boolean;
+  /** Long text (a description), on its own line below the label. */
+  readonly stacked?: boolean;
 }
 
-export interface PluginSection {
-  readonly title?: string;
-  readonly rows: ReadonlyArray<PluginSectionRow>;
-}
+/** One block of a page, top to bottom. Pages are named by their manifest id
+ * (one of this plugin's pages). */
+export type PluginBlock =
+  | {
+      readonly _tag: "Facts";
+      readonly title?: string;
+      readonly rows: ReadonlyArray<PluginSectionRow>;
+    }
+  | {
+      /** A button to another page. */
+      readonly _tag: "Link";
+      readonly page: string;
+      readonly title: string;
+      readonly icon?: string;
+    }
+  | {
+      /** The user's pins on a collection page, with a button to all of it. */
+      readonly _tag: "Pinned";
+      readonly collection: string;
+      readonly title: string;
+      readonly viewAll: string;
+      /** What shows while nothing is pinned. */
+      readonly empty: string;
+    }
+  | {
+      /** Facts about something, opening a page, with its own actions. */
+      readonly _tag: "Card";
+      readonly key: string;
+      readonly title: string;
+      readonly icon?: string;
+      readonly rows: ReadonlyArray<PluginSectionRow>;
+      readonly opens?: string;
+      readonly actions?: ReadonlyArray<PluginAction>;
+    };
 
 export interface PluginSectionsContent {
   /** The page's title for this workspace, when it depends on what is there
    * ("PNPM" for a pnpm repo); the manifest's title otherwise. */
   readonly title?: string;
-  readonly sections: ReadonlyArray<PluginSection>;
+  readonly blocks: ReadonlyArray<PluginBlock>;
   /** The files the page was read from: when one changes, it is stale. */
   readonly resources: ReadonlyArray<string>;
 }
 
 export interface PluginSectionsPage {
-  /** The page for a workspace; no sections means the page has nothing
-   * there (and is not offered in that workspace's menu). Its links are the
-   * plugin's pages whose `parent` is this one, from the manifest. */
+  /** The page for a workspace; no blocks means the page has nothing there
+   * (and is not offered in that workspace's menu). */
   readonly content: (context: PluginContext) => Effect.Effect<PluginSectionsContent, PluginError, PluginServices>;
 }
 
@@ -166,6 +199,8 @@ export interface PluginItem {
   readonly categories: ReadonlyArray<string>;
   /** What the play button and a tap do. */
   readonly run?: PluginAction;
+  /** What a tap does when it does not run (open its web page). */
+  readonly open?: PluginAction;
   readonly actions?: ReadonlyArray<PluginAction>;
   readonly forms?: ReadonlyArray<PluginForm>;
 }
@@ -186,6 +221,17 @@ export interface PluginCollection {
   /** The collection for a workspace; no items means the page has nothing
    * there. */
   readonly content: (context: PluginContext) => Effect.Effect<PluginCollectionContent, PluginError, PluginServices>;
+  /** Searching beyond the collection (a package registry): items that are not
+   * in it, with what can be done with them. The app searches the collection
+   * itself and shows these after. */
+  readonly search?: {
+    readonly placeholder: string;
+    /** Headings for what matched in the collection ("Installed"), and what
+     * the search found beyond it ("Not Installed"). */
+    readonly inCollection: string;
+    readonly beyond: string;
+    readonly run: (context: PluginContext, query: string) => Effect.Effect<ReadonlyArray<PluginItem>, PluginError, PluginServices>;
+  };
 }
 
 /** What a plugin module exports as its default: its pages' data, each under

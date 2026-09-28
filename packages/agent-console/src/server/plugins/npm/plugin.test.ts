@@ -1,7 +1,8 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Path, type Scope } from "effect";
+import { Effect, FileSystem, Layer, Path, type Scope } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { describe, expect, it } from "vitest";
-import type { PluginCollectionContent, PluginItem } from "../../plugin/api";
+import type { PluginBlock, PluginCollectionContent, PluginItem } from "../../plugin/api";
 import plugin from "./plugin";
 
 /** A monorepo in a temp folder: the lockfile at the root, the package the
@@ -21,6 +22,7 @@ const fixture = Effect.gen(function* () {
       "{",
       '  "name": "app",',
       '  "version": "1.2.3",',
+      '  "description": "The app",',
       '  "packageManager": "pnpm@10.33.4+sha512.abc",',
       '  "scripts": {',
       '    "build": "tsc -b",',
@@ -46,14 +48,73 @@ const scriptsFor = (workspace: string) => {
   return collection.content({ workspace });
 };
 
-const sectionsFor = (workspace: string) => {
-  const npm = plugin.sectionPages?.["npm"];
-  if (npm === undefined) throw new Error("the npm page is missing");
-  return npm.content({ workspace });
+const pageFor = (id: string) => (workspace: string) => {
+  const page = plugin.sectionPages?.[id];
+  if (page === undefined) throw new Error(`the ${id} page is missing`);
+  return page.content({ workspace });
 };
 
-const run = <A>(effect: Effect.Effect<A, unknown, FileSystem.FileSystem | Path.Path | Scope.Scope>) =>
-  Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(NodeServices.layer)));
+const packagesFor = (workspace: string) => {
+  const collection = plugin.collections?.["packages"];
+  if (collection === undefined) throw new Error("the packages collection is missing");
+  return collection.content({ workspace });
+};
+
+const searchFor = (workspace: string, query: string) => {
+  const search = plugin.collections?.["packages"]?.search;
+  if (search === undefined) throw new Error("the packages collection has no search");
+  return search.run({ workspace }, query);
+};
+
+/** A page's blocks as text, to compare whole. */
+const describeBlocks = (blocks: ReadonlyArray<PluginBlock>) =>
+  blocks.map((block) => {
+    switch (block._tag) {
+      case "Facts":
+        return `Facts ${block.title ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}${row.stacked === true ? " (stacked)" : ""}`).join(", ")}`;
+      case "Link":
+        return `Link ${block.title} -> ${block.page}`;
+      case "Pinned":
+        return `Pinned ${block.collection}`;
+      case "Card":
+        return `Card ${block.title} -> ${block.opens ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}`).join(", ")} [${(block.actions ?? []).map((action) => action.title).join(", ")}]`;
+    }
+  });
+
+/** The npm registry, faked: pnpm's latest is 10.40.0, and a search finds
+ * zod. With `down`, every call fails as an unreachable registry would. */
+const fakeRegistry = (down: boolean) =>
+  HttpClient.make((request, url) =>
+    down
+      ? Effect.succeed(HttpClientResponse.fromWeb(request, new Response("unavailable", { status: 503 })))
+      : Effect.succeed(
+          HttpClientResponse.fromWeb(
+            request,
+            Response.json(
+              url.pathname === "/-/v1/search"
+                ? {
+                    objects: [
+                      {
+                        package: {
+                          name: "zod",
+                          version: "4.0.0",
+                          description: "TypeScript-first schema validation",
+                        },
+                      },
+                    ],
+                  }
+                : { version: "10.40.0" },
+            ),
+          ),
+        ),
+  );
+
+type Services = FileSystem.FileSystem | Path.Path | HttpClient.HttpClient | Scope.Scope;
+
+const runWith = <A>(effect: Effect.Effect<A, unknown, Services>, registryDown: boolean) =>
+  Effect.runPromise(effect.pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeServices.layer, Layer.succeed(HttpClient.HttpClient, fakeRegistry(registryDown))))));
+
+const run = <A>(effect: Effect.Effect<A, unknown, Services>) => runWith(effect, false);
 
 const itemOf = (content: PluginCollectionContent, key: string): Effect.Effect<PluginItem> => {
   const item = content.items.find((candidate) => candidate.key === key);
@@ -69,7 +130,7 @@ describe("npm plugin: scripts", () => {
   it("finds the workspace's packages and skips dependency and hidden folders", async () => {
     const content = await run(fixture.pipe(Effect.flatMap(scriptsFor)));
     expect(content.groups.map((group) => `${group.key}=${group.title}`)).toEqual([".=app", "tools=tools"]);
-    expect(content.items.map((item) => `${item.key}=${item.detail ?? ""}`)).toEqual([".#build=tsc -b", ".#test=vitest run", ".#prebuild=rimraf dist", "tools#gen=node gen.js"]);
+    expect(content.items.map((item) => `${item.key}=${item.name}`)).toEqual([".#build=build", ".#test=test", ".#prebuild=prebuild", "tools#gen=gen"]);
   });
 
   it("titles scripts for people and puts them in categories", async () => {
@@ -115,7 +176,7 @@ describe("npm plugin: scripts", () => {
         }),
       ),
     );
-    expect(result._tag === "OpenFile" ? result.line : result._tag).toBe(7);
+    expect(result._tag === "OpenFile" ? result.line : result._tag).toBe(8);
   });
 
   it("edits a script in place, leaving the rest of package.json as it was", async () => {
@@ -201,13 +262,44 @@ describe("npm plugin: scripts", () => {
 });
 
 describe("npm plugin: the NPM page", () => {
-  it("shows the root package.json and its package manager", async () => {
-    const npm = await run(fixture.pipe(Effect.flatMap(sectionsFor)));
+  it("is the project, its pinned scripts, and the package manager's card", async () => {
+    const npm = await run(fixture.pipe(Effect.flatMap(pageFor("npm"))));
     expect(npm.title).toBe("PNPM");
-    expect(npm.sections.map((section) => [section.title ?? "", section.rows.map((row) => `${row.label}=${row.value}`)])).toEqual([
-      ["", ["Name=app", "Version=1.2.3"]],
-      ["Package Manager", ["Manager=pnpm", "Version=10.33.4"]],
-      ["Workspace", ["Packages=2", "Scripts=4", "Dependencies=0", "Dev Dependencies=1"]],
+    expect(describeBlocks(npm.blocks)).toEqual([
+      "Facts : Name=app, Version=1.2.3, Description=The app (stacked)",
+      "Link All Details -> details",
+      "Pinned scripts",
+      "Card pnpm -> packages: Version=10.33.4, Latest=10.40.0, Dependencies=0, Dev Dependencies=1, Workspace Packages=2 [Update to 10.40.0]",
+    ]);
+  });
+
+  it("updates the package manager with its own command", async () => {
+    const result = await run(
+      fixture.pipe(
+        Effect.flatMap(pageFor("npm")),
+        Effect.flatMap((npm) => {
+          const card = npm.blocks.find((block) => block._tag === "Card");
+          const update = card?._tag === "Card" ? card.actions?.[0] : undefined;
+          return update === undefined ? Effect.die("no update action") : update.run;
+        }),
+      ),
+    );
+    expect(result._tag === "RunTask" ? [result.command, ...result.args] : result._tag).toEqual(["pnpm", "self-update"]);
+  });
+
+  it("says when the registry cannot be reached, and offers no update", async () => {
+    const npm = await runWith(fixture.pipe(Effect.flatMap(pageFor("npm"))), true);
+    const card = npm.blocks.find((block) => block._tag === "Card");
+    expect(card?._tag === "Card" ? card.rows.find((row) => row.label === "Latest")?.value : undefined).toMatch(/^Couldn’t check: /);
+    expect(card?._tag === "Card" ? card.actions : undefined).toEqual([]);
+  });
+
+  it("has all the details on its own page", async () => {
+    const details = await run(fixture.pipe(Effect.flatMap(pageFor("details"))));
+    expect(describeBlocks(details.blocks)).toEqual([
+      "Facts Project: Name=app, Version=1.2.3, Description=The app (stacked)",
+      "Facts Tooling: Package Manager=pnpm@10.33.4+sha512.abc (stacked)",
+      "Facts Contents: Scripts=3, Dependencies=0, Dev Dependencies=1",
     ]);
   });
 
@@ -215,9 +307,66 @@ describe("npm plugin: the NPM page", () => {
     const npm = await run(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        return yield* sectionsFor(yield* fs.makeTempDirectoryScoped());
+        return yield* pageFor("npm")(yield* fs.makeTempDirectoryScoped());
       }),
     );
-    expect(npm.sections).toEqual([]);
+    expect(npm.blocks).toEqual([]);
+  });
+});
+
+describe("npm plugin: packages", () => {
+  it("lists each package's dependencies by kind, with what is installed", async () => {
+    const content = await run(
+      Effect.gen(function* () {
+        const app = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* fs.makeDirectory(path.join(app, "node_modules", "vitest"), { recursive: true });
+        yield* fs.writeFileString(path.join(app, "node_modules", "vitest", "package.json"), '{ "name": "vitest", "version": "3.2.4" }');
+        return yield* packagesFor(app);
+      }),
+    );
+    expect(content.items.map((item) => `${item.key} ${item.name} ${item.detail ?? ""} [${item.categories.join(",")}]`)).toEqual([".#devDependencies#vitest ^3.0.0 Installed 3.2.4 [dev]"]);
+  });
+
+  it("installs with the package's own package manager, as the kind asked for", async () => {
+    const result = await run(
+      fixture.pipe(
+        Effect.flatMap(packagesFor),
+        Effect.flatMap((content) =>
+          content.create === undefined
+            ? Effect.die("no install form")
+            : content.create.submit({
+                package: ".",
+                name: "zod",
+                version: "4",
+                kind: "dev",
+              }),
+        ),
+      ),
+    );
+    expect(result._tag === "RunTask" ? [result.command, ...result.args] : result._tag).toEqual(["pnpm", "add", "zod@4", "--save-dev"]);
+  });
+
+  it("updates and removes a dependency", async () => {
+    const commands = await run(
+      fixture.pipe(
+        Effect.flatMap(packagesFor),
+        Effect.flatMap((content) => itemOf(content, ".#devDependencies#vitest")),
+        Effect.flatMap((item) =>
+          Effect.forEach(
+            (item.actions ?? []).filter((action) => action.command !== "npm.view"),
+            (action) => action.run,
+          ),
+        ),
+      ),
+    );
+    expect(commands.map((result) => (result._tag === "RunTask" ? result.args.join(" ") : result._tag))).toEqual(["update vitest", "remove vitest"]);
+  });
+
+  it("searches npm, each result installable", async () => {
+    const found = await run(fixture.pipe(Effect.flatMap((app) => searchFor(app, "zod"))));
+    expect(found.map((item) => `${item.title} ${item.name}`)).toEqual(["zod 4.0.0"]);
+    expect(found[0]?.forms?.[0]?.fields.find((field) => field.id === "name")?.value).toBe("zod");
   });
 });

@@ -25,6 +25,7 @@ import * as React from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackHeaderItem, NativeStackHeaderItemMenuAction, NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { useAppContext } from "./AppContext";
@@ -48,7 +49,7 @@ import { CategoriesSheet, FormSheet, type GroupOption } from "./CollectionSheets
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { followResult } from "./followResult";
-import { invokeCollection, type CollectionGroup, type CollectionItem, type CollectionTarget, type FormSpec, type PinnedFilter } from "./pagesClient";
+import { invokeCollection, searchCollection, type CollectionGroup, type CollectionItem, type CollectionTarget, type FormSpec, type PinnedFilter } from "./pagesClient";
 import { changeCollection, loadCollection, useCollection, type CollectionData } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
@@ -81,7 +82,7 @@ interface Node {
 
 type Row =
   | { readonly type: "header"; readonly key: string; readonly title: string }
-  | { readonly type: "item"; readonly key: string; readonly item: CollectionItem; readonly depth: number }
+  | { readonly type: "item"; readonly key: string; readonly item: CollectionItem; readonly depth: number; readonly beyond?: boolean }
   | { readonly type: "node"; readonly key: string; readonly node: Node; readonly depth: number }
   | { readonly type: "seeAll"; readonly key: string; readonly label: string; readonly view: CollectionView }
   | { readonly type: "tiles"; readonly key: string; readonly tiles: ReadonlyArray<{ readonly item: CollectionItem } | { readonly node: Node }> }
@@ -269,6 +270,50 @@ const filterRows = (data: CollectionData, filter: Filter, grid: boolean, expande
   });
 };
 
+/** What a search shows: the collection's matches first, then what the
+ * plugin's search found beyond it, leaving out what the collection has. */
+const searchRows = (data: CollectionData, query: string, beyond: Search, grid: boolean): ReadonlyArray<Row> => {
+  const needle = query.trim().toLowerCase();
+  const local = data.content.items.filter((item) => [item.title, item.name].some((text) => text.toLowerCase().includes(needle)));
+  const search = data.content.search;
+  const inCollection = new Set(data.content.items.map((item) => item.title));
+  const found = beyond.kind === "done" ? beyond.items.filter((item) => !inCollection.has(item.title)) : [];
+  const header = (key: string, title: string): Row => ({
+    type: "header",
+    key,
+    title,
+  });
+  const note = (key: string, text: string): Row => ({
+    type: "empty",
+    key,
+    text,
+  });
+  return [
+    ...(search === undefined ? [] : [header("in collection", search.inCollection)]),
+    ...(local.length === 0 ? [note("no local", "No matches.")] : itemRows("local", local, grid, 0)),
+    ...(search === undefined
+      ? []
+      : [
+          header("beyond", search.beyond),
+          ...(beyond.kind === "searching"
+            ? [note("searching", "Searching…")]
+            : beyond.kind === "failed"
+              ? [note("search failed", `Search failed: ${beyond.message}`)]
+              : found.length === 0
+                ? [note("none beyond", "Nothing else found.")]
+                : found.map(
+                    (item): Row => ({
+                      type: "item",
+                      key: `beyond ${item.key}`,
+                      item,
+                      depth: 0,
+                      beyond: true,
+                    }),
+                  )),
+        ]),
+  ];
+};
+
 const indexRows = (data: CollectionData, of: "categories" | "groups", grid: boolean, expanded: ReadonlySet<string>): ReadonlyArray<Row> =>
   nodeRows(data, of, of === "categories" ? listedCategories(data.content, data.state).map(categoryNode) : data.content.groups.map(groupNode), grid, expanded);
 
@@ -290,6 +335,16 @@ const Chips = (props: {
     })}
   </ScrollView>
 );
+
+/** Where the plugin's search beyond the collection stands. */
+type Search =
+  | { readonly kind: "idle" }
+  | { readonly kind: "searching" }
+  | { readonly kind: "done"; readonly items: ReadonlyArray<CollectionItem> }
+  | { readonly kind: "failed"; readonly message: string };
+
+/** How long typing must pause before the search goes out. */
+const SEARCH_PAUSE_MS = 350;
 
 /** What a sheet is open for. */
 type Sheet =
@@ -313,6 +368,8 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   const [sheet, setSheet] = React.useState<Sheet | undefined>(undefined);
   // A package's page narrows by category with its chips.
   const [chip, setChip] = React.useState<string | undefined>(view.kind === "filter" ? view.category : undefined);
+  const [query, setQuery] = React.useState("");
+  const [beyond, setBeyond] = React.useState<Search>({ kind: "idle" });
 
   // Cached rows are already on screen; bring them up to date behind them.
   React.useEffect(() => {
@@ -320,7 +377,41 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
     void loadCollection(apiBase, dir, page, "ifChanged");
   }, [apiBase, dir, page]);
 
+  // Back from an install or an edit, the files behind the page changed.
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadCollection(apiBase, dir, page, "ifChanged");
+    }, [apiBase, dir, page]),
+  );
+
   const data = load.kind === "ready" ? load.value : undefined;
+  const searchable = data?.content.search !== undefined;
+
+  // The search beyond the collection goes out once typing pauses; a newer
+  // query supersedes an older one's answer.
+  React.useEffect(() => {
+    const trimmed = query.trim();
+    if (!searchable || trimmed.length === 0) {
+      setBeyond({ kind: "idle" });
+      return;
+    }
+    setBeyond({ kind: "searching" });
+    let current = true;
+    const timer = setTimeout(() => {
+      searchCollection(apiBase, dir, page, trimmed).then(
+        (items) => {
+          if (current) setBeyond({ kind: "done", items });
+        },
+        (error: unknown) => {
+          if (current) setBeyond({ kind: "failed", message: messageOf(error) });
+        },
+      );
+    }, SEARCH_PAUSE_MS);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [apiBase, dir, page, query, searchable]);
   const filter: Filter | undefined =
     view.kind === "filter"
       ? {
@@ -336,12 +427,13 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   const invoke = (target: CollectionTarget, command: string, label: string, values: Readonly<Record<string, string>> = {}) =>
     invokeCollection(apiBase, dir, page, target, command, values).then((result) => followResult(navigation, apiBase, result, label));
 
+  /** A tap: run it, or open it when it does not run. */
   const run = (item: CollectionItem): void => {
-    if (item.run === undefined) return;
-    const action = item.run;
+    const action = item.run ?? item.open;
+    if (action === undefined) return;
     setBusy(item.key);
     invoke({ _tag: "Item", key: item.key }, action.command, `${action.title} ${item.title}`)
-      .catch((error: unknown) => Alert.alert(`Couldn’t run ${item.title}`, messageOf(error)))
+      .catch((error: unknown) => Alert.alert(`Couldn’t ${action.title.toLowerCase()} ${item.title}`, messageOf(error)))
       .finally(() => setBusy(undefined));
   };
 
@@ -486,6 +578,29 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
       change("make the category", changeCollection(apiBase, dir, page, { _tag: "CreateCategory", name })),
     );
 
+  /** A search result is not in the collection: it has what the plugin
+   * offers (install it, view it), and nothing to sort or pin. */
+  const beyondMenu = (item: CollectionItem): ReadonlyArray<MenuAction> => [
+    ...item.forms.map(
+      (form): MenuAction => ({
+        label: form.title,
+        icon: symbolForIcon(form.icon),
+        onPress: () => openForm(form, { _tag: "Item", key: item.key }, filter?.group),
+      }),
+    ),
+    ...item.actions.map(
+      (other): MenuAction => ({
+        label: other.title,
+        icon: symbolForIcon(other.icon),
+        onPress: () => {
+          invoke({ _tag: "Item", key: item.key }, other.command, other.title).catch((error: unknown) =>
+            Alert.alert(`Couldn’t ${other.title.toLowerCase()}`, messageOf(error)),
+          );
+        },
+      }),
+    ),
+  ];
+
   const itemMenu = (item: CollectionItem): ReadonlyArray<MenuAction> => {
     if (data === undefined) return [];
     const pin = pinnedItem(data.state, item.key);
@@ -621,7 +736,9 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   const rows: ReadonlyArray<Row> =
     data === undefined
       ? []
-      : view.kind === "home"
+      : query.trim().length > 0
+        ? searchRows(data, query, beyond, grid)
+        : view.kind === "home"
         ? homeRows(data, grid, expanded)
         : view.kind === "filter"
           ? filterRows(data, filter ?? {}, grid, expanded)
@@ -732,6 +849,13 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
     navigation.setOptions({
       title: screenTitle,
       unstable_headerRightItems: () => (selection === undefined ? [...pinButton, moreMenu] : [doneButton]),
+      headerSearchBarOptions: {
+        placeholder: data?.content.search?.placeholder ?? `Search ${title}`,
+        hideWhenScrolling: false,
+        autoCapitalize: "none",
+        onChangeText: (event) => setQuery(event.nativeEvent.text),
+        onCancelButtonPress: () => setQuery(""),
+      },
     });
   });
 
@@ -753,17 +877,18 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
           <ItemRow
             title={row.item.title}
             name={row.item.name}
+            {...(row.item.detail === undefined ? {} : { detail: row.item.detail })}
             icon={symbolForIcon(row.item.icon)}
             depth={row.depth}
             width={width}
             busy={busy === row.item.key}
             canRun={row.item.run !== undefined}
-            selecting={selection !== undefined}
+            selecting={selection !== undefined && row.beyond !== true}
             selected={selection?.has(row.item.key) === true}
             pinned={pinnedItem(data.state, row.item.key) !== undefined}
             onRun={() => run(row.item)}
             onSelect={() => toggleSelect(row.item.key)}
-            menu={itemMenu(row.item)}
+            menu={row.beyond === true ? beyondMenu(row.item) : itemMenu(row.item)}
           />
         );
       case "node":

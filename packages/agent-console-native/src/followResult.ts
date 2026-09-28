@@ -1,12 +1,13 @@
 /**
  * Carrying out what a view or page action asked for, the same way everywhere:
  * a task runs on the backend's process runner and opens its live output, a
- * file opens in the viewer, and anything the action said is shown.
+ * file opens in the viewer, a web page opens in the browser, and anything the
+ * action said is shown.
  *
  * @internal
  */
 import type { NavigationProp } from "@react-navigation/native";
-import { Alert } from "react-native";
+import { Alert, Linking } from "react-native";
 import { startTask, type InvokeResult } from "./extensionViewsClient";
 import type { RootStackParamList } from "./RootNavigator";
 
@@ -32,6 +33,9 @@ export const followResult = async (
         name: result.path.split("/").at(-1) ?? result.path,
         ...(result.line === undefined ? {} : { line: result.line }),
       });
+      return;
+    case "OpenUrl":
+      await Linking.openURL(result.url);
       return;
     case "Completed":
       if (result.messages.length > 0) Alert.alert(title, result.messages.join("\n"));

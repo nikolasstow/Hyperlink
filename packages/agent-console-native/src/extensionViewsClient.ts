@@ -65,6 +65,9 @@ export const invokeResult = Schema.Union([
     path: Schema.String,
     line: Schema.optionalKey(Schema.Number),
   }),
+  Schema.TaggedStruct("OpenUrl", {
+    url: Schema.String,
+  }),
   Schema.TaggedStruct("Completed", {
     messages: Schema.Array(Schema.String),
   }),

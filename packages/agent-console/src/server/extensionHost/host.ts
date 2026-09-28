@@ -27,11 +27,12 @@ import {
   type CollectionContent,
   type CollectionTarget,
   type InvokeResult,
+  type CollectionItem,
   type PageSections,
   type TreeRefresh,
 } from "./protocol";
 import { EventEmitter, ProcessExecution, ShellExecution, Task, Uri, makeRegistry, makeVscode, toWorkspaceFolder, type Registry, type WorkspaceFolderInfo } from "./shim";
-import type { PluginAction } from "../plugin/api";
+import type { PluginAction, PluginServices } from "../plugin/api";
 import {
   flattenPluginTree,
   loadPlugin,
@@ -39,8 +40,10 @@ import {
   runPluginAction,
   targetKey,
   toCollection,
+  toSearchResults,
   toSections,
   type CollectionRuns,
+  type SectionsRuns,
   type PluginPageEntry,
   type PluginTreePage,
 } from "./pluginPages";
@@ -683,10 +686,22 @@ export const makeHost = (options: HostOptions) =>
         return entries;
       });
 
-    /** Plugin sectionPages and collections as last built, by `view workspace`,
-     * served again until stale by the same rules as trees. A collection's
-     * actions are kept beside it. */
-    const sectionPages = yield* Ref.make<ReadonlyMap<string, PageSections>>(new Map());
+    /** Plugin pages and collections as last built, by `view workspace`,
+     * served again until stale by the same rules as trees, with their
+     * actions beside them. */
+    const sectionPages = yield* Ref.make<
+      ReadonlyMap<
+        string,
+        {
+          readonly page: PageSections;
+          readonly runs: SectionsRuns;
+        }
+      >
+    >(new Map());
+    /** The actions of the last search results, by `view workspace`: a result
+     * is not in the collection, so its actions are kept here until the next
+     * search replaces them. */
+    const searchRuns = yield* Ref.make<ReadonlyMap<string, CollectionRuns>>(new Map());
     const collections = yield* Ref.make<
       ReadonlyMap<
         string,
@@ -760,13 +775,13 @@ export const makeHost = (options: HostOptions) =>
 
     /** A plugin page's title for a workspace, if the page has anything
      * there. */
-    const pageTitle = (page: PluginPageEntry, workspace: string): Effect.Effect<Option.Option<string>, ExtensionHostError, FileSystem.FileSystem | Path.Path> => {
+    const pageTitle = (page: PluginPageEntry, workspace: string): Effect.Effect<Option.Option<string>, ExtensionHostError, PluginServices> => {
       const titled = (has: boolean, title: string) => (has ? Option.some(title) : Option.none());
       switch (page.kind) {
         case "tree":
           return pluginTree(page, workspace, "none").pipe(Effect.map((entries) => titled(entries.length > 0, page.page.title)));
         case "sections":
-          return pluginSections(page, workspace, "none").pipe(Effect.map((content) => titled(content.sections.length > 0, content.title)));
+          return pluginSections(page, workspace, "none").pipe(Effect.map((built) => titled(built.page.blocks.length > 0, built.page.title)));
         case "collection":
           return pluginCollection(page, workspace, "none").pipe(Effect.map((collection) => titled(collection.content.items.length > 0, page.page.title)));
       }
@@ -800,7 +815,33 @@ export const makeHost = (options: HostOptions) =>
       Effect.gen(function* () {
         const page = pageOf(payload.page);
         if (page?.kind !== "sections") return yield* unknownPage(payload.page, "sections");
-        return yield* pluginSections(page, payload.workspace, payload.refresh);
+        return (yield* pluginSections(page, payload.workspace, payload.refresh)).page;
+      });
+
+    /** Run a card's action: only one the page offers on that card, as last
+     * served. */
+    const SectionsInvoke = (payload: { readonly workspace: string; readonly page: string; readonly block: string; readonly command: string }) =>
+      Effect.gen(function* () {
+        const page = pageOf(payload.page);
+        if (page?.kind !== "sections") return yield* unknownPage(payload.page, "sections");
+        const built = yield* pluginSections(page, payload.workspace, "none");
+        const run = built.runs.get(payload.block)?.get(payload.command);
+        if (run === undefined) return yield* rejected("UnknownCommand", `${payload.command} is not offered on ${payload.block}`);
+        return yield* runPluginAction(run);
+      });
+
+    /** Search beyond a collection; the results' actions are kept for invoking. */
+    const CollectionSearch = (payload: { readonly workspace: string; readonly page: string; readonly query: string }) =>
+      Effect.gen(function* () {
+        const page = pageOf(payload.page);
+        if (page?.kind !== "collection") return yield* unknownPage(payload.page, "collection");
+        const search = page.collection.search;
+        if (search === undefined) return yield* rejected("UnknownCommand", `${payload.page} has no search`);
+        const found = yield* search.run({ workspace: payload.workspace }, payload.query).pipe(Effect.mapError(providerFailed(page)));
+        const results = yield* toSearchResults(page, found);
+        yield* Ref.update(searchRuns, (all) => new Map([...all, [`${page.viewId} ${payload.workspace}`, results.runs]]));
+        const items: ReadonlyArray<CollectionItem> = results.items;
+        return items;
       });
 
     const CollectionRpc = (payload: { readonly workspace: string; readonly page: string; readonly refresh: TreeRefresh }) =>
@@ -823,7 +864,8 @@ export const makeHost = (options: HostOptions) =>
         const page = pageOf(payload.page);
         if (page?.kind !== "collection") return yield* unknownPage(payload.page, "collection");
         const collection = yield* pluginCollection(page, payload.workspace, "none");
-        const actions = collection.runs.get(targetKey(payload.target));
+        const searched = (yield* Ref.get(searchRuns)).get(`${page.viewId} ${payload.workspace}`);
+        const actions = collection.runs.get(targetKey(payload.target)) ?? searched?.get(targetKey(payload.target));
         if (actions === undefined) return yield* rejected("UnknownNode", `${payload.page} has no ${targetKey(payload.target)}`);
         const run = actions.get(payload.command);
         if (run === undefined) return yield* rejected("UnknownCommand", `${payload.command} is not offered on ${targetKey(payload.target)}`);
@@ -922,7 +964,9 @@ export const makeHost = (options: HostOptions) =>
       Children,
       Tree,
       Invoke,
-      PageSections: SectionsRpc,
+      Sections: SectionsRpc,
+      SectionsInvoke,
+      CollectionSearch,
       Collection: CollectionRpc,
       CollectionInvoke,
       Warm,

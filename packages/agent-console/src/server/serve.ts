@@ -78,6 +78,8 @@ const pagesHandlers = HttpApiBuilder.group(api, "pages", (handlers) =>
     Effect.map(([views, states]) =>
       handlers
         .handle("sections", ({ payload }) => views.sections(payload.workspace, payload.page, payload.refresh))
+        .handle("sectionsInvoke", ({ payload }) => views.sectionsInvoke(payload))
+        .handle("collectionSearch", ({ payload }) => views.collectionSearch(payload))
         .handle("collection", ({ payload }) => views.collection(payload.workspace, payload.page, payload.refresh))
         .handle("collectionInvoke", ({ payload }) => views.collectionInvoke(payload))
         .handle("collectionState", ({ payload }) => states.get(payload.workspace, payload.page))

@@ -22,7 +22,7 @@ import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
 import { resolveWithin } from "../fs";
 import { PluginRegistry } from "../plugin/registry";
 import { Workspaces } from "../workspaces";
-import { ExtensionHostError, ExtensionHostRpcs, ViewRequestError, type collectionInvokePayload, type TreeRefresh } from "./protocol";
+import { ExtensionHostError, ExtensionHostRpcs, ViewRequestError, type collectionInvokePayload, type collectionSearchPayload, type sectionsInvokePayload, type TreeRefresh } from "./protocol";
 
 /** How long one host call may take, activation included on a cold start. */
 const callDeadline = Duration.seconds(30);
@@ -166,7 +166,7 @@ const make = Effect.gen(function* () {
         Effect.flatMap((resolved) =>
           withDeadline(
             "sections",
-            client.PageSections({
+            client.Sections({
               workspace: resolved,
               page,
               refresh,
@@ -183,6 +183,30 @@ const make = Effect.gen(function* () {
               workspace: resolved,
               page,
               refresh,
+            }),
+          ),
+        ),
+      ),
+    sectionsInvoke: (payload: typeof sectionsInvokePayload.Type) =>
+      workspaceOf(payload.workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            payload.command,
+            client.SectionsInvoke({
+              ...payload,
+              workspace: resolved,
+            }),
+          ),
+        ),
+      ),
+    collectionSearch: (payload: typeof collectionSearchPayload.Type) =>
+      workspaceOf(payload.workspace).pipe(
+        Effect.flatMap((resolved) =>
+          withDeadline(
+            `search for "${payload.query}"`,
+            client.CollectionSearch({
+              ...payload,
+              workspace: resolved,
             }),
           ),
         ),

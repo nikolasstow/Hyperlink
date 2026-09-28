@@ -83,7 +83,12 @@ export class Completed extends Schema.TaggedClass<Completed>()("Completed", {
   messages: Schema.Array(Schema.String),
 }) {}
 
-export const InvokeResult = Schema.Union([RunTask, OpenFile, Completed]);
+/** A plugin asked to open a web page (a package on npmjs.com). */
+export class OpenUrl extends Schema.TaggedClass<OpenUrl>()("OpenUrl", {
+  url: Schema.String,
+}) {}
+
+export const InvokeResult = Schema.Union([RunTask, OpenFile, OpenUrl, Completed]);
 export type InvokeResult = typeof InvokeResult.Type;
 
 /** The host could not answer: an extension failed to activate or threw, a
@@ -150,11 +155,12 @@ export class TreeEntry extends Schema.Class<TreeEntry>("TreeEntry")({
 }) {}
 
 // ── Plugin pages ──────────────────────────────────────────────────────────────
-// Pages a plugin fills with data (plugin/api.ts): sectionPages and collections.
-// Actions are addressed by what they belong to (an item, a group, or the
-// collection itself) and their command; a form's action carries its values.
+// Pages a plugin fills with data (plugin/api.ts): pages organized into
+// sections, and collections. Actions are addressed by what they belong to (an
+// item, a group, the collection, or a block of a page) and their command; a
+// form's action carries its values.
 
-/** A page reached from another page of its plugin (a sectioned page's links). */
+/** A page reached from another page of its plugin. */
 export class PageLink extends Schema.Class<PageLink>("PageLink")({
   page: Schema.String,
   title: Schema.String,
@@ -167,21 +173,57 @@ export class SectionRow extends Schema.Class<SectionRow>("SectionRow")({
   value: Schema.String,
   /** Code-like (a version, a command), drawn monospaced. */
   mono: Schema.Boolean,
+  /** Long text (a description), on its own line below the label. */
+  stacked: Schema.Boolean,
 }) {}
 
-export class PageSection extends Schema.Class<PageSection>("PageSection")({
+/** Facts, as label and value rows. */
+export class FactsBlock extends Schema.TaggedClass<FactsBlock>()("Facts", {
   title: Schema.optionalKey(Schema.String),
   rows: Schema.Array(SectionRow),
 }) {}
 
-/** A page organized into sections: facts, then links to the plugin's pages that
- * open from here. */
+/** A button that opens another page of the plugin. */
+export class LinkBlock extends Schema.TaggedClass<LinkBlock>()("Link", {
+  link: PageLink,
+}) {}
+
+/** The user's pins on a collection page of the plugin, with a button to the
+ * whole collection. */
+export class PinnedBlock extends Schema.TaggedClass<PinnedBlock>()("Pinned", {
+  collection: PageLink,
+  title: Schema.String,
+  viewAll: Schema.String,
+  empty: Schema.String,
+}) {}
+
+/** A card: facts about something, opening a page, with its own actions (an
+ * update button). `key` addresses its actions. */
+export class CardBlock extends Schema.TaggedClass<CardBlock>()("Card", {
+  key: Schema.String,
+  title: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+  rows: Schema.Array(SectionRow),
+  opens: Schema.optionalKey(PageLink),
+  actions: Schema.Array(ViewAction),
+}) {}
+
+export const PageBlock = Schema.Union([FactsBlock, LinkBlock, PinnedBlock, CardBlock]);
+export type PageBlock = typeof PageBlock.Type;
+
+/** A page organized into blocks, top to bottom. */
 export class PageSections extends Schema.Class<PageSections>("PageSections")({
   /** The page's title for this workspace, over the manifest's. */
   title: Schema.String,
-  sections: Schema.Array(PageSection),
-  links: Schema.Array(PageLink),
+  blocks: Schema.Array(PageBlock),
 }) {}
+
+export const sectionsInvokePayload = Schema.Struct({
+  workspace: Schema.String,
+  page: Schema.String,
+  block: Schema.String,
+  command: Schema.String,
+});
 
 export const FormFieldKind = Schema.Literals(["text", "code", "choice", "group"]);
 
@@ -241,6 +283,8 @@ export class CollectionItem extends Schema.Class<CollectionItem>("CollectionItem
   group: Schema.String,
   categories: Schema.Array(Schema.String),
   run: Schema.optionalKey(ViewAction),
+  /** What tapping it does when it does not run (open its web page). */
+  open: Schema.optionalKey(ViewAction),
   actions: Schema.Array(ViewAction),
   forms: Schema.Array(FormSpec),
 }) {}
@@ -254,6 +298,16 @@ export class CollectionContent extends Schema.Class<CollectionContent>("Collecti
   categories: Schema.Array(CollectionCategory),
   /** What its groups are called, as a heading ("Packages"). */
   groupsTitle: Schema.String,
+  /** Whether the plugin searches beyond the collection (a registry), and
+   * what the search field says. */
+  search: Schema.optionalKey(
+    Schema.Struct({
+      placeholder: Schema.String,
+      /** Headings for what matched in the collection, and beyond it. */
+      inCollection: Schema.String,
+      beyond: Schema.String,
+    }),
+  ),
   create: Schema.optionalKey(FormSpec),
 }) {}
 
@@ -280,6 +334,12 @@ export const collectionInvokePayload = Schema.Struct({
   values: Schema.Record(Schema.String, Schema.String),
 });
 
+export const collectionSearchPayload = Schema.Struct({
+  workspace: Schema.String,
+  page: Schema.String,
+  query: Schema.String,
+});
+
 export class ExtensionHostRpcs extends RpcGroup.make(
   Rpc.make("Views", {
     payload: viewsPayload,
@@ -301,7 +361,7 @@ export class ExtensionHostRpcs extends RpcGroup.make(
     success: InvokeResult,
     error: HostCallError,
   }),
-  Rpc.make("PageSections", {
+  Rpc.make("Sections", {
     payload: pagePayload,
     success: PageSections,
     error: HostCallError,
@@ -309,6 +369,16 @@ export class ExtensionHostRpcs extends RpcGroup.make(
   Rpc.make("Collection", {
     payload: pagePayload,
     success: CollectionContent,
+    error: HostCallError,
+  }),
+  Rpc.make("SectionsInvoke", {
+    payload: sectionsInvokePayload,
+    success: InvokeResult,
+    error: HostCallError,
+  }),
+  Rpc.make("CollectionSearch", {
+    payload: collectionSearchPayload,
+    success: Schema.Array(CollectionItem),
     error: HostCallError,
   }),
   Rpc.make("CollectionInvoke", {

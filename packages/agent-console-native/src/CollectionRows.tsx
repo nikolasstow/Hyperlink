@@ -45,12 +45,14 @@ const withMenu = (menu: ReadonlyArray<MenuAction>, trigger: React.ReactElement):
 const Separator = (props: { readonly inset: number }): React.ReactElement => <View style={[styles.separator, { marginLeft: props.inset }]} />;
 
 /**
- * A script (an item): its title, its real name beneath, and the play button.
- * Tapping the row runs it too; while selecting, tapping selects it instead.
+ * An item (a script, a package): its title, its real name beneath (and a
+ * detail, when it has one), and the play button when it runs. Tapping the row
+ * runs or opens it; while selecting, tapping selects it instead.
  */
 export const ItemRow = (props: {
   readonly title: string;
   readonly name: string;
+  readonly detail?: string;
   readonly icon: SFSymbol;
   readonly depth: number;
   readonly width: number;
@@ -83,6 +85,9 @@ export const ItemRow = (props: {
       <VStack alignment="leading" spacing={2}>
         <UIText modifiers={[font({ size: 15 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title}</UIText>
         <UIText modifiers={[font({ size: 12, family: "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.name}</UIText>
+        {props.detail === undefined ? null : (
+          <UIText modifiers={[font({ size: 12 }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.detail}</UIText>
+        )}
       </VStack>
       <Spacer />
       {props.pinned ? <Image systemName="pin.fill" size={11} color={colors.secondaryLabel} /> : null}

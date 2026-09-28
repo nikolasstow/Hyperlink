@@ -1,8 +1,8 @@
 {
   "id": "doubleagent.npm",
   "name": "NPM",
-  "version": "0.2.0",
-  "description": "The repo's package.json and its scripts: run, edit, duplicate and add scripts, sorted into categories you can pin.",
+  "version": "0.3.0",
+  "description": "The repo's package.json, scripts and packages: run and sort scripts, install, update and remove packages, and search npm.",
   "main": "./plugin.ts",
   "contributes": {
     "pages": [
@@ -14,14 +14,30 @@
         "kind": "sections"
       },
       {
+        "id": "details",
+        "title": "Details",
+        "icon": "sf:info.circle",
+        "requirement": "repo",
+        "kind": "sections",
+        "parent": "npm"
+      },
+      {
         "id": "scripts",
         "title": "Scripts",
         "icon": "codicon:terminal",
         "requirement": "repo",
         "kind": "collection",
         "parent": "npm"
+      },
+      {
+        "id": "packages",
+        "title": "Packages",
+        "icon": "sf:shippingbox",
+        "requirement": "repo",
+        "kind": "collection",
+        "parent": "npm"
       }
     ]
   },
-  "permissions": ["processes", "write"]
+  "permissions": ["processes", "write", "network"]
 }

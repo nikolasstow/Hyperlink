@@ -356,7 +356,6 @@ export const RootNavigator = (): React.ReactElement => {
           component={PluginPageScreen}
           options={{
             headerShown: true,
-            headerLargeTitle: true,
             headerBackButtonDisplayMode: "minimal",
           }}
         />

@@ -17,6 +17,7 @@ import { ProcessRequestError, ProcessStartError, processSpec } from "./processes
 import { CollectionState, CollectionStateIoError, CollectionStateRequestError, collectionChangePayload, collectionStatePayload } from "./collections/state";
 import {
   CollectionContent,
+  CollectionItem,
   ExtensionHostError,
   InvokeResult,
   PageSections,
@@ -26,6 +27,8 @@ import {
   ViewRequestError,
   childrenPayload,
   collectionInvokePayload,
+  collectionSearchPayload,
+  sectionsInvokePayload,
   invokePayload,
   pagePayload,
   treePayload,
@@ -174,7 +177,7 @@ const viewsGroup = HttpApiGroup.make("views").add(
 );
 
 /**
- * Plugin pages the app draws natively: sectionPages and collections, run by the
+ * Plugin pages the app draws natively: pages organized into blocks, and collections, run by the
  * extension host like views. A collection's state (the user's categories and
  * pins) is the server's, beside the plugin's items.
  */
@@ -182,6 +185,16 @@ const pagesGroup = HttpApiGroup.make("pages").add(
   HttpApiEndpoint.post("sections", "/pages/sections", {
     payload: pagePayload,
     success: PageSections,
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("sectionsInvoke", "/pages/sections/invoke", {
+    payload: sectionsInvokePayload,
+    success: InvokeResult,
+    error: viewErrors,
+  }),
+  HttpApiEndpoint.post("collectionSearch", "/pages/collection/search", {
+    payload: collectionSearchPayload,
+    success: Schema.Array(CollectionItem),
     error: viewErrors,
   }),
   HttpApiEndpoint.post("collection", "/pages/collection", {

@@ -29,21 +29,42 @@ const pageLink = Schema.Struct({
 });
 export type PageLink = typeof pageLink.Type;
 
+const sectionRow = Schema.Struct({
+  label: Schema.String,
+  value: Schema.String,
+  mono: Schema.Boolean,
+  stacked: Schema.Boolean,
+});
+export type SectionRow = typeof sectionRow.Type;
+
+const pageBlock = Schema.Union([
+  Schema.TaggedStruct("Facts", {
+    title: Schema.optionalKey(Schema.String),
+    rows: Schema.Array(sectionRow),
+  }),
+  Schema.TaggedStruct("Link", {
+    link: pageLink,
+  }),
+  Schema.TaggedStruct("Pinned", {
+    collection: pageLink,
+    title: Schema.String,
+    viewAll: Schema.String,
+    empty: Schema.String,
+  }),
+  Schema.TaggedStruct("Card", {
+    key: Schema.String,
+    title: Schema.String,
+    icon: Schema.optionalKey(Schema.String),
+    rows: Schema.Array(sectionRow),
+    opens: Schema.optionalKey(pageLink),
+    actions: Schema.Array(viewAction),
+  }),
+]);
+export type PageBlock = typeof pageBlock.Type;
+
 const pageSections = Schema.Struct({
   title: Schema.String,
-  sections: Schema.Array(
-    Schema.Struct({
-      title: Schema.optionalKey(Schema.String),
-      rows: Schema.Array(
-        Schema.Struct({
-          label: Schema.String,
-          value: Schema.String,
-          mono: Schema.Boolean,
-        }),
-      ),
-    }),
-  ),
-  links: Schema.Array(pageLink),
+  blocks: Schema.Array(pageBlock),
 });
 export type PageSections = typeof pageSections.Type;
 
@@ -90,6 +111,7 @@ const collectionItem = Schema.Struct({
   group: Schema.String,
   categories: Schema.Array(Schema.String),
   run: Schema.optionalKey(viewAction),
+  open: Schema.optionalKey(viewAction),
   actions: Schema.Array(viewAction),
   forms: Schema.Array(formSpec),
 });
@@ -106,6 +128,13 @@ const collectionContent = Schema.Struct({
     }),
   ),
   groupsTitle: Schema.String,
+  search: Schema.optionalKey(
+    Schema.Struct({
+      placeholder: Schema.String,
+      inCollection: Schema.String,
+      beyond: Schema.String,
+    }),
+  ),
   create: Schema.optionalKey(formSpec),
 });
 export type CollectionContent = typeof collectionContent.Type;
@@ -209,5 +238,26 @@ export const invokeCollection = async (
       target,
       command,
       values,
+    }),
+  );
+
+/** Run a card's action on a page and learn what it asked for. */
+export const invokeSections = async (apiBase: string, workspace: string, page: string, block: string, command: string): Promise<InvokeResult> =>
+  Schema.decodeUnknownSync(invokeResult)(
+    await post(`${base(apiBase)}/pages/sections/invoke`, {
+      workspace,
+      page,
+      block,
+      command,
+    }),
+  );
+
+/** Search beyond a collection (a package registry). */
+export const searchCollection = async (apiBase: string, workspace: string, page: string, query: string): Promise<ReadonlyArray<CollectionItem>> =>
+  Schema.decodeUnknownSync(Schema.Array(collectionItem))(
+    await post(`${base(apiBase)}/pages/collection/search`, {
+      workspace,
+      page,
+      query,
     }),
   );
