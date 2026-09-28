@@ -20,6 +20,7 @@ import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { api } from "./api";
 import { ExtensionViews } from "./extensionHost/extensionViews";
+import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
 import { Workspaces } from "./workspaces";
 import { importFont, inspectFont, readFontFile } from "./fonts";
@@ -81,6 +82,10 @@ const processesHandlers = HttpApiBuilder.group(api, "processes", (handlers) =>
   ),
 );
 
+const pluginsHandlers = HttpApiBuilder.group(api, "plugins", (handlers) =>
+  PluginRegistry.pipe(Effect.map((registry) => handlers.handle("list", () => registry.list))),
+);
+
 // A process's output as server-sent events: `?id=<process id>`. Raw, since
 // it streams. 404 for an unknown process.
 const processStreamRoute = HttpRouter.add("GET", "/processes/stream", (request) =>
@@ -119,11 +124,21 @@ const fontFileRoute = HttpRouter.add("GET", "/fonts/file", (request) =>
 // One Workspaces for both: the views register the app's workspaces, the
 // runner checks against them.
 const workspacesLive = Workspaces.layer;
-const viewsLive = ExtensionViews.layer.pipe(Layer.provide(workspacesLive));
+// One PluginRegistry for the host (what it loads) and the manager (what it
+// shows).
+const registryLive = PluginRegistry.layer.pipe(Layer.provide(NodeServices.layer));
+const viewsLive = ExtensionViews.layer.pipe(Layer.provide([workspacesLive, registryLive]));
 const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
 
 const apiLive = HttpApiBuilder.layer(api).pipe(
-  Layer.provide([extensionsHandlers, configHandlers, fontsHandlers, viewsHandlers.pipe(Layer.provide(viewsLive)), processesHandlers.pipe(Layer.provide(runnerLive))]),
+  Layer.provide([
+    extensionsHandlers,
+    configHandlers,
+    fontsHandlers,
+    viewsHandlers.pipe(Layer.provide(viewsLive)),
+    processesHandlers.pipe(Layer.provide(runnerLive)),
+    pluginsHandlers.pipe(Layer.provide(registryLive)),
+  ]),
 );
 
 const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);

@@ -202,11 +202,24 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
           </View>
         </TouchableOpacity>
+
+        <Text style={styles.sectionLabel}>Dubz</Text>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("AgentButtonSettings")} activeOpacity={0.6}>
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
-              <Text style={styles.fieldLabel}>Dubz</Text>
+              <Text style={styles.fieldLabel}>Assistant Button</Text>
               <Text style={styles.hint}>Show the assistant button, and where it appears.</Text>
+            </View>
+            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+          </View>
+        </TouchableOpacity>
+
+        <Text style={styles.sectionLabel}>Plugins</Text>
+        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Plugins")} activeOpacity={0.6}>
+          <View style={styles.linkRow}>
+            <View style={styles.linkText}>
+              <Text style={styles.fieldLabel}>Plugin Manager</Text>
+              <Text style={styles.hint}>Installed plugins, the pages they add, and what they can do.</Text>
             </View>
             <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
           </View>

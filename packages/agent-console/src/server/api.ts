@@ -12,6 +12,7 @@ import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
+import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";
 import { ProcessRequestError, ProcessStartError, processSpec } from "./processes/runner";
 import { ExtensionHostError, InvokeResult, TreeEntry, ViewInfo, ViewNode, ViewRequestError, childrenPayload, invokePayload, treePayload, warmPayload } from "./extensionHost/protocol";
 
@@ -170,4 +171,18 @@ const processesGroup = HttpApiGroup.make("processes").add(
   }),
 );
 
-export const api = HttpApi.make("agent-console").add(extensionsGroup).add(configGroup).add(fontsGroup).add(viewsGroup).add(processesGroup);
+/** The installed plugins, for the plugin manager. */
+const pluginsGroup = HttpApiGroup.make("plugins").add(
+  HttpApiEndpoint.get("list", "/plugins", {
+    success: Schema.Array(InstalledPlugin),
+    error: PluginRegistryError,
+  }),
+);
+
+export const api = HttpApi.make("agent-console")
+  .add(extensionsGroup)
+  .add(configGroup)
+  .add(fontsGroup)
+  .add(viewsGroup)
+  .add(processesGroup)
+  .add(pluginsGroup);

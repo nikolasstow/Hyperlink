@@ -40,6 +40,7 @@ import type { ModelOption } from "./models";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
 import { prefetchWorkspaces } from "./extensionViewsStore";
+import { refreshPlugins } from "./pluginsStore";
 import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
@@ -177,6 +178,11 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     const workspaces = scanned.flatMap((repo) => repo.worktrees.map((worktree) => worktree.path));
     if (workspaces.length > 0) prefetchWorkspaces(getApiAddress(address), workspaces);
   }, [scanned, address]);
+
+  // The plugin manager's list too, so Settings → Plugins opens with it.
+  React.useEffect(() => {
+    void refreshPlugins(getApiAddress(address));
+  }, [address]);
 
   const sortedByRecent = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
   const recent = sortedByRecent.slice(0, groupSize);

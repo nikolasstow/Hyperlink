@@ -26,6 +26,8 @@ import { HeaderTitlePill } from "./HeaderTitlePill";
 import { AppearanceScreen } from "./AppearanceScreen";
 import { AgentButtonSettingsScreen } from "./AgentButtonSettingsScreen";
 import { ExtensionsScreen } from "./ExtensionsScreen";
+import { PluginDetailScreen } from "./PluginDetailScreen";
+import { PluginsScreen } from "./PluginsScreen";
 import { FontImportScreen } from "./FontImportScreen";
 import { ThemeColorGroupScreen } from "./ThemeColorGroupScreen";
 import { ThemeEditorScreen } from "./ThemeEditorScreen";
@@ -79,6 +81,9 @@ export type RootStackParamList = {
   ExtensionView: { repo: string; dir: string; view: string; title: string };
   // Live output of a process on the backend's process runner.
   ProcessOutput: { id: string; title: string; commandLine: string };
+  // The plugin manager, and one installed plugin (`name` is the nav title).
+  Plugins: undefined;
+  PluginDetail: { id: string; name: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -253,6 +258,8 @@ export const RootNavigator = (): React.ReactElement => {
          * collapses on scroll (not the custom glass header). */}
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
         <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
+        <Stack.Screen name="Plugins" component={PluginsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Plugins" }} />
+        <Stack.Screen name="PluginDetail" component={PluginDetailScreen} options={{ headerShown: true, title: "Plugin" }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
