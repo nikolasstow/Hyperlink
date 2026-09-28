@@ -50,43 +50,59 @@ export const PinToast = (props: {
   readonly onChoose: (scope: PinScope) => void;
   readonly onDone: () => void;
 }): React.ReactElement | null => {
-  const { subject, onDone } = props;
+  const { subject } = props;
   const offset = React.useRef(new Animated.Value(HIDDEN_OFFSET)).current;
   const [expanded, setExpanded] = React.useState(false);
   const [scope, setScope] = React.useState<PinScope | undefined>(subject?.scope);
   const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // The parent's callbacks change with every render of it; the toast keeps
+  // the latest in a ref, so a parent render never restarts it (that reset it
+  // collapsed and on its way out, so it vanished instead of expanding).
+  const onDone = React.useRef(props.onDone);
+  onDone.current = props.onDone;
 
-  const hide = React.useCallback(() => {
-    if (timer.current !== undefined) clearTimeout(timer.current);
-    Animated.timing(offset, { toValue: HIDDEN_OFFSET, duration: 220, useNativeDriver: true }).start(() => onDone());
-  }, [offset, onDone]);
-
-  const hideAfter = React.useCallback(
+  /** Slide out in `ms`, then say it is done. Reads only refs and the offset,
+   * so it is the same whichever render made it. */
+  const hideIn = React.useCallback(
     (ms: number) => {
       if (timer.current !== undefined) clearTimeout(timer.current);
-      timer.current = setTimeout(hide, ms);
+      timer.current = setTimeout(() => {
+        Animated.timing(offset, { toValue: HIDDEN_OFFSET, duration: 220, useNativeDriver: true }).start(() => onDone.current());
+      }, ms);
     },
-    [hide],
+    [offset],
   );
 
-  // Each new pin: in from below, collapsed, on its way out unless tapped.
+  const stopTimer = (): void => {
+    if (timer.current !== undefined) clearTimeout(timer.current);
+    timer.current = undefined;
+  };
+
+  // Each new pin (and only a new pin): in from below, collapsed, on its way
+  // out unless tapped.
+  const subjectId = subject?.id;
   React.useEffect(() => {
-    if (subject === undefined) return;
-    setScope(subject.scope);
+    if (subjectId === undefined) return;
     setExpanded(false);
     offset.setValue(HIDDEN_OFFSET);
     Animated.spring(offset, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 180 }).start();
-    hideAfter(SHOW_MS);
+    hideIn(SHOW_MS);
     return () => {
       if (timer.current !== undefined) clearTimeout(timer.current);
     };
-  }, [subject, offset, hideAfter]);
+  }, [subjectId, offset, hideIn]);
+
+  // The scope shown follows the pin it is about.
+  const subjectScope = subject?.scope;
+  React.useEffect(() => {
+    if (subjectScope !== undefined) setScope(subjectScope);
+  }, [subjectId, subjectScope]);
 
   if (subject === undefined || scope === undefined) return null;
 
   const expand = (): void => {
     // Open stays open until a choice is made.
-    if (timer.current !== undefined) clearTimeout(timer.current);
+    stopTimer();
     setExpanded(true);
   };
 
@@ -94,7 +110,7 @@ export const PinToast = (props: {
     setScope(next);
     props.onChoose(next);
     setExpanded(false);
-    hideAfter(AFTER_CHOICE_MS);
+    hideIn(AFTER_CHOICE_MS);
   };
 
   return (
