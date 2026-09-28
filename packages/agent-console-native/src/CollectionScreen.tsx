@@ -384,7 +384,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   // A package's page narrows by category with its chips.
   const [chip, setChip] = React.useState<string | undefined>(view.kind === "filter" ? view.category : undefined);
   const [query, setQuery] = React.useState("");
-  const [toast, setToast] = React.useState<{ readonly subject: PinToastSubject; readonly pins: ReadonlyArray<string> } | undefined>(undefined);
+  const [toast, setToast] = React.useState<{ readonly subject: PinToastSubject; readonly pins: Promise<ReadonlyArray<string>> } | undefined>(undefined);
   const [beyond, setBeyond] = React.useState<Search>({ kind: "idle" });
 
   // The scope the next pin goes to, read before it is needed.
@@ -443,26 +443,31 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
 
   /**
    * Pin items where the last pin went (a workspace package's page, the
-   * repo's, or both), then raise the toast that says so. It comes up for
-   * every pin, so where it goes can always be changed.
+   * repo's, or both), raising the toast that says so at once, as the pin is
+   * saved. It comes up for every pin, so where it goes can always be
+   * changed; a change made before the pin is saved waits for it.
    */
-  const pinItems = async (items: ReadonlyArray<CollectionItem>): Promise<void> => {
+  const pinItems = (items: ReadonlyArray<CollectionItem>): Promise<void> => {
     const labels = data?.content.pinScopes;
     const scope = labels === undefined ? "both" : pinScopeFor(page);
-    const pinned = await items.reduce<Promise<CollectionState | undefined>>(
+    const pinned = items.reduce<Promise<CollectionState | undefined>>(
       (previous, item) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "PinItem", item: item.key, scope })),
       Promise.resolve(undefined),
     );
-    if (labels === undefined || pinned === undefined) return;
-    const ids = pinned.pins.flatMap((pin) => (pin._tag === "PinnedItem" && items.some((item) => item.key === pin.item) ? [pin.id] : []));
-    setToast({
-      subject: {
-        id: ids.join(" "),
-        scope,
-        labels,
-      },
-      pins: ids,
-    });
+    const ids = pinned.then((state): ReadonlyArray<string> =>
+      state === undefined ? [] : state.pins.flatMap((pin) => (pin._tag === "PinnedItem" && items.some((item) => item.key === pin.item) ? [pin.id] : [])),
+    );
+    if (labels !== undefined && items.length > 0) {
+      setToast({
+        subject: {
+          id: `${items.map((item) => item.key).join(" ")} ${Date.now()}`,
+          scope,
+          labels,
+        },
+        pins: ids,
+      });
+    }
+    return ids.then(() => undefined);
   };
 
   const change = (label: string, run: Promise<unknown>): void => {
@@ -1083,7 +1088,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
           rememberPinScope(page, scope);
           change(
             "move the pin",
-            toast.pins.reduce<Promise<unknown>>((previous, id) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "ScopePin", id, scope })), Promise.resolve()),
+            toast.pins.then((ids) => ids.reduce<Promise<unknown>>((previous, id) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "ScopePin", id, scope })), Promise.resolve())),
           );
         }}
         onDone={() => setToast(undefined)}
