@@ -481,11 +481,21 @@ Owner-stated unless marked *Proposed*.
 
 - It is just **the NPM page, organized**, titled for the repo's package manager (**PNPM** in a
   pnpm repo). **No large header.** Top to bottom:
-  1. **Name, version, description**, then **Packages** (its count as secondary text) and **All Details**, all in **one
-     section** (one card). The description sits on its own line below its label, left aligned.
-  2. **Pinned scripts**, with a button to **view all** (the Scripts page, §23.3).
-  3. **The package manager**, a card: its details, **updating it**, and **numbers of what is
+  1. **Name, version, description, All Details**, in **one section** (one card). The description
+     sits on its own line below its label, left aligned.
+  2. **Packages**, its own section: **Workspace Packages**, **Dependencies**, **Development
+     Dependencies**, each with its count as secondary text.
+  3. **Pinned scripts**, with a button to **view all** (the Scripts page, §23.3). **With nothing
+     pinned, it shows the best suited scripts** until there are pins.
+  4. **The package manager**, a card: its details, **updating it**, and **numbers of what is
      installed**. It opens the Packages page (§23.2).
+- **The 3-dot menu**: **Edit Package Details**, **Install Dependency**, **Install Dev
+  Dependency**, **Create New Workspace Package**.
+- **A workspace package opens to the same page, for that package**: its details, its packages
+  (dependencies and dev dependencies), its scripts, and the rest, all scoped to it.
+- **A dependency opens its own page**: whether **an update is available**, **Update**,
+  **Uninstall**, and its other features.
+- *Open:* how catalogs and pnpm's other features (§23.4) fit into these pages.
 
 ### 23.2 Packages
 
