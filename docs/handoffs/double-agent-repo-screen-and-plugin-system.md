@@ -158,6 +158,11 @@ So the repo path is one hop longer on purpose: it first shows what's already ins
 
 ### 4.6 Shape sketch (for review — NOT an implementation)
 
+> **Superseded (2026-09-28), see §22:** pages are not plugin React Native code by default. A page
+> is a native page kind the app draws from the plugin's data, with WebView and React Native pages
+> as opt-in escape hatches.
+
+
 Illustrative only, to pin the contract before any code:
 
 ```
@@ -404,3 +409,61 @@ Owner-stated unless marked *Proposed*. Proposed items are not binding until appr
 3. The current NPM view stays until the NPM backend is rewritten (§21.5).
 4. Where a favorite can go is decided by the page's requirements (§4.2), including a page with a
    file, which belongs to that file's repo.
+
+---
+
+## 22. Plugins: what they are and how they install (DECISIONS, 2026-09-28)
+
+### 22.1 What a plugin is
+
+A package with:
+
+1. **A manifest**, `doubleagent-plugin.json`: id, name, version, description, icon, the server
+   entry (`main`), what it contributes (pages, tools, commands, views, themes, settings), and the
+   permissions it needs.
+2. **Server code**: an Effect module the backend runs on the Mac, in the extension host's worker.
+   Most of a plugin's work happens here (reading files, running processes, calling APIs).
+3. **Pages**, each with its requirement (§4.2), drawn by the app.
+
+The built-ins become plugins through the same mechanism: Files, Docs, Git, Tools, and **NPM**,
+the first one built. VS Code extensions stay a separate source (the extension host), feeding the
+same Tools page and install screen.
+
+### 22.2 How pages are drawn
+
+- **Default: native page kinds** the app ships and the plugin fills with data (a tree/list first,
+  since the NPM view already is one; detail, form and file editor later). No plugin code runs in
+  the app.
+- **Opt-in: WebView pages** (plugin HTML/JS in a WebView with a message bridge), the same bridge
+  VS Code webviews will use.
+- **Opt-in: React Native pages** (owner): supported, not the default. They run inside the app, so
+  the plugin declares them, install says so, and each renders inside an error boundary. Loading
+  downloaded JS under Hermes is to be proven by a spike before it is built on.
+
+### 22.3 Distribution: npm, with GitHub for the listing
+
+- A plugin is an **npm package** with the keyword `doubleagent-plugin`; the store is an npm
+  keyword search (the Homebridge / ESLint / Gatsby pattern). Nothing to host.
+- The package's `repository` field links its GitHub repo, which supplies stars and the README.
+- Install downloads the package tarball directly and unpacks it: **no `npm install`, so no
+  install scripts ever run.** npm's integrity checksum is verified; provenance, when present, ties
+  the package to the commit it was built from.
+- Updates: a newer published version.
+
+### 22.4 Trust: not vetted, scanned, at your own risk
+
+- Plugins are **not vetted** (owner), at least initially.
+- Each version is **scanned before install**, in two layers: deterministic checks first (process,
+  file-system use outside the plugin API, network, dynamic eval, obfuscation, anything undeclared
+  in the manifest), then an **LLM review** of the code for intent. Results are cached per version.
+- The scan cannot be comprehensive, so install always says **install at your own risk**, next to
+  the findings and the declared permissions.
+
+### 22.5 Build order
+
+1. **Plugin runtime and manifest, native pages, and the NPM plugin** (its backend written fresh,
+   not on VS Code's npm).
+2. The store (npm search) and the install screen (§21.4).
+3. React Native pages, after the Hermes spike.
+4. The AI scan.
+
