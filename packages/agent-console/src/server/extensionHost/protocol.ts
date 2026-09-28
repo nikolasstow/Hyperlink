@@ -39,6 +39,8 @@ export class ViewAction extends Schema.Class<ViewAction>("ViewAction")({
   title: Schema.String,
   icon: Schema.optionalKey(Schema.String),
   inline: Schema.Boolean,
+  /** It removes something (uninstall): the app asks first. */
+  destructive: Schema.optionalKey(Schema.Boolean),
 }) {}
 
 /** One row of a tree view. `icon` is a codicon name (`codicon:wrench`) or a
@@ -154,15 +156,49 @@ export class TreeEntry extends Schema.Class<TreeEntry>("TreeEntry")({
   node: ViewNode,
 }) {}
 
+export const FormFieldKind = Schema.Literals(["text", "code", "choice", "group"]);
+
+export class FormOption extends Schema.Class<FormOption>("FormOption")({
+  value: Schema.String,
+  label: Schema.String,
+}) {}
+
+/** One field of a form: free text, code (monospaced, no autocorrect), a
+ * choice among `options`, or one of the collection's groups (the app starts
+ * it on the group the user is looking at). `value` is what it starts with. */
+export class FormField extends Schema.Class<FormField>("FormField")({
+  id: Schema.String,
+  label: Schema.String,
+  kind: FormFieldKind,
+  value: Schema.String,
+  placeholder: Schema.optionalKey(Schema.String),
+  options: Schema.Array(FormOption),
+}) {}
+
+/** An action that asks for values first, drawn as a slide-up sheet. */
+export class FormSpec extends Schema.Class<FormSpec>("FormSpec")({
+  command: Schema.String,
+  title: Schema.String,
+  icon: Schema.optionalKey(Schema.String),
+  submitTitle: Schema.String,
+  fields: Schema.Array(FormField),
+}) {}
+
 // ── Plugin pages ──────────────────────────────────────────────────────────────
 // Pages a plugin fills with data (plugin/api.ts): pages organized into
 // sections, and collections. Actions are addressed by what they belong to (an
 // item, a group, the collection, or a block of a page) and their command; a
 // form's action carries its values.
 
-/** A page reached from another page of its plugin. */
+/** What a page is about, beyond the workspace: which package, which
+ * dependency. A page's own words; the app passes them back as given. For a
+ * collection, `group` and `category` open it on that filter. */
+export const PageParams = Schema.Record(Schema.String, Schema.String);
+
+/** A page reached from another page of its plugin, with its params. */
 export class PageLink extends Schema.Class<PageLink>("PageLink")({
   page: Schema.String,
+  params: PageParams,
   title: Schema.String,
   icon: Schema.optionalKey(Schema.String),
   /** Secondary text beside the title (a count). */
@@ -199,6 +235,12 @@ export class PinnedBlock extends Schema.TaggedClass<PinnedBlock>()("Pinned", {
   title: Schema.String,
   viewAll: Schema.String,
   empty: Schema.String,
+  /** Only the pins in this group (a package's own page). */
+  group: Schema.optionalKey(Schema.String),
+  /** Items to show while nothing is pinned: the plugin's best picks. */
+  suggestions: Schema.Array(Schema.String),
+  /** Said beside the suggestions, so they do not pass for pins. */
+  suggestionsNote: Schema.String,
 }) {}
 
 /** A card: facts about something, opening a page, with its own actions (an
@@ -212,50 +254,38 @@ export class CardBlock extends Schema.TaggedClass<CardBlock>()("Card", {
   actions: Schema.Array(ViewAction),
 }) {}
 
-export const PageBlock = Schema.Union([FactsBlock, LinkBlock, PinnedBlock, CardBlock]);
+/** Buttons for what can be done here (update, uninstall), in one card.
+ * `key` addresses them. */
+export class ActionsBlock extends Schema.TaggedClass<ActionsBlock>()("Actions", {
+  key: Schema.String,
+  title: Schema.optionalKey(Schema.String),
+  actions: Schema.Array(ViewAction),
+}) {}
+
+export const PageBlock = Schema.Union([FactsBlock, LinkBlock, PinnedBlock, CardBlock, ActionsBlock]);
 export type PageBlock = typeof PageBlock.Type;
 
-/** A page organized into blocks, top to bottom. */
+/** A page organized into blocks, top to bottom, with what its 3-dot menu
+ * offers (forms, addressed as the block `menu`). */
 export class PageSections extends Schema.Class<PageSections>("PageSections")({
   /** The page's title for this workspace, over the manifest's. */
   title: Schema.String,
   blocks: Schema.Array(PageBlock),
+  menu: Schema.Array(FormSpec),
 }) {}
+
+/** The block a page's 3-dot menu forms are addressed by. */
+export const pageMenuBlock = "menu";
 
 export const sectionsInvokePayload = Schema.Struct({
   workspace: Schema.String,
   page: Schema.String,
+  params: PageParams,
   block: Schema.String,
   command: Schema.String,
+  /** A form's values, by field id. */
+  values: Schema.Record(Schema.String, Schema.String),
 });
-
-export const FormFieldKind = Schema.Literals(["text", "code", "choice", "group"]);
-
-export class FormOption extends Schema.Class<FormOption>("FormOption")({
-  value: Schema.String,
-  label: Schema.String,
-}) {}
-
-/** One field of a form: free text, code (monospaced, no autocorrect), a
- * choice among `options`, or one of the collection's groups (the app starts
- * it on the group the user is looking at). `value` is what it starts with. */
-export class FormField extends Schema.Class<FormField>("FormField")({
-  id: Schema.String,
-  label: Schema.String,
-  kind: FormFieldKind,
-  value: Schema.String,
-  placeholder: Schema.optionalKey(Schema.String),
-  options: Schema.Array(FormOption),
-}) {}
-
-/** An action that asks for values first, drawn as a slide-up sheet. */
-export class FormSpec extends Schema.Class<FormSpec>("FormSpec")({
-  command: Schema.String,
-  title: Schema.String,
-  icon: Schema.optionalKey(Schema.String),
-  submitTitle: Schema.String,
-  fields: Schema.Array(FormField),
-}) {}
 
 /** A category the plugin assigns by default. */
 export class CollectionCategory extends Schema.Class<CollectionCategory>("CollectionCategory")({
@@ -289,6 +319,8 @@ export class CollectionItem extends Schema.Class<CollectionItem>("CollectionItem
   run: Schema.optionalKey(ViewAction),
   /** What tapping it does when it does not run (open its web page). */
   open: Schema.optionalKey(ViewAction),
+  /** The page tapping it opens, over `open` (a dependency's own page). */
+  opens: Schema.optionalKey(PageLink),
   actions: Schema.Array(ViewAction),
   forms: Schema.Array(FormSpec),
 }) {}
@@ -318,6 +350,7 @@ export class CollectionContent extends Schema.Class<CollectionContent>("Collecti
 export const pagePayload = Schema.Struct({
   workspace: Schema.String,
   page: Schema.String,
+  params: PageParams,
   refresh: Schema.Literals(["none", "ifChanged", "force"]),
 });
 

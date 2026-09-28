@@ -24,6 +24,7 @@ import {
   type CollectionContent,
   type CollectionState,
   type PageLink,
+  type PageParams,
   type PageSections,
 } from "./pagesClient";
 
@@ -93,24 +94,51 @@ export const loadCollection = (apiBase: string, workspace: string, page: string,
   });
 };
 
+/** A page's cache key: its workspace, id and params, the params in any
+ * order being the same page. */
+const sectionsKey = (workspace: string, page: string, params: PageParams): string =>
+  `${keyOf(workspace, page)} ${Object.entries(params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${name}=${value}`)
+    .join("&")}`;
+
 /** A page organized into blocks, then the pages its blocks open (its
  * buttons, pins and cards), so they are warm before a tap. */
-export const loadSections = (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<void> => {
-  const key = keyOf(workspace, page);
+export const loadSections = (apiBase: string, workspace: string, page: string, params: PageParams, refresh: TreeRefresh): Promise<void> => {
+  const key = sectionsKey(workspace, page, params);
   return once(`sections ${key} ${refresh}`, async () => {
-    await loadInto(sectionPages, key, `fetch sections ${key} ${refresh}`, () => fetchSections(apiBase, workspace, page, refresh));
+    await loadInto(sectionPages, key, `fetch sections ${key} ${refresh}`, () => fetchSections(apiBase, workspace, page, params, refresh));
     const loaded = sectionPages.get(key);
     if (loaded?.kind !== "ready") return;
     const linked = loaded.value.blocks.flatMap((block): ReadonlyArray<PageLink> =>
-      block._tag === "Link" ? [block.link] : block._tag === "Pinned" ? [block.collection] : block._tag === "Card" && block.opens !== undefined ? [block.opens] : [],
+      block._tag === "Facts"
+        ? block.links
+        : block._tag === "Link"
+          ? [block.link]
+          : block._tag === "Pinned"
+            ? [block.collection]
+            : block._tag === "Card" && block.opens !== undefined
+              ? [block.opens]
+              : [],
     );
-    await Promise.all(linked.map((link) => prefetchPage(apiBase, workspace, link.page, link.kind)));
+    await Promise.all(linked.map((link) => prefetchLink(apiBase, workspace, link)));
   });
 };
 
+/** Warm the page a link opens. A page opened with params warms only its
+ * content, not what it links to in turn, so warming stays one level deep. */
+const prefetchLink = (apiBase: string, workspace: string, link: PageLink): Promise<void> =>
+  link.kind === "collection"
+    ? loadCollection(apiBase, workspace, link.page, "none")
+    : link.kind === "sections"
+      ? loadInto(sectionPages, sectionsKey(workspace, link.page, link.params), `fetch sections ${sectionsKey(workspace, link.page, link.params)} none`, () =>
+          fetchSections(apiBase, workspace, link.page, link.params, "none"),
+        )
+      : Promise.resolve();
+
 /** Bring a menu page into the cache, if it is one kept here. */
 export const prefetchPage = (apiBase: string, workspace: string, page: string, kind: PageKind): Promise<void> =>
-  kind === "sections" ? loadSections(apiBase, workspace, page, "none") : kind === "collection" ? loadCollection(apiBase, workspace, page, "none") : Promise.resolve();
+  kind === "sections" ? loadSections(apiBase, workspace, page, {}, "none") : kind === "collection" ? loadCollection(apiBase, workspace, page, "none") : Promise.resolve();
 
 /**
  * Change a collection's state on the server; the state it answers with
@@ -130,8 +158,8 @@ const subscribe = (listener: () => void): (() => void) => {
 
 const loading: { readonly kind: "loading" } = { kind: "loading" };
 
-export const useSections = (workspace: string, page: string): Load<PageSections> =>
-  React.useSyncExternalStore(subscribe, () => sectionPages.get(keyOf(workspace, page)) ?? loading);
+export const useSections = (workspace: string, page: string, params: PageParams): Load<PageSections> =>
+  React.useSyncExternalStore(subscribe, () => sectionPages.get(sectionsKey(workspace, page, params)) ?? loading);
 
 /** A collection with its state: ready once both are, failed if either is. */
 export interface CollectionData {

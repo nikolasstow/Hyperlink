@@ -26,6 +26,7 @@ import type {
   PluginItem,
   PluginNode,
   PluginPageButton,
+  PluginPageRef,
   PluginSectionRow,
   PluginServices,
   PluginSectionsPage,
@@ -34,7 +35,7 @@ import type {
 } from "../plugin/api";
 import type { PluginError } from "../plugin/api";
 import { manifestFile, pluginManifest, type PluginManifest, type PluginPage } from "../plugin/manifest";
-import { CollectionContent, CollectionItem, ExtensionHostError, PageLink, PageSections, TreeEntry, ViewAction, ViewNode, type CollectionTarget, type InvokeResult } from "./protocol";
+import { CollectionContent, CollectionItem, ExtensionHostError, PageLink, PageSections, pageMenuBlock, TreeEntry, ViewAction, ViewNode, type CollectionTarget, type InvokeResult } from "./protocol";
 
 export interface LoadedPlugin {
   readonly dir: string;
@@ -167,14 +168,16 @@ export const pluginPages = (plugins: ReadonlyArray<LoadedPlugin>): ReadonlyArray
     }),
   );
 
-/** A link to one of `entry`'s plugin's pages, by its manifest id. */
-const linkTo = (entry: PluginPageEntry, id: string): Effect.Effect<PageLink, ExtensionHostError> => {
-  const page = (entry.plugin.manifest.contributes.pages ?? []).find((candidate) => candidate.id === id);
+/** A link to one of `entry`'s plugin's pages, by its manifest id, with its
+ * params. */
+const linkTo = (entry: PluginPageEntry, ref: PluginPageRef): Effect.Effect<PageLink, ExtensionHostError> => {
+  const page = (entry.plugin.manifest.contributes.pages ?? []).find((candidate) => candidate.id === ref.page);
   return page === undefined
-    ? Effect.fail(providerFailure(`${entry.viewId} links to ${id}, which is not one of its plugin's pages`))
+    ? Effect.fail(providerFailure(`${entry.viewId} links to ${ref.page}, which is not one of its plugin's pages`))
     : Effect.succeed(
         new PageLink({
           page: `${entry.plugin.manifest.id}/${page.id}`,
+          params: ref.params ?? {},
           title: page.title,
           ...(page.icon === undefined ? {} : { icon: page.icon }),
           kind: page.kind,
@@ -184,11 +187,12 @@ const linkTo = (entry: PluginPageEntry, id: string): Effect.Effect<PageLink, Ext
 
 /** A button's link: the page, under the button's own title and icon. */
 const buttonTo = (entry: PluginPageEntry, button: PluginPageButton) =>
-  linkTo(entry, button.page).pipe(
+  linkTo(entry, button).pipe(
     Effect.map(
       (link) =>
         new PageLink({
           page: link.page,
+          params: link.params,
           title: button.title,
           ...(button.icon === undefined ? (link.icon === undefined ? {} : { icon: link.icon }) : { icon: button.icon }),
           ...(button.detail === undefined ? {} : { detail: button.detail }),
@@ -231,10 +235,14 @@ const blockData = (entry: PluginPageEntry, block: PluginBlock): Effect.Effect<un
           title: block.title,
           viewAll: block.viewAll,
           empty: block.empty,
+          ...(block.group === undefined ? {} : { group: block.group }),
+          suggestions: block.suggestions ?? [],
+          suggestionsNote: block.suggestionsNote ?? "Suggested",
         })),
       );
-    case "Card":
-      const opening: Effect.Effect<PageLink | undefined, ExtensionHostError> = block.opens === undefined ? Effect.succeed(undefined) : linkTo(entry, block.opens);
+    case "Card": {
+      const { opens: ref } = block;
+      const opening: Effect.Effect<PageLink | undefined, ExtensionHostError> = ref === undefined ? Effect.succeed(undefined) : linkTo(entry, ref);
       return opening.pipe(
         Effect.map((opens) => ({
           _tag: "Card",
@@ -246,14 +254,23 @@ const blockData = (entry: PluginPageEntry, block: PluginBlock): Effect.Effect<un
           actions: (block.actions ?? []).map((action) => actionData(action, false)),
         })),
       );
+    }
+    case "Actions":
+      return Effect.succeed({
+        _tag: "Actions",
+        key: block.key,
+        ...(block.title === undefined ? {} : { title: block.title }),
+        actions: block.actions.map((action) => actionData(action, false)),
+      });
   }
 };
 
-/** A page's actions (its cards'), by block key then command. */
-export type SectionsRuns = ReadonlyMap<string, ReadonlyMap<string, PluginAction["run"]>>;
+/** A page's actions, by block key (a card's, or `menu` for its 3-dot menu's
+ * forms) then command. */
+export type SectionsRuns = ReadonlyMap<string, ReadonlyMap<string, CollectionRun>>;
 
 /** A page organized into blocks as the app draws it, with the Effects its
- * cards' actions run. */
+ * cards' actions and menu forms run. */
 export const toSections = (
   entry: PluginPageEntry,
   content: PluginSectionsContent,
@@ -263,15 +280,17 @@ export const toSections = (
       Schema.decodeUnknownEffect(PageSections)({
         title: content.title ?? entry.page.title,
         blocks,
+        menu: (content.menu ?? []).map(formData),
       }).pipe(Effect.mapError((cause) => providerFailure(`${entry.viewId}: its page is malformed: ${cause.message}`))),
     ),
     Effect.map((page) => ({
       page,
-      runs: new Map(
-        content.blocks.flatMap((block): ReadonlyArray<readonly [string, ReadonlyMap<string, PluginAction["run"]>]> =>
-          block._tag === "Card" ? [[block.key, new Map((block.actions ?? []).map((action): readonly [string, PluginAction["run"]] => [action.command, action.run]))]] : [],
+      runs: new Map([
+        ...content.blocks.flatMap((block): ReadonlyArray<readonly [string, ReadonlyMap<string, CollectionRun>]> =>
+          block._tag === "Card" || block._tag === "Actions" ? [[block.key, runsOf(block.actions ?? [], [])]] : [],
         ),
-      ),
+        [pageMenuBlock, runsOf([], content.menu ?? [])],
+      ]),
     })),
   );
 
@@ -289,6 +308,7 @@ const actionData = (action: PluginAction, inline: boolean) => ({
   title: action.title,
   ...(action.icon === undefined ? {} : { icon: action.icon }),
   inline,
+  ...(action.destructive === true ? { destructive: true } : {}),
 });
 
 const formData = (form: PluginForm) => ({
@@ -312,19 +332,25 @@ const runsOf = (actions: ReadonlyArray<PluginAction>, forms: ReadonlyArray<Plugi
     ...forms.map((form): readonly [string, CollectionRun] => [form.command, form.submit]),
   ]);
 
-const itemData = (item: PluginItem) => ({
-  key: item.key,
-  title: item.title,
-  name: item.name,
-  ...(item.detail === undefined ? {} : { detail: item.detail }),
-  ...(item.icon === undefined ? {} : { icon: item.icon }),
-  group: item.group,
-  categories: item.categories,
-  ...(item.run === undefined ? {} : { run: actionData(item.run, true) }),
-  ...(item.open === undefined ? {} : { open: actionData(item.open, false) }),
-  actions: (item.actions ?? []).map((action) => actionData(action, false)),
-  forms: (item.forms ?? []).map(formData),
-});
+const itemData = (entry: PluginPageEntry, item: PluginItem) => {
+  const opening: Effect.Effect<PageLink | undefined, ExtensionHostError> = item.opens === undefined ? Effect.succeed(undefined) : buttonTo(entry, item.opens);
+  return opening.pipe(
+    Effect.map((opens) => ({
+      key: item.key,
+      title: item.title,
+      name: item.name,
+      ...(item.detail === undefined ? {} : { detail: item.detail }),
+      ...(item.icon === undefined ? {} : { icon: item.icon }),
+      group: item.group,
+      categories: item.categories,
+      ...(item.run === undefined ? {} : { run: actionData(item.run, true) }),
+      ...(item.open === undefined ? {} : { open: actionData(item.open, false) }),
+      ...(opens === undefined ? {} : { opens }),
+      actions: (item.actions ?? []).map((action) => actionData(action, false)),
+      forms: (item.forms ?? []).map(formData),
+    })),
+  );
+};
 
 const itemRuns = (item: PluginItem): readonly [string, ReadonlyMap<string, CollectionRun>] => [
   targetKey({ _tag: "Item", key: item.key }),
@@ -337,7 +363,8 @@ export const toSearchResults = (
   entry: Extract<PluginPageEntry, { readonly kind: "collection" }>,
   items: ReadonlyArray<PluginItem>,
 ): Effect.Effect<{ readonly items: ReadonlyArray<CollectionItem>; readonly runs: CollectionRuns }, ExtensionHostError> =>
-  Schema.decodeUnknownEffect(Schema.Array(CollectionItem))(items.map(itemData)).pipe(
+  Effect.forEach(items, (item) => itemData(entry, item)).pipe(
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(CollectionItem))),
     Effect.mapError((cause) => providerFailure(`${entry.viewId}: a search result is malformed: ${cause.message}`)),
     Effect.map((decoded) => ({
       items: decoded,
@@ -350,6 +377,8 @@ export const toCollection = (
   entry: Extract<PluginPageEntry, { readonly kind: "collection" }>,
   content: PluginCollectionContent,
 ): Effect.Effect<{ readonly content: CollectionContent; readonly runs: CollectionRuns }, ExtensionHostError> =>
+  Effect.forEach(content.items, (item) => itemData(entry, item)).pipe(
+    Effect.flatMap((items) =>
   Schema.decodeUnknownEffect(CollectionContent)({
     groups: content.groups.map((group) => ({
       key: group.key,
@@ -359,7 +388,7 @@ export const toCollection = (
       ...(group.resource === undefined ? {} : { resource: group.resource }),
       actions: (group.actions ?? []).map((action) => actionData(action, false)),
     })),
-    items: content.items.map(itemData),
+    items,
     categories: entry.collection.categories.map((category) => ({
       id: category.id,
       name: category.name,
@@ -374,7 +403,9 @@ export const toCollection = (
           },
         }),
     ...(content.create === undefined ? {} : { create: formData(content.create) }),
-  }).pipe(
+  }),
+    ),
+  ).pipe(
     Effect.mapError((cause) => providerFailure(`${entry.viewId}: its collection is malformed: ${cause.message}`)),
     Effect.map((decoded) => ({
       content: decoded,

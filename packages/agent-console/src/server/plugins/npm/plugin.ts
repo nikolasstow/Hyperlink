@@ -2,27 +2,34 @@
  * NPM: the repo's package.json, its scripts, and its packages
  * (docs/handoffs/double-agent-repo-screen-and-plugin-system.md §23).
  *
- * - The **NPM** page (pages.ts), organized: the project, the pinned scripts,
- *   and the package manager's card; with **All Details** below it.
+ * - **The NPM page** (pages.ts), for the workspace or one of its packages:
+ *   the package, its packages, its pinned scripts, the package manager.
+ *   With it: **Workspace Packages**, a **dependency's page**, and **Details**.
  * - **Scripts** (scriptsCollection.ts): every package's scripts, sorted into
  *   categories and pinned by the user.
  * - **Packages** (dependencies.ts): the workspace's dependencies, with
- *   install, update and remove, and search across the npm registry.
+ *   install, update and uninstall, and search across the npm registry.
  *
  * @internal
  */
 import { definePlugin } from "../../plugin/api";
 import { dependenciesCollection } from "./dependencies";
-import { detailsPage, npmPage } from "./pages";
+import { dependencyPage, detailsPage, npmPage, workspacePage } from "./pages";
 import { scriptsCollection } from "./scriptsCollection";
 
 export default definePlugin({
   sectionPages: {
     npm: {
-      content: ({ workspace }) => npmPage(workspace),
+      content: ({ workspace, params }) => npmPage(workspace, params),
+    },
+    workspace: {
+      content: ({ workspace }) => workspacePage(workspace),
+    },
+    dependency: {
+      content: ({ workspace, params }) => dependencyPage(workspace, params),
     },
     details: {
-      content: ({ workspace }) => detailsPage(workspace),
+      content: ({ workspace, params }) => detailsPage(workspace, params),
     },
   },
   collections: {

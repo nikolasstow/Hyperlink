@@ -39,6 +39,9 @@ export type PluginServices = FileSystem.FileSystem | Path.Path | HttpClient.Http
 export interface PluginContext {
   /** The workspace (repo or worktree folder) the page is for. */
   readonly workspace: string;
+  /** What the page is about beyond the workspace (which package), as the
+   * link that opened it said. Empty for a page opened from the menu. */
+  readonly params: Readonly<Record<string, string>>;
 }
 
 /** Something a node offers. `inline` puts it on the row (a run action becomes
@@ -49,6 +52,8 @@ export interface PluginAction {
   /** `codicon:<name>`, the icon vocabulary views share. */
   readonly icon?: string;
   readonly inline?: boolean;
+  /** It removes something (uninstall): the app asks first. */
+  readonly destructive?: boolean;
   readonly run: Effect.Effect<InvokeResult, PluginError, PluginServices>;
 }
 
@@ -87,9 +92,15 @@ export interface PluginSectionRow {
   readonly stacked?: boolean;
 }
 
-/** A button to one of the plugin's pages, titled here. */
-export interface PluginPageButton {
+/** One of the plugin's pages, by its manifest id, with its params. For a
+ * collection, `group` and `category` open it on that filter. */
+export interface PluginPageRef {
   readonly page: string;
+  readonly params?: Readonly<Record<string, string>>;
+}
+
+/** A button to one of the plugin's pages, titled here. */
+export interface PluginPageButton extends PluginPageRef {
   readonly title: string;
   readonly icon?: string;
   /** Secondary text beside the title (a count). */
@@ -106,21 +117,25 @@ export type PluginBlock =
       /** Buttons to other pages, below the rows in the same card. */
       readonly links?: ReadonlyArray<PluginPageButton>;
     }
-  | {
+  | ({
       /** A button to another page. */
       readonly _tag: "Link";
-      readonly page: string;
-      readonly title: string;
-      readonly icon?: string;
-    }
+    } & PluginPageButton)
   | {
       /** The user's pins on a collection page, with a button to all of it. */
       readonly _tag: "Pinned";
-      readonly collection: string;
+      /** The collection, and the view "view all" opens it on. */
+      readonly collection: PluginPageRef;
       readonly title: string;
       readonly viewAll: string;
-      /** What shows while nothing is pinned. */
+      /** What shows while nothing is pinned and nothing is suggested. */
       readonly empty: string;
+      /** Only the pins in this group (a package's own page). */
+      readonly group?: string;
+      /** Item keys to show while nothing is pinned: the best picks. */
+      readonly suggestions?: ReadonlyArray<string>;
+      /** Said beside the suggestions, so they do not pass for pins. */
+      readonly suggestionsNote?: string;
     }
   | {
       /** Facts about something, opening a page, with its own actions. */
@@ -129,8 +144,15 @@ export type PluginBlock =
       readonly title: string;
       readonly icon?: string;
       readonly rows: ReadonlyArray<PluginSectionRow>;
-      readonly opens?: string;
+      readonly opens?: PluginPageRef;
       readonly actions?: ReadonlyArray<PluginAction>;
+    }
+  | {
+      /** Buttons for what can be done here, in one card. */
+      readonly _tag: "Actions";
+      readonly key: string;
+      readonly title?: string;
+      readonly actions: ReadonlyArray<PluginAction>;
     };
 
 export interface PluginSectionsContent {
@@ -138,6 +160,8 @@ export interface PluginSectionsContent {
    * ("PNPM" for a pnpm repo); the manifest's title otherwise. */
   readonly title?: string;
   readonly blocks: ReadonlyArray<PluginBlock>;
+  /** What the page's 3-dot menu offers. */
+  readonly menu?: ReadonlyArray<PluginForm>;
   /** The files the page was read from: when one changes, it is stale. */
   readonly resources: ReadonlyArray<string>;
 }
@@ -212,6 +236,8 @@ export interface PluginItem {
   readonly run?: PluginAction;
   /** What a tap does when it does not run (open its web page). */
   readonly open?: PluginAction;
+  /** The page a tap opens, over `open` (a dependency's own page). */
+  readonly opens?: PluginPageButton;
   readonly actions?: ReadonlyArray<PluginAction>;
   readonly forms?: ReadonlyArray<PluginForm>;
 }

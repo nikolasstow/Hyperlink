@@ -49,6 +49,7 @@ import { CategoriesSheet, FormSheet, type GroupOption } from "./CollectionSheets
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { followResult } from "./followResult";
+import { confirmFirst, openLink } from "./openPage";
 import { invokeCollection, searchCollection, type CollectionGroup, type CollectionItem, type CollectionTarget, type FormSpec, type PinnedFilter } from "./pagesClient";
 import { changeCollection, loadCollection, useCollection, type CollectionData } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
@@ -427,8 +428,12 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   const invoke = (target: CollectionTarget, command: string, label: string, values: Readonly<Record<string, string>> = {}) =>
     invokeCollection(apiBase, dir, page, target, command, values).then((result) => followResult(navigation, apiBase, result, label));
 
-  /** A tap: run it, or open it when it does not run. */
+  /** A tap: open its page, else run it, else open it (its web page). */
   const run = (item: CollectionItem): void => {
+    if (item.opens !== undefined) {
+      openLink(navigation, props.route.params.repo, dir, item.opens);
+      return;
+    }
     const action = item.run ?? item.open;
     if (action === undefined) return;
     setBusy(item.key);
@@ -638,11 +643,13 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
       (other): MenuAction => ({
         label: other.title,
         icon: symbolForIcon(other.icon),
-        onPress: () => {
-          invoke({ _tag: "Item", key: item.key }, other.command, other.title).catch((error: unknown) =>
-            Alert.alert(`Couldn’t ${other.title.toLowerCase()}`, messageOf(error)),
-          );
-        },
+        ...(other.destructive === true ? { destructive: true } : {}),
+        onPress: () =>
+          confirmFirst(other, () => {
+            invoke({ _tag: "Item", key: item.key }, other.command, other.title).catch((error: unknown) =>
+              Alert.alert(`Couldn’t ${other.title.toLowerCase()}`, messageOf(error)),
+            );
+          }),
       }),
     );
     return [

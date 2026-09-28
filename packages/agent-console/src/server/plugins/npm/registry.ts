@@ -31,7 +31,12 @@ export type RegistryPackage = (typeof searchResponse.Type)["objects"][number]["p
 
 const latestResponse = Schema.Struct({
   version: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  license: Schema.optionalKey(Schema.String),
+  homepage: Schema.optionalKey(Schema.String),
 });
+
+export type RegistryRelease = typeof latestResponse.Type;
 
 const getJson = <S extends Schema.Constraint>(url: string, schema: S, what: string) =>
   HttpClient.get(url).pipe(
@@ -50,11 +55,12 @@ export const searchRegistry = (query: string, size: number) =>
     Effect.map((response): ReadonlyArray<RegistryPackage> => response.objects.map((object) => object.package)),
   );
 
+/** A package's latest release: its version, and what it says about itself. */
+export const latestRelease = (name: string): Effect.Effect<RegistryRelease, PluginError, HttpClient.HttpClient> =>
+  getJson(`${registry}/${name.startsWith("@") ? `@${encodeURIComponent(name.slice(1))}` : encodeURIComponent(name)}/latest`, latestResponse, `looking up ${name}'s latest version`);
+
 /** A package's latest published version. */
-export const latestVersion = (name: string) =>
-  getJson(`${registry}/${name.startsWith("@") ? `@${encodeURIComponent(name.slice(1))}` : encodeURIComponent(name)}/latest`, latestResponse, `looking up ${name}'s latest version`).pipe(
-    Effect.map((response) => response.version),
-  );
+export const latestVersion = (name: string) => latestRelease(name).pipe(Effect.map((release) => release.version));
 
 /** A package's page on npmjs.com. */
 export const packageUrl = (name: string): string => `https://www.npmjs.com/package/${name}`;

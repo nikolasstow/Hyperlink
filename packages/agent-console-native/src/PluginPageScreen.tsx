@@ -16,7 +16,8 @@
 import * as React from "react";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { NativeStackHeaderItemMenuAction, NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
@@ -24,7 +25,9 @@ import { filterTitle, pinTitle } from "./collectionModel";
 import { colors } from "./colors";
 import { ensureWorkspace } from "./extensionViewsStore";
 import { followResult } from "./followResult";
-import { invokeCollection, invokeSections, type PageBlock, type PageLink, type SectionRow } from "./pagesClient";
+import { confirmFirst, openLink } from "./openPage";
+import { invokeCollection, invokeSections, pageMenuBlock, type FormSpec, type PageBlock, type SectionRow } from "./pagesClient";
+import { FormSheet } from "./CollectionSheets";
 import { changeCollection, loadCollection, loadSections, useCollection, useSections } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
@@ -33,14 +36,10 @@ import { SystemIcon } from "./SystemIcon";
 type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
 type Navigation = Props["navigation"];
 
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+/** A page opened from the menu is about nothing beyond its workspace. */
+const noParams: Readonly<Record<string, string>> = {};
 
-/** Open one of the plugin's pages, drawn by its kind. */
-const openLink = (navigation: Navigation, repo: string, dir: string, link: PageLink): void => {
-  if (link.kind === "collection") navigation.push("Collection", { repo, dir, page: link.page, title: link.title, view: { kind: "home" } });
-  else if (link.kind === "sections") navigation.push("PluginPage", { repo, dir, page: link.page, title: link.title });
-  else navigation.push("ExtensionView", { repo, dir, view: link.page, title: link.title });
-};
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 const Rows = (props: { readonly rows: ReadonlyArray<SectionRow> }): React.ReactElement => (
   <>
@@ -99,6 +98,20 @@ const PinnedCard = (props: {
   }, [apiBase, dir, page]);
 
   const data = load.kind === "ready" ? load.value : undefined;
+  // A package's own page shows only its pins.
+  const pins = data === undefined ? [] : data.state.pins.filter((pin) => block.group === undefined || (pin._tag === "PinnedItem" ? data.content.items.find((item) => item.key === pin.item)?.group === block.group : pin.group === block.group));
+  // With nothing pinned, the plugin's best picks, said to be suggestions.
+  const suggested = data === undefined || pins.length > 0 ? [] : data.content.items.filter((item) => block.suggestions.includes(item.key));
+  const runItem = (key: string, title: string): void => {
+    const item = data?.content.items.find((candidate) => candidate.key === key);
+    const run = item?.run;
+    if (item === undefined || run === undefined) return;
+    setBusy(item.key);
+    invokeCollection(apiBase, dir, page, { _tag: "Item", key: item.key }, run.command, {})
+      .then((result) => followResult(navigation, apiBase, result, title))
+      .catch((error: unknown) => Alert.alert(`Couldn’t run ${title}`, messageOf(error)))
+      .finally(() => setBusy(undefined));
+  };
   const unpin = (id: string, title: string): void =>
     Alert.alert(title, undefined, [
       { text: "Cancel", style: "cancel" },
@@ -123,12 +136,28 @@ const PinnedCard = (props: {
           <View style={styles.row}>
             <Text style={styles.hint}>Couldn’t load pins: {load.message}</Text>
           </View>
-        ) : data === undefined || data.state.pins.length === 0 ? (
+        ) : data === undefined || (pins.length === 0 && suggested.length === 0) ? (
           <View style={styles.row}>
             <Text style={styles.hint}>{block.empty}</Text>
           </View>
+        ) : pins.length === 0 ? (
+          <>
+            {suggested.map((item, index) => (
+              <Pressable key={item.key} style={[styles.row, index > 0 && styles.rowBorder]} onPress={() => runItem(item.key, item.title)}>
+                <SystemIcon name="terminal" size={18} color={colors.secondaryLabel} />
+                <View style={styles.pinText}>
+                  <Text style={styles.linkTitle}>{item.title}</Text>
+                  <Text style={[styles.pinDetail, styles.mono]}>{item.name}</Text>
+                </View>
+                {busy === item.key ? <ActivityIndicator color={colors.secondaryLabel} /> : <SystemIcon name="play.fill" size={15} color={colors.tint} />}
+              </Pressable>
+            ))}
+            <View style={[styles.row, styles.rowBorder]}>
+              <Text style={styles.hint}>{block.suggestionsNote}</Text>
+            </View>
+          </>
         ) : (
-          data.state.pins.map((pin, index) => {
+          pins.map((pin, index) => {
             const title = pinTitle(data.content, data.state, pin);
             if (pin._tag === "PinnedFilter") {
               return (
@@ -161,16 +190,8 @@ const PinnedCard = (props: {
             }
             const item = data.content.items.find((candidate) => candidate.key === pin.item);
             const run = item?.run;
-            const start = (): void => {
-              if (item === undefined || run === undefined) return;
-              setBusy(item.key);
-              invokeCollection(apiBase, dir, page, { _tag: "Item", key: item.key }, run.command, {})
-                .then((result) => followResult(navigation, apiBase, result, item.title))
-                .catch((error: unknown) => Alert.alert(`Couldn’t run ${item.title}`, messageOf(error)))
-                .finally(() => setBusy(undefined));
-            };
             return (
-              <Pressable key={pin.id} style={[styles.row, index > 0 && styles.rowBorder]} onPress={start} onLongPress={() => unpin(pin.id, title)}>
+              <Pressable key={pin.id} style={[styles.row, index > 0 && styles.rowBorder]} onPress={() => runItem(pin.item, title)} onLongPress={() => unpin(pin.id, title)}>
                 <SystemIcon name="terminal" size={18} color={colors.secondaryLabel} />
                 <View style={styles.pinText}>
                   <Text style={styles.linkTitle}>{title}</Text>
@@ -189,23 +210,62 @@ const PinnedCard = (props: {
 
 export const PluginPageScreen = (props: Props): React.ReactElement => {
   const { repo, dir, page, title } = props.route.params;
+  const params = props.route.params.params ?? noParams;
   const { navigation } = props;
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
-  const load = useSections(dir, page);
+  const load = useSections(dir, page, params);
   const [busy, setBusy] = React.useState<string | undefined>(undefined);
+  const [form, setForm] = React.useState<FormSpec | undefined>(undefined);
 
   React.useEffect(() => {
     ensureWorkspace(apiBase, dir);
-    void loadSections(apiBase, dir, page, "ifChanged");
-  }, [apiBase, dir, page]);
+    void loadSections(apiBase, dir, page, params, "ifChanged");
+  }, [apiBase, dir, page, params]);
+
+  // Back from an install, an edit or a new package, the files behind the
+  // page changed.
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadSections(apiBase, dir, page, params, "ifChanged");
+    }, [apiBase, dir, page, params]),
+  );
 
   const shownTitle = load.kind === "ready" ? load.value.title : title;
+  const menu = React.useMemo((): ReadonlyArray<FormSpec> => (load.kind === "ready" ? load.value.menu : []), [load]);
   React.useLayoutEffect(() => {
-    navigation.setOptions({ title: shownTitle });
-  }, [navigation, shownTitle]);
+    navigation.setOptions({
+      title: shownTitle,
+      unstable_headerRightItems: () =>
+        menu.length === 0
+          ? []
+          : [
+              {
+                type: "menu",
+                label: "More",
+                icon: {
+                  type: "sfSymbol",
+                  name: "ellipsis",
+                },
+                menu: {
+                  items: menu.map(
+                    (spec): NativeStackHeaderItemMenuAction => ({
+                      type: "action",
+                      label: spec.title,
+                      icon: {
+                        type: "sfSymbol",
+                        name: symbolForIcon(spec.icon),
+                      },
+                      onPress: () => setForm(spec),
+                    }),
+                  ),
+                },
+              },
+            ],
+    });
+  }, [navigation, shownTitle, menu]);
 
   if (load.kind !== "ready") {
     return (
@@ -216,7 +276,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
           <>
             <Text style={styles.message}>Couldn’t load {title}.</Text>
             <Text style={styles.detail}>{load.message}</Text>
-            <TouchableOpacity onPress={() => void loadSections(apiBase, dir, page, "force")}>
+            <TouchableOpacity onPress={() => void loadSections(apiBase, dir, page, params, "force")}>
               <Text style={styles.retry}>Try Again</Text>
             </TouchableOpacity>
           </>
@@ -227,7 +287,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
 
   const runCardAction = (block: string, command: string, label: string): void => {
     setBusy(`${block} ${command}`);
-    invokeSections(apiBase, dir, page, block, command)
+    invokeSections(apiBase, dir, page, params, block, command, {})
       .then((result) => followResult(navigation, apiBase, result, label))
       .catch((error: unknown) => Alert.alert(`Couldn’t ${label.toLowerCase()}`, messageOf(error)))
       .finally(() => setBusy(undefined));
@@ -269,7 +329,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
               <View style={styles.rowBorder} />
               <Rows rows={block.rows} />
               {block.actions.map((action) => (
-                <Pressable key={action.command} style={[styles.row, styles.rowBorder]} onPress={() => runCardAction(block.key, action.command, action.title)}>
+                <Pressable key={action.command} style={[styles.row, styles.rowBorder]} onPress={() => confirmFirst(action, () => runCardAction(block.key, action.command, action.title))}>
                   {busy === `${block.key} ${action.command}` ? (
                     <ActivityIndicator color={colors.secondaryLabel} />
                   ) : (
@@ -282,19 +342,57 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
           </View>
         );
       }
+      case "Actions":
+        return (
+          <View key={`actions ${block.key}`}>
+            {block.title === undefined ? <View style={styles.gap} /> : <Text style={styles.sectionLabel}>{block.title}</Text>}
+            <View style={styles.card}>
+              {block.actions.map((action, actionIndex) => (
+                <Pressable
+                  key={action.command}
+                  style={[styles.row, actionIndex > 0 && styles.rowBorder]}
+                  onPress={() => confirmFirst(action, () => runCardAction(block.key, action.command, action.title))}
+                >
+                  {busy === `${block.key} ${action.command}` ? (
+                    <ActivityIndicator color={colors.secondaryLabel} />
+                  ) : (
+                    <SystemIcon name={symbolForIcon(action.icon)} size={17} color={action.destructive === true ? colors.destructive : colors.tint} />
+                  )}
+                  <Text style={[styles.linkTitle, action.destructive === true ? styles.destructive : styles.tinted]}>{action.title}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        );
     }
   };
 
   return (
+    <>
     <ScrollView
       style={styles.root}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-      refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void loadSections(apiBase, dir, page, "force")} />}
+      refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void loadSections(apiBase, dir, page, params, "force")} />}
     >
       {load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded page. Refreshing failed: {load.error}</Text>}
       {load.value.blocks.map(renderBlock)}
     </ScrollView>
+    <FormSheet
+      spec={form}
+      groups={[]}
+      onCancel={() => setForm(undefined)}
+      onSubmit={(values) =>
+        form === undefined
+          ? Promise.resolve()
+          : invokeSections(apiBase, dir, page, params, pageMenuBlock, form.command, values).then(async (result) => {
+              setForm(undefined);
+              await followResult(navigation, apiBase, result, form.title);
+              await loadSections(apiBase, dir, page, params, "ifChanged");
+            })
+      }
+    />
+    </>
   );
 };
 
@@ -374,6 +472,9 @@ const styles = StyleSheet.create({
   linkDetail: {
     color: colors.secondaryLabel,
     fontSize: 16,
+  },
+  destructive: {
+    color: colors.destructive,
   },
   tinted: {
     color: colors.tint,

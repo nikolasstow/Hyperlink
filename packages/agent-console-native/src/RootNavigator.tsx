@@ -83,7 +83,7 @@ export type RootStackParamList = {
   ExtensionView: { repo: string; dir: string; view: string; title: string };
   // A plugin's page organized into sections (NPM's), and a plugin's collection page (its
   // Scripts) in one of its views: home, a filter, or an index of all.
-  PluginPage: { repo: string; dir: string; page: string; title: string };
+  PluginPage: { repo: string; dir: string; page: string; title: string; params?: Readonly<Record<string, string>> };
   Collection: { repo: string; dir: string; page: string; title: string; view: CollectionView };
   // Live output of a process on the backend's process runner.
   ProcessOutput: { id: string; title: string; commandLine: string };

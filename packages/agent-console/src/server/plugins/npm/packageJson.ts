@@ -189,3 +189,35 @@ export const changeScripts = (
     if (!entries.some(([existing]) => existing === change.previous)) return yield* editError(`there is no script named "${change.previous}" any more`);
     return entries.map(([existing, current]): readonly [string, string] => (existing === change.previous ? script : [existing, current]));
   });
+
+/**
+ * `text` with a top-level string field set, or removed for `undefined`, every
+ * other byte as it was. A new field goes right after the first of `after`
+ * the file has (a description after the version), else last.
+ */
+export const writeField = (text: string, key: string, value: string | undefined, after: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const { keys, close } = yield* topLevel(text);
+    const index = keys.findIndex((candidate) => candidate.key === key);
+    const span = keys[index];
+    if (value === undefined) {
+      if (span === undefined) return text;
+      const previous = keys[index - 1];
+      if (previous !== undefined) return `${text.slice(0, previous.valueEnd)}${text.slice(span.valueEnd)}`;
+      const next = keys[index + 1];
+      return next === undefined ? `${text.slice(0, span.keyStart)}${text.slice(close)}` : `${text.slice(0, span.keyStart)}${text.slice(next.keyStart)}`;
+    }
+    const encoded = yield* encodeString(value);
+    if (span !== undefined) return `${text.slice(0, span.valueStart)}${encoded}${text.slice(span.valueEnd)}`;
+    const newline = text.includes("\r\n") ? "\r\n" : "\n";
+    const anchor = after.map((name) => keys.find((candidate) => candidate.key === name)).find((found) => found !== undefined) ?? keys.at(-1);
+    const name = yield* encodeString(key);
+    if (anchor === undefined) return `${text.slice(0, close)}${newline}  ${name}: ${encoded}${newline}${text.slice(close)}`;
+    const indent = indentAt(text, anchor.keyStart);
+    return `${text.slice(0, anchor.valueEnd)},${newline}${indent}${name}: ${encoded}${text.slice(anchor.valueEnd)}`;
+  });
+
+/** A new package's package.json: its name, a first version, and private
+ * until it is meant to be published. */
+export const newPackageJson = (name: string) =>
+  encodeString(name).pipe(Effect.map((encoded) => ["{", `  "name": ${encoded},`, '  "version": "0.0.0",', '  "private": true', "}", ""].join("\n")));

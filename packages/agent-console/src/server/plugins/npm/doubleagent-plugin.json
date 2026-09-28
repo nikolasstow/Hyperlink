@@ -1,7 +1,7 @@
 {
   "id": "doubleagent.npm",
   "name": "NPM",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The repo's package.json, scripts and packages: run and sort scripts, install, update and remove packages, and search npm.",
   "main": "./plugin.ts",
   "contributes": {
@@ -12,6 +12,14 @@
         "icon": "sf:shippingbox",
         "requirement": "repo",
         "kind": "sections"
+      },
+      {
+        "id": "workspace",
+        "title": "Workspace Packages",
+        "icon": "sf:square.stack.3d.up",
+        "requirement": "repo",
+        "kind": "sections",
+        "parent": "npm"
       },
       {
         "id": "details",
@@ -36,8 +44,20 @@
         "requirement": "repo",
         "kind": "collection",
         "parent": "npm"
+      },
+      {
+        "id": "dependency",
+        "title": "Dependency",
+        "icon": "sf:shippingbox",
+        "requirement": "repo",
+        "kind": "sections",
+        "parent": "npm"
       }
     ]
   },
-  "permissions": ["processes", "write", "network"]
+  "permissions": [
+    "processes",
+    "write",
+    "network"
+  ]
 }

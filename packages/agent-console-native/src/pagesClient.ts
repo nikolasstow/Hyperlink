@@ -19,56 +19,23 @@ const viewAction = Schema.Struct({
   title: Schema.String,
   icon: Schema.optionalKey(Schema.String),
   inline: Schema.Boolean,
+  destructive: Schema.optionalKey(Schema.Boolean),
 });
+export type PageAction = typeof viewAction.Type;
+
+/** What a page is about beyond the workspace (which package); for a
+ * collection, `group` and `category` open it on that filter. */
+export type PageParams = Readonly<Record<string, string>>;
 
 const pageLink = Schema.Struct({
   page: Schema.String,
+  params: Schema.Record(Schema.String, Schema.String),
   title: Schema.String,
   icon: Schema.optionalKey(Schema.String),
   detail: Schema.optionalKey(Schema.String),
   kind: pageKind,
 });
 export type PageLink = typeof pageLink.Type;
-
-const sectionRow = Schema.Struct({
-  label: Schema.String,
-  value: Schema.String,
-  mono: Schema.Boolean,
-  stacked: Schema.Boolean,
-});
-export type SectionRow = typeof sectionRow.Type;
-
-const pageBlock = Schema.Union([
-  Schema.TaggedStruct("Facts", {
-    title: Schema.optionalKey(Schema.String),
-    rows: Schema.Array(sectionRow),
-    links: Schema.Array(pageLink),
-  }),
-  Schema.TaggedStruct("Link", {
-    link: pageLink,
-  }),
-  Schema.TaggedStruct("Pinned", {
-    collection: pageLink,
-    title: Schema.String,
-    viewAll: Schema.String,
-    empty: Schema.String,
-  }),
-  Schema.TaggedStruct("Card", {
-    key: Schema.String,
-    title: Schema.String,
-    icon: Schema.optionalKey(Schema.String),
-    rows: Schema.Array(sectionRow),
-    opens: Schema.optionalKey(pageLink),
-    actions: Schema.Array(viewAction),
-  }),
-]);
-export type PageBlock = typeof pageBlock.Type;
-
-const pageSections = Schema.Struct({
-  title: Schema.String,
-  blocks: Schema.Array(pageBlock),
-});
-export type PageSections = typeof pageSections.Type;
 
 const formField = Schema.Struct({
   id: Schema.String,
@@ -94,6 +61,58 @@ const formSpec = Schema.Struct({
 });
 export type FormSpec = typeof formSpec.Type;
 
+const sectionRow = Schema.Struct({
+  label: Schema.String,
+  value: Schema.String,
+  mono: Schema.Boolean,
+  stacked: Schema.Boolean,
+});
+export type SectionRow = typeof sectionRow.Type;
+
+const pageBlock = Schema.Union([
+  Schema.TaggedStruct("Facts", {
+    title: Schema.optionalKey(Schema.String),
+    rows: Schema.Array(sectionRow),
+    links: Schema.Array(pageLink),
+  }),
+  Schema.TaggedStruct("Link", {
+    link: pageLink,
+  }),
+  Schema.TaggedStruct("Pinned", {
+    collection: pageLink,
+    title: Schema.String,
+    viewAll: Schema.String,
+    empty: Schema.String,
+    group: Schema.optionalKey(Schema.String),
+    suggestions: Schema.Array(Schema.String),
+    suggestionsNote: Schema.String,
+  }),
+  Schema.TaggedStruct("Card", {
+    key: Schema.String,
+    title: Schema.String,
+    icon: Schema.optionalKey(Schema.String),
+    rows: Schema.Array(sectionRow),
+    opens: Schema.optionalKey(pageLink),
+    actions: Schema.Array(viewAction),
+  }),
+  Schema.TaggedStruct("Actions", {
+    key: Schema.String,
+    title: Schema.optionalKey(Schema.String),
+    actions: Schema.Array(viewAction),
+  }),
+]);
+export type PageBlock = typeof pageBlock.Type;
+
+const pageSections = Schema.Struct({
+  title: Schema.String,
+  blocks: Schema.Array(pageBlock),
+  menu: Schema.Array(formSpec),
+});
+
+/** The block a page's 3-dot menu forms are addressed by. */
+export const pageMenuBlock = "menu";
+export type PageSections = typeof pageSections.Type;
+
 const collectionGroup = Schema.Struct({
   key: Schema.String,
   title: Schema.String,
@@ -114,6 +133,7 @@ const collectionItem = Schema.Struct({
   categories: Schema.Array(Schema.String),
   run: Schema.optionalKey(viewAction),
   open: Schema.optionalKey(viewAction),
+  opens: Schema.optionalKey(pageLink),
   actions: Schema.Array(viewAction),
   forms: Schema.Array(formSpec),
 });
@@ -189,11 +209,12 @@ const post = (url: string, body: object) =>
     body: JSON.stringify(body),
   });
 
-export const fetchSections = async (apiBase: string, workspace: string, page: string, refresh: TreeRefresh): Promise<PageSections> =>
+export const fetchSections = async (apiBase: string, workspace: string, page: string, params: PageParams, refresh: TreeRefresh): Promise<PageSections> =>
   Schema.decodeUnknownSync(pageSections)(
     await post(`${base(apiBase)}/pages/sections`, {
       workspace,
       page,
+      params,
       refresh,
     }),
   );
@@ -203,6 +224,7 @@ export const fetchCollection = async (apiBase: string, workspace: string, page: 
     await post(`${base(apiBase)}/pages/collection`, {
       workspace,
       page,
+      params: {},
       refresh,
     }),
   );
@@ -243,14 +265,25 @@ export const invokeCollection = async (
     }),
   );
 
-/** Run a card's action on a page and learn what it asked for. */
-export const invokeSections = async (apiBase: string, workspace: string, page: string, block: string, command: string): Promise<InvokeResult> =>
+/** Run a page's action (a card's, an actions block's, or a menu form with
+ * its values) and learn what it asked for. */
+export const invokeSections = async (
+  apiBase: string,
+  workspace: string,
+  page: string,
+  params: PageParams,
+  block: string,
+  command: string,
+  values: Readonly<Record<string, string>>,
+): Promise<InvokeResult> =>
   Schema.decodeUnknownSync(invokeResult)(
     await post(`${base(apiBase)}/pages/sections/invoke`, {
       workspace,
       page,
+      params,
       block,
       command,
+      values,
     }),
   );
 

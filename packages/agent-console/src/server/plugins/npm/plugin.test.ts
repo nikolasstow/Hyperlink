@@ -45,39 +45,52 @@ const fixture = Effect.gen(function* () {
 const scriptsFor = (workspace: string) => {
   const collection = plugin.collections?.["scripts"];
   if (collection === undefined) throw new Error("the scripts collection is missing");
-  return collection.content({ workspace });
+  return collection.content({ workspace, params: {} });
 };
 
-const pageFor = (id: string) => (workspace: string) => {
-  const page = plugin.sectionPages?.[id];
-  if (page === undefined) throw new Error(`the ${id} page is missing`);
-  return page.content({ workspace });
-};
+const pageFor =
+  (id: string, params: Readonly<Record<string, string>> = {}) =>
+  (workspace: string) => {
+    const page = plugin.sectionPages?.[id];
+    if (page === undefined) throw new Error(`the ${id} page is missing`);
+    return page.content({ workspace, params });
+  };
 
 const packagesFor = (workspace: string) => {
   const collection = plugin.collections?.["packages"];
   if (collection === undefined) throw new Error("the packages collection is missing");
-  return collection.content({ workspace });
+  return collection.content({ workspace, params: {} });
 };
 
 const searchFor = (workspace: string, query: string) => {
   const search = plugin.collections?.["packages"]?.search;
   if (search === undefined) throw new Error("the packages collection has no search");
-  return search.run({ workspace }, query);
+  return search.run({ workspace, params: {} }, query);
 };
+
+const describeParams = (params: Readonly<Record<string, string>> | undefined) =>
+  params === undefined || Object.keys(params).length === 0
+    ? ""
+    : `(${Object.entries(params)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(",")})`;
 
 /** A page's blocks as text, to compare whole. */
 const describeBlocks = (blocks: ReadonlyArray<PluginBlock>) =>
   blocks.map((block) => {
     switch (block._tag) {
       case "Facts":
-        return `Facts ${block.title ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}${row.stacked === true ? " (stacked)" : ""}`).join(", ")}${(block.links ?? []).map((link) => ` | ${link.title}${link.detail === undefined ? "" : ` ${link.detail}`} -> ${link.page}`).join("")}`;
+        return `Facts ${block.title ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}${row.stacked === true ? " (stacked)" : ""}`).join(", ")}${(block.links ?? [])
+          .map((link) => ` | ${link.title}${link.detail === undefined ? "" : ` ${link.detail}`} -> ${link.page}${describeParams(link.params)}`)
+          .join("")}`;
       case "Link":
         return `Link ${block.title} -> ${block.page}`;
       case "Pinned":
-        return `Pinned ${block.collection}`;
+        return `Pinned ${block.collection.page}${describeParams(block.collection.params)} suggesting ${(block.suggestions ?? []).join(" ")}`;
       case "Card":
-        return `Card ${block.title} -> ${block.opens ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}`).join(", ")} [${(block.actions ?? []).map((action) => action.title).join(", ")}]`;
+        return `Card ${block.title} -> ${block.opens?.page ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}`).join(", ")} [${(block.actions ?? []).map((action) => action.title).join(", ")}]`;
+      case "Actions":
+        return `Actions: ${block.actions.map((action) => `${action.title}${action.destructive === true ? " (destructive)" : ""}`).join(", ")}`;
     }
   });
 
@@ -262,14 +275,117 @@ describe("npm plugin: scripts", () => {
 });
 
 describe("npm plugin: the NPM page", () => {
-  it("is the project, its pinned scripts, and the package manager's card", async () => {
+  it("is the project, its packages, its pinned scripts, and the package manager's card", async () => {
     const npm = await run(fixture.pipe(Effect.flatMap(pageFor("npm"))));
     expect(npm.title).toBe("PNPM");
     expect(describeBlocks(npm.blocks)).toEqual([
-      "Facts : Name=app, Version=1.2.3, Description=The app (stacked) | Packages 1 -> packages | All Details -> details",
-      "Pinned scripts",
+      "Facts : Name=app, Version=1.2.3, Description=The app (stacked) | All Details -> details(package=.)",
+      "Facts Packages:  | Workspace Packages 1 -> workspace | Dependencies 0 -> packages(category=dependencies) | Development Dependencies 1 -> packages(category=dev)",
+      "Pinned scripts suggesting .#build .#test .#prebuild",
       "Card pnpm -> packages: Version=10.33.4, Latest=10.40.0, Dependencies=0, Dev Dependencies=1, Workspace Packages=2 [Update to 10.40.0]",
     ]);
+    expect(npm.menu?.map((form) => form.title)).toEqual(["Edit Package Details", "Install Dependency", "Install Dev Dependency", "New Workspace Package"]);
+  });
+
+  it("is the same page for one workspace package, scoped to it", async () => {
+    const tools = await run(fixture.pipe(Effect.flatMap(pageFor("npm", { package: "tools" }))));
+    expect(tools.title).toBe("tools");
+    expect(describeBlocks(tools.blocks)).toEqual([
+      "Facts : Name=tools, Folder=tools | All Details -> details(package=tools)",
+      "Facts Packages:  | Dependencies 0 -> packages(group=tools,category=dependencies) | Development Dependencies 0 -> packages(group=tools,category=dev)",
+      "Pinned scripts(group=tools) suggesting ",
+    ]);
+    expect(tools.menu?.map((form) => form.title)).toEqual(["Edit Package Details", "Install Dependency", "Install Dev Dependency"]);
+  });
+
+  it("lists the workspace packages, each opening its own page", async () => {
+    const page = await run(fixture.pipe(Effect.flatMap(pageFor("workspace"))));
+    expect(describeBlocks(page.blocks)).toEqual(["Facts :  | tools tools -> npm(package=tools)"]);
+  });
+
+  it("shows a dependency: asked for, installed, latest, and what can be done", async () => {
+    const page = await run(
+      Effect.gen(function* () {
+        const app = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* fs.makeDirectory(path.join(app, "node_modules", "vitest"), { recursive: true });
+        yield* fs.writeFileString(path.join(app, "node_modules", "vitest", "package.json"), '{ "name": "vitest", "version": "3.2.4" }');
+        return yield* pageFor("dependency", { package: ".", kind: "devDependencies", name: "vitest" })(app);
+      }),
+    );
+    expect(page.title).toBe("vitest");
+    expect(describeBlocks(page.blocks)).toEqual([
+      "Facts : Status=Update available, Asked For=^3.0.0, Installed=3.2.4, Latest=10.40.0",
+      "Facts In: Package=app, As=Dev Dependencies",
+      "Actions: Update to 10.40.0, Update Within Range, Uninstall (destructive), View on npm",
+    ]);
+  });
+
+  it("edits a package's details in place", async () => {
+    const text = await run(
+      Effect.gen(function* () {
+        const app = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const npm = yield* pageFor("npm")(app);
+        const edit = npm.menu?.find((form) => form.command === "npm.editDetails");
+        if (edit === undefined) return yield* Effect.die("no edit form");
+        yield* edit.submit({
+          name: "app",
+          version: "1.3.0",
+          description: "",
+        });
+        return yield* fs.readFileString(path.join(app, "package.json"));
+      }),
+    );
+    expect(text.startsWith('{\n  "name": "app",\n  "version": "1.3.0",\n  "packageManager"')).toBe(true);
+  });
+
+  it("creates a workspace package, and says when pnpm-workspace.yaml does not take it in", async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const app = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* fs.writeFileString(path.join(app, "pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n");
+        const npm = yield* pageFor("npm")(app);
+        const create = npm.menu?.find((form) => form.command === "npm.createPackage");
+        if (create === undefined) return yield* Effect.die("no create form");
+        const made = yield* create.submit({
+          name: "@x/new",
+          folder: "libs/new",
+        });
+        return {
+          made,
+          file: yield* fs.readFileString(path.join(app, "libs", "new", "package.json")),
+        };
+      }),
+    );
+    expect(result.file).toBe('{\n  "name": "@x/new",\n  "version": "0.0.0",\n  "private": true\n}\n');
+    expect(result.made._tag === "Completed" ? result.made.messages : result.made._tag).toEqual([
+      "Created @x/new in libs/new.",
+      "pnpm-workspace.yaml does not take in libs/new yet; add it to its packages so pnpm links it.",
+    ]);
+  });
+
+  it("installs into a pnpm workspace's root as the root", async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const app = yield* fixture;
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        yield* fs.writeFileString(path.join(app, "pnpm-workspace.yaml"), "packages:\n  - 'tools'\n");
+        const npm = yield* pageFor("npm")(app);
+        const install = npm.menu?.find((form) => form.command === "npm.installDevDependency");
+        if (install === undefined) return yield* Effect.die("no install form");
+        return yield* install.submit({
+          name: "zod",
+          version: "",
+        });
+      }),
+    );
+    expect(result._tag === "RunTask" ? [result.command, ...result.args] : result._tag).toEqual(["pnpm", "add", "zod", "--save-dev", "--workspace-root"]);
   });
 
   it("updates the package manager with its own command", async () => {

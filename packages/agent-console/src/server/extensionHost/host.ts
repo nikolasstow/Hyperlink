@@ -253,6 +253,13 @@ interface Row {
   readonly runs?: ReadonlyMap<string, PluginAction["run"]>;
 }
 
+/** Params as a cache key: the same params in any order are the same page. */
+const paramsKey = (params: Readonly<Record<string, string>>): string =>
+  Object.entries(params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+
 const call = (what: string, run: () => unknown) =>
   Effect.tryPromise({
     try: () => Promise.resolve(run()),
@@ -653,7 +660,7 @@ export const makeHost = (options: HostOptions) =>
         const stale =
           cached === undefined || refresh === "force" ? true : refresh === "ifChanged" ? yield* changedSince(key) : false;
         if (!stale && cached !== undefined) return cached;
-        const nodes = yield* page.view.tree({ workspace }).pipe(
+        const nodes = yield* page.view.tree({ workspace, params: {} }).pipe(
           Effect.mapError(
             (cause) =>
               new ExtensionHostError({
@@ -737,12 +744,19 @@ export const makeHost = (options: HostOptions) =>
         message: `${page.viewId}: ${cause.message}`,
       });
 
-    const pluginSections = (page: Extract<PluginPageEntry, { readonly kind: "sections" }>, workspace: string, refresh: TreeRefresh) =>
+    /** A page for a workspace and params, cached under both: a package's
+     * page is its own page. */
+    const pluginSections = (
+      page: Extract<PluginPageEntry, { readonly kind: "sections" }>,
+      workspace: string,
+      params: Readonly<Record<string, string>>,
+      refresh: TreeRefresh,
+    ) =>
       cached(
         sectionPages,
-        `${page.viewId} ${workspace}`,
+        `${page.viewId} ${workspace} ${paramsKey(params)}`,
         refresh,
-        page.sections.content({ workspace }).pipe(
+        page.sections.content({ workspace, params }).pipe(
           Effect.mapError(providerFailed(page)),
           Effect.flatMap((content) =>
             toSections(page, content).pipe(
@@ -760,7 +774,7 @@ export const makeHost = (options: HostOptions) =>
         collections,
         `${page.viewId} ${workspace}`,
         refresh,
-        page.collection.content({ workspace }).pipe(
+        page.collection.content({ workspace, params: {} }).pipe(
           Effect.mapError(providerFailed(page)),
           Effect.flatMap((content) =>
             toCollection(page, content).pipe(
@@ -781,7 +795,7 @@ export const makeHost = (options: HostOptions) =>
         case "tree":
           return pluginTree(page, workspace, "none").pipe(Effect.map((entries) => titled(entries.length > 0, page.page.title)));
         case "sections":
-          return pluginSections(page, workspace, "none").pipe(Effect.map((built) => titled(built.page.blocks.length > 0, built.page.title)));
+          return pluginSections(page, workspace, {}, "none").pipe(Effect.map((built) => titled(built.page.blocks.length > 0, built.page.title)));
         case "collection":
           return pluginCollection(page, workspace, "none").pipe(Effect.map((collection) => titled(collection.content.items.length > 0, page.page.title)));
       }
@@ -811,23 +825,35 @@ export const makeHost = (options: HostOptions) =>
 
     const unknownPage = (view: string, kind: string) => rejected("UnknownView", `no plugin page ${view} of kind ${kind}`);
 
-    const SectionsRpc = (payload: { readonly workspace: string; readonly page: string; readonly refresh: TreeRefresh }) =>
+    const SectionsRpc = (payload: {
+      readonly workspace: string;
+      readonly page: string;
+      readonly params: Readonly<Record<string, string>>;
+      readonly refresh: TreeRefresh;
+    }) =>
       Effect.gen(function* () {
         const page = pageOf(payload.page);
         if (page?.kind !== "sections") return yield* unknownPage(payload.page, "sections");
-        return (yield* pluginSections(page, payload.workspace, payload.refresh)).page;
+        return (yield* pluginSections(page, payload.workspace, payload.params, payload.refresh)).page;
       });
 
-    /** Run a card's action: only one the page offers on that card, as last
-     * served. */
-    const SectionsInvoke = (payload: { readonly workspace: string; readonly page: string; readonly block: string; readonly command: string }) =>
+    /** Run a card's action or a menu form: only one the page offers there,
+     * as last served. */
+    const SectionsInvoke = (payload: {
+      readonly workspace: string;
+      readonly page: string;
+      readonly params: Readonly<Record<string, string>>;
+      readonly block: string;
+      readonly command: string;
+      readonly values: Readonly<Record<string, string>>;
+    }) =>
       Effect.gen(function* () {
         const page = pageOf(payload.page);
         if (page?.kind !== "sections") return yield* unknownPage(payload.page, "sections");
-        const built = yield* pluginSections(page, payload.workspace, "none");
+        const built = yield* pluginSections(page, payload.workspace, payload.params, "none");
         const run = built.runs.get(payload.block)?.get(payload.command);
         if (run === undefined) return yield* rejected("UnknownCommand", `${payload.command} is not offered on ${payload.block}`);
-        return yield* runPluginAction(run);
+        return yield* runPluginAction(run(payload.values));
       });
 
     /** Search beyond a collection; the results' actions are kept for invoking. */
@@ -837,7 +863,7 @@ export const makeHost = (options: HostOptions) =>
         if (page?.kind !== "collection") return yield* unknownPage(payload.page, "collection");
         const search = page.collection.search;
         if (search === undefined) return yield* rejected("UnknownCommand", `${payload.page} has no search`);
-        const found = yield* search.run({ workspace: payload.workspace }, payload.query).pipe(Effect.mapError(providerFailed(page)));
+        const found = yield* search.run({ workspace: payload.workspace, params: {} }, payload.query).pipe(Effect.mapError(providerFailed(page)));
         const results = yield* toSearchResults(page, found);
         yield* Ref.update(searchRuns, (all) => new Map([...all, [`${page.viewId} ${payload.workspace}`, results.runs]]));
         const items: ReadonlyArray<CollectionItem> = results.items;

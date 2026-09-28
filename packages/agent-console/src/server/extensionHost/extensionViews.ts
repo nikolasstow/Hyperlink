@@ -161,7 +161,7 @@ const make = Effect.gen(function* () {
           ),
         ),
       ),
-    sections: (workspace: string, page: string, refresh: TreeRefresh) =>
+    sections: (workspace: string, page: string, params: Readonly<Record<string, string>>, refresh: TreeRefresh) =>
       workspaceOf(workspace).pipe(
         Effect.flatMap((resolved) =>
           withDeadline(
@@ -169,6 +169,7 @@ const make = Effect.gen(function* () {
             client.Sections({
               workspace: resolved,
               page,
+              params,
               refresh,
             }),
           ),
@@ -182,6 +183,7 @@ const make = Effect.gen(function* () {
             client.Collection({
               workspace: resolved,
               page,
+              params: {},
               refresh,
             }),
           ),
