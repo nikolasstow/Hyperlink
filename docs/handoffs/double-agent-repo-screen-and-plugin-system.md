@@ -496,27 +496,29 @@ Owner-stated unless marked *Proposed*.
   rest (the Dubz flow below), with labels from the LLM wherever there is no default (§21).
 - **Filtering:** by **category**, and by **package** in a monorepo.
 - **The page, top to bottom:**
-  1. **Pinned:** pinned scripts and folders.
+  1. **Pinned:** pinned scripts and filters.
   2. **Categories**, repo-wide: a few listed, with a tap through to a page of all of them.
   3. **Packages:** the repo's own packages (not its dependencies). Also a few listed, with a tap
      through to a page of all of them.
-- **Folders can be filters**, so new scripts land in them on their own (for example, the build
-  scripts in `@some/package`).
-- **Pinning a filter makes one of those folders:**
+- **Filters, not folders.** A filter is a package, a category, or both. It is live, so new
+  scripts show up in it on their own (for example, the build scripts in `@some/package`).
+- **Pinning a filter saves it to Pinned:**
   - open a package, select a category, and pin it to get that category in that package;
   - open a category for the whole repo and pin it to get everything in that category.
+- **Categories are created by the owner** (besides the ones AI assigns) and appear where
+  categories are listed: the repo-wide Categories section and inside a package.
 - **AI categorizing happens in the Dubz window** (when Dubz is enabled). It opens at **half
   height** to ask. On yes it works, then **expands to full screen** showing the result, with
   **Cancel** and **Continue**, a note that it can be changed by hand at any time, and a message
   field to tell the agent what to do instead. Any AI-organize feature works this way.
-- Rows and tiles show folder and script icons. A folder shows its name and how many scripts it
-  holds. A script shows a proper English title with its real script name.
+- Rows and tiles show filter and script icons. A filter shows its name and how many scripts it
+  matches. A script shows a proper English title with its real script name.
 - It works **like Files**: multi-select to move; a hard press opens a menu (edit, move, and run
   for a script).
 - A script row has a **play button**: tapping the row runs it. Its menu has **Edit Script** and
   **Duplicate**.
 - The 3-dot menu has **Add New Script** and the list/grid switch.
-- Editing (a script or a folder) is a **slide-up sheet**.
+- Editing (a script, a filter or a category) is a **slide-up sheet**.
 - The intended path is asking **Dubz** to write any new script, so **pages need a way to tell the
   agent what it can do** there (soon).
 
