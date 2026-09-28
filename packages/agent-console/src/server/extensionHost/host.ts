@@ -925,7 +925,15 @@ export const makeHost = (options: HostOptions) =>
               Effect.all(
                 [
                   Effect.forEach(viewIds(), (view) => Tree({ workspace, view, refresh: "none" }), { discard: true }),
-                  Effect.forEach(pages, (page) => pageTitle(page, workspace), { discard: true }),
+                  // Only the menu's pages: a page that opens from another
+                  // takes params (which dependency) that only its link has,
+                  // and the app warms those as it loads the page linking
+                  // to them.
+                  Effect.forEach(
+                    pages.filter((page) => page.page.parent === undefined),
+                    (page) => pageTitle(page, workspace),
+                    { discard: true },
+                  ),
                 ],
                 { discard: true },
               ),
