@@ -215,7 +215,6 @@ const dependencyItem = (pkg: Package, kind: Kind, name: string, range: string) =
         title: name,
         name: range,
         detail: installed === undefined ? "Not installed" : `Installed ${installed}`,
-        icon: "sf:shippingbox",
         group: pkg.key,
         categories: [kind.category],
         opens: {
@@ -320,7 +319,6 @@ const searchResult = (workspace: string, keys: ReadonlyArray<string>, found: Reg
   title: found.name,
   name: found.version,
   ...(found.description === undefined ? {} : { detail: found.description }),
-  icon: "sf:shippingbox",
   group: "",
   categories: [],
   open: viewOnNpm(found.name),

@@ -53,7 +53,8 @@ export const ItemRow = (props: {
   readonly title: string;
   readonly name: string;
   readonly detail?: string;
-  readonly icon: SFSymbol;
+  /** None for an item that is just its name (a package). */
+  readonly icon: SFSymbol | undefined;
   readonly depth: number;
   readonly width: number;
   readonly busy: boolean;
@@ -81,7 +82,7 @@ export const ItemRow = (props: {
       ) : (
         <UIText modifiers={[frame({ width: CHEVRON_COL })]}>{""}</UIText>
       )}
-      <Image systemName={props.icon} size={17} color={colors.secondaryLabel} modifiers={[frame({ width: ICON_COL })]} />
+      {props.icon === undefined ? null : <Image systemName={props.icon} size={17} color={colors.secondaryLabel} modifiers={[frame({ width: ICON_COL })]} />}
       <VStack alignment="leading" spacing={2}>
         <UIText modifiers={[font({ size: 15 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title}</UIText>
         <UIText modifiers={[font({ size: 12, family: "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.name}</UIText>
@@ -99,7 +100,7 @@ export const ItemRow = (props: {
       <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }}>
         {withMenu(props.selecting ? [] : props.menu, trigger)}
       </Host>
-      <Separator inset={12 + props.depth * INDENT + CHEVRON_COL + ICON_COL + 20} />
+      <Separator inset={12 + props.depth * INDENT + CHEVRON_COL + (props.icon === undefined ? 0 : ICON_COL) + 20} />
     </View>
   );
 };
@@ -160,7 +161,8 @@ export const NodeRow = (props: {
 export const Tile = (props: {
   readonly title: string;
   readonly subtitle: string;
-  readonly icon: SFSymbol;
+  /** None for an item that is just its name (a package). */
+  readonly icon: SFSymbol | undefined;
   readonly width: number;
   readonly count?: number;
   readonly busy?: boolean;
@@ -185,7 +187,7 @@ export const Tile = (props: {
       <HStack spacing={6} alignment="center">
         {props.selecting === true ? (
           <Image systemName={props.selected === true ? "checkmark.circle.fill" : "circle"} size={18} color={props.selected === true ? colors.tint : colors.secondaryLabel} />
-        ) : (
+        ) : props.icon === undefined ? null : (
           <Image systemName={props.icon} size={18} color={colors.tint} />
         )}
         <Spacer />

@@ -898,7 +898,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
             title={row.item.title}
             name={row.item.name}
             {...(row.item.detail === undefined ? {} : { detail: row.item.detail })}
-            icon={symbolForIcon(row.item.icon)}
+            icon={row.item.icon === undefined ? undefined : symbolForIcon(row.item.icon)}
             depth={row.depth}
             width={width}
             busy={busy === row.item.key}
@@ -937,7 +937,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
                   key={tile.item.key}
                   title={tile.item.title}
                   subtitle={tile.item.name}
-                  icon={symbolForIcon(tile.item.icon)}
+                  icon={tile.item.icon === undefined ? undefined : symbolForIcon(tile.item.icon)}
                   width={tileWidth}
                   busy={busy === tile.item.key}
                   selecting={selection !== undefined}
