@@ -136,8 +136,6 @@ export type PluginBlock =
       readonly group?: string;
       /** Item keys to show while nothing is pinned: the best picks. */
       readonly suggestions?: ReadonlyArray<string>;
-      /** Said beside the suggestions, so they do not pass for pins. */
-      readonly suggestionsNote?: string;
     }
   | {
       /** Facts about something, opening a page, with its own actions. */

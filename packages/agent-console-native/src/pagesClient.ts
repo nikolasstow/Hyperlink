@@ -86,7 +86,6 @@ const pageBlock = Schema.Union([
     empty: Schema.String,
     group: Schema.optionalKey(Schema.String),
     suggestions: Schema.Array(Schema.String),
-    suggestionsNote: Schema.String,
   }),
   Schema.TaggedStruct("Card", {
     key: Schema.String,

@@ -240,8 +240,8 @@ const PinnedCard = (props: {
             );
           });
 
-  // Always a grid: pins (or suggestions) as two-column tiles, then the note
-  // and the way to all of them.
+  // Always a grid: pins (or suggestions) as two-column tiles, then the way
+  // to all of them.
   return (
     <View>
       <Text style={styles.sectionLabel}>{block.title}</Text>
@@ -260,7 +260,6 @@ const PinnedCard = (props: {
       ) : (
         <View style={styles.grid}>{tiles}</View>
       )}
-      {pins.length === 0 && suggested.length > 0 ? <Text style={styles.note}>{block.suggestionsNote}</Text> : null}
       <View style={[styles.card, styles.linkCard]}>
         <LinkRow title={block.viewAll} icon={block.collection.icon} onPress={() => openLink(navigation, props.repo, dir, block.collection)} />
       </View>
@@ -550,12 +549,6 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     fontWeight: "500",
-  },
-  note: {
-    color: colors.secondaryLabel,
-    fontSize: 13,
-    marginTop: 8,
-    marginHorizontal: 4,
   },
   pinDetail: {
     color: colors.secondaryLabel,

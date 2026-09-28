@@ -340,7 +340,6 @@ const pinnedBlock = (pkg: Package | undefined, suggestions: ReadonlyArray<string
   empty: "Pin a script from its menu to keep it here.",
   ...(pkg === undefined ? {} : { group: pkg.key }),
   suggestions,
-  suggestionsNote: "Suggested until you pin scripts",
 });
 
 const installForms = (workspace: string, key: string): ReadonlyArray<PluginForm> => {

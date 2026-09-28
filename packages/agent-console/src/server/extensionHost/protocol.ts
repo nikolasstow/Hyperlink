@@ -241,8 +241,6 @@ export class PinnedBlock extends Schema.TaggedClass<PinnedBlock>()("Pinned", {
   group: Schema.optionalKey(Schema.String),
   /** Items to show while nothing is pinned: the plugin's best picks. */
   suggestions: Schema.Array(Schema.String),
-  /** Said beside the suggestions, so they do not pass for pins. */
-  suggestionsNote: Schema.String,
 }) {}
 
 /** A card: facts about something, opening a page, with its own actions (an

@@ -241,7 +241,6 @@ const blockData = (entry: PluginPageEntry, block: PluginBlock): Effect.Effect<un
           empty: block.empty,
           ...(block.group === undefined ? {} : { group: block.group }),
           suggestions: block.suggestions ?? [],
-          suggestionsNote: block.suggestionsNote ?? "Suggested",
         })),
       );
     case "Card": {
