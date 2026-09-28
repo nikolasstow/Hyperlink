@@ -486,7 +486,9 @@ Owner-stated unless marked *Proposed*.
   2. **Packages**, its own section: **Workspace Packages**, **Dependencies**, **Development
      Dependencies**, each with its count as secondary text.
   3. **Pinned scripts**, with a button to **view all** (the Scripts page, §23.3). **With nothing
-     pinned, it shows the best suited scripts** until there are pins.
+     pinned, it shows the best suited scripts** until there are pins. **With nothing pinned and
+     nothing suited, the section is left out**, and the Packages section gets a **Scripts** row
+     (its count, even 0) opening the Scripts page.
   4. **The package manager**, a card: its details, **updating it**, and **numbers of what is
      installed**. It opens the Packages page (§23.2).
 - **Pinned is always a grid.**

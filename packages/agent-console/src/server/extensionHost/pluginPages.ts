@@ -238,7 +238,6 @@ const blockData = (entry: PluginPageEntry, block: PluginBlock): Effect.Effect<un
           collection,
           title: block.title,
           viewAll: block.viewAll,
-          empty: block.empty,
           ...(block.group === undefined ? {} : { group: block.group }),
           suggestions: block.suggestions ?? [],
         })),

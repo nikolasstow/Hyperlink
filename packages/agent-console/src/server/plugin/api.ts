@@ -129,9 +129,9 @@ export type PluginBlock =
       /** The collection, and the view "view all" opens it on. */
       readonly collection: PluginPageRef;
       readonly title: string;
+      /** With nothing pinned and nothing suggested, the app leaves the block
+       * out; the page offers its own way to the collection then. */
       readonly viewAll: string;
-      /** What shows while nothing is pinned and nothing is suggested. */
-      readonly empty: string;
       /** Only the pins in this group (a package's own page). */
       readonly group?: string;
       /** Item keys to show while nothing is pinned: the best picks. */

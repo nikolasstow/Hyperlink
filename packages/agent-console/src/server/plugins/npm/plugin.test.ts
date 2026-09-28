@@ -293,7 +293,7 @@ describe("npm plugin: the NPM page", () => {
     expect(tools.title).toBe("tools");
     expect(describeBlocks(tools.blocks)).toEqual([
       "Facts  (opens details(package=tools)): Name=tools, Folder=tools",
-      "Facts Packages:  | Dependencies 0 -> packages(group=tools,category=dependencies) | Development Dependencies 0 -> packages(group=tools,category=dev)",
+      "Facts Packages:  | Dependencies 0 -> packages(group=tools,category=dependencies) | Development Dependencies 0 -> packages(group=tools,category=dev) | Scripts 1 -> scripts(group=tools)",
       "Pinned scripts(group=tools) suggesting ",
     ]);
     expect(tools.menu?.map((form) => form.title)).toEqual(["Edit Package Details"]);

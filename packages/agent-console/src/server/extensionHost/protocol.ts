@@ -231,12 +231,12 @@ export class LinkBlock extends Schema.TaggedClass<LinkBlock>()("Link", {
 }) {}
 
 /** The user's pins on a collection page of the plugin, with a button to the
- * whole collection. */
+ * whole collection. With nothing pinned and nothing suggested, the app leaves
+ * it out. */
 export class PinnedBlock extends Schema.TaggedClass<PinnedBlock>()("Pinned", {
   collection: PageLink,
   title: Schema.String,
   viewAll: Schema.String,
-  empty: Schema.String,
   /** Only the pins in this group (a package's own page). */
   group: Schema.optionalKey(Schema.String),
   /** Items to show while nothing is pinned: the plugin's best picks. */

@@ -83,7 +83,6 @@ const pageBlock = Schema.Union([
     collection: pageLink,
     title: Schema.String,
     viewAll: Schema.String,
-    empty: Schema.String,
     group: Schema.optionalKey(Schema.String),
     suggestions: Schema.Array(Schema.String),
   }),

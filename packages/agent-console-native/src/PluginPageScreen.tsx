@@ -145,7 +145,7 @@ const PinnedCard = (props: {
   readonly dir: string;
   readonly apiBase: string;
   readonly navigation: Navigation;
-}): React.ReactElement => {
+}): React.ReactElement | null => {
   const { block, dir, apiBase, navigation } = props;
   const page = block.collection.page;
   const load = useCollection(dir, page);
@@ -240,22 +240,19 @@ const PinnedCard = (props: {
             );
           });
 
+  // Nothing pinned and nothing suggested: no section at all (the page's
+  // Packages section has a Scripts row then). Nor one while the pins load,
+  // so it does not flash up empty; they are prefetched with the page.
+  if (load.kind === "loading" || (load.kind === "ready" && tiles.length === 0)) return null;
+
   // Always a grid: pins (or suggestions) as two-column tiles, then the way
   // to all of them.
   return (
     <View>
       <Text style={styles.sectionLabel}>{block.title}</Text>
-      {load.kind === "loading" ? (
-        <View style={[styles.card, styles.row]}>
-          <ActivityIndicator color={colors.secondaryLabel} />
-        </View>
-      ) : load.kind === "failed" ? (
+      {load.kind === "failed" ? (
         <View style={[styles.card, styles.row]}>
           <Text style={styles.hint}>Couldn’t load pins: {load.message}</Text>
-        </View>
-      ) : tiles.length === 0 ? (
-        <View style={[styles.card, styles.row]}>
-          <Text style={styles.hint}>{block.empty}</Text>
         </View>
       ) : (
         <View style={styles.grid}>{tiles}</View>

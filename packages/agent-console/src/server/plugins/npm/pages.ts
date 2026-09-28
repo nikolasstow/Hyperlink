@@ -273,8 +273,10 @@ const managerCard = (workspace: string, packages: ReadonlyArray<Package>, root: 
 
 /** The Packages section: the workspace's packages (for the whole
  * workspace), and the dependencies and dev dependencies, each opening its
- * list. `pkg` scopes it to one package. */
-const packagesBlock = (packages: ReadonlyArray<Package>, pkg: Package | undefined): PluginBlock => {
+ * list. `pkg` scopes it to one package. `scriptsRow` adds the scripts, with
+ * their count, for a page whose Pinned section has nothing to show (no
+ * scripts suggested): that is then the way to them. */
+const packagesBlock = (packages: ReadonlyArray<Package>, pkg: Package | undefined, scriptsRow: boolean): PluginBlock => {
   const scope = pkg === undefined ? packages : [pkg];
   const group: Readonly<Record<string, string>> = pkg === undefined ? {} : { group: pkg.key };
   const listOf = (field: string, title: string): ReadonlyArray<PluginPageButton> => {
@@ -312,6 +314,17 @@ const packagesBlock = (packages: ReadonlyArray<Package>, pkg: Package | undefine
         : []),
       ...listOf("dependencies", "Dependencies"),
       ...listOf("devDependencies", "Development Dependencies"),
+      ...(scriptsRow
+        ? [
+            {
+              page: "scripts",
+              params: group,
+              title: "Scripts",
+              icon: "codicon:terminal",
+              detail: String(scope.reduce((total, candidate) => total + candidate.scripts.length, 0)),
+            },
+          ]
+        : []),
     ],
   };
 };
@@ -337,7 +350,6 @@ const pinnedBlock = (pkg: Package | undefined, suggestions: ReadonlyArray<string
   collection: pkg === undefined ? { page: "scripts" } : { page: "scripts", params: { group: pkg.key } },
   title: "Pinned Scripts",
   viewAll: "View All Scripts",
-  empty: "Pin a script from its menu to keep it here.",
   ...(pkg === undefined ? {} : { group: pkg.key }),
   suggestions,
 });
@@ -359,9 +371,10 @@ export const npmPage = (workspace: string, params: Readonly<Record<string, strin
     if (requested !== undefined && requested !== ".") {
       const pkg = packages.find((candidate) => candidate.key === requested);
       if (pkg === undefined) return yield* new PluginError({ message: `there is no package at ${requested}` });
+      const suggestions = suggestedScripts([pkg], 4);
       const content: PluginSectionsContent = {
         title: titleOf(pkg, workspace),
-        blocks: [aboutBlock(pkg, workspace), packagesBlock(packages, pkg), pinnedBlock(pkg, suggestedScripts([pkg], 4))],
+        blocks: [aboutBlock(pkg, workspace), packagesBlock(packages, pkg, suggestions.length === 0), pinnedBlock(pkg, suggestions)],
         menu: [editDetailsForm(workspace, pkg)],
         add: installForms(workspace, pkg.key),
         resources: [pkg.file],
@@ -376,7 +389,7 @@ export const npmPage = (workspace: string, params: Readonly<Record<string, strin
     const content: PluginSectionsContent = {
       // The page is named for the repo's own package manager.
       title: card.manager.toUpperCase(),
-      blocks: [...(root === undefined ? [] : [aboutBlock(root, workspace)]), packagesBlock(packages, undefined), pinnedBlock(undefined, suggestions), card.block],
+      blocks: [...(root === undefined ? [] : [aboutBlock(root, workspace)]), packagesBlock(packages, undefined, suggestions.length === 0), pinnedBlock(undefined, suggestions), card.block],
       menu: root === undefined ? [] : [editDetailsForm(workspace, root)],
       add: [...(root === undefined ? [] : installForms(workspace, root.key)), createPackageForm(workspace)],
       resources: packages.map((pkg) => pkg.file),
