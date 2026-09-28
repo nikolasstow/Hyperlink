@@ -481,7 +481,7 @@ Owner-stated unless marked *Proposed*.
 
 - It is just **the NPM page, organized**, titled for the repo's package manager (**PNPM** in a
   pnpm repo). **No large header.** Top to bottom:
-  1. **Name, version, description, All Details**, in **one section** (one card). The description
+  1. **Name, version, description** in **one section** (one card); **tapping anywhere in it opens all the details**, and the description row carries the chevron. The description
      sits on its own line below its label, left aligned.
   2. **Packages**, its own section: **Workspace Packages**, **Dependencies**, **Development
      Dependencies**, each with its count as secondary text.

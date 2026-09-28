@@ -221,6 +221,8 @@ export class FactsBlock extends Schema.TaggedClass<FactsBlock>()("Facts", {
   title: Schema.optionalKey(Schema.String),
   rows: Schema.Array(SectionRow),
   links: Schema.Array(PageLink),
+  /** A page the whole card opens (its last row carries the chevron). */
+  opens: Schema.optionalKey(PageLink),
 }) {}
 
 /** A button that opens another page of the plugin. */

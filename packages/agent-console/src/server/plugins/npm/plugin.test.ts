@@ -80,7 +80,7 @@ const describeBlocks = (blocks: ReadonlyArray<PluginBlock>) =>
   blocks.map((block) => {
     switch (block._tag) {
       case "Facts":
-        return `Facts ${block.title ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}${row.stacked === true ? " (stacked)" : ""}`).join(", ")}${(block.links ?? [])
+        return `Facts ${block.title ?? ""}${block.opens === undefined ? "" : ` (opens ${block.opens.page}${describeParams(block.opens.params)})`}: ${block.rows.map((row) => `${row.label}=${row.value}${row.stacked === true ? " (stacked)" : ""}`).join(", ")}${(block.links ?? [])
           .map((link) => ` | ${link.title}${link.detail === undefined ? "" : ` ${link.detail}`} -> ${link.page}${describeParams(link.params)}`)
           .join("")}`;
       case "Link":
@@ -279,7 +279,7 @@ describe("npm plugin: the NPM page", () => {
     const npm = await run(fixture.pipe(Effect.flatMap(pageFor("npm"))));
     expect(npm.title).toBe("PNPM");
     expect(describeBlocks(npm.blocks)).toEqual([
-      "Facts : Name=app, Version=1.2.3, Description=The app (stacked) | All Details -> details(package=.)",
+      "Facts  (opens details(package=.)): Name=app, Version=1.2.3, Description=The app (stacked)",
       "Facts Packages:  | Workspace Packages 1 -> workspace | Dependencies 0 -> packages(category=dependencies) | Development Dependencies 1 -> packages(category=dev)",
       "Pinned scripts suggesting .#build .#test .#prebuild",
       "Card pnpm -> packages: Version=10.33.4, Latest=10.40.0, Dependencies=0, Dev Dependencies=1, Workspace Packages=2 [Update to 10.40.0]",
@@ -292,7 +292,7 @@ describe("npm plugin: the NPM page", () => {
     const tools = await run(fixture.pipe(Effect.flatMap(pageFor("npm", { package: "tools" }))));
     expect(tools.title).toBe("tools");
     expect(describeBlocks(tools.blocks)).toEqual([
-      "Facts : Name=tools, Folder=tools | All Details -> details(package=tools)",
+      "Facts  (opens details(package=tools)): Name=tools, Folder=tools",
       "Facts Packages:  | Dependencies 0 -> packages(group=tools,category=dependencies) | Development Dependencies 0 -> packages(group=tools,category=dev)",
       "Pinned scripts(group=tools) suggesting ",
     ]);

@@ -211,15 +211,19 @@ const rowData = (row: PluginSectionRow) => ({
 /** A block's wire data, its links checked against the plugin's pages. */
 const blockData = (entry: PluginPageEntry, block: PluginBlock): Effect.Effect<unknown, ExtensionHostError> => {
   switch (block._tag) {
-    case "Facts":
-      return Effect.forEach(block.links ?? [], (button) => buttonTo(entry, button)).pipe(
-        Effect.map((links) => ({
+    case "Facts": {
+      const { opens: ref } = block;
+      const opening: Effect.Effect<PageLink | undefined, ExtensionHostError> = ref === undefined ? Effect.succeed(undefined) : linkTo(entry, ref);
+      return Effect.all([Effect.forEach(block.links ?? [], (button) => buttonTo(entry, button)), opening]).pipe(
+        Effect.map(([links, opens]) => ({
           _tag: "Facts",
           ...(block.title === undefined ? {} : { title: block.title }),
           rows: block.rows.map(rowData),
           links,
+          ...(opens === undefined ? {} : { opens }),
         })),
       );
+    }
     case "Link":
       return buttonTo(entry, block).pipe(
         Effect.map((link) => ({

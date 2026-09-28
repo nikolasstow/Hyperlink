@@ -112,7 +112,7 @@ export const loadSections = (apiBase: string, workspace: string, page: string, p
     if (loaded?.kind !== "ready") return;
     const linked = loaded.value.blocks.flatMap((block): ReadonlyArray<PageLink> =>
       block._tag === "Facts"
-        ? block.links
+        ? [...block.links, ...(block.opens === undefined ? [] : [block.opens])]
         : block._tag === "Link"
           ? [block.link]
           : block._tag === "Pinned"

@@ -66,25 +66,32 @@ const noParams: Readonly<Record<string, string>> = {};
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-const Rows = (props: { readonly rows: ReadonlyArray<SectionRow> }): React.ReactElement => (
+/** Label and value rows. With `chevron`, the last row carries it: the card
+ * opens a page. */
+const Rows = (props: { readonly rows: ReadonlyArray<SectionRow>; readonly chevron?: boolean }): React.ReactElement => (
   <>
-    {props.rows.map((row, index) =>
-      row.stacked ? (
+    {props.rows.map((row, index) => {
+      const chevron = props.chevron === true && index === props.rows.length - 1 ? <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} /> : null;
+      return row.stacked ? (
         <View key={row.label} style={[styles.stackedRow, index > 0 && styles.rowBorder]}>
-          <Text style={styles.factLabel}>{row.label}</Text>
-          <Text style={[styles.stackedValue, row.mono && styles.mono]} selectable>
+          <View style={styles.stackedTop}>
+            <Text style={styles.factLabel}>{row.label}</Text>
+            {chevron}
+          </View>
+          <Text style={[styles.stackedValue, row.mono && styles.mono]} selectable={props.chevron !== true}>
             {row.value}
           </Text>
         </View>
       ) : (
         <View key={row.label} style={[styles.row, index > 0 && styles.rowBorder]}>
           <Text style={styles.factLabel}>{row.label}</Text>
-          <Text style={[styles.factValue, row.mono && styles.mono]} selectable numberOfLines={1}>
+          <Text style={[styles.factValue, row.mono && styles.mono]} selectable={props.chevron !== true} numberOfLines={1}>
             {row.value}
           </Text>
+          {chevron}
         </View>
-      ),
-    )}
+      );
+    })}
   </>
 );
 
@@ -333,12 +340,12 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
         return (
           <View key={`facts ${index}`}>
             {block.title === undefined ? <View style={styles.gap} /> : <Text style={styles.sectionLabel}>{block.title}</Text>}
-            <View style={styles.card}>
-              <Rows rows={block.rows} />
+            <Pressable style={styles.card} disabled={block.opens === undefined} onPress={() => (block.opens === undefined ? undefined : openLink(navigation, repo, dir, block.opens))}>
+              <Rows rows={block.rows} chevron={block.opens !== undefined} />
               {block.links.map((link, linkIndex) => (
                 <LinkRow key={link.page} title={link.title} icon={link.icon} {...(link.detail === undefined ? {} : { detail: link.detail })} border={block.rows.length > 0 || linkIndex > 0} onPress={() => openLink(navigation, repo, dir, link)} />
               ))}
-            </View>
+            </Pressable>
           </View>
         );
       case "Link":
@@ -559,6 +566,11 @@ const styles = StyleSheet.create({
     color: colors.secondaryLabel,
     fontSize: 16,
     textAlign: "right",
+  },
+  stackedTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   stackedValue: {
     color: colors.secondaryLabel,

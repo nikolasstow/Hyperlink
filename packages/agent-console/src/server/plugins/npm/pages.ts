@@ -316,22 +316,20 @@ const packagesBlock = (packages: ReadonlyArray<Package>, pkg: Package | undefine
   };
 };
 
+/** The package: its name, version, folder and description, the whole card
+ * opening all its details. */
 const aboutBlock = (pkg: Package, workspace: string): PluginBlock => ({
   _tag: "Facts",
   rows: [
     row("Name", titleOf(pkg, workspace)),
     ...optional("Version", pkg.json.version, { mono: true }),
-    ...optional("Description", pkg.json.description, { stacked: true }),
     ...(pkg.key === "." ? [] : [row("Folder", pkg.key, { mono: true })]),
+    ...optional("Description", pkg.json.description, { stacked: true }),
   ],
-  links: [
-    {
-      page: "details",
-      params: { package: pkg.key },
-      title: "All Details",
-      icon: "sf:info.circle",
-    },
-  ],
+  opens: {
+    page: "details",
+    params: { package: pkg.key },
+  },
 });
 
 const pinnedBlock = (pkg: Package | undefined, suggestions: ReadonlyArray<string>): PluginBlock => ({

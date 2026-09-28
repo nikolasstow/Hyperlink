@@ -116,6 +116,8 @@ export type PluginBlock =
       readonly rows: ReadonlyArray<PluginSectionRow>;
       /** Buttons to other pages, below the rows in the same card. */
       readonly links?: ReadonlyArray<PluginPageButton>;
+      /** A page the whole card opens (its last row carries the chevron). */
+      readonly opens?: PluginPageRef;
     }
   | ({
       /** A button to another page. */
