@@ -39,6 +39,8 @@ import type { RootStackParamList } from "./RootNavigator";
 import { SetiIcon } from "./SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { SystemIcon } from "./SystemIcon";
+import { usePrimaryWorktree } from "./primaryWorktree";
+import { WorktreePicker } from "./WorktreePicker";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 
@@ -112,7 +114,11 @@ const Row = (props: {
 const WARM_SURFACES = 2;
 
 export const FileExplorerScreen = (props: Props): React.ReactElement => {
-  const { repo, dir } = props.route.params;
+  const { repo, root } = props.route.params;
+  // Files as opened from a repo shows its primary worktree, following the
+  // picker; a folder drilled into stays that folder.
+  const primary = usePrimaryWorktree(repo, props.route.params.dir);
+  const dir = root === true ? primary.dir : props.route.params.dir;
   const { backend } = useAppContext();
   const headerHeight = useHeaderHeight();
   const tree = useFileTree(backend, dir);
@@ -195,8 +201,20 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
           onPress: onForward,
         },
       ],
+      // The worktree picker, top right, at the root: its own glass, so not
+      // inside the bar's shared background.
+      unstable_headerRightItems: () =>
+        root === true && primary.primary !== undefined
+          ? [
+              {
+                type: "custom",
+                element: <WorktreePicker repo={repo} fallback={props.route.params.dir} />,
+                hidesSharedBackground: true,
+              },
+            ]
+          : [],
     });
-  }, [navigation, forwardTarget, onForward]);
+  }, [navigation, forwardTarget, onForward, root, primary.primary, repo, props.route.params.dir]);
 
   return (
     <View style={styles.root}>

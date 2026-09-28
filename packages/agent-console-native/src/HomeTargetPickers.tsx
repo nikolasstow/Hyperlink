@@ -41,6 +41,7 @@ import {
   setRepoMenuSort,
   type RepoMenuSort,
 } from "./settings";
+import { chosenPrimaryOf } from "./primaryWorktree";
 import { createWorktree } from "./worktree";
 
 export type FolderTarget = {
@@ -173,6 +174,8 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       }
       const found = scanned.find((r) => r.repo === lockedRepo.name);
       const worktree =
+        // A new session starts in the repo's primary worktree (primaryWorktree.ts).
+        chosenPrimaryOf(lockedRepo.name) ??
         found?.worktrees.find((w) => w.isMain) ??
         found?.worktrees[0] ??
         // Fall back to the dir the page was opened with, so the composer works
@@ -195,7 +198,8 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           ? repo.worktrees.find((w) => worktreeLabel(w) === lastKey || w.name === lastKey)
           : undefined;
       const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
-      const chosen = fromLast ?? main;
+      // A chosen primary worktree (primaryWorktree.ts) comes first.
+      const chosen = chosenPrimaryOf(repo.repo) ?? fromLast ?? main;
       if (chosen === undefined) return;
       const branch = (await runFs(readCurrentBranch(backend, chosen.path))) ?? "main";
       onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
@@ -251,7 +255,8 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           ? repo.worktrees.find((w) => worktreeLabel(w) === lastKey || w.name === lastKey)
           : undefined;
       const main = repo.worktrees.find((w) => w.isMain) ?? repo.worktrees[0];
-      const chosen = fromLast ?? main;
+      // A chosen primary worktree (primaryWorktree.ts) comes first.
+      const chosen = chosenPrimaryOf(repo.repo) ?? fromLast ?? main;
       if (chosen === undefined) return;
       const branch = (await runFs(readCurrentBranch(backend, chosen.path))) ?? "main";
       props.onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });

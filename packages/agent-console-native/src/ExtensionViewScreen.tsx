@@ -33,6 +33,7 @@ import { warmCodeSurfaces } from "../modules/code-surface";
 import type { RootStackParamList } from "./RootNavigator";
 import { iconForFile } from "./fileIcon";
 import { SetiIcon } from "./SetiIcon";
+import { usePrimaryWorktree } from "./primaryWorktree";
 import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonList } from "./Skeleton";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
@@ -172,7 +173,9 @@ const Row = (props: {
 };
 
 export const ExtensionViewScreen = (props: Props): React.ReactElement => {
-  const { dir, view, title } = props.route.params;
+  const { view, title } = props.route.params;
+  // A worktree page: it shows the repo's primary worktree (primaryWorktree.ts).
+  const { dir } = usePrimaryWorktree(props.route.params.repo, props.route.params.dir);
   const { navigation } = props;
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);

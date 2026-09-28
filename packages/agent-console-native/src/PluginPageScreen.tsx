@@ -35,6 +35,8 @@ import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonPage } from "./Skeleton";
+import { usePrimaryWorktree } from "./primaryWorktree";
+import { WorktreePicker } from "./WorktreePicker";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
@@ -267,8 +269,12 @@ const PinnedCard = (props: {
 };
 
 export const PluginPageScreen = (props: Props): React.ReactElement => {
-  const { repo, dir, page, title } = props.route.params;
+  const { repo, page, title } = props.route.params;
   const params = props.route.params.params ?? noParams;
+  // A worktree page: it shows the repo's primary worktree, following the
+  // picker (primaryWorktree.ts).
+  const worktree = usePrimaryWorktree(repo, props.route.params.dir);
+  const { dir } = worktree;
   const { navigation } = props;
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
@@ -293,11 +299,15 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
   );
 
   const shownTitle = load.kind === "ready" ? load.value.title : title;
+  const showPicker = Object.keys(params).length === 0 && worktree.primary !== undefined;
   const menu = React.useMemo((): ReadonlyArray<FormSpec> => (load.kind === "ready" ? load.value.menu : []), [load]);
   const add = React.useMemo((): ReadonlyArray<FormSpec> => (load.kind === "ready" ? load.value.add : []), [load]);
   React.useLayoutEffect(() => {
     navigation.setOptions({
       title: shownTitle,
+      // A page opened from the repo menu names its worktree in place of its
+      // title, as the picker; a page about one package keeps its title.
+      ...(showPicker ? { headerTitle: () => <WorktreePicker repo={repo} fallback={props.route.params.dir} /> } : {}),
       // The + menu adds (a dependency, a package); the 3-dot menu has the
       // rest. Each only when the page offers something for it.
       unstable_headerRightItems: () => [
@@ -305,7 +315,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
         ...(menu.length === 0 ? [] : [formsMenu("More", "ellipsis", menu, setForm)]),
       ],
     });
-  }, [navigation, shownTitle, menu, add]);
+  }, [navigation, shownTitle, menu, add, showPicker, repo, props.route.params.dir]);
 
   if (load.kind === "loading") {
     return (

@@ -49,6 +49,7 @@ import { ItemRow, NodeRow, SectionHeader, SeeAllRow, Tile, type MenuAction } fro
 import { CategoriesSheet, FormSheet, type GroupOption } from "./CollectionSheets";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { usePrimaryWorktree } from "./primaryWorktree";
 import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonGrid, SkeletonList } from "./Skeleton";
 import { followResult } from "./followResult";
@@ -377,7 +378,9 @@ type Sheet =
   | { readonly kind: "categories"; readonly items: ReadonlyArray<CollectionItem> };
 
 export const CollectionScreen = (props: Props): React.ReactElement => {
-  const { dir, page, title, view } = props.route.params;
+  const { page, title, view } = props.route.params;
+  // A worktree page: it shows the repo's primary worktree (primaryWorktree.ts).
+  const { dir } = usePrimaryWorktree(props.route.params.repo, props.route.params.dir);
   const { navigation } = props;
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);

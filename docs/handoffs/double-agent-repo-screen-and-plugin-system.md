@@ -365,6 +365,17 @@ Owner-stated unless marked *Proposed*. Proposed items are not binding until appr
 - **Favorites is the menu.** The menu *is* the repo's favorites list: Files, Docs, Git and Tools
   are its defaults, favoriting a page adds it here, and edit mode reorders it.
 
+### 21.1a The primary worktree (DECISIONS, 2026-09-28)
+
+- **Each repo always has a primary worktree** (its main checkout until another is chosen). It is
+  the default whenever something is done in the repo: pages where the worktree matters (Files,
+  the PNPM page and the pages under it) open on it, and a new session starts in it.
+- **A glass worktree dropdown** chooses it, and choosing changes it everywhere. It is **one
+  reusable component**, so a plugin page places it where it fits: **Files** has it at the **top
+  right** of its header; **PNPM** has it **in place of its header title**.
+- **The repo screen has no worktree dropdown and does not change with it**: nothing on it belongs
+  to a single worktree, since its sessions can be in any.
+
 ### 21.2 Favorites
 
 - Plugins can add pages; pages can be **favorited** into the menu's Favorites (§3.2, §4.5 stand).

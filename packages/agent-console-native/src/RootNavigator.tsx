@@ -74,7 +74,9 @@ export type RootStackParamList = {
   SessionList: { repo: string; worktree: string | null; title: string };
   // The file explorer rooted at `dir` (an absolute path); `repo` labels the
   // context. Pushed again per folder when drilling in.
-  FileExplorer: { repo: string; dir: string };
+  // `root` is Files as opened from a repo: it shows the repo's primary
+  // worktree and carries the worktree picker; a folder drilled into is fixed.
+  FileExplorer: { repo: string; dir: string; root?: boolean };
   // A minimal read-only view of the file at `path`; `name` is the nav-bar title.
   // `line` (1-based) scrolls to it, as an extension opening a file asks.
   FileViewer: { path: string; name: string; line?: number };

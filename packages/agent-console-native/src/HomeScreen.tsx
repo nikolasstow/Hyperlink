@@ -44,6 +44,7 @@ import { refreshPlugins } from "./pluginsStore";
 import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
+import { updateScannedRepos } from "./primaryWorktree";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
@@ -71,6 +72,10 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const [setupDate, setSetupDate] = React.useState<number>(() => Date.now());
   const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
+  // Worktree pickers and pages read the scan too (primaryWorktree.ts).
+  React.useEffect(() => {
+    if (scanned.length > 0) updateScannedRepos(scanned);
+  }, [scanned]);
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -316,7 +321,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
               onSelect={(label) => {
                 if (label === "Files") {
                   clearForward();
-                  props.navigation.navigate("FileExplorer", { repo: item.group.repo, dir: repoDir });
+                  props.navigation.navigate("FileExplorer", { repo: item.group.repo, dir: repoDir, root: true });
                 }
               }}
             />
