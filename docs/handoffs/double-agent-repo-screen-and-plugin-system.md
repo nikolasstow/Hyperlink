@@ -479,15 +479,21 @@ Owner-stated unless marked *Proposed*.
 
 ### 23.1 The repo's NPM page
 
-- It is just **the NPM page, organized** (not a separate summary): package.json's details (name,
-  version, and the rest), the **package manager and its version**, and similar, then its
-  **subsections**: **Packages**, **Scripts**, and the other features (§23.4).
-- It is titled for the repo's package manager: **PNPM** in a pnpm repo.
+- It is just **the NPM page, organized**, titled for the repo's package manager (**PNPM** in a
+  pnpm repo). **No large header.** Top to bottom:
+  1. **Name, version, description.** The description sits on its own line below its label, left
+     aligned. Then a button to **see all details** on a new page.
+  2. **Pinned scripts**, with a button to **view all** (the Scripts page, §23.3).
+  3. **The package manager**, a card: its details, **updating it**, and **numbers of what is
+     installed**. It opens the Packages page (§23.2).
 
 ### 23.2 Packages
 
 - A combination of **the npm website and a GUI for every package-manager feature**, pnpm's
-  included (catalogs and the rest).
+  included (catalogs and the rest): **a fully functioning package manager.**
+- The page has **the packages, organized**, with **search**. **Install** is in the 3-dot menu,
+  but the faster way to install is search: results **already installed come first**, then
+  results **not installed** below them.
 
 ### 23.3 Scripts
 
