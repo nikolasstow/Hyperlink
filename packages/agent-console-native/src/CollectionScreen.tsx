@@ -48,6 +48,7 @@ import { ItemRow, NodeRow, SectionHeader, SeeAllRow, Tile, type MenuAction } fro
 import { CategoriesSheet, FormSheet, type GroupOption } from "./CollectionSheets";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonGrid, SkeletonList } from "./Skeleton";
 import { followResult } from "./followResult";
 import { confirmFirst, openLink } from "./openPage";
@@ -401,6 +402,8 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
       void loadCollection(apiBase, dir, page, "ifChanged");
     }, [apiBase, dir, page]),
   );
+
+  const pull = usePullToRefresh(() => loadCollection(apiBase, dir, page, "force"));
 
   const data = load.kind === "ready" ? load.value : undefined;
   const searchable = data?.content.search !== undefined;
@@ -1045,7 +1048,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
           contentContainerStyle={{ paddingBottom: insets.bottom + (selection === undefined ? 24 : 96) }}
           initialNumToRender={16}
           windowSize={7}
-          refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void loadCollection(apiBase, dir, page, "force")} />}
+          refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
           ListHeaderComponent={load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded scripts. Refreshing failed: {load.error}</Text>}
           renderItem={({ item: row }) => renderRow(row)}
         />

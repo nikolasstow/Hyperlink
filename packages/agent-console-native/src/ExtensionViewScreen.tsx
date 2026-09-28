@@ -33,6 +33,7 @@ import { warmCodeSurfaces } from "../modules/code-surface";
 import type { RootStackParamList } from "./RootNavigator";
 import { iconForFile } from "./fileIcon";
 import { SetiIcon } from "./SetiIcon";
+import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonList } from "./Skeleton";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { getApiAddress } from "./settings";
@@ -181,6 +182,7 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   const tree = React.useMemo(() => indexTree(load.kind === "ready" ? load.value : []), [load]);
   const [expanded, setExpanded] = React.useState<ReadonlySet<string> | undefined>(undefined);
   const [busy, setBusy] = React.useState<string | undefined>(undefined);
+  const pull = usePullToRefresh(() => revalidateTree(apiBase, dir, view, "force"));
 
   React.useLayoutEffect(() => {
     navigation.setOptions({ title });
@@ -247,7 +249,7 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
           contentInsetAdjustmentBehavior="automatic"
           initialNumToRender={16}
           windowSize={7}
-          refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void revalidateTree(apiBase, dir, view, "force")} />}
+          refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
           ListHeaderComponent={load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded scripts. Refreshing failed: {load.error}</Text>}
           ListEmptyComponent={<Text style={[styles.message, styles.emptyNote]}>Nothing here.</Text>}
           renderItem={({ item: row }) => (

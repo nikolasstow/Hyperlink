@@ -33,6 +33,7 @@ import { FormSheet } from "./CollectionSheets";
 import { changeCollection, loadCollection, loadSections, useCollection, useSections } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
+import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonPage } from "./Skeleton";
 import { SystemIcon } from "./SystemIcon";
 
@@ -287,6 +288,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
   const load = useSections(dir, page, params);
   const [busy, setBusy] = React.useState<string | undefined>(undefined);
   const [form, setForm] = React.useState<FormSpec | undefined>(undefined);
+  const pull = usePullToRefresh(() => loadSections(apiBase, dir, page, params, "force"));
 
   React.useEffect(() => {
     ensureWorkspace(apiBase, dir);
@@ -424,7 +426,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
       style={styles.root}
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
-      refreshControl={<RefreshControl refreshing={load.refreshing} onRefresh={() => void loadSections(apiBase, dir, page, params, "force")} />}
+      refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
     >
       {load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded page. Refreshing failed: {load.error}</Text>}
       {load.value.blocks.map(renderBlock)}
