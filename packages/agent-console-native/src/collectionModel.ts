@@ -91,6 +91,21 @@ export const pinTitle = (content: CollectionContent, state: CollectionState, pin
     ? (content.items.find((item) => item.key === pin.item)?.title ?? pin.item)
     : (pin.name ?? filterTitle(content, state, pin));
 
+/**
+ * The pins a page shows. The repo's pages (`group` undefined: the repo's NPM
+ * page, the whole Scripts page) show items pinned to the repo or both, and
+ * filters on no package. A package's pages (its NPM page, Scripts on that
+ * package) show its items pinned to the package or both, and filters on it.
+ * A pin from before scopes counts as both.
+ */
+export const pinsShownOn = (content: CollectionContent, state: CollectionState, group: string | undefined): ReadonlyArray<Pin> =>
+  state.pins.filter((pin) => {
+    if (pin._tag === "PinnedFilter") return pin.group === group;
+    const scope = pin.scope ?? "both";
+    if (group === undefined) return scope !== "group";
+    return scope !== "top" && content.items.find((item) => item.key === pin.item)?.group === group;
+  });
+
 /** The pinned filter for exactly this filter, if there is one. */
 export const pinnedFilter = (state: CollectionState, filter: Filter): Pin | undefined =>
   state.pins.find((pin) => pin._tag === "PinnedFilter" && pin.group === filter.group && pin.category === filter.category);

@@ -530,7 +530,10 @@ Owner-stated unless marked *Proposed*.
 - **Pinning a script raises a toast** at the bottom, on glass: **"Pin to Workspace Package ⌄"**
   (or Repo, or both: whatever was chosen last). It goes away on its own; **tapping it expands
   it** to choose **Workspace Package**, **Repo**, or **Both**, which is where the pin shows (the
-  package's page, the repo's NPM page, or both) and is remembered for the next pin. **The toast
+  package's page, the repo's NPM page, or both) and is remembered for the next pin. **A pin
+  shows only where it was pinned**: pinned to a workspace package, it is on that package's
+  pages alone (its NPM page, and Scripts on that package), never the repo's NPM page or the
+  repo-wide Scripts page. **The toast
   comes up for every pin**, so where it goes can always be changed.
 - **Loading shows skeletons** (the page's shape in soft gray), not a spinner, when there is
   nothing cached to show.

@@ -23,7 +23,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
-import { filterTitle, pinTitle } from "./collectionModel";
+import { filterTitle, pinsShownOn, pinTitle } from "./collectionModel";
 import { colors } from "./colors";
 import { ensureWorkspace } from "./extensionViewsStore";
 import { followResult } from "./followResult";
@@ -158,19 +158,8 @@ const PinnedCard = (props: {
   }, [apiBase, dir, page]);
 
   const data = load.kind === "ready" ? load.value : undefined;
-  // Each page shows the pins meant for it: a package's page, its scripts
-  // pinned to the package (or both); the repo's page, scripts pinned to the
-  // repo (or both). A pin from before scopes shows on both. A filter shows on
-  // its package's page, or on the repo's when it has no package.
-  const pins =
-    data === undefined
-      ? []
-      : data.state.pins.filter((pin) => {
-          if (pin._tag === "PinnedFilter") return pin.group === block.group;
-          const scope = pin.scope ?? "both";
-          if (block.group === undefined) return scope !== "group";
-          return scope !== "top" && data.content.items.find((item) => item.key === pin.item)?.group === block.group;
-        });
+  // Each page shows the pins meant for it (collectionModel.pinsShownOn).
+  const pins = data === undefined ? [] : pinsShownOn(data.content, data.state, block.group);
   // With nothing pinned, the plugin's best picks, said to be suggestions.
   const suggested = data === undefined || pins.length > 0 ? [] : data.content.items.filter((item) => block.suggestions.includes(item.key));
   const runItem = (key: string, title: string): void => {

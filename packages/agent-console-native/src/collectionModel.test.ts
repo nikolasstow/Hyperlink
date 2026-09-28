@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterTitle, itemsIn, listedCategories, membership, pinTitle, reassign } from "./collectionModel";
+import { filterTitle, itemsIn, listedCategories, membership, pinsShownOn, pinTitle, reassign } from "./collectionModel";
 import type { CollectionContent, CollectionItem, CollectionState } from "./pagesClient";
 
 const item = (key: string, group: string, categories: ReadonlyArray<string>): CollectionItem => ({
@@ -106,5 +106,40 @@ describe("collection model", () => {
       ".#build": ["test"],
       "app#build:ios": ["cat_1", "test"],
     });
+  });
+
+  it("shows a pin only on the pages it was pinned to", () => {
+    const scoped: CollectionState = {
+      ...state,
+      pins: [
+        {
+          _tag: "PinnedItem",
+          id: "p1",
+          item: "app#build:ios",
+          scope: "group",
+        },
+        {
+          _tag: "PinnedItem",
+          id: "p2",
+          item: "app#gen",
+          scope: "top",
+        },
+        {
+          _tag: "PinnedItem",
+          id: "p3",
+          item: ".#test",
+          scope: "both",
+        },
+        {
+          _tag: "PinnedItem",
+          id: "p4",
+          item: ".#build",
+        },
+        ...state.pins,
+      ],
+    };
+    expect(pinsShownOn(content, scoped, undefined).map((pin) => pin.id)).toEqual(["p2", "p3", "p4", "pin_2"]);
+    expect(pinsShownOn(content, scoped, "packages/app").map((pin) => pin.id)).toEqual(["p1", "pin_1"]);
+    expect(pinsShownOn(content, scoped, ".").map((pin) => pin.id)).toEqual(["p3", "p4"]);
   });
 });

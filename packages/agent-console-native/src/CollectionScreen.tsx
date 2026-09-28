@@ -39,6 +39,7 @@ import {
   listedCategories,
   pinnedFilter,
   pinnedItem,
+  pinsShownOn,
   pinTitle,
   reassign,
   type Category,
@@ -172,24 +173,31 @@ const itemRows = (key: string, items: ReadonlyArray<CollectionItem>, grid: boole
         }),
       );
 
+/** The Pinned section of a page about `group` (a package), or of the
+ * repo-wide page: only the pins meant for it (collectionModel.pinsShownOn). */
+const pinnedRows = (data: CollectionData, group: string | undefined, grid: boolean, expanded: ReadonlySet<string>): ReadonlyArray<Row> => {
+  const { content, state } = data;
+  const shown = pinsShownOn(content, state, group);
+  const pinnedItems = shown.flatMap((pin) => (pin._tag === "PinnedItem" ? content.items.filter((item) => item.key === pin.item) : []));
+  const pinnedFilters = shown.flatMap((pin) => (pin._tag === "PinnedFilter" ? [filterNode(data, pin)] : []));
+  return shown.length === 0
+    ? []
+    : [
+        {
+          type: "header",
+          key: "pinned",
+          title: "Pinned",
+        },
+        ...(grid
+          ? tileRows("pinned", [...pinnedFilters.map((node) => ({ node })), ...pinnedItems.map((item) => ({ item }))])
+          : [...nodeRows(data, "pinned filters", pinnedFilters, false, expanded), ...itemRows("pinned", pinnedItems, false, 0)]),
+      ];
+};
+
 const homeRows = (data: CollectionData, grid: boolean, expanded: ReadonlySet<string>): ReadonlyArray<Row> => {
   const { content, state } = data;
-  const pinnedItems = state.pins.flatMap((pin) => (pin._tag === "PinnedItem" ? content.items.filter((item) => item.key === pin.item) : []));
-  const pinnedFilters = state.pins.flatMap((pin) => (pin._tag === "PinnedFilter" ? [filterNode(data, pin)] : []));
   const categories = listedCategories(content, state);
-  const pinned: ReadonlyArray<Row> =
-    state.pins.length === 0
-      ? []
-      : [
-          {
-            type: "header",
-            key: "pinned",
-            title: "Pinned",
-          },
-          ...(grid
-            ? tileRows("pinned", [...pinnedFilters.map((node) => ({ node })), ...pinnedItems.map((item) => ({ item }))])
-            : [...nodeRows(data, "pinned filters", pinnedFilters, false, expanded), ...itemRows("pinned", pinnedItems, false, 0)]),
-        ];
+  const pinned = pinnedRows(data, undefined, grid, expanded);
   const header = (key: string, title: string): Row => ({
     type: "header",
     key,
@@ -221,6 +229,7 @@ const homeRows = (data: CollectionData, grid: boolean, expanded: ReadonlySet<str
 
 const filterRows = (data: CollectionData, filter: Filter, grid: boolean, expanded: ReadonlySet<string>): ReadonlyArray<Row> => {
   const items = itemsIn(data.content, filter, data.state);
+  // A package's page: its chips, then its own pins (on "All"), then its items.
   const chips: ReadonlyArray<Row> =
     filter.group === undefined
       ? []
@@ -230,6 +239,7 @@ const filterRows = (data: CollectionData, filter: Filter, grid: boolean, expande
             key: "chips",
             group: filter.group,
           },
+          ...(filter.category === undefined ? pinnedRows(data, filter.group, grid, expanded) : []),
         ];
   if (items.length === 0) {
     return [

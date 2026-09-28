@@ -2,7 +2,7 @@ import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, Stream, type Path, type Scope } from "effect";
 import { describe, expect, it } from "vitest";
 import { Workspaces } from "../workspaces";
-import { ProcessRunner } from "./runner";
+import { cleanEnvironment, ProcessRunner } from "./runner";
 
 const runnerLayer = ProcessRunner.layer.pipe(Layer.provideMerge(Workspaces.layer), Layer.provideMerge(NodeServices.layer));
 
@@ -124,5 +124,32 @@ describe("process runner", () => {
       ),
     );
     expect(error.reason).toBe("UnknownProcess");
+  });
+});
+
+describe("the environment a process starts with", () => {
+  it("leaves out what running the server through pnpm added", () => {
+    const clean = cleanEnvironment({
+      HOME: "/Users/me",
+      PNPM_HOME: "/Users/me/Library/pnpm",
+      PATH: [
+        "/repo/packages/agent-console/node_modules/.bin",
+        "/Users/me/.cache/node/corepack/v1/pnpm/10.33.4/dist/node-gyp-bin",
+        "/repo/node_modules/.bin",
+        "/usr/local/bin",
+        "/usr/bin",
+      ].join(":"),
+      NODE_PATH: "/repo/node_modules/.pnpm/node_modules",
+      INIT_CWD: "/repo/packages/agent-console",
+      PNPM_SCRIPT_SRC_DIR: "/repo/packages/agent-console",
+      npm_lifecycle_event: "serve",
+      npm_config_user_agent: "pnpm/10.33.4",
+      UNSET: undefined,
+    });
+    expect(clean).toEqual({
+      HOME: "/Users/me",
+      PNPM_HOME: "/Users/me/Library/pnpm",
+      PATH: "/usr/local/bin:/usr/bin",
+    });
   });
 });

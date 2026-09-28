@@ -23,6 +23,26 @@ import { Workspaces } from "../workspaces";
  * remote shell with extra steps. */
 const allowedCommands: ReadonlySet<string> = new Set(["pnpm", "npm", "yarn", "bun", "npx", "node", "git", "eas"]);
 
+/**
+ * The environment a process starts with: the server's, less what running the
+ * server through a package manager added to it. `pnpm serve` puts its own
+ * package's `node_modules/.bin` first on PATH and sets its run's variables
+ * (`npm_*`, `INIT_CWD`, `NODE_PATH` into this checkout's packages, …); a
+ * script inherits all that, so a script in another repo ran this checkout's
+ * tools (its vite) and resolved packages against it. The script's own package
+ * manager adds what its run needs.
+ */
+export const cleanEnvironment = (env: Readonly<Record<string, string | undefined>>): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(env).flatMap(([key, value]): ReadonlyArray<readonly [string, string]> => {
+      if (value === undefined) return [];
+      if (/^npm_/i.test(key) || key === "INIT_CWD" || key === "NODE_PATH" || key.startsWith("PNPM_SCRIPT_") || key === "PNPM_PACKAGE_NAME") return [];
+      if (key !== "PATH") return [[key, value]];
+      const kept = value.split(":").filter((entry) => !entry.includes("/node_modules/.bin") && !/\/corepack\/.*\/node-gyp-bin$/.test(entry));
+      return [[key, kept.join(":")]];
+    }),
+  );
+
 /** Lines kept in memory per process; the log file keeps everything. */
 const backlogLines = 2000;
 
@@ -154,7 +174,8 @@ const make = Effect.gen(function* () {
         .spawn(
           ChildProcess.make(spec.command, [...spec.args], {
             cwd,
-            extendEnv: true,
+            env: cleanEnvironment(process.env),
+            extendEnv: false,
           }),
         )
         .pipe(
