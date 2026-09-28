@@ -87,6 +87,13 @@ export interface PluginSectionRow {
   readonly stacked?: boolean;
 }
 
+/** A button to one of the plugin's pages, titled here. */
+export interface PluginPageButton {
+  readonly page: string;
+  readonly title: string;
+  readonly icon?: string;
+}
+
 /** One block of a page, top to bottom. Pages are named by their manifest id
  * (one of this plugin's pages). */
 export type PluginBlock =
@@ -94,6 +101,8 @@ export type PluginBlock =
       readonly _tag: "Facts";
       readonly title?: string;
       readonly rows: ReadonlyArray<PluginSectionRow>;
+      /** Buttons to other pages, below the rows in the same card. */
+      readonly links?: ReadonlyArray<PluginPageButton>;
     }
   | {
       /** A button to another page. */

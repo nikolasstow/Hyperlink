@@ -177,10 +177,12 @@ export class SectionRow extends Schema.Class<SectionRow>("SectionRow")({
   stacked: Schema.Boolean,
 }) {}
 
-/** Facts, as label and value rows. */
+/** Facts, as label and value rows, then buttons to other pages of the
+ * plugin, all in one card. */
 export class FactsBlock extends Schema.TaggedClass<FactsBlock>()("Facts", {
   title: Schema.optionalKey(Schema.String),
   rows: Schema.Array(SectionRow),
+  links: Schema.Array(PageLink),
 }) {}
 
 /** A button that opens another page of the plugin. */

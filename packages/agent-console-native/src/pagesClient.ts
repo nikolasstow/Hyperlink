@@ -41,6 +41,7 @@ const pageBlock = Schema.Union([
   Schema.TaggedStruct("Facts", {
     title: Schema.optionalKey(Schema.String),
     rows: Schema.Array(sectionRow),
+    links: Schema.Array(pageLink),
   }),
   Schema.TaggedStruct("Link", {
     link: pageLink,

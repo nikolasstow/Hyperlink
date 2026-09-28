@@ -25,6 +25,7 @@ import type {
   PluginForm,
   PluginItem,
   PluginNode,
+  PluginPageButton,
   PluginSectionRow,
   PluginServices,
   PluginSectionsPage,
@@ -181,6 +182,20 @@ const linkTo = (entry: PluginPageEntry, id: string): Effect.Effect<PageLink, Ext
       );
 };
 
+/** A button's link: the page, under the button's own title and icon. */
+const buttonTo = (entry: PluginPageEntry, button: PluginPageButton) =>
+  linkTo(entry, button.page).pipe(
+    Effect.map(
+      (link) =>
+        new PageLink({
+          page: link.page,
+          title: button.title,
+          ...(button.icon === undefined ? (link.icon === undefined ? {} : { icon: link.icon }) : { icon: button.icon }),
+          kind: link.kind,
+        }),
+    ),
+  );
+
 const rowData = (row: PluginSectionRow) => ({
   label: row.label,
   value: row.value,
@@ -192,20 +207,19 @@ const rowData = (row: PluginSectionRow) => ({
 const blockData = (entry: PluginPageEntry, block: PluginBlock): Effect.Effect<unknown, ExtensionHostError> => {
   switch (block._tag) {
     case "Facts":
-      return Effect.succeed({
-        _tag: "Facts",
-        ...(block.title === undefined ? {} : { title: block.title }),
-        rows: block.rows.map(rowData),
-      });
+      return Effect.forEach(block.links ?? [], (button) => buttonTo(entry, button)).pipe(
+        Effect.map((links) => ({
+          _tag: "Facts",
+          ...(block.title === undefined ? {} : { title: block.title }),
+          rows: block.rows.map(rowData),
+          links,
+        })),
+      );
     case "Link":
-      return linkTo(entry, block.page).pipe(
+      return buttonTo(entry, block).pipe(
         Effect.map((link) => ({
           _tag: "Link",
-          link: {
-            ...link,
-            title: block.title,
-            ...(block.icon === undefined ? {} : { icon: block.icon }),
-          },
+          link,
         })),
       );
     case "Pinned":

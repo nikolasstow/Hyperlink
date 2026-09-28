@@ -3,8 +3,8 @@
  * docs/handoffs/double-agent-repo-screen-and-plugin-system.md §23.1), top to
  * bottom as the plugin lists them:
  *
- * - **Facts**: label and value rows; a long value (a description) sits on its
- *   own line below its label.
+ * - **Facts**: label and value rows (a long value, a description, sits on its
+ *   own line below its label), then buttons to other pages, in one card.
  * - **Link**: a button to another of the plugin's pages (All Details).
  * - **Pinned**: the user's pins on one of the plugin's collections (pinned
  *   scripts), each runnable from here, with a button to the whole collection.
@@ -234,6 +234,9 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
             {block.title === undefined ? <View style={styles.gap} /> : <Text style={styles.sectionLabel}>{block.title}</Text>}
             <View style={styles.card}>
               <Rows rows={block.rows} />
+              {block.links.map((link, linkIndex) => (
+                <LinkRow key={link.page} title={link.title} icon={link.icon} border={block.rows.length > 0 || linkIndex > 0} onPress={() => openLink(navigation, repo, dir, link)} />
+              ))}
             </View>
           </View>
         );

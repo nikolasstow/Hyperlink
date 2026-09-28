@@ -45,6 +45,11 @@ const workspaceGlobs = (value: unknown): string | undefined => {
 const selfUpdate = (manager: string): ReadonlyArray<string> =>
   manager === "npm" ? ["install", "--global", "npm@latest"] : manager === "yarn" ? ["set", "version", "latest"] : manager === "bun" ? ["upgrade"] : ["self-update"];
 
+/** Every package the workspace depends on, of any kind, each name once:
+ * what the Packages page lists, without its repeats across packages. */
+const uniquePackages = (packages: ReadonlyArray<Package>) =>
+  new Set(packages.flatMap((pkg) => [pkg.json.dependencies, pkg.json.devDependencies, pkg.json.peerDependencies, pkg.json.optionalDependencies].flatMap((field) => Object.keys(field ?? {})))).size;
+
 /** Direct dependencies across the workspace, each name once. */
 const uniqueDependencies = (packages: ReadonlyArray<Package>, field: "dependencies" | "devDependencies") =>
   new Set(packages.flatMap((pkg) => Object.keys(pkg.json[field] ?? {}))).size;
@@ -124,12 +129,17 @@ export const npmPage = (workspace: string) =>
                 ...optional("Version", root.json.version, { mono: true }),
                 ...optional("Description", root.json.description, { stacked: true }),
               ],
-            },
-            {
-              _tag: "Link",
-              page: "details",
-              title: "All Details",
-              icon: "sf:info.circle",
+              links: [
+                {
+                  page: "packages",
+                  title: `Packages (${uniquePackages(packages)})`,
+                },
+                {
+                  page: "details",
+                  title: "All Details",
+                  icon: "sf:info.circle",
+                },
+              ],
             },
           ];
     const content: PluginSectionsContent = {
