@@ -347,6 +347,13 @@ type Search =
   | { readonly kind: "done"; readonly items: ReadonlyArray<CollectionItem> }
   | { readonly kind: "failed"; readonly message: string };
 
+/** Room the toast leaves under it for the search field, which iOS draws at
+ * the bottom of the screen (the page's nav-bar search), so it sits above it. */
+const SEARCH_BAR_CLEARANCE = 72;
+
+/** Room the toast leaves for the selection bar, while selecting. */
+const SELECTION_BAR_HEIGHT = 56;
+
 /** How long typing must pause before the search goes out. */
 const SEARCH_PAUSE_MS = 350;
 
@@ -1067,7 +1074,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
       <EdgeBlurBars variant="top" />
       <PinToast
         subject={toast?.subject}
-        bottom={insets.bottom + (selection === undefined ? 16 : 76)}
+        bottom={insets.bottom + SEARCH_BAR_CLEARANCE + (selection === undefined ? 0 : SELECTION_BAR_HEIGHT)}
         onChoose={(scope) => {
           if (toast === undefined) return;
           rememberPinScope(page, scope);
