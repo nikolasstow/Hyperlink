@@ -471,3 +471,63 @@ same Tools page and install screen.
 3. React Native pages, after the Hermes spike.
 4. The AI scan.
 
+---
+
+## 23. The NPM plugin (DECISIONS, 2026-09-28)
+
+Owner-stated unless marked *Proposed*.
+
+### 23.1 The repo's NPM page
+
+- The page is a **summary of package.json**: the project's details (name, version, and the rest),
+  the **package manager and its version**, and similar, then **subsections**: **Packages**,
+  **Scripts**, and the other features (§23.4).
+
+### 23.2 Packages
+
+- A combination of **the npm website and a GUI for every package-manager feature**, pnpm's
+  included (catalogs and the rest).
+
+### 23.3 Scripts
+
+- **Two views, switched by a tab bar at the top:** the **tree** (as today) and an **organized**
+  view (name to be decided).
+- The organized view is **organized by AI and rearrangeable by hand.**
+- **First open asks whether to organize.** Declined, there is no tab; it can be added later from
+  the 3-dot menu or by asking Dubz.
+- **AI organizing happens in the Dubz window** (when Dubz is enabled): it opens at **half height**
+  to ask whether to organize; on yes it works, then **expands to full screen** showing how it
+  organized them, with **Cancel** and **Continue**, a note that they can be changed by hand at any
+  time, and a message field to tell the agent what to do instead. Any AI-organize feature works
+  this way.
+- The organized view has a **grid** (simple two columns) and a **list**. Each shows folder and
+  script icons; a folder shows its name and how many scripts it holds; a script shows a proper
+  English title with its real script name.
+- It works **like Files**: multi-select to move; a hard press opens a menu (edit, move, and run
+  for a script).
+- A script row has a **play button**: tapping the row runs it. Its menu has **Edit Script** and
+  **Duplicate**.
+- The 3-dot menu has **Add New Script**.
+- Editing (a script or a folder) is a **slide-up sheet**.
+- The intended path is asking **Dubz** to write any new script, so **pages need a way to tell the
+  agent what it can do** there (soon).
+
+### 23.4 Other features (*Proposed*, for the owner to pick)
+
+What pnpm and npm offer that a GUI makes easier:
+
+- **Workspace:** the packages in pnpm-workspace.yaml, how they depend on each other, and running a
+  script across them (`-r`, `--filter`, `--parallel`).
+- **Catalogs:** each catalog's entries, which packages use each, and bumping one version everywhere.
+- **Dependencies:** add, remove and update (by package, dev or not), **outdated** with update
+  picking, and **why** a package is installed.
+- **Build scripts:** which dependencies want to run install scripts, and approving them
+  (`onlyBuiltDependencies`, `pnpm approve-builds`).
+- **Security:** `pnpm audit`, with fixes.
+- **Overrides and patches:** `overrides`, `pnpm patch` / `patch-commit`, `patchedDependencies`.
+- **Versions and releases:** the package manager version against the declared one (`packageManager`,
+  Corepack), Node versions (`pnpm env`), and releasing (changesets, `publish`, `pack`).
+- **Store:** disk used and saved, and pruning.
+- **Licenses:** every dependency's license.
+- **Binaries:** what `node_modules/.bin` offers, to run with `exec`.
+
