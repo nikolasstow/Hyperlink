@@ -92,6 +92,8 @@ export interface PluginPageButton {
   readonly page: string;
   readonly title: string;
   readonly icon?: string;
+  /** Secondary text beside the title (a count). */
+  readonly detail?: string;
 }
 
 /** One block of a page, top to bottom. Pages are named by their manifest id

@@ -132,7 +132,8 @@ export const npmPage = (workspace: string) =>
               links: [
                 {
                   page: "packages",
-                  title: `Packages (${uniquePackages(packages)})`,
+                  title: "Packages",
+                  detail: String(uniquePackages(packages)),
                 },
                 {
                   page: "details",

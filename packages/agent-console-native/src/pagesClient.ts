@@ -25,6 +25,7 @@ const pageLink = Schema.Struct({
   page: Schema.String,
   title: Schema.String,
   icon: Schema.optionalKey(Schema.String),
+  detail: Schema.optionalKey(Schema.String),
   kind: pageKind,
 });
 export type PageLink = typeof pageLink.Type;

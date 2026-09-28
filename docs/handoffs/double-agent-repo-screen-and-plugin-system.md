@@ -481,7 +481,7 @@ Owner-stated unless marked *Proposed*.
 
 - It is just **the NPM page, organized**, titled for the repo's package manager (**PNPM** in a
   pnpm repo). **No large header.** Top to bottom:
-  1. **Name, version, description**, then **Packages (N)** and **All Details**, all in **one
+  1. **Name, version, description**, then **Packages** (its count as secondary text) and **All Details**, all in **one
      section** (one card). The description sits on its own line below its label, left aligned.
   2. **Pinned scripts**, with a button to **view all** (the Scripts page, §23.3).
   3. **The package manager**, a card: its details, **updating it**, and **numbers of what is

@@ -64,11 +64,18 @@ const Rows = (props: { readonly rows: ReadonlyArray<SectionRow> }): React.ReactE
   </>
 );
 
-/** A button row: an icon, a title, a chevron. */
-const LinkRow = (props: { readonly title: string; readonly icon: string | undefined; readonly onPress: () => void; readonly border?: boolean }): React.ReactElement => (
+/** A button row: an icon, a title, secondary text beside it, a chevron. */
+const LinkRow = (props: {
+  readonly title: string;
+  readonly icon: string | undefined;
+  readonly detail?: string;
+  readonly onPress: () => void;
+  readonly border?: boolean;
+}): React.ReactElement => (
   <Pressable style={[styles.row, props.border === true && styles.rowBorder]} onPress={props.onPress}>
     <SystemIcon name={symbolForIcon(props.icon)} size={18} color={colors.tint} />
     <Text style={styles.linkTitle}>{props.title}</Text>
+    {props.detail === undefined ? null : <Text style={styles.linkDetail}>{props.detail}</Text>}
     <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} />
   </Pressable>
 );
@@ -235,7 +242,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
             <View style={styles.card}>
               <Rows rows={block.rows} />
               {block.links.map((link, linkIndex) => (
-                <LinkRow key={link.page} title={link.title} icon={link.icon} border={block.rows.length > 0 || linkIndex > 0} onPress={() => openLink(navigation, repo, dir, link)} />
+                <LinkRow key={link.page} title={link.title} icon={link.icon} {...(link.detail === undefined ? {} : { detail: link.detail })} border={block.rows.length > 0 || linkIndex > 0} onPress={() => openLink(navigation, repo, dir, link)} />
               ))}
             </View>
           </View>
@@ -362,6 +369,10 @@ const styles = StyleSheet.create({
   linkTitle: {
     flex: 1,
     color: colors.label,
+    fontSize: 16,
+  },
+  linkDetail: {
+    color: colors.secondaryLabel,
     fontSize: 16,
   },
   tinted: {

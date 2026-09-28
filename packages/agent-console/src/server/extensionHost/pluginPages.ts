@@ -191,6 +191,7 @@ const buttonTo = (entry: PluginPageEntry, button: PluginPageButton) =>
           page: link.page,
           title: button.title,
           ...(button.icon === undefined ? (link.icon === undefined ? {} : { icon: link.icon }) : { icon: button.icon }),
+          ...(button.detail === undefined ? {} : { detail: button.detail }),
           kind: link.kind,
         }),
     ),

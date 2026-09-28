@@ -71,7 +71,7 @@ const describeBlocks = (blocks: ReadonlyArray<PluginBlock>) =>
   blocks.map((block) => {
     switch (block._tag) {
       case "Facts":
-        return `Facts ${block.title ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}${row.stacked === true ? " (stacked)" : ""}`).join(", ")}${(block.links ?? []).map((link) => ` | ${link.title} -> ${link.page}`).join("")}`;
+        return `Facts ${block.title ?? ""}: ${block.rows.map((row) => `${row.label}=${row.value}${row.stacked === true ? " (stacked)" : ""}`).join(", ")}${(block.links ?? []).map((link) => ` | ${link.title}${link.detail === undefined ? "" : ` ${link.detail}`} -> ${link.page}`).join("")}`;
       case "Link":
         return `Link ${block.title} -> ${block.page}`;
       case "Pinned":
@@ -266,7 +266,7 @@ describe("npm plugin: the NPM page", () => {
     const npm = await run(fixture.pipe(Effect.flatMap(pageFor("npm"))));
     expect(npm.title).toBe("PNPM");
     expect(describeBlocks(npm.blocks)).toEqual([
-      "Facts : Name=app, Version=1.2.3, Description=The app (stacked) | Packages (1) -> packages | All Details -> details",
+      "Facts : Name=app, Version=1.2.3, Description=The app (stacked) | Packages 1 -> packages | All Details -> details",
       "Pinned scripts",
       "Card pnpm -> packages: Version=10.33.4, Latest=10.40.0, Dependencies=0, Dev Dependencies=1, Workspace Packages=2 [Update to 10.40.0]",
     ]);

@@ -165,6 +165,8 @@ export class PageLink extends Schema.Class<PageLink>("PageLink")({
   page: Schema.String,
   title: Schema.String,
   icon: Schema.optionalKey(Schema.String),
+  /** Secondary text beside the title (a count). */
+  detail: Schema.optionalKey(Schema.String),
   kind: PageKind,
 }) {}
 
