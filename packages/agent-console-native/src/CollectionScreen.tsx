@@ -50,7 +50,9 @@ import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { followResult } from "./followResult";
 import { confirmFirst, openLink } from "./openPage";
-import { invokeCollection, searchCollection, type CollectionGroup, type CollectionItem, type CollectionTarget, type FormSpec, type PinnedFilter } from "./pagesClient";
+import { rememberPinScope, pinScopeFor, preloadPinScope } from "./pinScope";
+import { PinToast, type PinToastSubject } from "./PinToast";
+import { invokeCollection, searchCollection, type CollectionState, type CollectionGroup, type CollectionItem, type CollectionTarget, type FormSpec, type PinnedFilter } from "./pagesClient";
 import { changeCollection, loadCollection, useCollection, type CollectionData } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
@@ -347,6 +349,9 @@ type Search =
 /** How long typing must pause before the search goes out. */
 const SEARCH_PAUSE_MS = 350;
 
+/** A filter worth pinning has a category; a package alone is not a pin. */
+const pinnableFilter = (filter: Filter): boolean => filter.category !== undefined;
+
 /** What a sheet is open for. */
 type Sheet =
   | { readonly kind: "form"; readonly spec: FormSpec; readonly group?: string; readonly submit: (values: Readonly<Record<string, string>>) => Promise<void> }
@@ -370,7 +375,11 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   // A package's page narrows by category with its chips.
   const [chip, setChip] = React.useState<string | undefined>(view.kind === "filter" ? view.category : undefined);
   const [query, setQuery] = React.useState("");
+  const [toast, setToast] = React.useState<{ readonly subject: PinToastSubject; readonly pins: ReadonlyArray<string> } | undefined>(undefined);
   const [beyond, setBeyond] = React.useState<Search>({ kind: "idle" });
+
+  // The scope the next pin goes to, read before it is needed.
+  React.useEffect(() => preloadPinScope(page), [page]);
 
   // Cached rows are already on screen; bring them up to date behind them.
   React.useEffect(() => {
@@ -420,6 +429,31 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
           ...(chip === undefined ? {} : { category: chip }),
         }
       : undefined;
+
+  /**
+   * Pin items where the last pin went (a workspace package's page, the
+   * repo's, or both), then raise the toast that says so and can change it.
+   * A root package's script has one page to show on, so it just pins.
+   */
+  const pinItems = async (items: ReadonlyArray<CollectionItem>): Promise<void> => {
+    const labels = data?.content.pinScopes;
+    const scoped = labels === undefined ? [] : items.filter((item) => item.group !== ".");
+    const scope = scoped.length === 0 ? "both" : pinScopeFor(page);
+    const pinned = await items.reduce<Promise<CollectionState | undefined>>(
+      (previous, item) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "PinItem", item: item.key, scope: scoped.includes(item) ? scope : "both" })),
+      Promise.resolve(undefined),
+    );
+    if (labels === undefined || pinned === undefined || scoped.length === 0) return;
+    const ids = pinned.pins.flatMap((pin) => (pin._tag === "PinnedItem" && scoped.some((item) => item.key === pin.item) ? [pin.id] : []));
+    setToast({
+      subject: {
+        id: ids.join(" "),
+        scope,
+        labels,
+      },
+      pins: ids,
+    });
+  };
 
   const change = (label: string, run: Promise<unknown>): void => {
     run.catch((error: unknown) => Alert.alert(`Couldn’t ${label}`, messageOf(error)));
@@ -627,18 +661,24 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
         onPress: () => openForm(form, { _tag: "Item", key: item.key }),
       }),
     );
-    const pinning: MenuAction =
-      pin === undefined
-        ? {
-            label: "Pin",
-            icon: "pin",
-            onPress: () => change(`pin ${item.title}`, changeCollection(apiBase, dir, page, { _tag: "PinItem", item: item.key })),
-          }
-        : {
-            label: "Unpin",
-            icon: "pin.slash",
-            onPress: () => change(`unpin ${item.title}`, changeCollection(apiBase, dir, page, { _tag: "Unpin", id: pin.id })),
-          };
+    const pinning: ReadonlyArray<MenuAction> =
+      pin !== undefined
+        ? [
+            {
+              label: "Unpin",
+              icon: "pin.slash",
+              onPress: () => change(`unpin ${item.title}`, changeCollection(apiBase, dir, page, { _tag: "Unpin", id: pin.id })),
+            },
+          ]
+        : data.content.pinnable
+          ? [
+              {
+                label: "Pin",
+                icon: "pin",
+                onPress: () => change(`pin ${item.title}`, pinItems([item])),
+              },
+            ]
+          : [];
     const others = item.actions.map(
       (other): MenuAction => ({
         label: other.title,
@@ -660,7 +700,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
         icon: "tag",
         onPress: () => setSheet({ kind: "categories", items: [item] }),
       },
-      pinning,
+      ...pinning,
       ...others,
       {
         label: "Select",
@@ -673,19 +713,27 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   const nodeMenu = (node: Node): ReadonlyArray<MenuAction> => {
     if (data === undefined) return [];
     const pinned = node.pin ?? pinnedFilter(data.state, node.filter);
-    const pinAction: MenuAction =
-      pinned === undefined
-        ? {
-            label: "Pin",
-            icon: "pin",
-            onPress: () => change(`pin ${node.title}`, changeCollection(apiBase, dir, page, { _tag: "PinFilter", ...node.filter })),
-          }
-        : {
-            label: "Unpin",
-            icon: "pin.slash",
-            destructive: node.pin !== undefined,
-            onPress: () => change(`unpin ${node.title}`, changeCollection(apiBase, dir, page, { _tag: "Unpin", id: pinned.id })),
-          };
+    // What can be pinned is scripts, and filters on a category; a package
+    // as a whole is not a pin (one pinned before can still be unpinned).
+    const pinAction: ReadonlyArray<MenuAction> =
+      pinned !== undefined
+        ? [
+            {
+              label: "Unpin",
+              icon: "pin.slash",
+              destructive: node.pin !== undefined,
+              onPress: () => change(`unpin ${node.title}`, changeCollection(apiBase, dir, page, { _tag: "Unpin", id: pinned.id })),
+            },
+          ]
+        : pinnableFilter(node.filter)
+          ? [
+              {
+                label: "Pin",
+                icon: "pin",
+                onPress: () => change(`pin ${node.title}`, changeCollection(apiBase, dir, page, { _tag: "PinFilter", ...node.filter })),
+              },
+            ]
+          : [];
     const { category, group, pin } = node;
     const filterEdit: ReadonlyArray<MenuAction> =
       pin === undefined
@@ -734,7 +782,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
         onPress: () => openNode(node),
       },
       ...filterEdit,
-      pinAction,
+      ...pinAction,
       ...categoryEdits,
       ...groupActions,
     ];
@@ -764,7 +812,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
 
   // The bar: selecting has Done; otherwise the filter's pin and the 3-dot menu.
   const pinButton: ReadonlyArray<NativeStackHeaderItem> =
-    filter === undefined || (filter.group === undefined && filter.category === undefined)
+    filter === undefined || (currentPin === undefined && !pinnableFilter(filter))
       ? []
       : [
           {
@@ -999,23 +1047,35 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
           <Pressable disabled={selected.length === 0} onPress={() => setSheet({ kind: "categories", items: selected })}>
             <Text style={[styles.selectionAction, selected.length === 0 && styles.disabled]}>Categories…</Text>
           </Pressable>
-          <Pressable
-            disabled={selected.length === 0}
-            onPress={() =>
-              change(
-                "pin them",
-                selected
-                  .filter((item) => pinnedItem(data.state, item.key) === undefined)
-                  .reduce<Promise<unknown>>((previous, item) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "PinItem", item: item.key })), Promise.resolve())
-                  .then(() => setSelection(undefined)),
-              )
-            }
-          >
-            <Text style={[styles.selectionAction, selected.length === 0 && styles.disabled]}>Pin</Text>
-          </Pressable>
+          {data.content.pinnable ? (
+            <Pressable
+              disabled={selected.length === 0}
+              onPress={() =>
+                change(
+                  "pin them",
+                  pinItems(selected.filter((item) => pinnedItem(data.state, item.key) === undefined)).then(() => setSelection(undefined)),
+                )
+              }
+            >
+              <Text style={[styles.selectionAction, selected.length === 0 && styles.disabled]}>Pin</Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
       <EdgeBlurBars variant="top" />
+      <PinToast
+        subject={toast?.subject}
+        bottom={insets.bottom + (selection === undefined ? 16 : 76)}
+        onChoose={(scope) => {
+          if (toast === undefined) return;
+          rememberPinScope(page, scope);
+          change(
+            "move the pin",
+            toast.pins.reduce<Promise<unknown>>((previous, id) => previous.then(() => changeCollection(apiBase, dir, page, { _tag: "ScopePin", id, scope })), Promise.resolve()),
+          );
+        }}
+        onDone={() => setToast(undefined)}
+      />
       <FormSheet
         spec={sheet?.kind === "form" ? sheet.spec : undefined}
         groups={groupOptions}

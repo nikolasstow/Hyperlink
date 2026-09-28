@@ -334,6 +334,8 @@ export const dependenciesOf = (pkg: Package) =>
 export const dependenciesCollection: PluginCollection = {
   categories: dependencyCategories,
   groupsTitle: "Workspace",
+  // Pinning is for scripts; a dependency is looked up, not run.
+  pinnable: false,
   content: ({ workspace }) =>
     packagesIn(workspace).pipe(
       Effect.flatMap((packages) =>

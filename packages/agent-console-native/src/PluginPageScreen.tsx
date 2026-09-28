@@ -27,7 +27,7 @@ import { filterTitle, pinTitle } from "./collectionModel";
 import { colors } from "./colors";
 import { ensureWorkspace } from "./extensionViewsStore";
 import { followResult } from "./followResult";
-import { confirmFirst, openLink } from "./openPage";
+import { confirmFirst, linkKey, openLink } from "./openPage";
 import { invokeCollection, invokeSections, pageMenuBlock, type FormSpec, type PageBlock, type SectionRow } from "./pagesClient";
 import { FormSheet } from "./CollectionSheets";
 import { changeCollection, loadCollection, loadSections, useCollection, useSections } from "./pagesStore";
@@ -156,8 +156,19 @@ const PinnedCard = (props: {
   }, [apiBase, dir, page]);
 
   const data = load.kind === "ready" ? load.value : undefined;
-  // A package's own page shows only its pins.
-  const pins = data === undefined ? [] : data.state.pins.filter((pin) => block.group === undefined || (pin._tag === "PinnedItem" ? data.content.items.find((item) => item.key === pin.item)?.group === block.group : pin.group === block.group));
+  // Each page shows the pins meant for it: a package's page, its scripts
+  // pinned to the package (or both); the repo's page, scripts pinned to the
+  // repo (or both). A pin from before scopes shows on both. A filter shows on
+  // its package's page, or on the repo's when it has no package.
+  const pins =
+    data === undefined
+      ? []
+      : data.state.pins.filter((pin) => {
+          if (pin._tag === "PinnedFilter") return pin.group === block.group;
+          const scope = pin.scope ?? "both";
+          if (block.group === undefined) return scope !== "group";
+          return scope !== "top" && data.content.items.find((item) => item.key === pin.item)?.group === block.group;
+        });
   // With nothing pinned, the plugin's best picks, said to be suggestions.
   const suggested = data === undefined || pins.length > 0 ? [] : data.content.items.filter((item) => block.suggestions.includes(item.key));
   const runItem = (key: string, title: string): void => {
@@ -339,19 +350,19 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
             <Pressable style={styles.card} disabled={block.opens === undefined} onPress={() => (block.opens === undefined ? undefined : openLink(navigation, repo, dir, block.opens))}>
               <Rows rows={block.rows} chevron={block.opens !== undefined} />
               {block.links.map((link, linkIndex) => (
-                <LinkRow key={link.page} title={link.title} icon={link.icon} {...(link.detail === undefined ? {} : { detail: link.detail })} border={block.rows.length > 0 || linkIndex > 0} onPress={() => openLink(navigation, repo, dir, link)} />
+                <LinkRow key={linkKey(link)} title={link.title} icon={link.icon} {...(link.detail === undefined ? {} : { detail: link.detail })} border={block.rows.length > 0 || linkIndex > 0} onPress={() => openLink(navigation, repo, dir, link)} />
               ))}
             </Pressable>
           </View>
         );
       case "Link":
         return (
-          <View key={`link ${block.link.page}`} style={[styles.card, styles.linkCard]}>
+          <View key={`link ${linkKey(block.link)}`} style={[styles.card, styles.linkCard]}>
             <LinkRow title={block.link.title} icon={block.link.icon} onPress={() => openLink(navigation, repo, dir, block.link)} />
           </View>
         );
       case "Pinned":
-        return <PinnedCard key={`pinned ${block.collection.page}`} block={block} repo={repo} dir={dir} apiBase={apiBase} navigation={navigation} />;
+        return <PinnedCard key={`pinned ${linkKey(block.collection)}`} block={block} repo={repo} dir={dir} apiBase={apiBase} navigation={navigation} />;
       case "Card": {
         const { opens } = block;
         return (

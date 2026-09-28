@@ -63,10 +63,12 @@ describe("collection state", () => {
       {
         _tag: "PinItem",
         item: ".#build",
+        scope: "top",
       },
       {
         _tag: "PinItem",
         item: ".#build",
+        scope: "both",
       },
       {
         _tag: "PinFilter",
@@ -80,6 +82,22 @@ describe("collection state", () => {
       },
     ]);
     expect(pinned.pins.map((pin) => pin._tag)).toEqual(["PinnedItem", "PinnedFilter"]);
+    const item = pinned.pins[0];
+    if (item === undefined) throw new Error("no item pinned");
+    const scoped = await apply(
+      [
+        {
+          _tag: "ScopePin",
+          id: item.id,
+          scope: "group",
+        },
+      ],
+      pinned,
+    );
+    expect(scoped.pins[0]).toMatchObject({
+      item: ".#build",
+      scope: "group",
+    });
     const filter = pinned.pins[1];
     if (filter === undefined) throw new Error("no filter pinned");
     const renamed = await apply(

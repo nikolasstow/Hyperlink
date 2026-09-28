@@ -525,6 +525,13 @@ Owner-stated unless marked *Proposed*.
      through to a page of all of them.
 - **Filters, not folders.** A filter is a package, a category, or both. It is live, so new
   scripts show up in it on their own (for example, the build scripts in `@some/package`).
+- **What pins is scripts, and filters on a category.** A workspace package as a whole is not a
+  pin, and dependencies (Packages, §23.2) are not pinned.
+- **Pinning a script raises a toast** at the bottom, on glass: **"Pin to Workspace Package ⌄"**
+  (or Repo, or both: whatever was chosen last). It goes away on its own; **tapping it expands
+  it** to choose **Workspace Package**, **Repo**, or **Both**, which is where the pin shows (the
+  package's page, the repo's NPM page, or both) and is remembered for the next pin. A root
+  package's script just pins, since its package is the repo.
 - **Pinning a filter saves it to Pinned:**
   - open a package, select a category, and pin it to get that category in that package;
   - open a category for the whole repo and pin it to get everything in that category.

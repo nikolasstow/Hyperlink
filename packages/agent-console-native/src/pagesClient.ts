@@ -150,6 +150,13 @@ const collectionContent = Schema.Struct({
     }),
   ),
   groupsTitle: Schema.String,
+  pinnable: Schema.Boolean,
+  pinScopes: Schema.optionalKey(
+    Schema.Struct({
+      group: Schema.String,
+      top: Schema.String,
+    }),
+  ),
   search: Schema.optionalKey(
     Schema.Struct({
       placeholder: Schema.String,
@@ -165,6 +172,7 @@ const pin = Schema.Union([
   Schema.TaggedStruct("PinnedItem", {
     id: Schema.String,
     item: Schema.String,
+    scope: Schema.optionalKey(Schema.Literals(["group", "top", "both"])),
   }),
   Schema.TaggedStruct("PinnedFilter", {
     id: Schema.String,
@@ -188,13 +196,18 @@ const collectionState = Schema.Struct({
 });
 export type CollectionState = typeof collectionState.Type;
 
+/** Where a pinned item shows: its group's page (a workspace package's), the
+ * collection's top page (the repo's), or both. */
+export type PinScope = "group" | "top" | "both";
+
 /** One change to a collection's state (collections/state.ts `CollectionChange`). */
 export type CollectionChange =
   | { readonly _tag: "CreateCategory"; readonly name: string }
   | { readonly _tag: "RenameCategory"; readonly id: string; readonly name: string }
   | { readonly _tag: "DeleteCategory"; readonly id: string }
   | { readonly _tag: "Assign"; readonly assignments: Readonly<Record<string, ReadonlyArray<string>>> }
-  | { readonly _tag: "PinItem"; readonly item: string }
+  | { readonly _tag: "PinItem"; readonly item: string; readonly scope: PinScope }
+  | { readonly _tag: "ScopePin"; readonly id: string; readonly scope: PinScope }
   | { readonly _tag: "PinFilter"; readonly name?: string; readonly group?: string; readonly category?: string }
   | { readonly _tag: "UpdateFilter"; readonly id: string; readonly name: string; readonly group?: string; readonly category?: string }
   | { readonly _tag: "Unpin"; readonly id: string };

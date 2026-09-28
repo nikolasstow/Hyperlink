@@ -257,6 +257,14 @@ export interface PluginCollection {
   /** What its groups are called, as a heading ("Packages"); `Groups` by
    * default. */
   readonly groupsTitle?: string;
+  /** Whether its items can be pinned; they can by default. */
+  readonly pinnable?: boolean;
+  /** Where a pinned item can show, by name: its group's page ("Workspace
+   * Package") and the top page ("Repo"). Without these, pins have no scope. */
+  readonly pinScopes?: {
+    readonly group: string;
+    readonly top: string;
+  };
   /** The collection for a workspace; no items means the page has nothing
    * there. */
   readonly content: (context: PluginContext) => Effect.Effect<PluginCollectionContent, PluginError, PluginServices>;

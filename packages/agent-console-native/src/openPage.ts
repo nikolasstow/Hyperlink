@@ -39,6 +39,14 @@ export const openLink = (navigation: Navigation, repo: string, dir: string, link
   }
 };
 
+/** A link's identity: its page and params. Several links can open one page
+ * with different params (each workspace package's NPM page). */
+export const linkKey = (link: PageLink): string =>
+  `${link.page}?${Object.entries(link.params)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${name}=${value}`)
+    .join("&")}`;
+
 /** Ask before an action that removes something. */
 export const confirmFirst = (action: PageAction, run: () => void): void => {
   if (action.destructive !== true) {

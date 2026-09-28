@@ -336,6 +336,16 @@ export class CollectionContent extends Schema.Class<CollectionContent>("Collecti
   categories: Schema.Array(CollectionCategory),
   /** What its groups are called, as a heading ("Packages"). */
   groupsTitle: Schema.String,
+  /** Whether its items can be pinned (scripts can; dependencies cannot). */
+  pinnable: Schema.Boolean,
+  /** What a pinned item's scopes are called, when it has them: its group's
+   * page ("Workspace Package") and the top page ("Repo"). */
+  pinScopes: Schema.optionalKey(
+    Schema.Struct({
+      group: Schema.String,
+      top: Schema.String,
+    }),
+  ),
   /** Whether the plugin searches beyond the collection (a registry), and
    * what the search field says. */
   search: Schema.optionalKey(

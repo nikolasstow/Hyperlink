@@ -144,6 +144,10 @@ const addScript = (workspace: string, keys: ReadonlyArray<string>): PluginForm =
 export const scriptsCollection: PluginCollection = {
   categories: scriptCategories,
   groupsTitle: "Packages",
+  pinScopes: {
+    group: "Workspace Package",
+    top: "Repo",
+  },
   content: ({ workspace }) =>
     packagesIn(workspace).pipe(
       Effect.map((packages) => ({

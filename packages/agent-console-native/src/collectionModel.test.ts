@@ -42,6 +42,7 @@ const content: CollectionContent = {
     },
   ],
   groupsTitle: "Packages",
+  pinnable: true,
 };
 
 const state: CollectionState = {

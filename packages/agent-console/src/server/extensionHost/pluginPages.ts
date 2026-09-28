@@ -398,6 +398,15 @@ export const toCollection = (
       ...(category.icon === undefined ? {} : { icon: category.icon }),
     })),
     groupsTitle: entry.collection.groupsTitle ?? "Groups",
+    pinnable: entry.collection.pinnable ?? true,
+    ...(entry.collection.pinScopes === undefined
+      ? {}
+      : {
+          pinScopes: {
+            group: entry.collection.pinScopes.group,
+            top: entry.collection.pinScopes.top,
+          },
+        }),
     ...(entry.collection.search === undefined ? {} : {
           search: {
             placeholder: entry.collection.search.placeholder,

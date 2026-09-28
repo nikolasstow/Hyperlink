@@ -23,9 +23,16 @@ export const UserCategory = Schema.Struct({
   name: Schema.String,
 });
 
+/** Where a pinned item shows: on its group's page (a workspace package's),
+ * on the collection's top page (the repo's), or both. */
+export const PinScope = Schema.Literals(["group", "top", "both"]);
+export type PinScope = typeof PinScope.Type;
+
+/** A pinned item; without a scope (pinned before scopes), it shows on both. */
 export const PinnedItem = Schema.TaggedStruct("PinnedItem", {
   id: Schema.String,
   item: Schema.String,
+  scope: Schema.optionalKey(PinScope),
 });
 
 /** A filter: a group, a category, or both. New items that match show up in
@@ -73,7 +80,15 @@ export const CollectionChange = Schema.Union([
   Schema.TaggedStruct("DeleteCategory", { id: Schema.String }),
   /** Set these items' categories (each to its own list). */
   Schema.TaggedStruct("Assign", { assignments: Schema.Record(Schema.String, Schema.Array(Schema.String)) }),
-  Schema.TaggedStruct("PinItem", { item: Schema.String }),
+  Schema.TaggedStruct("PinItem", {
+    item: Schema.String,
+    scope: PinScope,
+  }),
+  /** Change where a pinned item shows. */
+  Schema.TaggedStruct("ScopePin", {
+    id: Schema.String,
+    scope: PinScope,
+  }),
   Schema.TaggedStruct("PinFilter", {
     name: Schema.optionalKey(Schema.String),
     group: Schema.optionalKey(Schema.String),
@@ -202,6 +217,7 @@ export const applyChange = (state: CollectionState, change: CollectionChange): E
                       _tag: "PinnedItem",
                       id,
                       item: change.item,
+                      scope: change.scope,
                     },
                   ],
                 }),
@@ -252,6 +268,22 @@ export const applyChange = (state: CollectionState, change: CollectionChange): E
         }),
       );
     }
+    case "ScopePin":
+      return state.pins.some((pin) => pin._tag === "PinnedItem" && pin.id === change.id)
+        ? Effect.succeed(
+            new CollectionState({
+              ...state,
+              pins: state.pins.map((pin) =>
+                pin._tag === "PinnedItem" && pin.id === change.id
+                  ? {
+                      ...pin,
+                      scope: change.scope,
+                    }
+                  : pin,
+              ),
+            }),
+          )
+        : Effect.fail(badRequest(`no pinned item ${change.id}`));
     case "Unpin":
       return Effect.succeed(
         new CollectionState({
