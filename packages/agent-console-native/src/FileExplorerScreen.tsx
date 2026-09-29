@@ -29,7 +29,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
-import { DubzBar } from "./Composer";
+import { DubzBar } from "./Dubz";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { iconForFile } from "./fileIcon";
@@ -42,7 +42,6 @@ import { SetiIcon } from "./SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { SystemIcon } from "./SystemIcon";
 import { usePrimaryWorktree } from "./primaryWorktree";
-import { composerRestingBottom } from "./useKeyboardSlide";
 import { WorktreePicker } from "./WorktreePicker";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
@@ -237,9 +236,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       )}
       <EdgeBlurBars variant="top" />
       {/* The bottom bar, with Dubz its only page: nothing to compose here. */}
-      <View style={[styles.bar, { bottom: composerRestingBottom(insets.bottom) }]}>
-        <DubzBar bottomInset={0} agentSurface="repo" />
-      </View>
+      <DubzBar agentSurface="repo" />
     </View>
   );
 };
@@ -297,12 +294,6 @@ const styles = StyleSheet.create({
   empty: {
     color: colors.secondaryLabel,
     textAlign: "center",
-  },
-  // Where Home's composer floats (`bottom` set inline).
-  bar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
   },
   error: {
     color: colors.secondaryLabel,

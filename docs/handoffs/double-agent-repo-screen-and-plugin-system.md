@@ -672,8 +672,14 @@ Owner-stated.
 - **Where there is nothing to compose** (Files), Dubz is the bar's only page. Files no longer
   has search; it will return another way.
 - **The bar opens to the page opened last**, remembered across launches.
-- **Dubz expanded is unchanged.** It keeps its window, detents and grow-in. Each page keeps
-  its own height as you swipe.
+- **One component per page, two states, never swapped.** Each page (composer, Dubz) has a
+  collapsed state (the bar; the two are the same pill: regular glass, `+`, a line of text, a muted
+  send) and an expanded one, animated between by layout. Dubz expanded is its window (clear glass,
+  detents, grab handle) growing up out of its own bar, to just under the header; at the smallest
+  detent the window has no glass and the pill fills it, so it is the bar with a handle, and the
+  keyboard going down there collapses it. Each page keeps its own height as you swipe.
+- **A page turn's work waits for the slide.** Focus moving and the page remembered happen when the
+  slide has finished, so nothing on the JS side competes with its frames.
 - **No page dots** for now.
 - The Dubz settings still choose where Dubz appears, now as a page of the bar. Where it is
   off, the composer is the only page.

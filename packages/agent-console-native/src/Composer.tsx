@@ -6,12 +6,14 @@
  * layout. Screens vary it through `placeholder`, `topSection` (Home's
  * repo/worktree/branch pickers), and `agentSurface`.
  *
- * It is the first of the bar's two pages, Dubz the second (Dubz.tsx): while
- * expanded, a swipe left slides it off and Dubz in beside it, both by layout
- * (margins here, `left` there), never a transform (glass dies under one). A tap
- * on the collapsed bar opens the page opened last. Where Dubz is off for the
- * surface, the composer is the only page. `DubzBar` is the bar where Dubz is the
- * only page: the same collapsed bar, opening Dubz.
+ * The bar has two pages side by side: this composer, then Dubz (Dubz.tsx).
+ * Each is one component with a collapsed state (the bar; the two are the same
+ * pill) and an expanded one, animated between, never swapped. Collapsed, the
+ * bar shows the page opened last. Expanded, a swipe slides to the other page,
+ * by layout (margins here, `left` on the Dubz page), never a transform (glass
+ * dies under one); what the turn changes (focus, the page remembered) waits
+ * until the slide has finished, so the JS side never competes with its frames.
+ * Where Dubz is off for the surface, the composer is the only page.
  *
  * This is the "component that takes other components" split: the fragile glass
  * and collapse mechanics live once in `BottomBar` (see its header for the
@@ -23,28 +25,22 @@
  * (`LayoutAnimation.configureNext` in the focus/blur/send handlers); the layout
  * it animates lives in the shell.
  *
- * `+`/send are real native SwiftUI `Button`s (background circle, glass effect
- * and SF Symbol one native element via `@expo/ui`). `glassEffect` is confirmed
- * load-bearing — swapping it for a flat `background()` reintroduced a delayed-
- * alignment bug (see `CHIP_BUTTON_MODIFIERS`). Attachment (`+`) is still a stub;
- * model selection is real (`client.provider.list()`), passed on every send.
+ * `+`/send are the bar's shared buttons (composerChips.tsx). Attachment (`+`)
+ * is still a stub; model selection is real (`client.provider.list()`), passed
+ * on every send.
  *
  * @internal
  */
-import { Button, Host } from "@expo/ui/swift-ui";
-import { buttonStyle, foregroundStyle, frame, glassEffect, imageScale, labelStyle } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { LayoutAnimation, StyleSheet, Text, TextInput, useWindowDimensions } from "react-native";
+import { LayoutAnimation, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { runOnJS, useAnimatedStyle, withTiming } from "react-native-reanimated";
-import { useIsFocused } from "@react-navigation/native";
+import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useAppContext } from "./AppContext";
-import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
+import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { BottomBar } from "./BottomBar";
-import { barPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useDubz } from "./Dubz";
+import { PlusChip, SendChip } from "./composerChips";
+import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import { colors } from "./colors";
-import { useTheme } from "./theme";
-import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { findModel, getDefaultModel, listModels, type ModelOption } from "./models";
 import { ModelPicker } from "./ModelPicker";
 import { getLastModel, setLastModel } from "./settings";
@@ -67,54 +63,6 @@ const EXPAND_ANIMATION = {
   delete: { type: "keyboard", property: "opacity" },
 } as const;
 
-// Colors mixed toward a neutral (not lowered alpha), staying on the confirmed-
-// safe `glassEffect` with a fully opaque tint. `+` is gray mixed toward black.
-const mixRgb = (
-  base: readonly [number, number, number],
-  target: readonly [number, number, number],
-  factor: number,
-  alpha = 1,
-): string => {
-  const [r, g, b] = base.map((channel, i) => Math.round(channel + (target[i] - channel) * factor));
-  return alpha === 1 ? `rgb(${r},${g},${b})` : `rgba(${r},${g},${b},${alpha})`;
-};
-const SYSTEM_GRAY = { light: [142, 142, 147], dark: [142, 142, 147] } as const;
-const WHITE: readonly [number, number, number] = [255, 255, 255];
-const BLACK: readonly [number, number, number] = [0, 0, 0];
-const GRAY_LIGHTEN_FACTOR = 0.6;
-const GRAY_DARKEN_FACTOR = 0.25;
-const FILL_ALPHA = 0.85;
-const CHIP_FILL = mixRgb(SYSTEM_GRAY.light, WHITE, GRAY_LIGHTEN_FACTOR, FILL_ALPHA);
-const CHIP_ICON = mixRgb(SYSTEM_GRAY.light, BLACK, GRAY_DARKEN_FACTOR);
-
-// +/send's background, glass effect and icon as one native element. Confirmed:
-// swapping `glassEffect` for `background(color, shapes.circle())` reintroduced
-// the delayed-alignment bug, so glass stays. `foregroundStyle` LAST, after
-// `glassEffect` — order is significant; before it the glass overrode the glyph
-// colour.
-const CHIP_BUTTON_MODIFIERS = [
-  buttonStyle("plain"),
-  labelStyle("iconOnly"),
-  imageScale("small"),
-  frame({ width: COMPOSER_CHIP_SIZE, height: COMPOSER_CHIP_SIZE }),
-  glassEffect({ glass: { variant: "regular", interactive: true, tint: CHIP_FILL }, shape: "circle" }),
-  foregroundStyle(CHIP_ICON),
-];
-
-// Send has two states: solid green when there's text, muted green when not. The
-// glyph stays white in both.
-const sendButtonModifiers = (active: boolean, activeFill: string, mutedFill: string) => [
-  buttonStyle("plain"),
-  labelStyle("iconOnly"),
-  imageScale("medium"),
-  frame({ width: COMPOSER_SEND_CHIP_SIZE, height: COMPOSER_SEND_CHIP_SIZE }),
-  glassEffect({ glass: { variant: "regular", interactive: true, tint: active ? activeFill : mutedFill }, shape: "circle" }),
-  foregroundStyle("#FFFFFF"),
-];
-
-/** Each composer's id, so only the one on screen slides with the pages. */
-let nextComposeId = 0;
-
 export const Composer = (props: {
   readonly onSend: (text: string, model: ModelOption | undefined) => Promise<void>;
   readonly disabled: boolean;
@@ -130,25 +78,25 @@ export const Composer = (props: {
   readonly agentSurface: AgentSurface;
 }): React.ReactElement => {
   const { client } = useAppContext();
-  const { colors: themeColors } = useTheme();
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [focused, setFocused] = React.useState(false);
   const [models, setModels] = React.useState<ReadonlyArray<ModelOption>>([]);
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
-  // Held open while it slides back in from Dubz, until its input takes focus.
+  // Held expanded while it is a page sliding (away to Dubz, or back), when its
+  // input is not the focused one.
   const [held, setHeld] = React.useState(false);
   const expanded = focused || held || text.length > 0;
-  const dubz = useDubz();
-  const { pageX, slidingCompose, barAway, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, registerCompose } = dubz;
   const withDubz = useAgentButtonVisible(props.agentSurface);
-  const isFocused = useIsFocused();
-  const [id] = React.useState(() => {
-    nextComposeId += 1;
-    return nextComposeId;
-  });
+  const lastPage = useBarPage();
+  const [dubzOpen, setDubzOpen] = React.useState(false);
+  // Open or collapse Dubz without its grow: it slid in, or away.
+  const [dubzInstant, setDubzInstant] = React.useState(false);
+  const dubzInputRef = React.useRef<TextInput>(null);
   const { width: screenW } = useWindowDimensions();
+  // Where the pages stand: 0 this composer, 1 Dubz.
+  const pageX = useSharedValue(withDubz && lastPage === "dubz" ? 1 : 0);
   const hasContent = text.trim().length > 0 && !props.disabled;
   // iOS multiline TextInput's intrinsic-size reporting doesn't reliably account
   // for its own padding; measure the content height directly instead.
@@ -193,48 +141,77 @@ export const Composer = (props: {
   };
 
   const onFocus = (): void => {
-    LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    // Held (sliding in from Dubz), it is expanded already.
+    if (!held) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(true);
     setHeld(false);
     if (withDubz) rememberPage("compose");
   };
 
-  const focusInput = React.useCallback(() => inputRef.current?.focus(), []);
+  const expand = React.useCallback(() => inputRef.current?.focus(), []);
 
-  /** Open the bar to the page opened last. */
-  const expand = (): void => {
-    if (withDubz && barPage() === "dubz") dubz.open();
-    else focusInput();
-  };
-
-  // On screen, with Dubz on, this composer is the page beside Dubz.
+  // Collapsed, the bar shows the page opened last (on any screen).
   React.useEffect(() => {
-    if (!isFocused || !withDubz) return undefined;
-    return registerCompose({
-      id,
-      hold: setHeld,
-      focus: focusInput,
-    });
-  }, [isFocused, withDubz, id, registerCompose, focusInput]);
+    if (expanded || dubzOpen) return;
+    pageX.value = withDubz && lastPage === "dubz" ? 1 : 0;
+  }, [expanded, dubzOpen, withDubz, lastPage, pageX]);
 
-  // Expanded, with Dubz on: the Dubz window mounts beside it, off screen, so a
-  // swipe finds it ready instead of waiting for it to mount mid-swipe.
-  React.useEffect(() => {
-    if (!expanded || !isFocused || !withDubz) return undefined;
-    prepare(id);
-    return () => unprepare(id);
-  }, [expanded, isFocused, withDubz, id, prepare, unprepare]);
+  // ── To Dubz ──
+  // The swipe begins: Dubz opens beside this, off to the right, already open.
+  const beginToDubz = React.useCallback(() => {
+    setHeld(true);
+    setDubzInstant(true);
+    setDubzOpen(true);
+  }, []);
+  // The slide has finished on Dubz: it takes the keyboard.
+  const turnToDubz = React.useCallback(() => {
+    rememberPage("dubz");
+    dubzInputRef.current?.focus();
+  }, []);
+  // The slide has fallen back: Dubz goes, unseen.
+  const stayOnCompose = React.useCallback(() => {
+    setDubzOpen(false);
+    setHeld(false);
+  }, []);
+
+  // ── Back from Dubz ──
+  const pageBack = React.useMemo<PageBack>(
+    () => ({
+      pageX,
+      begin: () => setHeld(true),
+      turn: () => {
+        rememberPage("compose");
+        inputRef.current?.focus();
+        setDubzInstant(true);
+        setDubzOpen(false);
+      },
+      stay: () => setHeld(false),
+    }),
+    [pageX],
+  );
+
+  // Dubz, collapsed on the bar, tapped; and Dubz collapsing into the bar.
+  const openDubz = React.useCallback(() => {
+    rememberPage("dubz");
+    setDubzInstant(false);
+    setDubzOpen(true);
+  }, []);
+  const closeDubz = React.useCallback(() => {
+    setDubzInstant(false);
+    setDubzOpen(false);
+    setHeld(false);
+  }, []);
 
   // Swipe left, while expanded, to slide Dubz in. Only a clear sideways drag
   // pages, so typing, selecting and the controls are left alone.
   const toDubz = React.useMemo(
     () =>
       Gesture.Pan()
-        .enabled(expanded && withDubz && isFocused)
+        .enabled(expanded && withDubz)
         .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
         .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
         .onStart(() => {
-          runOnJS(beginFromCompose)(id);
+          runOnJS(beginToDubz)();
         })
         .onUpdate((e) => {
           const moved = -e.translationX / screenW;
@@ -242,22 +219,22 @@ export const Composer = (props: {
         })
         .onEnd((e) => {
           const turned = pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING;
-          runOnJS(turned ? settleOnDubz : stayOnCompose)();
-          pageX.value = withTiming(turned ? 1 : 0, { duration: PAGE_MS, easing: pageEasing });
+          pageX.value = withTiming(turned ? 1 : 0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+            if (finished === true) runOnJS(turned ? turnToDubz : stayOnCompose)();
+          });
         }),
-    [expanded, withDubz, isFocused, pageX, beginFromCompose, id, screenW, settleOnDubz, stayOnCompose],
+    [expanded, withDubz, pageX, screenW, beginToDubz, turnToDubz, stayOnCompose],
   );
 
-  // Off to the left by how far the pages stand from the composer; only this
-  // composer, when it is the one sliding. Wholly off while Dubz stands in for
-  // the bar.
-  const slide = useAnimatedStyle(() => {
-    const aside = barAway.value === 1 ? screenW : slidingCompose.value === id ? pageX.value * screenW : 0;
-    return {
-      marginLeft: -aside,
-      marginRight: aside,
-    };
-  });
+  // Each page off to its side by how far the pages stand from it.
+  const composeSlide = useAnimatedStyle(() => ({
+    marginLeft: -pageX.value * screenW,
+    marginRight: pageX.value * screenW,
+  }));
+  const dubzSlide = useAnimatedStyle(() => ({
+    left: (1 - pageX.value) * screenW,
+    right: -(1 - pageX.value) * screenW,
+  }));
 
   const onBlur = (): void => {
     // Only animate the collapse when it will actually happen — typed text, or
@@ -282,61 +259,55 @@ export const Composer = (props: {
   };
 
   return (
-    <GestureDetector gesture={toDubz}>
-      <Reanimated.View style={slide}>
-        <BottomBar
-          expanded={expanded}
-          bottomInset={props.bottomInset}
-          error={error}
-          topSection={props.topSection}
-          onExpandRequest={expand}
-          input={
-            <TextInput
-              ref={inputRef}
-              style={[
-                styles.input,
-                // Ignore `contentHeight` while empty — belt and suspenders with
-                // onContentSizeChange's own guard, so the field always shrinks back
-                // after a send.
-                { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
-              ]}
-              value={text}
-              onChangeText={setText}
-              onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
-              editable={!props.disabled}
-              placeholder={props.placeholder}
-              placeholderTextColor={colors.placeholderText}
-              multiline
-              submitBehavior="blurAndSubmit"
-              onSubmitEditing={() => void send()}
-              onFocus={onFocus}
-              onBlur={onBlur}
-            />
-          }
-          leading={
-            <Host style={styles.chipHost}>
-              <Button
-                label="Attach"
-                systemImage="plus"
+    <View pointerEvents="box-none">
+      <GestureDetector gesture={toDubz}>
+        <Reanimated.View style={composeSlide}>
+          <BottomBar
+            expanded={expanded}
+            bottomInset={props.bottomInset}
+            error={error}
+            topSection={props.topSection}
+            onExpandRequest={expand}
+            input={
+              <TextInput
+                ref={inputRef}
+                style={[
+                  styles.input,
+                  // Ignore `contentHeight` while empty — belt and suspenders with
+                  // onContentSizeChange's own guard, so the field always shrinks back
+                  // after a send.
+                  { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
+                ]}
+                value={text}
+                onChangeText={setText}
+                onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
+                editable={!props.disabled}
+                placeholder={props.placeholder}
+                placeholderTextColor={colors.placeholderText}
+                multiline
+                submitBehavior="blurAndSubmit"
+                onSubmitEditing={() => void send()}
+                onFocus={onFocus}
+                onBlur={onBlur}
+              />
+            }
+            leading={
+              <PlusChip
                 onPress={() => {
                   // Collapsed: whole bar expands. Expanded: attach is still a stub.
                   if (!expanded) expand();
                 }}
-                modifiers={CHIP_BUTTON_MODIFIERS}
               />
-            </Host>
-          }
-          expandedCenter={<ModelPicker models={models} selected={selectedModel} onChange={pickModel} />}
-          collapsedCenter={
-            <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
-              {text.length > 0 ? text : props.placeholder}
-            </Text>
-          }
-          trailing={
-            <Host style={styles.sendChipHost}>
-              <Button
-                label="Send"
-                systemImage="arrow.up"
+            }
+            expandedCenter={<ModelPicker models={models} selected={selectedModel} onChange={pickModel} />}
+            collapsedCenter={
+              <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
+                {text.length > 0 ? text : props.placeholder}
+              </Text>
+            }
+            trailing={
+              <SendChip
+                active={hasContent}
                 onPress={() => {
                   if (!expanded) {
                     expand();
@@ -344,66 +315,17 @@ export const Composer = (props: {
                   }
                   void send();
                 }}
-                modifiers={sendButtonModifiers(hasContent, themeColors.sendActiveFill, themeColors.sendMutedFill)}
               />
-            </Host>
-          }
-        />
-      </Reanimated.View>
-    </GestureDetector>
-  );
-};
-
-/**
- * The bar where Dubz is the only page (nothing to compose there, as in Files):
- * the composer's collapsed bar, the same to the pixel, and any tap on it opens
- * Dubz. Nothing where Dubz is off for the surface.
- */
-export const DubzBar = (props: {
-  /** Home-indicator safe-area inset. */
-  readonly bottomInset: number;
-  readonly agentSurface: AgentSurface;
-}): React.ReactElement | null => {
-  const { colors: themeColors } = useTheme();
-  const dubz = useDubz();
-  const { barAway } = dubz;
-  const visible = useAgentButtonVisible(props.agentSurface);
-  const { width: screenW } = useWindowDimensions();
-  // Off screen while Dubz stands in for it, so it never shows through.
-  const away = useAnimatedStyle(() => {
-    const aside = barAway.value === 1 ? screenW : 0;
-    return {
-      marginLeft: -aside,
-      marginRight: aside,
-    };
-  });
-  if (!visible) return null;
-  return (
-    <Reanimated.View style={away}>
-      <BottomBar
-        expanded={false}
-        bottomInset={props.bottomInset}
-        onExpandRequest={dubz.open}
-        input={null}
-        leading={
-          <Host style={styles.chipHost}>
-            <Button label="Attach" systemImage="plus" onPress={dubz.open} modifiers={CHIP_BUTTON_MODIFIERS} />
-          </Host>
-        }
-        expandedCenter={null}
-        collapsedCenter={
-          <Text style={[styles.mirrorText, styles.mirrorPlaceholder]} numberOfLines={1}>
-            {`Ask ${AGENT_NAME}…`}
-          </Text>
-        }
-        // Muted, as the composer's is with nothing to send.
-        trailing={
-          <Host style={styles.sendChipHost}>
-            <Button label="Send" systemImage="arrow.up" onPress={dubz.open} modifiers={sendButtonModifiers(false, themeColors.sendActiveFill, themeColors.sendMutedFill)} />
-          </Host>
-        }
-      />
-    </Reanimated.View>
+            }
+          />
+        </Reanimated.View>
+      </GestureDetector>
+      {withDubz ? (
+        <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
+          <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} pageBack={pageBack} />
+        </Reanimated.View>
+      ) : null}
+    </View>
   );
 };
 
@@ -417,13 +339,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 8,
   },
-  chipHost: {
-    width: COMPOSER_CHIP_SIZE,
-    height: COMPOSER_CHIP_SIZE,
-  },
-  sendChipHost: {
-    width: COMPOSER_SEND_CHIP_SIZE,
-    height: COMPOSER_SEND_CHIP_SIZE,
+  // The Dubz page lies over the composer's bar, bottom to bottom, beside it
+  // (`left` from dubzSlide).
+  dubzPage: {
+    position: "absolute",
+    bottom: 0,
   },
   mirrorText: {
     color: colors.label,

@@ -5,7 +5,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
 import { AppToastHost } from "./src/AppToast";
-import { DubzOverlay, DubzProvider } from "./src/Dubz";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
 import { type OpencodeClient, makeClient } from "./src/client";
@@ -188,14 +187,8 @@ const AppInner = (): React.ReactElement => {
           }}
         >
           <ThemeSync />
-          {/* Dubz is app-wide: one provider wraps the whole navigator, and the
-           * overlay renders once on top so tapping the assistant button on any
-           * screen opens the same glass window. */}
-          <DubzProvider>
-            <RootNavigator />
-            <AppToastHost />
-            <DubzOverlay />
-          </DubzProvider>
+          <RootNavigator />
+          <AppToastHost />
         </AppContextProvider>
       )}
     </View>

@@ -3,7 +3,7 @@
  * parts once — the glass field, the squircle clip, the collapse layout — and
  * takes the variable parts as
  * **slots** rather than as a pile of variant params. A variant (the chat/Home
- * `Composer`, or `DubzBar` where Dubz is the only page) supplies its `input`, `leading`, centre and
+ * `Composer`) supplies its `input`, `leading`, centre and
  * `trailing` elements and drives the shell with a single `expanded` flag.
  *
  * Why a presentational shell driven by `expanded`, not a context that owns the
