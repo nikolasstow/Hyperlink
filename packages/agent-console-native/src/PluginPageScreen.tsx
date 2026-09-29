@@ -34,6 +34,8 @@ import { changeCollection, loadCollection, loadSections, useCollection, useSecti
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { usePullToRefresh } from "./pullToRefresh";
+import { RunCountdownRing } from "./RunCountdownRing";
+import { useRunCountdown } from "./runCountdown";
 import { SkeletonPage } from "./Skeleton";
 import { usePrimaryWorktree } from "./primaryWorktree";
 import { WorktreePicker } from "./WorktreePicker";
@@ -124,6 +126,8 @@ const PinTile = (props: {
   readonly icon: SFSymbol;
   readonly busy: boolean;
   readonly playable: boolean;
+  /** Counting down to a run: the ring shows in place of play. */
+  readonly countdownMs?: number;
   readonly onPress: () => void;
   readonly onLongPress?: () => void;
 }): React.ReactElement => (
@@ -133,7 +137,13 @@ const PinTile = (props: {
       <Text style={styles.tileTitle} numberOfLines={2}>
         {props.title}
       </Text>
-      {props.busy ? <ActivityIndicator color={colors.secondaryLabel} /> : props.playable ? <SystemIcon name="play.fill" size={14} color={colors.tint} /> : null}
+      {props.countdownMs !== undefined ? (
+        <RunCountdownRing size={22} durationMs={props.countdownMs} />
+      ) : props.busy ? (
+        <ActivityIndicator color={colors.secondaryLabel} />
+      ) : props.playable ? (
+        <SystemIcon name="play.fill" size={14} color={colors.tint} />
+      ) : null}
     </View>
     <Text style={[styles.pinDetail, styles.mono]} numberOfLines={1}>
       {props.subtitle}
@@ -164,15 +174,24 @@ const PinnedCard = (props: {
   const pins = data === undefined ? [] : pinsShownOn(data.content, data.state, block.group);
   // With nothing pinned, the plugin's best picks, said to be suggestions.
   const suggested = data === undefined || pins.length > 0 ? [] : data.content.items.filter((item) => block.suggestions.includes(item.key));
+  // Running waits out the countdown, so a stray tap starts nothing; a tap
+  // while it counts stops it.
+  const countdown = useRunCountdown();
   const runItem = (key: string, title: string): void => {
     const item = data?.content.items.find((candidate) => candidate.key === key);
     const run = item?.run;
     if (item === undefined || run === undefined) return;
-    setBusy(item.key);
-    invokeCollection(apiBase, dir, page, { _tag: "Item", key: item.key }, run.command, {})
-      .then((result) => followResult(navigation, apiBase, result, title))
-      .catch((error: unknown) => Alert.alert(`Couldn’t run ${title}`, messageOf(error)))
-      .finally(() => setBusy(undefined));
+    if (countdown.counting?.key === item.key) {
+      countdown.cancel();
+      return;
+    }
+    countdown.start(item.key, () => {
+      setBusy(item.key);
+      invokeCollection(apiBase, dir, page, { _tag: "Item", key: item.key }, run.command, {})
+        .then((result) => followResult(navigation, apiBase, result, title))
+        .catch((error: unknown) => Alert.alert(`Couldn’t run ${title}`, messageOf(error)))
+        .finally(() => setBusy(undefined));
+    });
   };
   const unpin = (id: string, title: string): void =>
     Alert.alert(title, undefined, [
@@ -198,6 +217,7 @@ const PinnedCard = (props: {
               icon="terminal"
               busy={busy === item.key}
               playable={item.run !== undefined}
+              {...(countdown.counting?.key === item.key ? { countdownMs: countdown.counting.durationMs } : {})}
               onPress={() => runItem(item.key, item.title)}
             />
           ))
@@ -238,6 +258,7 @@ const PinnedCard = (props: {
                 icon="terminal"
                 busy={busy === pin.item}
                 playable={item?.run !== undefined}
+                {...(countdown.counting?.key === pin.item ? { countdownMs: countdown.counting.durationMs } : {})}
                 onPress={() => runItem(pin.item, title)}
                 onLongPress={() => unpin(pin.id, title)}
               />

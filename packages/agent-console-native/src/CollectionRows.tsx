@@ -9,11 +9,12 @@
  * @internal
  */
 import * as React from "react";
-import { Button, ContextMenu, Host, HStack, Image, ProgressView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Button, ContextMenu, Host, HStack, Image, ProgressView, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import { DynamicColorIOS, Pressable, StyleSheet, Text, View } from "react-native";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { colors } from "./colors";
+import { RunCountdownRing } from "./RunCountdownRing";
 
 export const INDENT = 20;
 const CHEVRON_COL = 20;
@@ -44,6 +45,19 @@ const withMenu = (menu: ReadonlyArray<MenuAction>, trigger: React.ReactElement):
 
 const Separator = (props: { readonly inset: number }): React.ReactElement => <View style={[styles.separator, { marginLeft: props.inset }]} />;
 
+/** Size of the countdown ring where the play button was. */
+const RING = 26;
+
+/** The countdown ring in a SwiftUI row, where its play button was: an RN
+ * view hosted in place, as the file icons in the tree view are. */
+const CountdownSlot = (props: { readonly durationMs: number; readonly onCancel: () => void }): React.ReactElement => (
+  <RNHostView matchContents>
+    <Pressable onPress={props.onCancel} hitSlop={10} accessibilityRole="button" accessibilityLabel="Stop">
+      <RunCountdownRing size={RING} durationMs={props.durationMs} />
+    </Pressable>
+  </RNHostView>
+);
+
 /**
  * An item (a script, a package): its title, its real name beneath (and a
  * detail, when it has one), and the play button when it runs. Tapping the row
@@ -59,6 +73,9 @@ export const ItemRow = (props: {
   readonly width: number;
   readonly busy: boolean;
   readonly canRun: boolean;
+  /** Counting down to a run: the ring shows, and a tap stops it. */
+  readonly countdownMs?: number;
+  readonly onCancel?: () => void;
   readonly selecting: boolean;
   readonly selected: boolean;
   readonly pinned: boolean;
@@ -66,6 +83,8 @@ export const ItemRow = (props: {
   readonly onSelect: () => void;
   readonly menu: ReadonlyArray<MenuAction>;
 }): React.ReactElement => {
+  const counting = props.countdownMs !== undefined;
+  const cancel = props.onCancel ?? props.onRun;
   const trigger = (
     <HStack
       spacing={10}
@@ -74,7 +93,7 @@ export const ItemRow = (props: {
         padding({ leading: 12 + props.depth * INDENT, trailing: 16, top: 10, bottom: 10 }),
         frame({ width: props.width, alignment: "leading" }),
         background(colors.systemBackground),
-        onTapGesture(props.selecting ? props.onSelect : props.onRun),
+        onTapGesture(props.selecting ? props.onSelect : counting ? cancel : props.onRun),
       ]}
     >
       {props.selecting ? (
@@ -95,7 +114,13 @@ export const ItemRow = (props: {
       </VStack>
       <Spacer />
       {props.pinned ? <Image systemName="pin.fill" size={11} color={colors.secondaryLabel} /> : null}
-      {props.selecting || !props.canRun ? null : props.busy ? <ProgressView /> : <Button systemImage="play.fill" onPress={props.onRun} />}
+      {props.selecting || !props.canRun ? null : props.countdownMs !== undefined ? (
+        <CountdownSlot durationMs={props.countdownMs} onCancel={cancel} />
+      ) : props.busy ? (
+        <ProgressView />
+      ) : (
+        <Button systemImage="play.fill" onPress={props.onRun} />
+      )}
     </HStack>
   );
   return (
@@ -169,6 +194,9 @@ export const Tile = (props: {
   readonly width: number;
   readonly count?: number;
   readonly busy?: boolean;
+  /** Counting down to a run: the ring shows, and a tap stops it. */
+  readonly countdownMs?: number;
+  readonly onCancel?: () => void;
   readonly selecting?: boolean;
   readonly selected?: boolean;
   readonly onPress: () => void;
@@ -184,7 +212,7 @@ export const Tile = (props: {
         frame({ width: props.width, height: 80, alignment: "topLeading" }),
         background(colors.cardBackground),
         cornerRadius(14),
-        onTapGesture(props.onPress),
+        onTapGesture(props.countdownMs !== undefined && props.onCancel !== undefined ? props.onCancel : props.onPress),
       ]}
     >
       {/* The icon sits on the title's line. */}
@@ -197,7 +225,13 @@ export const Tile = (props: {
         <UIText modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
         <Spacer />
         {props.count === undefined ? null : <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel)]}>{String(props.count)}</UIText>}
-        {props.onRun === undefined || props.selecting === true ? null : props.busy === true ? <ProgressView /> : <Button systemImage="play.fill" onPress={props.onRun} />}
+        {props.onRun === undefined || props.selecting === true ? null : props.countdownMs !== undefined ? (
+          <CountdownSlot durationMs={props.countdownMs} onCancel={props.onCancel ?? props.onPress} />
+        ) : props.busy === true ? (
+          <ProgressView />
+        ) : (
+          <Button systemImage="play.fill" onPress={props.onRun} />
+        )}
       </HStack>
       <Spacer />
       <UIText modifiers={[font({ size: 12, family: props.onRun === undefined ? undefined : "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.subtitle}</UIText>

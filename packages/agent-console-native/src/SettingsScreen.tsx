@@ -43,6 +43,7 @@ import {
   setWorktreeTemplate,
   type DefaultWorktreePreference,
 } from "./settings";
+import { runCountdownChoices, setRunCountdownSeconds, useRunCountdownSeconds } from "./runCountdown";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
@@ -59,6 +60,7 @@ const timeAgo = (ms: number): string => {
 };
 
 export const SettingsScreen = (props: Props): React.ReactElement => {
+  const runCountdown = useRunCountdownSeconds();
   const insets = useSafeAreaInsets();
   const { address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
@@ -364,6 +366,17 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <Text style={[styles.hint, styles.optionFooter]}>
             Each session can still be switched from its own menu; that choice lasts until the app restarts.
           </Text>
+        </View>
+
+        <Text style={styles.sectionLabel}>Scripts</Text>
+        <View style={styles.card}>
+          <Text style={styles.hint}>Tapping a script counts down before it runs, so a stray tap starts nothing. Tap the ring to stop it.</Text>
+          {runCountdownChoices.map((choice, index) => (
+            <TouchableOpacity key={choice} style={[styles.optionRow, index > 0 && styles.optionRowBorder]} activeOpacity={0.6} onPress={() => setRunCountdownSeconds(choice)}>
+              <Text style={styles.rowTitle}>{choice === 1 ? "1 second" : `${choice} seconds`}</Text>
+              {runCountdown === choice ? <SystemIcon name="checkmark" size={15} color={colors.tint} /> : null}
+            </TouchableOpacity>
+          ))}
         </View>
 
         <Text style={styles.sectionLabel}>Server</Text>

@@ -547,6 +547,10 @@ Owner-stated unless marked *Proposed*.
   pages alone (its NPM page, and Scripts on that package), never the repo's NPM page or the
   repo-wide Scripts page. **The toast
   comes up for every pin**, so where it goes can always be changed.
+- **Running a script counts down first**, against accidental taps: the play button becomes an
+  iOS download-style ring that fills over the countdown, with a **stop** button in it to cancel;
+  the script runs when it completes. The length is a setting (Settings → Scripts: 1, 2, 3 or 5
+  seconds; 3 by default). *Next (owner has ideas):* how a run opens its terminal.
 - **Loading shows skeletons** (the page's shape in soft gray), not a spinner, when there is
   nothing cached to show.
 - **Pinning a filter saves it to Pinned:**

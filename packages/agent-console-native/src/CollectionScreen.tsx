@@ -50,6 +50,7 @@ import { CategoriesSheet, FormSheet, type GroupOption } from "./CollectionSheets
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { usePrimaryWorktree } from "./primaryWorktree";
+import { useRunCountdown } from "./runCountdown";
 import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonGrid, SkeletonList } from "./Skeleton";
 import { followResult } from "./followResult";
@@ -392,6 +393,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   const grid = display === "grid";
   const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = React.useState<string | undefined>(undefined);
+  const countdown = useRunCountdown();
   const [selection, setSelection] = React.useState<ReadonlySet<string> | undefined>(undefined);
   const [sheet, setSheet] = React.useState<Sheet | undefined>(undefined);
   // A package's page narrows by category with its chips.
@@ -498,10 +500,16 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
     }
     const action = item.run ?? item.open;
     if (action === undefined) return;
-    setBusy(item.key);
-    invoke({ _tag: "Item", key: item.key }, action.command, `${action.title} ${item.title}`)
-      .catch((error: unknown) => Alert.alert(`Couldn’t ${action.title.toLowerCase()} ${item.title}`, messageOf(error)))
-      .finally(() => setBusy(undefined));
+    const go = (): void => {
+      setBusy(item.key);
+      invoke({ _tag: "Item", key: item.key }, action.command, `${action.title} ${item.title}`)
+        .catch((error: unknown) => Alert.alert(`Couldn’t ${action.title.toLowerCase()} ${item.title}`, messageOf(error)))
+        .finally(() => setBusy(undefined));
+    };
+    // Running waits out the countdown, so a stray tap starts nothing; opening
+    // (a web page) does not.
+    if (item.run === undefined) go();
+    else countdown.start(item.key, go);
   };
 
   /** A plugin form's sheet: submitting runs it, then re-reads the collection
@@ -978,6 +986,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
             depth={row.depth}
             width={width}
             busy={busy === row.item.key}
+            {...(countdown.counting?.key === row.item.key ? { countdownMs: countdown.counting.durationMs, onCancel: countdown.cancel } : {})}
             canRun={row.item.run !== undefined}
             selecting={selection !== undefined && row.beyond !== true}
             selected={selection?.has(row.item.key) === true}
@@ -1016,6 +1025,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
                   icon={tile.item.icon === undefined ? undefined : symbolForIcon(tile.item.icon)}
                   width={tileWidth}
                   busy={busy === tile.item.key}
+                  {...(countdown.counting?.key === tile.item.key ? { countdownMs: countdown.counting.durationMs, onCancel: countdown.cancel } : {})}
                   selecting={selection !== undefined}
                   selected={selection?.has(tile.item.key) === true}
                   onPress={() => (selection === undefined ? run(tile.item) : toggleSelect(tile.item.key))}
