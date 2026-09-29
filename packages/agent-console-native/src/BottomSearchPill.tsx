@@ -22,7 +22,6 @@ import * as React from "react";
 import { StyleSheet, TextInput, useColorScheme, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import Reanimated, {
   Easing,
-  useAnimatedKeyboard,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -31,6 +30,7 @@ import Reanimated, {
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
+import { useKeyboardHeightValue } from "./keyboardHeight";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { composerRestingBottom } from "./useKeyboardSlide";
 
@@ -107,7 +107,7 @@ export const BottomSearchPill = (props: {
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
-  const keyboard = useAnimatedKeyboard();
+  const keyboardHeight = useKeyboardHeightValue();
 
   // One animated `bottom`: rest tucked toward the bottom edge — the SAME rest as
   // the composer (composerRestingBottom), so the search pill hugs the bottom the
@@ -116,7 +116,7 @@ export const BottomSearchPill = (props: {
   const restingBottom = composerRestingBottom(insets.bottom);
   const hiddenValue = props.hidden;
   const animatedStyle = useAnimatedStyle(() => ({
-    bottom: Math.max(keyboard.height.value, restingBottom) - hiddenValue.value,
+    bottom: Math.max(keyboardHeight.value, restingBottom) - hiddenValue.value,
   }));
 
   return (

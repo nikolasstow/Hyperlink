@@ -25,6 +25,7 @@ import {
 } from "./src/settings";
 import { primeDefaultPermissionMode, primeSessionPermissionModes } from "./src/sessionPermissions";
 import { registerForPush } from "./src/push";
+import { KeyboardHeightProvider } from "./src/keyboardHeight";
 
 /** Only the one-time async bootstrap (resolve a server address, connect,
  * resolve a root folder) lives in this hand-rolled state machine — once
@@ -187,8 +188,11 @@ const AppInner = (): React.ReactElement => {
           }}
         >
           <ThemeSync />
-          <RootNavigator />
-          <AppToastHost />
+          {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}
+          <KeyboardHeightProvider>
+            <RootNavigator />
+            <AppToastHost />
+          </KeyboardHeightProvider>
         </AppContextProvider>
       )}
     </View>

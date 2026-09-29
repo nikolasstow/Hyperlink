@@ -21,7 +21,8 @@
  *
  * @internal
  */
-import { useAnimatedKeyboard, useAnimatedStyle, type AnimatedStyle } from "react-native-reanimated";
+import { useAnimatedStyle, type AnimatedStyle } from "react-native-reanimated";
+import { useKeyboardHeightValue } from "./keyboardHeight";
 import type { ViewStyle } from "react-native";
 
 /**
@@ -33,8 +34,9 @@ import type { ViewStyle } from "react-native";
 export const composerRestingBottom = (safeBottom: number): number => Math.max(safeBottom - 16, 6);
 
 export const useKeyboardSlide = (restingBottom: number): AnimatedStyle<ViewStyle> => {
-  const keyboard = useAnimatedKeyboard();
+  // The app's one keyboard tracker (keyboardHeight.tsx), not a new one.
+  const keyboardHeight = useKeyboardHeightValue();
   return useAnimatedStyle(() => ({
-    bottom: Math.max(keyboard.height.value, restingBottom),
+    bottom: Math.max(keyboardHeight.value, restingBottom),
   }));
 };

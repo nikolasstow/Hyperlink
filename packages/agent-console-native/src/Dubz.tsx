@@ -33,7 +33,6 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, {
   Easing,
   runOnJS,
-  useAnimatedKeyboard,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
@@ -43,6 +42,7 @@ import Reanimated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible } from "./agentButtonSettings";
 import { colors } from "./colors";
+import { useKeyboardHeightValue } from "./keyboardHeight";
 import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
@@ -223,9 +223,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const headerHeight = useHeaderHeight();
   const scheme = useColorScheme();
   const glassScheme = scheme === "dark" ? "dark" : "light";
-  // Destructure the height SHARED VALUE — capturing the whole useAnimatedKeyboard
-  // object (KeyboardImpl) in a worklet fails to serialize to the UI thread.
-  const { height: kbHeight } = useAnimatedKeyboard();
+  // The app's one keyboard tracker (keyboardHeight.tsx): every screen has a
+  // Dubz page, and a tracker each ran them all at once, all the time.
+  const kbHeight = useKeyboardHeightValue();
   const { height: screenH, width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
   const resting = composerRestingBottom(insets.bottom);
