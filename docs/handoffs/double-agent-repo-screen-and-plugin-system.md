@@ -370,9 +370,10 @@ Owner-stated unless marked *Proposed*. Proposed items are not binding until appr
 - **Each repo always has a primary worktree** (its main checkout until another is chosen). It is
   the default whenever something is done in the repo: pages where the worktree matters (Files,
   the PNPM page and the pages under it) open on it, and a new session starts in it.
-- **A glass worktree dropdown** chooses it, and choosing changes it everywhere. It is **one
-  reusable component**, so a plugin page places it where it fits: **Files** has it at the **top
-  right** of its header; **PNPM** has it **in place of its header title**.
+- **The header title chooses it**: the page's title (the folder name in Files, **PNPM** on that
+  page) with the **worktree name under it as a subtitle** and a **chevron on the right**; tapping
+  it opens the worktree dropdown, and choosing changes it everywhere. It is **one reusable
+  component** a plugin page uses as its header title.
 - **The repo screen has no worktree dropdown and does not change with it**: nothing on it belongs
   to a single worktree, since its sessions can be in any.
 

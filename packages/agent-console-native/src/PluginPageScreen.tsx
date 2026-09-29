@@ -305,9 +305,9 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
   React.useLayoutEffect(() => {
     navigation.setOptions({
       title: shownTitle,
-      // A page opened from the repo menu names its worktree in place of its
-      // title, as the picker; a page about one package keeps its title.
-      ...(showPicker ? { headerTitle: () => <WorktreePicker repo={repo} fallback={props.route.params.dir} /> } : {}),
+      // A page opened from the repo menu names its worktree under its title,
+      // and opens the worktree menu; a page about one package keeps its title.
+      ...(showPicker ? { headerTitle: () => <WorktreePicker repo={repo} fallback={props.route.params.dir} title={shownTitle} /> } : {}),
       // The + menu adds (a dependency, a package); the 3-dot menu has the
       // rest. Each only when the page offers something for it.
       unstable_headerRightItems: () => [

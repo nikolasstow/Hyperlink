@@ -201,20 +201,15 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
           onPress: onForward,
         },
       ],
-      // The worktree picker, top right, at the root: its own glass, so not
-      // inside the bar's shared background.
-      unstable_headerRightItems: () =>
-        root === true && primary.primary !== undefined
-          ? [
-              {
-                type: "custom",
-                element: <WorktreePicker repo={repo} fallback={props.route.params.dir} />,
-                hidesSharedBackground: true,
-              },
-            ]
-          : [],
+      // At the root, the title names the worktree under the folder's name,
+      // and opens the worktree menu.
+      ...(root === true && primary.primary !== undefined
+        ? {
+            headerTitle: () => <WorktreePicker repo={repo} fallback={props.route.params.dir} title={dir.split("/").filter(Boolean).pop() ?? repo} />,
+          }
+        : {}),
     });
-  }, [navigation, forwardTarget, onForward, root, primary.primary, repo, props.route.params.dir]);
+  }, [navigation, forwardTarget, onForward, root, primary.primary, repo, props.route.params.dir, dir]);
 
   return (
     <View style={styles.root}>
