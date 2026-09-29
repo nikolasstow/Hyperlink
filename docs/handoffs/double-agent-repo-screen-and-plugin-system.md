@@ -642,9 +642,13 @@ Owner-stated. Not built yet.
 Owner-stated.
 
 - **Archive** is an option on a session (its hard-press menu), beside Delete.
-- **Swiping left on a session only reveals its actions, as in Apple Messages**: two circles,
-  **Archive** (indigo, where Messages has Mute) and **Delete** (red; it asks first). No swipe
-  acts by itself.
+- **Swiping left on a session only reveals its actions, as in Apple Messages' Mute and Delete**:
+  **Mute** (indigo; Unmute when muted) and, in the red circle, **Archive** (Unarchive on the
+  Archived page). No swipe acts by itself. Delete is in the hard-press menu.
+- **Muted sessions send no notifications** (the backend keeps the list and the notifier checks
+  it), and their card shows the muted bell, as in Messages.
+- **Leaving and returning animate**: the archived row slides off and the rows below glide up;
+  Undo fades it back in as the others move down.
 - **Archiving shows a toast, "Archived", with Undo.** The session slides off and the list closes
   up.
 - opencode has no archive, so the backend keeps one (`/sessions/archived`, archive, unarchive),

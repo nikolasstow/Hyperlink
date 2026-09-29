@@ -7,7 +7,8 @@
  */
 import type { Session } from "@opencode-ai/sdk";
 import * as React from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import Reanimated, { LinearTransition } from "react-native-reanimated";
+import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
@@ -15,7 +16,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { getApiAddress } from "./settings";
-import { archiveWithUndo, unarchived, useArchivedSessions, withoutArchived } from "./sessionArchive";
+import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
@@ -25,7 +26,7 @@ import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
-import { SessionCard } from "./SessionCard";
+import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { relativeTime } from "./time";
 import { useSessionActivity } from "./useSessionActivity";
 
@@ -81,6 +82,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   }, [load]);
 
   const archivedSet = useArchivedSessions();
+  const mutedSet = useMutedSessions();
   const group = React.useMemo(() => groupByRepo(unarchived(sessions, archivedSet), scanned).find((g) => g.repo === repo), [sessions, archivedSet, scanned, repo]);
   // `worktree === null` means the whole repo; otherwise just that worktree's.
   const listed = worktree === null ? (group?.sessions ?? []) : (group?.worktrees.get(worktree) ?? []);
@@ -91,7 +93,10 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
       style={styles.fill}
       scrollEdgeEffects={{ top: "soft", bottom: "soft" }}
     >
-      <FlatList
+      <Reanimated.FlatList
+        // Rows glide to their places as sessions leave (archived) or come back
+        // (Undo), instead of snapping.
+        itemLayoutAnimation={LinearTransition.duration(LAYOUT_MS)}
         data={listed}
         keyExtractor={(session) => session.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
@@ -113,6 +118,8 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
             onStop={() => abortSession(client, item.id, () => void load())}
             onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void load())}
             onArchive={() => archiveWithUndo(getApiAddress(address), item.id)}
+            muted={mutedSet.has(item.id)}
+            onMute={() => toggleMute(getApiAddress(address), item.id)}
           />
         )}
       />

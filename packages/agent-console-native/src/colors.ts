@@ -31,8 +31,8 @@ export const colors = {
   placeholderText: PlatformColor("placeholderText"),
   tint: PlatformColor("systemBlue"),
   destructive: PlatformColor("systemRed"),
-  /** Archiving (the swipe action on a session), in the indigo Messages
-   * gives its first swipe action. */
+  /** A session's first swipe action (Mute), in the indigo Messages gives
+   * its own. */
   archive: PlatformColor("systemIndigo"),
   /** Attention/needs-input accent (e.g. a session waiting on a question). */
   warning: PlatformColor("systemOrange"),

@@ -28,6 +28,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Connect, Plugin } from "vite";
 import { type ActivityState, registerActivityToken, sendActivityEnd, sendActivityUpdate } from "./activityPush";
+import { mutedSessionsFile, stateFolderName } from "./sessions/files";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
@@ -351,6 +352,27 @@ export const notificationsPlugin = (): Plugin => {
    * rather than re-fetched on every event. */
   const hiddenCache = new Map<string, boolean>();
 
+  /** Whether the user muted this session (sessions/archive.ts keeps the list,
+   * in the state folder both servers run in). Read fresh each time: a mute
+   * applies to the very next notification. An unreadable list mutes nothing
+   * and says why. */
+  const isMuted = async (sessionID: string): Promise<boolean> => {
+    const file = resolve(process.env.AGENT_CONSOLE_STATE_DIR ?? resolve(process.cwd(), stateFolderName), mutedSessionsFile);
+    const text = await readFile(file, "utf8").catch((error: unknown) => {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+      console.error(`[notifications] reading ${file} failed; nothing is muted`, error);
+      return undefined;
+    });
+    if (text === undefined) return false;
+    try {
+      const muted: unknown = JSON.parse(text);
+      return typeof muted === "object" && muted !== null && sessionID in muted;
+    } catch (error: unknown) {
+      console.error(`[notifications] ${file} is not a list of muted sessions; nothing is muted`, error);
+      return false;
+    }
+  };
+
   const isHidden = async (sessionID: string): Promise<boolean> => {
     const cached = hiddenCache.get(sessionID);
     if (cached !== undefined) return cached;
@@ -508,7 +530,7 @@ export const notificationsPlugin = (): Plugin => {
 
             if (event.type === "permission.asked" || event.type === "permission.v2.asked") {
               if (sessionID === undefined || !shouldNotify(`ask:${sessionID}`)) continue;
-              if (await isHidden(sessionID)) continue;
+              if ((await isHidden(sessionID)) || (await isMuted(sessionID))) continue;
               const action =
                 typeof properties.permission === "string"
                   ? properties.permission
@@ -568,7 +590,7 @@ export const notificationsPlugin = (): Plugin => {
               // or replayed idle, not a new response.
               if (last.id !== undefined && idleNotifiedFor.get(sessionID) === last.id) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
-              if (await isHidden(sessionID)) continue;
+              if ((await isHidden(sessionID)) || (await isMuted(sessionID))) continue;
               if (last.id !== undefined) idleNotifiedFor.set(sessionID, last.id);
               await send({
                 title: await titleOf(sessionID),

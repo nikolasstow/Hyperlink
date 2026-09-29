@@ -109,7 +109,10 @@ const sessionsHandlers = HttpApiBuilder.group(api, "sessions", (handlers) =>
       handlers
         .handle("archived", () => archive.list)
         .handle("archive", ({ payload }) => archive.archive(payload.id))
-        .handle("unarchive", ({ payload }) => archive.unarchive(payload.id)),
+        .handle("unarchive", ({ payload }) => archive.unarchive(payload.id))
+        .handle("muted", () => archive.muted)
+        .handle("mute", ({ payload }) => archive.mute(payload.id))
+        .handle("unmute", ({ payload }) => archive.unmute(payload.id)),
     ),
   ),
 );

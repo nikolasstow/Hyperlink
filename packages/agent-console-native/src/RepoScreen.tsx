@@ -48,7 +48,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
 import { readWorkspace, refreshWorkspace } from "./repoScanCache";
-import { archiveWithUndo, unarchived, useArchivedSessions, withoutArchived } from "./sessionArchive";
+import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
@@ -226,6 +226,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
   // This repo/workspace's own sessions, via the shared grouping logic.
   const archivedSet = useArchivedSessions();
+  const mutedSet = useMutedSessions();
   const group = React.useMemo(() => groupByRepo(unarchived(sessions, archivedSet), scanned).find((g) => g.repo === name), [sessions, archivedSet, scanned, name]);
   const repoSessions = group?.sessions ?? [];
   const worktreeCount = group?.worktrees.size ?? 0;
@@ -294,6 +295,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         onStop={() => abortSession(client, session.id, () => void load())}
         onDelete={() => confirmDeleteSession(client, session.id, session.title, () => void load())}
         onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
+        muted={mutedSet.has(session.id)}
+        onMute={() => toggleMute(getApiAddress(address), session.id)}
       />
     );
   };

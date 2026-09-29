@@ -44,10 +44,19 @@ const post = (apiBase: string, path: string, id: string) =>
     body: JSON.stringify({ id }),
   });
 
+/** Sessions moving into a list they were not in (archived, or brought back
+ * by Undo): each one's card fades in when it next mounts, once. */
+const returning = new Set<string>();
+
+/** Whether this session's card is arriving in a list (and so fades in):
+ * true once per move, for the card that mounts for it. */
+export const takeReturning = (id: string): boolean => returning.delete(id);
+
 /** Archive a session: gone from the lists, and from the phone's session
  * cache (archived sessions live on the server alone), now; saved behind. */
 export const archiveSession = (apiBase: string, id: string): void => {
   const before = archivedIds;
+  returning.add(id);
   set(new Set([...archivedIds, id]));
   void forgetCachedSession(id);
   post(apiBase, "/sessions/archive", id).then(
@@ -74,6 +83,7 @@ export const archiveWithUndo = (apiBase: string, id: string): void => {
 /** Take a session out of the archive (Undo, and the archive page to come). */
 export const unarchiveSession = (apiBase: string, id: string): void => {
   const before = archivedIds;
+  returning.add(id);
   set(new Set([...archivedIds].filter((archivedId) => archivedId !== id)));
   post(apiBase, "/sessions/unarchive", id).then(
     (value) => set(decode(value)),
@@ -122,3 +132,51 @@ export const withoutArchived = <S extends { readonly id: string }>(sessions: Rea
 /** Sessions that are not archived. */
 export const unarchived = <S extends { readonly id: string }>(sessions: ReadonlyArray<S>, archivedSet: ReadonlySet<string>): ReadonlyArray<S> =>
   archivedSet.size === 0 ? sessions : sessions.filter((session) => !archivedSet.has(session.id));
+
+// ── Muted ───────────────────────────────────────────────────────────────────
+// Muted sessions send no notifications: the backend keeps the list (the
+// notifier reads it before it sends), and the app marks them on their cards.
+
+let mutedIds: ReadonlySet<string> = new Set();
+let mutedVersion = 0;
+const mutedListeners = new Set<() => void>();
+
+const setMuted = (next: ReadonlySet<string>): void => {
+  mutedIds = next;
+  mutedVersion += 1;
+  mutedListeners.forEach((listener) => listener());
+};
+
+/** Read the muted sessions from the backend (Home does). A failure leaves
+ * what is known and is logged. */
+export const loadMutedSessions = (apiBase: string): Promise<void> =>
+  request(`${base(apiBase)}/sessions/muted`).then(
+    (value) => setMuted(decode(value)),
+    (error: unknown) => console.error("[session mute] reading the muted sessions failed", error),
+  );
+
+/** Mute a session, or unmute a muted one: shown at once, saved behind; a save
+ * that fails puts it back and says why. */
+export const toggleMute = (apiBase: string, id: string): void => {
+  const before = mutedIds;
+  const muting = !mutedIds.has(id);
+  setMuted(muting ? new Set([...mutedIds, id]) : new Set([...mutedIds].filter((mutedId) => mutedId !== id)));
+  post(apiBase, muting ? "/sessions/mute" : "/sessions/unmute", id).then(
+    (value) => setMuted(decode(value)),
+    (error: unknown) => {
+      setMuted(before);
+      Alert.alert(muting ? "Couldn’t mute" : "Couldn’t unmute", error instanceof Error ? error.message : String(error));
+    },
+  );
+};
+
+const subscribeMuted = (listener: () => void): (() => void) => {
+  mutedListeners.add(listener);
+  return () => mutedListeners.delete(listener);
+};
+
+/** The muted session ids, kept current. */
+export const useMutedSessions = (): ReadonlySet<string> => {
+  React.useSyncExternalStore(subscribeMuted, () => mutedVersion);
+  return mutedIds;
+};

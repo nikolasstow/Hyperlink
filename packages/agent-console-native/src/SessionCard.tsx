@@ -14,16 +14,17 @@
  *
  * @internal
  */
-import { Button, Circle, ContextMenu, Host, HStack, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Button, Circle, ContextMenu, Host, HStack, Image, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { Easing, FadeIn, LinearTransition, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
 import { lastMessageSummary, useSessionPreview } from "./sessionPreview";
+import { takeReturning } from "./sessionArchive";
 import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
 
@@ -57,6 +58,10 @@ export type SessionCardProps = {
   readonly onArchive: () => void;
   /** An archived session (the Archived page): its action is Unarchive. */
   readonly archived?: boolean;
+  /** Muted: it sends no notifications, and its card shows the muted bell. */
+  readonly muted: boolean;
+  /** Mute the session, or unmute a muted one. */
+  readonly onMute: () => void;
 };
 
 /** The swipe actions, as Messages draws them: circles beside the card. */
@@ -67,10 +72,19 @@ const ACTIONS_WIDTH = CIRCLE * 2 + CIRCLE_GAP * 3;
 
 /**
  * What swiping a session left reveals (it reveals only; nothing happens until
- * a tap), as in Messages: two circles, Archive and Delete.
+ * a tap), as in Messages' Mute and Delete: Mute (indigo), and in the red
+ * circle, Archive (Unarchive on the Archived page). Delete is in the menu.
  */
-const SwipeActions = (props: { readonly archived: boolean; readonly onArchive: () => void; readonly onDelete: () => void }): React.ReactElement => (
+const SwipeActions = (props: {
+  readonly archived: boolean;
+  readonly muted: boolean;
+  readonly onMute: () => void;
+  readonly onArchive: () => void;
+}): React.ReactElement => (
   <View style={styles.actions}>
+    <Pressable style={[styles.circle, styles.muteCircle]} onPress={props.onMute} accessibilityRole="button" accessibilityLabel={props.muted ? "Unmute" : "Mute"}>
+      <SystemIcon name={props.muted ? "bell.fill" : "bell.slash.fill"} size={22} color="#FFFFFF" />
+    </Pressable>
     <Pressable
       style={[styles.circle, styles.archiveCircle]}
       onPress={props.onArchive}
@@ -78,9 +92,6 @@ const SwipeActions = (props: { readonly archived: boolean; readonly onArchive: (
       accessibilityLabel={props.archived ? "Unarchive" : "Archive"}
     >
       <SystemIcon name={props.archived ? "tray.and.arrow.up.fill" : "archivebox.fill"} size={22} color="#FFFFFF" />
-    </Pressable>
-    <Pressable style={[styles.circle, styles.deleteCircle]} onPress={props.onDelete} accessibilityRole="button" accessibilityLabel="Delete">
-      <SystemIcon name="trash.fill" size={22} color="#FFFFFF" />
     </Pressable>
   </View>
 );
@@ -98,6 +109,7 @@ const CardBody = (props: {
   readonly meta: string;
   readonly unread: boolean;
   readonly unreadColor: string;
+  readonly muted: boolean;
   readonly summary?: string;
 }): React.ReactElement => (
   <VStack
@@ -108,6 +120,8 @@ const CardBody = (props: {
     <HStack spacing={7} alignment="center">
       {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(props.unreadColor)]} /> : null}
       <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
+      {/* Muted: the bell Messages shows beside a muted conversation. */}
+      {props.muted ? <Image systemName="bell.slash.fill" size={12} color={colors.secondaryLabel} /> : null}
     </HStack>
     {props.repo !== undefined || props.worktree !== undefined ? (
       <HStack spacing={6} alignment="center">
@@ -134,48 +148,31 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
   const summary = lastMessageSummary(transcript);
 
-  // Archiving: the row slides off to the left, the gap closes, and only then
-  // does the session leave the list (removing it at once made it snap out of
-  // existence). The toast that says so, with Undo, is the caller's.
-  const { onArchive, onDelete } = props;
+  // Archiving: the row slides off to the left, then the session leaves the
+  // list, and the rows below glide up into its place (the lists' layout
+  // transitions). Undo brings it back: its card fades in as they make room.
+  const { onArchive, onMute } = props;
   const swipeable = React.useRef<SwipeableMethods>(null);
-  const rowHeight = useSharedValue(0);
   const slide = useSharedValue(0);
-  const collapse = useSharedValue(0);
   const leaving = React.useRef(false);
   const archive = React.useCallback(() => {
     if (leaving.current) return;
     leaving.current = true;
     slide.value = withTiming(1, { duration: SLIDE_MS, easing: Easing.in(Easing.cubic) }, (slid) => {
-      if (slid !== true) return;
-      collapse.value = withTiming(1, { duration: COLLAPSE_MS, easing: Easing.inOut(Easing.cubic) }, (collapsed) => {
-        if (collapsed === true) runOnJS(onArchive)();
-      });
+      if (slid === true) runOnJS(onArchive)();
     });
-  }, [onArchive, slide, collapse]);
-  const leave = useAnimatedStyle(() => {
-    if (collapse.value === 0 && slide.value === 0) return {};
-    return {
-      // Clipped only while it leaves (its height closes over its content);
-      // clipping always cut a card whose height had not arrived yet into a
-      // block over the next.
-      overflow: "hidden",
-      transform: [{ translateX: -screenWidth * slide.value }],
-      ...(collapse.value === 0
-        ? {}
-        : {
-            height: rowHeight.value * (1 - collapse.value),
-            marginBottom: ROW_GAP * (1 - collapse.value),
-          }),
-    };
-  });
+  }, [onArchive, slide]);
+  const leave = useAnimatedStyle(() => (slide.value === 0 ? {} : { transform: [{ translateX: -screenWidth * slide.value }] }));
+  // A card arriving in the list (Undo, or newly archived) fades in, once.
+  const [arriving] = React.useState(() => takeReturning(props.sessionId));
 
   return (
     <Animated.View
       style={[styles.row, leave]}
-      onLayout={(event) => {
-        if (!leaving.current) rowHeight.value = event.nativeEvent.layout.height;
-      }}
+      // Moves smoothly when rows around it come or go (in a list that is not
+      // a FlatList; a FlatList animates its cells: itemLayoutAnimation).
+      layout={LinearTransition.duration(LAYOUT_MS)}
+      {...(arriving ? { entering: FadeIn.duration(LAYOUT_MS) } : {})}
     >
     <Swipeable
       ref={swipeable}
@@ -185,12 +182,12 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
       renderRightActions={() => (
         <SwipeActions
           archived={props.archived === true}
-          onArchive={archive}
-          onDelete={() => {
-            // Close first; Delete asks before it deletes.
+          muted={props.muted}
+          onMute={() => {
             swipeable.current?.close();
-            onDelete();
+            onMute();
           }}
+          onArchive={archive}
         />
       )}
     >
@@ -206,6 +203,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         <ContextMenu.Items>
           <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
           <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
+          <Button label={props.muted ? "Unmute" : "Mute"} systemImage={props.muted ? "bell" : "bell.slash"} onPress={props.onMute} />
           {props.archived === true ? (
             <Button label="Unarchive" systemImage="tray.and.arrow.up" onPress={archive} />
           ) : (
@@ -231,6 +229,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
               meta={props.meta}
               unread={props.unread}
               unreadColor={themeColors.secondary}
+              muted={props.muted}
               summary={summary === undefined ? undefined : summaryLabel(summary.role, summary.text)}
             />
           </VStack>
@@ -242,9 +241,10 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   );
 };
 
-/** How the row leaves when archived: sliding off, then closing up. */
+/** How the row leaves when archived (sliding off), and how rows move and
+ * arrive around it. */
 const SLIDE_MS = 220;
-const COLLAPSE_MS = 240;
+export const LAYOUT_MS = 260;
 /** Space under each card. */
 const ROW_GAP = 10;
 
@@ -268,10 +268,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  archiveCircle: {
+  muteCircle: {
     backgroundColor: colors.archive,
   },
-  deleteCircle: {
+  archiveCircle: {
     backgroundColor: colors.destructive,
   },
 });

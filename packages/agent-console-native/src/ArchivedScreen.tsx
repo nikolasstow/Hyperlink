@@ -13,7 +13,8 @@
  */
 import type { Session } from "@opencode-ai/sdk";
 import * as React from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Reanimated, { LinearTransition } from "react-native-reanimated";
+import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -25,8 +26,8 @@ import type { ScannedRepo } from "./repoScan";
 import { readWorkspace } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
-import { fetchArchive, unarchiveWithUndo, useArchivedSessions } from "./sessionArchive";
-import { SessionCard } from "./SessionCard";
+import { fetchArchive, toggleMute, unarchiveWithUndo, useArchivedSessions, useMutedSessions } from "./sessionArchive";
+import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { getApiAddress } from "./settings";
 import { SkeletonList } from "./Skeleton";
 import { relativeTime } from "./time";
@@ -57,6 +58,7 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
   const [refreshing, setRefreshing] = React.useState(false);
   // Still archived now: one unarchived here leaves the list at once.
   const archivedSet = useArchivedSessions();
+  const mutedSet = useMutedSessions();
 
   // Whether a list is on screen: a refresh that fails keeps it, and says so.
   const shown = React.useRef(false);
@@ -112,7 +114,10 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      <FlatList
+      <Reanimated.FlatList
+        // Rows glide to their places as sessions leave (archived) or come back
+        // (Undo), instead of snapping.
+        itemLayoutAnimation={LinearTransition.duration(LAYOUT_MS)}
         data={listed}
         keyExtractor={(session) => session.id}
         contentInsetAdjustmentBehavior="never"
@@ -149,6 +154,8 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
               onStop={() => abortSession(client, item.id, () => void fetchAll())}
               onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void fetchAll())}
               onArchive={() => unarchiveWithUndo(apiBase, item.id)}
+              muted={mutedSet.has(item.id)}
+              onMute={() => toggleMute(apiBase, item.id)}
             />
           );
         }}

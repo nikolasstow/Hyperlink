@@ -10,8 +10,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
-import Animated from "react-native-reanimated";
+import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import Animated, { LinearTransition } from "react-native-reanimated";
 import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -21,7 +21,7 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { getSetupDate, loadReads } from "./sessionReads";
 import { RepoCard } from "./RepoCard";
-import { SessionCard } from "./SessionCard";
+import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { useSessionActivity } from "./useSessionActivity";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
@@ -45,7 +45,7 @@ import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { updateScannedRepos } from "./primaryWorktree";
-import { archiveWithUndo, loadArchivedSessions, unarchived, useArchivedSessions, withoutArchived } from "./sessionArchive";
+import { archiveWithUndo, loadArchivedSessions, loadMutedSessions, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
@@ -193,7 +193,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // The archive, so archived sessions stay out of every list.
   React.useEffect(() => {
     void loadArchivedSessions(getApiAddress(address));
+    void loadMutedSessions(getApiAddress(address));
   }, [address]);
+  const mutedSet = useMutedSessions();
   const archivedSet = useArchivedSessions();
   const visible = unarchived(sessions, archivedSet);
 
@@ -259,7 +261,10 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         * else. That screen-level route produced nothing here across every
         * variation tried, so this marks the list explicitly. */}
       <ScrollViewMarker style={styles.list} scrollEdgeEffects={{ top: "soft", bottom: "soft" }}>
-      <FlatList
+      <Animated.FlatList
+        // Rows glide to their places as sessions leave (archived) or come back
+        // (Undo), instead of snapping.
+        itemLayoutAnimation={LinearTransition.duration(LAYOUT_MS)}
         style={styles.list}
         data={rows}
         keyExtractor={(row, i) => (row.kind === "heading" ? `h-${row.title}` : row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`)}
@@ -305,6 +310,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
                 onDelete={() => confirmDeleteSession(client, item.session.id, item.session.title, () => void loadSessions())}
                 onArchive={() => archiveWithUndo(getApiAddress(address), item.session.id)}
+                muted={mutedSet.has(item.session.id)}
+                onMute={() => toggleMute(getApiAddress(address), item.session.id)}
               />
             );
           }

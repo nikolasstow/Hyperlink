@@ -238,7 +238,8 @@ const processesGroup = HttpApiGroup.make("processes").add(
   }),
 );
 
-/** Archived sessions (sessions/archive.ts): which are put away, and when. */
+/** Marked sessions (sessions/archive.ts): which are archived, and which
+ * muted, and when. */
 const sessionsGroup = HttpApiGroup.make("sessions").add(
   HttpApiEndpoint.get("archived", "/sessions/archived", {
     success: ArchivedSessions,
@@ -250,6 +251,20 @@ const sessionsGroup = HttpApiGroup.make("sessions").add(
     error: SessionArchiveError,
   }),
   HttpApiEndpoint.post("unarchive", "/sessions/unarchive", {
+    payload: sessionIdPayload,
+    success: ArchivedSessions,
+    error: SessionArchiveError,
+  }),
+  HttpApiEndpoint.get("muted", "/sessions/muted", {
+    success: ArchivedSessions,
+    error: SessionArchiveError,
+  }),
+  HttpApiEndpoint.post("mute", "/sessions/mute", {
+    payload: sessionIdPayload,
+    success: ArchivedSessions,
+    error: SessionArchiveError,
+  }),
+  HttpApiEndpoint.post("unmute", "/sessions/unmute", {
     payload: sessionIdPayload,
     success: ArchivedSessions,
     error: SessionArchiveError,
