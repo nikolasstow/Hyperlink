@@ -482,51 +482,48 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
               tintColor="rgba(0,0,0,0.18)"
               colorScheme={glassScheme}
             >
-              {/* The window's content, cropped to the window: a plain
-               * rectangular clip, as a scroll view's, which glass inside
-               * renders under. The pill sits at its bottom: the bar
-               * collapsed, the window's composer open. */}
-              <View style={styles.content}>
-                <Reanimated.View style={pillWrapStyle}>
-                  {/* What Dubz suggests, tied to the top of the pill: it never
-                   * moves with the window's height; the window only reveals it,
-                   * and crops it out at the smallest detent and collapsed. */}
-                  {suggestions.length > 0 ? (
-                    <View style={styles.suggestions} pointerEvents={open ? "box-none" : "none"}>
-                      {suggestions.map((suggestion) => (
-                        <Suggestion key={suggestion.kind} suggestion={suggestion} />
-                      ))}
-                    </View>
-                  ) : null}
-                  <GestureDetector gesture={dismissKb}>
-                    <Reanimated.View style={[styles.pill, pillStyle]}>
-                      {/* The bar's regular glass, never faded (opacity on glass
-                       * or its parents stops it rendering). */}
-                      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                        <GlassView style={styles.pillGlass} glassEffectStyle="regular" colorScheme={glassScheme} />
-                      </View>
-                      <View style={styles.plusSlot}>
-                        <PlusChip onPress={open ? noop : onOpen} />
-                      </View>
-                      <TextInput
-                        ref={inputRef}
-                        style={[styles.input, { maxHeight: open ? LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V : COMPOSER_SEND_CHIP_SIZE }]}
-                        value={text}
-                        onChangeText={setDraft}
-                        placeholder={`Ask ${AGENT_NAME}…`}
-                        placeholderTextColor={colors.placeholderText}
-                        editable={open}
-                        multiline
-                      />
-                      <SendChip active={text.trim().length > 0} onPress={open ? () => setDraft("") : onOpen} />
-                      {/* Collapsed: any tap on the bar opens it. */}
-                      {open ? null : (
-                        <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
-                      )}
-                    </Reanimated.View>
-                  </GestureDetector>
-                </Reanimated.View>
+              {/* What Dubz suggests: the space above the pill, which alone is
+               * cropped (no glass in it; nothing above the pill's glass ever
+               * clips it). Its contents sit at its bottom, on the pill's top,
+               * and never move; the window's top only reveals or hides them. */}
+              <View style={styles.suggestionsArea} pointerEvents={open ? "box-none" : "none"}>
+                <View style={styles.suggestions}>
+                  {suggestions.map((suggestion) => (
+                    <Suggestion key={suggestion.kind} suggestion={suggestion} />
+                  ))}
+                </View>
               </View>
+              {/* The pill sits at the window's bottom, a direct child of the
+               * window's glass: the bar collapsed, the window's composer open. */}
+              <Reanimated.View style={pillWrapStyle}>
+                <GestureDetector gesture={dismissKb}>
+                  <Reanimated.View style={[styles.pill, pillStyle]}>
+                    {/* The bar's regular glass, never faded (opacity on glass
+                     * or its parents stops it rendering). */}
+                    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                      <GlassView style={styles.pillGlass} glassEffectStyle="regular" colorScheme={glassScheme} />
+                    </View>
+                    <View style={styles.plusSlot}>
+                      <PlusChip onPress={open ? noop : onOpen} />
+                    </View>
+                    <TextInput
+                      ref={inputRef}
+                      style={[styles.input, { maxHeight: open ? LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V : COMPOSER_SEND_CHIP_SIZE }]}
+                      value={text}
+                      onChangeText={setDraft}
+                      placeholder={`Ask ${AGENT_NAME}…`}
+                      placeholderTextColor={colors.placeholderText}
+                      editable={open}
+                      multiline
+                    />
+                    <SendChip active={text.trim().length > 0} onPress={open ? () => setDraft("") : onOpen} />
+                    {/* Collapsed: any tap on the bar opens it. */}
+                    {open ? null : (
+                      <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
+                    )}
+                  </Reanimated.View>
+                </GestureDetector>
+              </Reanimated.View>
             </GlassView>
           </GlassContainer>
 
@@ -603,18 +600,17 @@ const styles = StyleSheet.create({
     right: 0,
   },
   // The window's content, cropped to it; the pill at its bottom.
-  content: {
+  // The space above the pill, cropped to the window; its contents at its
+  // bottom, on the pill's top. No glass above the pill is ever clipped.
+  suggestionsArea: {
     flex: 1,
     overflow: "hidden",
     justifyContent: "flex-end",
   },
-  // Above the pill, its bottom on the pill's top: full width of the window
-  // (the pill's inset does not move it).
+  // The suggestions themselves: no padding on the area, so it shrinks to
+  // nothing collapsed and leaves the pill exactly the bar.
   suggestions: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: "100%",
+    paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 16,
   },
