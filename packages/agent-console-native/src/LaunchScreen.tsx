@@ -45,8 +45,9 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     minHeight: 52,
+    // Rounded on the glass itself, not clipped: clipping crops it to a flat
+    // fallback.
     borderRadius: 26,
-    overflow: "hidden",
     justifyContent: "center",
     paddingHorizontal: 18,
   },

@@ -53,16 +53,16 @@ const styles = StyleSheet.create({
     gap: PILL_DOT_GAP,
     height: PILL_HEIGHT,
     paddingHorizontal: PILL_PAD_H,
-    borderRadius: PILL_RADIUS,
-    borderCurve: "continuous",
-    overflow: "hidden",
   },
+  // Rounded on itself: a rounded, clipping parent crops the glass to a flat
+  // fallback (Dubz.tsx has the rules).
   glass: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    borderRadius: PILL_RADIUS,
   },
   text: {
     color: colors.label,

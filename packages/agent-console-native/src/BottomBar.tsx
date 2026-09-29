@@ -18,8 +18,11 @@
  *   collapse is height/width/opacity, never conditional rendering. (The one
  *   `expandHit` Pressable and the settings-gated assistant are plain toggles,
  *   not part of the glass/Host first-mount hazard.)
- * - The squircle clip is on the plain wrapping `fieldClip` View, never on
- *   `GlassView` (its own `setBorderCurve` broke the effect).
+ * - The glass is rounded by `borderRadius` on the `GlassView` itself (native
+ *   UIGlassEffect corner configuration), never clipped by a rounded
+ *   `overflow: hidden` parent: that crops iOS's glass to a hard shape and it
+ *   falls back to a flat look (Dubz.tsx has the rules). No `borderCurve` on the
+ *   glass either; that broke it outright.
  * - The expand/collapse animation is the variant's to trigger
  *   (`LayoutAnimation.configureNext` in its focus/blur/send handlers); the
  *   layout change it animates lives here, driven by the `expanded` prop.
@@ -102,13 +105,11 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
       {/* The pill and the assistant sit in one row: the pill flexes to fill,
        * the assistant rides its right edge. */}
       <View style={styles.barRow}>
-        {/* The shadow lives on this OUTER wrapper, never on `fieldClip` — that
-         * one clips (overflow: hidden) for the squircle, which would clip its
-         * own shadow too. */}
+        {/* The small drop shadow lives on this OUTER wrapper. */}
         <View style={styles.pillShadow}>
-        {/* The squircle clip lives on this plain wrapping View, not on GlassView
-         * directly — GlassView's own setBorderCurve broke the glass effect. */}
-        <View style={styles.fieldClip} onLayout={(e) => onFieldLayout(e.nativeEvent.layout.height)}>
+        {/* Measures the pill; it does not clip or round it (the glass rounds
+         * itself). */}
+        <View onLayout={(e) => onFieldLayout(e.nativeEvent.layout.height)}>
           <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
             {props.topSection !== undefined ? (
               <View style={[styles.topSection, !expanded && styles.topSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
@@ -187,14 +188,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
   },
-  fieldClip: {
-    borderRadius: FIELD_RADIUS,
-    borderCurve: "continuous",
-    overflow: "hidden",
-  },
   field: {
     padding: COMPOSER_FIELD_PADDING,
     position: "relative",
+    borderRadius: FIELD_RADIUS,
   },
   expandHit: {
     ...StyleSheet.absoluteFill,

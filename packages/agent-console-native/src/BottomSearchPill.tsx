@@ -130,14 +130,12 @@ export const BottomSearchPill = (props: {
     <Reanimated.View style={[styles.wrap, { paddingBottom: 8 }, animatedStyle]} pointerEvents="box-none">
       {/* Pill + the assistant button on the right, matching the composer. */}
       <View style={styles.row}>
-        {/* The drop shadow lives on this OUTER wrapper (no overflow), matching the
-         * composer pill — `clip` below clips for the squircle and would clip its
-         * own shadow. */}
+        {/* The drop shadow lives on this OUTER wrapper, matching the composer
+         * pill. The glass rounds itself (`borderRadius` on the GlassView, no
+         * `borderCurve`, which broke it); nothing around it clips or rounds
+         * it, which cropped it to a flat fallback (Dubz.tsx has the rules). */}
         <View style={styles.pillShadow}>
-        {/* The squircle clip lives on this plain View, never on `GlassView`:
-         * setting `borderCurve` on the glass itself breaks the effect outright
-         * (see the SessionComposer handoff's invariant 2). */}
-        <View style={styles.clip}>
+        <View>
           <GlassView style={styles.pill} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
             {/* A plain Feather glyph, not the @expo/ui SystemIcon (a Host): the
              * Host's measurement race (see SystemIcon's own doc) drifted the
@@ -193,17 +191,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
   },
-  clip: {
-    borderRadius: SEARCH_PILL_HEIGHT / 2,
-    borderCurve: "continuous",
-    overflow: "hidden",
-  },
   pill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     height: SEARCH_PILL_HEIGHT,
     paddingHorizontal: 14,
+    borderRadius: SEARCH_PILL_HEIGHT / 2,
   },
   input: {
     flex: 1,

@@ -66,12 +66,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingHorizontal: ROW_GUTTER,
   },
+  // Rounded on the glass itself, not clipped: clipping crops it to a flat
+  // fallback.
   bubble: {
     flex: 1,
     borderRadius: 18,
     padding: 14,
     gap: 8,
-    overflow: "hidden",
   },
   headerRow: {
     flexDirection: "row",
