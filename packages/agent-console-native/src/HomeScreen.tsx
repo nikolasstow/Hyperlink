@@ -104,9 +104,11 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const loadScan = React.useCallback(
     async (force: boolean): Promise<void> => {
       const stale = force || (await isStale());
-      if (!stale) {
-        const cached = await readWorkspace();
-        if (cached !== undefined) setScanned(cached);
+      // Fresh and readable: use it. No cache (or one from an older scan
+      // version, which reads as none) needs a scan however recent the last.
+      const cached = stale ? undefined : await readWorkspace();
+      if (cached !== undefined) {
+        setScanned(cached);
         return;
       }
       try {

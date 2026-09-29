@@ -85,8 +85,16 @@ export const TaskSuggestion = (props: {
     };
   }, [props.apiBase, github]);
 
-  // Not known yet, or not on GitHub: no tasks to suggest.
-  if (repos === undefined || repoName === undefined || github === undefined) return null;
+  // Still reading the repos.
+  if (repos === undefined) return null;
+  // Nothing to show tasks for: say why, rather than show nothing.
+  if (repoName === undefined || github === undefined) {
+    return (
+      <Text style={styles.note}>
+        {repoName === undefined ? "No GitHub repos found yet. Pull to refresh on Home to scan." : `${repoName} isn’t on GitHub, so it has no tasks.`}
+      </Text>
+    );
+  }
 
   const pick = (name: string): void => {
     pickedRepo = name;
