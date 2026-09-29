@@ -89,6 +89,13 @@ const subscribe = (listener: () => void): (() => void) => {
   return () => listeners.delete(listener);
 };
 
+/** The worktree chosen as a repo's primary, kept current: what the new
+ * session composer follows. Undefined until one is chosen. */
+export const useChosenPrimary = (repo: string | undefined): ScannedWorktree | undefined => {
+  React.useSyncExternalStore(subscribe, () => version);
+  return repo === undefined ? undefined : chosenPrimaryOf(repo);
+};
+
 /**
  * A repo's worktrees and the folder its worktree pages show: the primary
  * worktree, kept current. `fallback` is the folder while the repo is not (or

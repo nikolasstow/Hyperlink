@@ -41,7 +41,7 @@ import {
   setRepoMenuSort,
   type RepoMenuSort,
 } from "./settings";
-import { chosenPrimaryOf } from "./primaryWorktree";
+import { chosenPrimaryOf, useChosenPrimary } from "./primaryWorktree";
 import { createWorktree } from "./worktree";
 
 export type FolderTarget = {
@@ -165,6 +165,34 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
   // When a repo is locked (repo/workspace pages) select IT instead — a workspace
   // becomes a folder target, a git repo its main (or last-used) worktree.
   const { onChange, lockedRepo, scanned } = props;
+
+  // Choosing a repo's primary worktree (the worktree pages' picker) selects
+  // it here too. Only a new choice moves the composer; picking another
+  // worktree here, for this session, stays as picked.
+  const targetRepo = props.target?.kind === "repo" ? props.target.repo : lockedRepo?.isRepo === true ? lockedRepo.name : undefined;
+  const chosenPrimary = useChosenPrimary(targetRepo);
+  const latestTarget = React.useRef(props.target);
+  latestTarget.current = props.target;
+  const latestOnChange = React.useRef(onChange);
+  latestOnChange.current = onChange;
+  // The primary last followed, so a rescan (new objects, same worktree) or a
+  // pick made here is left alone; only a different primary moves it.
+  const followed = React.useRef<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (chosenPrimary === undefined || followed.current === chosenPrimary.path) return;
+    followed.current = chosenPrimary.path;
+    const current = latestTarget.current;
+    if (current?.kind !== "repo" || current.worktree.path === chosenPrimary.path) return;
+    let cancelled = false;
+    // The branch is the one checked out in that worktree, as for any pick.
+    void (async () => {
+      const branch = (await runFs(readCurrentBranch(backend, chosenPrimary.path))) ?? "main";
+      if (!cancelled) latestOnChange.current({ kind: "repo", repo: current.repo, worktree: chosenPrimary, branch });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chosenPrimary, backend]);
   React.useEffect(() => {
     if (props.target !== undefined) return;
     if (lockedRepo !== undefined) {

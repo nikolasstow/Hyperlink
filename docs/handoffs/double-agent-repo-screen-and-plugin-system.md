@@ -369,7 +369,8 @@ Owner-stated unless marked *Proposed*. Proposed items are not binding until appr
 
 - **Each repo always has a primary worktree** (its main checkout until another is chosen). It is
   the default whenever something is done in the repo: pages where the worktree matters (Files,
-  the PNPM page and the pages under it) open on it, and a new session starts in it.
+  the PNPM page and the pages under it) open on it, and a new session starts in it. **Choosing
+  it also selects it in the new-session composer**, with the **branch checked out there**.
 - **The header title chooses it**: the page's title (the folder name in Files, **PNPM** on that
   page) with the **worktree name under it as a subtitle**; tapping
   it opens the worktree dropdown, and choosing changes it everywhere. It is **one reusable
