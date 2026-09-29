@@ -133,6 +133,9 @@ interface DubzApi {
   readonly close: () => void;
   readonly isOpen: boolean;
   readonly arrival: Arrival;
+  /** Whether Dubz is the page showing (the window is mounted beside the
+   * composer, off screen, while the composer is). */
+  readonly onDubz: boolean;
   /** Where the pages stand: 0 the composer, 1 Dubz, between while sliding.
    * Both follow it by layout (`left`, margins), never a transform. */
   readonly pageX: SharedValue<number>;
@@ -143,21 +146,22 @@ interface DubzApi {
   readonly hasCompose: boolean;
   /** A screen's composer takes its place beside Dubz; returns its leaving. */
   readonly registerCompose: (page: ComposePage) => () => void;
-  /** A swipe from the composer begins: the window mounts off to the right. */
+  /** The composer expanded: the window mounts beside it, off to the right,
+   * so a swipe finds it there. */
+  readonly prepare: (composeId: number) => void;
+  /** That composer collapsed: the window it mounted goes, unless Dubz shows. */
+  readonly unprepare: (composeId: number) => void;
+  /** A swipe from the composer begins: it holds itself expanded. */
   readonly beginFromCompose: (composeId: number) => void;
   /** The swipe turned the page: Dubz takes the keyboard. */
   readonly settleOnDubz: () => void;
-  /** The swipe fell back: the window goes, as if it never came. */
-  readonly dropDubz: () => void;
+  /** The swipe fell back: the composer stays. */
+  readonly stayOnCompose: () => void;
   /** A swipe from Dubz begins: the composer holds itself expanded, off to the
    * left. */
   readonly beginFromDubz: () => void;
   /** That swipe turned the page: the composer takes the keyboard. */
   readonly settleOnCompose: () => void;
-  /** The composer page has slid in: the window goes. */
-  readonly finishOnCompose: () => void;
-  /** That swipe fell back: the composer lets go. */
-  readonly releaseCompose: () => void;
   /** The window's input, focused when a swipe lands on Dubz. */
   readonly inputRef: React.RefObject<TextInput | null>;
   /** Set when the window should go at once, without shrinking. */
@@ -176,12 +180,26 @@ export const useDubz = (): DubzApi => {
 export const DubzProvider = (props: { readonly children: React.ReactNode }): React.ReactElement => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [arrival, setArrival] = React.useState<Arrival>("grow");
+  const [onDubz, setOnDubz] = React.useState(false);
   const pageX = useSharedValue(1);
   const slidingCompose = useSharedValue(-1);
   const inputRef = React.useRef<TextInput>(null);
   const instantClose = React.useRef(false);
   const compose = React.useRef<ComposePage | undefined>(undefined);
   const [hasCompose, setHasCompose] = React.useState(false);
+  // Read by callbacks without re-creating them: whether the window is open,
+  // whether Dubz shows, and which composer mounted it beside itself.
+  const openNow = React.useRef(false);
+  const onDubzNow = React.useRef(false);
+  const preparedBy = React.useRef(-1);
+  const show = React.useCallback((open: boolean) => {
+    openNow.current = open;
+    setIsOpen(open);
+  }, []);
+  const showDubz = React.useCallback((shown: boolean) => {
+    onDubzNow.current = shown;
+    setOnDubz(shown);
+  }, []);
   // Load the persisted detent and page once, before the user can open the
   // window, so the first open after an app restart lands where it was left.
   React.useEffect(() => {
@@ -198,22 +216,23 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
   const open = React.useCallback(() => {
     // A drop the window never mounted for must not make this close instant.
     instantClose.current = false;
+    preparedBy.current = -1;
     pageX.value = 1;
     slidingCompose.value = -1;
     setArrival("grow");
-    setIsOpen(true);
+    showDubz(true);
+    show(true);
     rememberPage("dubz");
-  }, [pageX, slidingCompose]);
+  }, [pageX, slidingCompose, show, showDubz]);
   const close = React.useCallback(() => {
-    // The composer comes back to its place, collapsed, as the window shrinks.
+    // The composer comes back to its place and collapses into the bar as the
+    // window shrinks.
     slidingCompose.value = -1;
-    setIsOpen(false);
-  }, [slidingCompose]);
-  const closeAtOnce = React.useCallback(() => {
-    instantClose.current = true;
-    slidingCompose.value = -1;
-    setIsOpen(false);
-  }, [slidingCompose]);
+    preparedBy.current = -1;
+    showDubz(false);
+    show(false);
+    compose.current?.hold(false);
+  }, [slidingCompose, show, showDubz]);
   const registerCompose = React.useCallback((page: ComposePage) => {
     compose.current = page;
     setHasCompose(true);
@@ -223,60 +242,89 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
       setHasCompose(false);
     };
   }, []);
-  const beginFromCompose = React.useCallback(
+  const prepare = React.useCallback(
     (composeId: number) => {
+      if (openNow.current) return;
       instantClose.current = false;
+      preparedBy.current = composeId;
+      pageX.value = 0;
       slidingCompose.value = composeId;
       setArrival("slide");
-      setIsOpen(true);
+      showDubz(false);
+      show(true);
     },
-    [slidingCompose],
+    [pageX, slidingCompose, show, showDubz],
+  );
+  const unprepare = React.useCallback(
+    (composeId: number) => {
+      if (preparedBy.current !== composeId || onDubzNow.current || !openNow.current) return;
+      preparedBy.current = -1;
+      instantClose.current = true;
+      slidingCompose.value = -1;
+      show(false);
+    },
+    [slidingCompose, show],
+  );
+  const beginFromCompose = React.useCallback(
+    (composeId: number) => {
+      if (!openNow.current) prepare(composeId);
+      slidingCompose.value = composeId;
+      // Stays expanded as it slides away, rather than collapsing on the way.
+      compose.current?.hold(true);
+    },
+    [prepare, slidingCompose],
   );
   const settleOnDubz = React.useCallback(() => {
+    showDubz(true);
     inputRef.current?.focus();
     rememberPage("dubz");
-  }, []);
+  }, [showDubz]);
+  const stayOnCompose = React.useCallback(() => compose.current?.hold(false), []);
   const beginFromDubz = React.useCallback(() => {
     const page = compose.current;
     if (page === undefined) return;
     slidingCompose.value = page.id;
+    preparedBy.current = page.id;
     page.hold(true);
   }, [slidingCompose]);
   const settleOnCompose = React.useCallback(() => {
+    showDubz(false);
     compose.current?.focus();
     rememberPage("compose");
-  }, []);
-  const releaseCompose = React.useCallback(() => compose.current?.hold(false), []);
+  }, [showDubz]);
   const api = React.useMemo<DubzApi>(
     () => ({
       open,
       close,
       isOpen,
       arrival,
+      onDubz,
       pageX,
       slidingCompose,
       hasCompose,
       registerCompose,
+      prepare,
+      unprepare,
       beginFromCompose,
       settleOnDubz,
-      dropDubz: closeAtOnce,
+      stayOnCompose,
       beginFromDubz,
       settleOnCompose,
-      finishOnCompose: closeAtOnce,
-      releaseCompose,
       inputRef,
       instantClose,
     }),
-    [open, close, isOpen, arrival, pageX, slidingCompose, hasCompose, registerCompose, beginFromCompose, settleOnDubz, closeAtOnce, beginFromDubz, settleOnCompose, releaseCompose],
+    [open, close, isOpen, arrival, onDubz, pageX, slidingCompose, hasCompose, registerCompose, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, beginFromDubz, settleOnCompose],
   );
   return <DubzContext.Provider value={api}>{props.children}</DubzContext.Provider>;
 };
 
 /**
  * Mounted once at the root, but the heavy window — its `useAnimatedKeyboard`
- * tracking, gestures and layout animation — is only mounted while Dubz is open.
- * Keeping those hooks alive when closed ran a global keyboard listener (fighting
- * the composer's) and bogged the whole app down.
+ * tracking, gestures and layout animation — is only mounted while Dubz is open,
+ * or while a composer beside it is expanded (mounted off screen, so a swipe
+ * finds it ready; mounting it mid-swipe hitched the slide). Keeping those hooks
+ * alive otherwise ran a global keyboard listener (fighting the composer's) and
+ * bogged the whole app down.
  */
 export const DubzOverlay = (): React.ReactElement | null => {
   const { isOpen } = useDubz();
@@ -290,7 +338,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
 
 /** The window itself — mounted only while open (and through its exit animation). */
 const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.ReactElement => {
-  const { isOpen, close, arrival, pageX, hasCompose, beginFromDubz, settleOnCompose, finishOnCompose, releaseCompose, inputRef, instantClose } = useDubz();
+  const { isOpen, close, arrival, onDubz, pageX, hasCompose, beginFromDubz, settleOnCompose, inputRef, instantClose } = useDubz();
   // How this mount came: fixed for its life (a later open is a new mount).
   const [arrivedBy] = React.useState(arrival);
   const insets = useSafeAreaInsets();
@@ -487,17 +535,13 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
           pageX.value = 1 - (moved < 0 ? 0 : moved > 1 ? 1 : moved);
         })
         .onEnd((e) => {
-          if (1 - pageX.value > PAGE_TURN || e.velocityX > PAGE_FLING) {
-            runOnJS(settleOnCompose)();
-            pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
-              if (finished === true) runOnJS(finishOnCompose)();
-            });
-            return;
-          }
-          runOnJS(releaseCompose)();
-          pageX.value = withTiming(1, { duration: PAGE_MS, easing: pageEasing });
+          // The window stays mounted off to the right while the composer is
+          // up, so the next swipe finds it there.
+          const turned = 1 - pageX.value > PAGE_TURN || e.velocityX > PAGE_FLING;
+          if (turned) runOnJS(settleOnCompose)();
+          pageX.value = withTiming(turned ? 0 : 1, { duration: PAGE_MS, easing: pageEasing });
         }),
-    [hasCompose, screenW, pageX, beginFromDubz, settleOnCompose, finishOnCompose, releaseCompose],
+    [hasCompose, screenW, pageX, beginFromDubz, settleOnCompose],
   );
 
   // Grows via LAYOUT (animating `top`), never a transform — a transform/opacity
@@ -570,7 +614,8 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
        * lowered, it passes touches through so you can see/scroll what's behind. */}
       <Pressable
         style={StyleSheet.absoluteFill}
-        pointerEvents={lowered ? "none" : "auto"}
+        // Beside the composer (not the page showing), it catches nothing.
+        pointerEvents={lowered || !onDubz ? "none" : "auto"}
         onPress={close}
         accessibilityRole="button"
         accessibilityLabel="Close Dubz"

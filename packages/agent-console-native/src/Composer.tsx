@@ -141,7 +141,7 @@ export const Composer = (props: {
   const [held, setHeld] = React.useState(false);
   const expanded = focused || held || text.length > 0;
   const dubz = useDubz();
-  const { pageX, slidingCompose, beginFromCompose, settleOnDubz, dropDubz, registerCompose } = dubz;
+  const { pageX, slidingCompose, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, registerCompose } = dubz;
   const withDubz = useAgentButtonVisible(props.agentSurface);
   const isFocused = useIsFocused();
   const [id] = React.useState(() => {
@@ -217,6 +217,14 @@ export const Composer = (props: {
     });
   }, [isFocused, withDubz, id, registerCompose, focusInput]);
 
+  // Expanded, with Dubz on: the Dubz window mounts beside it, off screen, so a
+  // swipe finds it ready instead of waiting for it to mount mid-swipe.
+  React.useEffect(() => {
+    if (!expanded || !isFocused || !withDubz) return undefined;
+    prepare(id);
+    return () => unprepare(id);
+  }, [expanded, isFocused, withDubz, id, prepare, unprepare]);
+
   // Swipe left, while expanded, to slide Dubz in. Only a clear sideways drag
   // pages, so typing, selecting and the controls are left alone.
   const toDubz = React.useMemo(
@@ -226,7 +234,6 @@ export const Composer = (props: {
         .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
         .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
         .onStart(() => {
-          pageX.value = 0;
           runOnJS(beginFromCompose)(id);
         })
         .onUpdate((e) => {
@@ -234,16 +241,11 @@ export const Composer = (props: {
           pageX.value = moved < 0 ? 0 : moved > 1 ? 1 : moved;
         })
         .onEnd((e) => {
-          if (pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING) {
-            runOnJS(settleOnDubz)();
-            pageX.value = withTiming(1, { duration: PAGE_MS, easing: pageEasing });
-            return;
-          }
-          pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
-            if (finished === true) runOnJS(dropDubz)();
-          });
+          const turned = pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING;
+          runOnJS(turned ? settleOnDubz : stayOnCompose)();
+          pageX.value = withTiming(turned ? 1 : 0, { duration: PAGE_MS, easing: pageEasing });
         }),
-    [expanded, withDubz, isFocused, pageX, beginFromCompose, id, screenW, settleOnDubz, dropDubz],
+    [expanded, withDubz, isFocused, pageX, beginFromCompose, id, screenW, settleOnDubz, stayOnCompose],
   );
 
   // Off to the left by how far the pages stand from the composer; only this
@@ -257,9 +259,10 @@ export const Composer = (props: {
   });
 
   const onBlur = (): void => {
-    // Only animate the collapse when it will actually happen — typed text keeps
-    // `expanded` true across a blur, so there's no layout change to animate then.
-    if (text.length === 0) LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    // Only animate the collapse when it will actually happen — typed text, or
+    // being held as a page, keeps `expanded` true across a blur, so there's no
+    // layout change to animate then.
+    if (text.length === 0 && !held) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(false);
   };
 
@@ -381,8 +384,7 @@ export const DubzBar = (props: {
           {`Ask ${AGENT_NAME}…`}
         </Text>
       }
-      // Collapsed to no width, as the composer's is; kept so the bar is the
-      // composer's height.
+      // Muted, as the composer's is with nothing to send.
       trailing={
         <Host style={styles.sendChipHost}>
           <Button label="Send" systemImage="arrow.up" onPress={dubz.open} modifiers={sendButtonModifiers(false, themeColors.sendActiveFill, themeColors.sendMutedFill)} />

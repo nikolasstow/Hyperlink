@@ -57,7 +57,7 @@ export interface BottomBarProps {
   readonly expandedCenter: React.ReactNode;
   /** Centre content shown while collapsed (the one-line mirror of the input). */
   readonly collapsedCenter: React.ReactNode;
-  /** Right control shown only while expanded (Send); slides to 0 width collapsed. */
+  /** Right control (Send), always shown: muted while there is nothing to send. */
   readonly trailing: React.ReactNode;
   /** Open the bar — bound to taps on the collapsed pill / mirror. */
   readonly onExpandRequest: () => void;
@@ -98,9 +98,9 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
                 {props.collapsedCenter}
               </Pressable>
             </View>
-            {/* Send: shown expanded, slides to 0 width collapsed. overflow clips
-             * the still-mounted Host so nothing unmounts. */}
-            <View style={[styles.sendSlot, !expanded && styles.sendSlotCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
+            {/* Send: always shown, as before Dubz; collapsed, a tap on it
+             * opens the bar (the variant's handler). */}
+            <View style={styles.sendSlot}>
               {props.trailing}
             </View>
           </View>
@@ -190,13 +190,5 @@ const styles = StyleSheet.create({
     width: COMPOSER_SEND_CHIP_SIZE,
     alignItems: "center",
     justifyContent: "center",
-  },
-  sendSlotCollapsed: {
-    width: 0,
-    opacity: 0,
-    // overflow clips the still-mounted Host down to 0 width ONLY while
-    // collapsed — never when shown, where it would crop the glass button's edge
-    // (the same crop the assistant button had).
-    overflow: "hidden",
   },
 });
