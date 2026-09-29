@@ -577,6 +577,9 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // time (left/right fixed); the bottom is anchored at the keyboard, and the top
   // animates from the bottom edge (0 height) up to the full top — so the window
   // unfolds upward from the bottom.
+  // Where the bar rests, worked out here: a plain function cannot run inside
+  // the style worklet, so it takes the number.
+  const barResting = composerRestingBottom(insets.bottom);
   const windowStyle = useAnimatedStyle(() => {
     const fullTop = insets.top + TOP_MARGIN;
     // Expanded height is derived from the STABLE keyboard height, so it doesn't
@@ -592,7 +595,7 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     // indicator when the keyboard is gone); toward the pill detent it moves to
     // where the bottom bar's pill sits, so there the window covers the bar.
     const windowGap = Math.max(kbHeight.value, insets.bottom) + MARGIN;
-    const barGap = Math.max(kbHeight.value, composerRestingBottom(insets.bottom)) + BAR_GAP;
+    const barGap = Math.max(kbHeight.value, barResting) + BAR_GAP;
     const bottomEdge = screenH - (windowGap + (barGap - windowGap) * p);
     const fullHeight = screenH - stableBottom - fullTop;
     const height = Math.max(fullHeight * grow.value - dragY.value, 0);
