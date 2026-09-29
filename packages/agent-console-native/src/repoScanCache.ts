@@ -12,6 +12,7 @@
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as React from "react";
 import { runFs } from "./effect/runtime";
 import { type ScannedRepo, scanRepos } from "./repoScan";
 
@@ -30,20 +31,43 @@ type Persisted = { readonly version: number; readonly repos: ReadonlyArray<Scann
 
 let inMemory: ReadonlyArray<ScannedRepo> | undefined;
 let inFlight: Promise<ReadonlyArray<ScannedRepo>> | undefined;
+const listeners = new Set<() => void>();
+
+const remember = (repos: ReadonlyArray<ScannedRepo>): void => {
+  inMemory = repos;
+  listeners.forEach((listener) => listener());
+};
 
 export const getCachedRepos = async (): Promise<ReadonlyArray<ScannedRepo> | undefined> => {
   if (inMemory !== undefined) return inMemory;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (raw === null) return undefined;
-    const parsed = JSON.parse(raw) as Partial<Persisted>;
-    if (parsed.version !== SCAN_VERSION || parsed.repos === undefined) return undefined;
-    inMemory = parsed.repos;
-    return parsed.repos;
-  } catch {
+    const parsed: unknown = JSON.parse(raw);
+    // A scan saved by an older version reads as none: it gets rescanned.
+    if (typeof parsed !== "object" || parsed === null || !("version" in parsed) || parsed.version !== SCAN_VERSION) return undefined;
+    if (!("repos" in parsed) || !Array.isArray(parsed.repos)) return undefined;
+    const repos: ReadonlyArray<ScannedRepo> = parsed.repos;
+    remember(repos);
+    return repos;
+  } catch (error: unknown) {
+    console.error("[repo scan] reading the saved scan failed", error);
     return undefined;
   }
 };
+
+// Loaded as the app starts, so the repos are in memory before any page asks.
+void getCachedRepos();
+
+const subscribe = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
+/** The scanned repos known now (saved, or scanned since), read as the page
+ * renders: `undefined` only before the saved scan has loaded or when there is
+ * none. */
+export const useWorkspaceRepos = (): ReadonlyArray<ScannedRepo> | undefined => React.useSyncExternalStore(subscribe, () => inMemory);
 
 export const getLastScanAt = async (): Promise<number | undefined> => {
   const raw = await AsyncStorage.getItem(LAST_SCAN_KEY);
@@ -64,7 +88,7 @@ export const rescan = (backend: string, rootDir: string): Promise<ReadonlyArray<
   // result back as a Promise for the React callers.
   inFlight = runFs(scanRepos(backend, rootDir))
     .then(async (repos) => {
-      inMemory = repos;
+      remember(repos);
       const toStore: Persisted = { version: SCAN_VERSION, repos };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
       await AsyncStorage.setItem(LAST_SCAN_KEY, String(Date.now()));

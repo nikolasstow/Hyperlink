@@ -5,7 +5,9 @@
  * not about one repo) with New Task under it. Left column left-aligned, right
  * column right-aligned; nothing is sized from its text.
  *
- * Tasks are the repo's GitHub issues (taskCounts.ts).
+ * Tasks are the repo's GitHub issues (taskCounts.ts). The repos and counts
+ * are read from stores loaded as the app starts, so the block is whole the
+ * instant it renders; nothing in it loads late.
  *
  * @internal
  */
@@ -17,9 +19,9 @@ import * as React from "react";
 import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { showToast } from "./AppToast";
 import { colors } from "./colors";
-import type { GitHubRepo, ScannedRepo } from "./repoScan";
-import { readWorkspace } from "./repoScanCache";
-import { KINDS, loadTaskCounts, type TaskCount } from "./taskCounts";
+import type { GitHubRepo } from "./repoScan";
+import { useWorkspaceRepos } from "./repoScanCache";
+import { KINDS, useTaskCounts } from "./taskCounts";
 
 const PILL_HEIGHT = 30;
 const REPO_SIZE = 20;
@@ -33,11 +35,6 @@ const KIND_TINT: Readonly<Record<string, string>> = {
 };
 const OTHER_TINT = "rgba(142,142,147,0.45)";
 
-type Counts =
-  | { readonly kind: "loading" }
-  | { readonly kind: "ready"; readonly counts: ReadonlyArray<TaskCount> }
-  | { readonly kind: "failed"; readonly message: string };
-
 // The repo last picked here, so the block opens on it again.
 let pickedRepo: string | undefined;
 
@@ -49,41 +46,15 @@ export const TaskSuggestion = (props: {
   readonly apiBase: string;
 }): React.ReactElement | null => {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
-  const [repos, setRepos] = React.useState<ReadonlyArray<ScannedRepo> | undefined>(undefined);
+  const workspace = useWorkspaceRepos();
+  const repos = React.useMemo(() => (workspace ?? []).filter((repo) => repo.github !== undefined), [workspace]);
   const [picked, setPicked] = React.useState(pickedRepo);
-  const [counts, setCounts] = React.useState<Counts>({ kind: "loading" });
+  const repoName = props.repo ?? picked ?? repos[0]?.repo;
+  const github: GitHubRepo | undefined = repos.find((repo) => repo.repo === repoName)?.github;
+  const counts = useTaskCounts(props.apiBase, github);
 
-  React.useEffect(() => {
-    readWorkspace().then(
-      (scanned) => setRepos((scanned ?? []).filter((repo) => repo.github !== undefined)),
-      (error: unknown) => {
-        console.error("[tasks] reading the repos failed", error);
-        setRepos([]);
-      },
-    );
-  }, []);
-
-  const repoName = props.repo ?? picked ?? repos?.[0]?.repo;
-  const github: GitHubRepo | undefined = repos?.find((repo) => repo.repo === repoName)?.github;
-
-  React.useEffect(() => {
-    if (github === undefined) return undefined;
-    let cancelled = false;
-    loadTaskCounts(props.apiBase, github).then(
-      (next) => {
-        if (!cancelled) setCounts({ kind: "ready", counts: next });
-      },
-      (error: unknown) => {
-        if (!cancelled) setCounts({ kind: "failed", message: error instanceof Error ? error.message : String(error) });
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [props.apiBase, github]);
-
-  // Still reading the repos.
-  if (repos === undefined) return null;
+  // Only in the app's first moments, before the saved scan has loaded.
+  if (workspace === undefined) return null;
   // Nothing to show tasks for: say why, rather than show nothing.
   if (repoName === undefined || github === undefined) {
     return (
@@ -98,9 +69,9 @@ export const TaskSuggestion = (props: {
     setPicked(name);
   };
 
-  // Every kind, always; while loading, each count a dash.
+  // Every kind, always; before the first load ever, each count a dash.
   const shown: ReadonlyArray<{ readonly kind: string; readonly count: number | undefined }> =
-    counts.kind === "ready" ? counts.counts : KINDS.map((kind) => ({ kind, count: undefined }));
+    counts.counts ?? KINDS.map((kind) => ({ kind, count: undefined }));
 
   return (
     <View style={styles.block}>
@@ -150,9 +121,9 @@ export const TaskSuggestion = (props: {
             </Menu>
           </Host>
         )}
-        {counts.kind === "failed" ? (
+        {counts.error !== undefined ? (
           <Text style={styles.failed} numberOfLines={2}>
-            Couldn’t load tasks: {counts.message}
+            Couldn’t load tasks: {counts.error}
           </Text>
         ) : null}
         <Pressable style={styles.newTask} hitSlop={8} accessibilityRole="button" onPress={() => showToast({ message: "New Task: the form comes next" })}>

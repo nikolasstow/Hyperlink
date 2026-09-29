@@ -8,11 +8,17 @@
  * GitHub default labels say (`bug` → Bug, `enhancement` → Feature); else it
  * is a Task.
  *
+ * The counts are kept on the phone and loaded as the app starts, so a page
+ * shows them the instant it renders; Home refreshes every repo's in the
+ * background (`prefetchTaskCounts`), and a page showing one refreshes it.
+ *
  * @internal
  */
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Schema } from "effect";
+import * as React from "react";
 import { base, request } from "./extensionsClient";
-import type { GitHubRepo } from "./repoScan";
+import type { GitHubRepo, ScannedRepo } from "./repoScan";
 
 const Issue = Schema.Struct({
   number: Schema.Number,
@@ -23,6 +29,11 @@ const Issue = Schema.Struct({
 });
 type Issue = typeof Issue.Type;
 const Issues = Schema.Array(Issue);
+
+const TaskCountSchema = Schema.Struct({
+  kind: Schema.String,
+  count: Schema.Number,
+});
 
 /** One kind of task and how many are open. */
 export interface TaskCount {
@@ -66,19 +77,112 @@ const fetchTaskCounts = async (apiBase: string, repo: GitHubRepo): Promise<Reado
   return countByKind(Schema.decodeUnknownSync(Issues)(await request(url)));
 };
 
-/** How long counts are reused: every screen's Dubz asks, and GitHub allows an
- * unauthenticated caller 60 requests an hour. */
-const FRESH_MS = 2 * 60 * 1000;
-const loaded = new Map<string, { readonly at: number; readonly counts: Promise<ReadonlyArray<TaskCount>> }>();
 
-/** The repo's counts, shared by every caller for a couple of minutes; a failed
- * load is not kept, so the next caller tries again. */
-export const loadTaskCounts = (apiBase: string, repo: GitHubRepo): Promise<ReadonlyArray<TaskCount>> => {
-  const key = `${apiBase} ${repo.owner}/${repo.name}`;
-  const known = loaded.get(key);
-  if (known !== undefined && Date.now() - known.at < FRESH_MS) return known.counts;
-  const counts = fetchTaskCounts(apiBase, repo);
-  loaded.set(key, { at: Date.now(), counts });
-  counts.catch(() => loaded.delete(key));
-  return counts;
+// ── Kept on the phone, loaded at start ─────────────────────────────────────
+
+const STORAGE_KEY = "agent-console-native:taskCounts";
+const Saved = Schema.Record(Schema.String, Schema.Array(TaskCountSchema));
+const SavedJson = Schema.fromJsonString(Saved);
+
+/** How long counts count as fresh: GitHub allows an unauthenticated caller
+ * 60 requests an hour. */
+const FRESH_MS = 2 * 60 * 1000;
+
+/** A repo's counts as known: the last loaded, and the last failure. */
+export interface KnownCounts {
+  readonly counts?: ReadonlyArray<TaskCount>;
+  readonly error?: string;
+}
+
+let known: Readonly<Record<string, KnownCounts>> = {};
+const fetchedAt = new Map<string, number>();
+const inFlight = new Map<string, Promise<void>>();
+const listeners = new Set<() => void>();
+
+const keyOf = (repo: GitHubRepo): string => `${repo.owner}/${repo.name}`;
+
+const set = (key: string, next: KnownCounts): void => {
+  known = {
+    ...known,
+    [key]: next,
+  };
+  listeners.forEach((listener) => listener());
+};
+
+const save = (): void => {
+  const counts: Record<string, ReadonlyArray<TaskCount>> = {};
+  for (const [key, value] of Object.entries(known)) {
+    if (value.counts !== undefined) counts[key] = value.counts;
+  }
+  AsyncStorage.setItem(STORAGE_KEY, Schema.encodeSync(SavedJson)(counts)).catch((error: unknown) =>
+    console.error("[tasks] saving the counts failed", error),
+  );
+};
+
+AsyncStorage.getItem(STORAGE_KEY)
+  .then((raw) => {
+    if (raw === null) return;
+    const saved = Schema.decodeUnknownSync(SavedJson)(raw);
+    // Anything loaded meanwhile is newer; keep it.
+    const merged: Record<string, KnownCounts> = {};
+    for (const [key, counts] of Object.entries(saved)) merged[key] = { counts };
+    known = {
+      ...merged,
+      ...known,
+    };
+    listeners.forEach((listener) => listener());
+  })
+  .catch((error: unknown) => console.error("[tasks] reading the saved counts failed", error));
+
+/** Refresh a repo's counts unless fresh or already under way. */
+export const refreshTaskCounts = (apiBase: string, repo: GitHubRepo): Promise<void> => {
+  const key = keyOf(repo);
+  const at = fetchedAt.get(key);
+  if (at !== undefined && Date.now() - at < FRESH_MS) return Promise.resolve();
+  const running = inFlight.get(key);
+  if (running !== undefined) return running;
+  const run = fetchTaskCounts(apiBase, repo).then(
+    (counts) => {
+      fetchedAt.set(key, Date.now());
+      set(key, { counts });
+      save();
+    },
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[tasks] loading ${key}'s counts failed`, error);
+      // What was known stays shown; the failure is said alongside.
+      set(key, {
+        ...known[key],
+        error: message,
+      });
+    },
+  );
+  const tracked = run.finally(() => inFlight.delete(key));
+  inFlight.set(key, tracked);
+  return tracked;
+};
+
+/** Refresh every GitHub repo's counts (Home, as the repos load). */
+export const prefetchTaskCounts = (apiBase: string, repos: ReadonlyArray<ScannedRepo>): void => {
+  for (const repo of repos) {
+    if (repo.github !== undefined) void refreshTaskCounts(apiBase, repo.github);
+  }
+};
+
+const subscribe = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
+const NOTHING: KnownCounts = {};
+
+/** A repo's counts as known now, read as the page renders; refreshed behind
+ * when stale. */
+export const useTaskCounts = (apiBase: string, repo: GitHubRepo | undefined): KnownCounts => {
+  const key = repo === undefined ? undefined : keyOf(repo);
+  const value = React.useSyncExternalStore(subscribe, () => (key === undefined ? NOTHING : (known[key] ?? NOTHING)));
+  React.useEffect(() => {
+    if (repo !== undefined) void refreshTaskCounts(apiBase, repo);
+  }, [apiBase, repo]);
+  return value;
 };

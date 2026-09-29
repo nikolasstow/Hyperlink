@@ -37,6 +37,7 @@ import {
   type SessionTarget,
 } from "./HomeTargetPickers";
 import type { DubzContext } from "./dubzSuggestions";
+import { prefetchTaskCounts } from "./taskCounts";
 import type { ModelOption } from "./models";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
@@ -192,6 +193,12 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     const workspaces = scanned.flatMap((repo) => repo.worktrees.map((worktree) => worktree.path));
     if (workspaces.length > 0) prefetchWorkspaces(getApiAddress(address), workspaces);
+  }, [scanned, address]);
+
+  // Every repo's task counts too, so Dubz's tasks block shows them the
+  // instant it renders.
+  React.useEffect(() => {
+    prefetchTaskCounts(getApiAddress(address), scanned);
   }, [scanned, address]);
 
   // The plugin manager's list too, so Settings → Plugins opens with it.
