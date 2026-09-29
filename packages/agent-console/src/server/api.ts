@@ -14,6 +14,7 @@ import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
 import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";
 import { ProcessRequestError, ProcessStartError, processSpec } from "./processes/runner";
+import { ArchivedSessions, SessionArchiveError, sessionIdPayload } from "./sessions/archive";
 import { CollectionState, CollectionStateIoError, CollectionStateRequestError, collectionChangePayload, collectionStatePayload } from "./collections/state";
 import {
   CollectionContent,
@@ -237,6 +238,24 @@ const processesGroup = HttpApiGroup.make("processes").add(
   }),
 );
 
+/** Archived sessions (sessions/archive.ts): which are put away, and when. */
+const sessionsGroup = HttpApiGroup.make("sessions").add(
+  HttpApiEndpoint.get("archived", "/sessions/archived", {
+    success: ArchivedSessions,
+    error: SessionArchiveError,
+  }),
+  HttpApiEndpoint.post("archive", "/sessions/archive", {
+    payload: sessionIdPayload,
+    success: ArchivedSessions,
+    error: SessionArchiveError,
+  }),
+  HttpApiEndpoint.post("unarchive", "/sessions/unarchive", {
+    payload: sessionIdPayload,
+    success: ArchivedSessions,
+    error: SessionArchiveError,
+  }),
+);
+
 /** The installed plugins, for the plugin manager. */
 const pluginsGroup = HttpApiGroup.make("plugins").add(
   HttpApiEndpoint.get("list", "/plugins", {
@@ -252,4 +271,5 @@ export const api = HttpApi.make("agent-console")
   .add(viewsGroup)
   .add(pagesGroup)
   .add(processesGroup)
-  .add(pluginsGroup);
+  .add(pluginsGroup)
+  .add(sessionsGroup);

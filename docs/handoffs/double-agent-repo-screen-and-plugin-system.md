@@ -632,3 +632,17 @@ Owner-stated. Not built yet.
     have **Dubz fill it out**.
   - **Asking for the same thing without tapping the suggestion goes straight to the form, already
     filled out**, and the request can be followed up with changes.
+
+---
+
+## 26. Archiving sessions (DECISIONS, 2026-09-29)
+
+Owner-stated.
+
+- **Archive** is an option on a session (its hard-press menu), beside Delete.
+- **Swiping left on a session archives it, and shows that, as in Apple Messages**: the swipe
+  reveals an Archive action; a long swipe archives on release, a short one leaves the action to
+  tap. The session leaves the lists.
+- opencode has no archive, so the backend keeps one (`/sessions/archived`, archive, unarchive),
+  shared by every device.
+- *Later:* a page of archived sessions (to unarchive from).

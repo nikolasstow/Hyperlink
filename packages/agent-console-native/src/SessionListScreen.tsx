@@ -14,6 +14,8 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { getApiAddress } from "./settings";
+import { archiveSession, unarchived, useArchivedSessions } from "./sessionArchive";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
@@ -31,7 +33,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "SessionList">;
 
 export const SessionListScreen = (props: Props): React.ReactElement => {
   const { repo, worktree } = props.route.params;
-  const { client } = useAppContext();
+  const { client, address } = useAppContext();
   const headerHeight = useHeaderHeight();
   const isFocused = useIsFocused();
   const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
@@ -78,7 +80,8 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
     void load().finally(() => setRefreshing(false));
   }, [load]);
 
-  const group = React.useMemo(() => groupByRepo(sessions, scanned).find((g) => g.repo === repo), [sessions, scanned, repo]);
+  const archivedSet = useArchivedSessions();
+  const group = React.useMemo(() => groupByRepo(unarchived(sessions, archivedSet), scanned).find((g) => g.repo === repo), [sessions, archivedSet, scanned, repo]);
   // `worktree === null` means the whole repo; otherwise just that worktree's.
   const listed = worktree === null ? (group?.sessions ?? []) : (group?.worktrees.get(worktree) ?? []);
 
@@ -109,6 +112,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
             onRename={() => promptRenameSession(client, item.id, item.title, () => void load())}
             onStop={() => abortSession(client, item.id, () => void load())}
             onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void load())}
+            onArchive={() => archiveSession(getApiAddress(address), item.id)}
           />
         )}
       />

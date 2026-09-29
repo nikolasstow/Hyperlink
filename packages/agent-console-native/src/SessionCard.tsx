@@ -17,11 +17,14 @@
 import { Button, Circle, ContextMenu, Host, HStack, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { useWindowDimensions } from "react-native";
+import { LayoutAnimation, Pressable, StyleSheet, Text, useWindowDimensions } from "react-native";
+import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
 import { lastMessageSummary, useSessionPreview } from "./sessionPreview";
+import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
 
 /** Horizontal margin outside the card (matches the list gutter). */
@@ -49,7 +52,49 @@ export type SessionCardProps = {
   readonly onRename: () => void;
   readonly onStop: () => void;
   readonly onDelete: () => void;
+  /** Put the session away (swipe left, or the menu); the list leaves it out. */
+  readonly onArchive: () => void;
 };
+
+/** The Archive action's width when revealed and left open. */
+const ACTION_WIDTH = 88;
+/** How far a swipe must go, as a share of the card, to archive on release
+ * without a tap (a full swipe, as in Messages). */
+const FULL_SWIPE_FRACTION = 0.55;
+
+/**
+ * The Archive action behind a session card, revealed by swiping left: a
+ * purple panel with the archive box, growing with the drag. A short swipe
+ * leaves it open to tap; a long one archives on release.
+ */
+const ArchiveAction = (props: {
+  readonly translation: SharedValue<number>;
+  readonly fullSwipeAt: number;
+  readonly onArmedChange: (armed: boolean) => void;
+  readonly onPress: () => void;
+}): React.ReactElement => {
+  const { fullSwipeAt, onArmedChange } = props;
+  // Track whether the drag is past the full-swipe point, for the release.
+  useAnimatedReaction(
+    () => -props.translation.value >= fullSwipeAt,
+    (armed, previous) => {
+      if (armed !== previous) runOnJS(onArmedChange)(armed);
+    },
+    [fullSwipeAt, onArmedChange],
+  );
+  const grow = useAnimatedStyle(() => ({ width: Math.max(ACTION_WIDTH, -props.translation.value - ACTION_GAP) }));
+  return (
+    <Animated.View style={[styles.action, grow]}>
+      <Pressable style={styles.actionHit} onPress={props.onPress} accessibilityRole="button" accessibilityLabel="Archive">
+        <SystemIcon name="archivebox.fill" size={20} color="#FFFFFF" />
+        <Text style={styles.actionLabel}>Archive</Text>
+      </Pressable>
+    </Animated.View>
+  );
+};
+
+/** Space between the card and the action, and the action and the edge. */
+const ACTION_GAP = 8;
 
 const summaryLabel = (role: "user" | "assistant", text: string): string => (role === "user" ? `You: ${text}` : text);
 
@@ -100,12 +145,37 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
   const summary = lastMessageSummary(transcript);
 
+  // A long swipe archives on release; the row then closes up (LayoutAnimation
+  // runs the list's change as the session leaves it).
+  const armed = React.useRef(false);
+  const onArmedChange = React.useCallback((next: boolean) => {
+    armed.current = next;
+  }, []);
+  const { onArchive } = props;
+  const archive = React.useCallback(() => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    onArchive();
+  }, [onArchive]);
+
   return (
-    <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
+    <Swipeable
+      containerStyle={styles.row}
+      friction={1}
+      overshootRight
+      rightThreshold={ACTION_WIDTH / 2}
+      renderRightActions={(_progress, translation) => (
+        <ArchiveAction translation={translation} fullSwipeAt={cardWidth * FULL_SWIPE_FRACTION} onArmedChange={onArmedChange} onPress={archive} />
+      )}
+      onSwipeableWillOpen={() => {
+        if (armed.current) archive();
+      }}
+    >
+    <Host style={{ marginHorizontal: CARD_GUTTER }} matchContents={{ vertical: true, horizontal: false }}>
       <ContextMenu>
         <ContextMenu.Items>
           <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
           <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
+          <Button label="Archive" systemImage="archivebox" onPress={archive} />
           <Section>
             {props.running ? <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} /> : null}
             <Button label="Delete" role="destructive" systemImage="trash" onPress={props.onDelete} />
@@ -132,5 +202,30 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         </ContextMenu.Trigger>
       </ContextMenu>
     </Host>
+    </Swipeable>
   );
 };
+
+const styles = StyleSheet.create({
+  row: {
+    marginBottom: 10,
+  },
+  action: {
+    marginLeft: -CARD_GUTTER + ACTION_GAP,
+    marginRight: CARD_GUTTER,
+    borderRadius: 14,
+    backgroundColor: colors.archive,
+    overflow: "hidden",
+  },
+  actionHit: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  actionLabel: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+});

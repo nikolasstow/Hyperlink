@@ -31,6 +31,8 @@ export const colors = {
   placeholderText: PlatformColor("placeholderText"),
   tint: PlatformColor("systemBlue"),
   destructive: PlatformColor("systemRed"),
+  /** Archiving (the swipe action on a session), as Mail colours it. */
+  archive: PlatformColor("systemPurple"),
   /** Attention/needs-input accent (e.g. a session waiting on a question). */
   warning: PlatformColor("systemOrange"),
   accentTint: DynamicColorIOS({ light: "rgba(0,122,255,0.14)", dark: "rgba(10,132,255,0.2)" }),

@@ -23,6 +23,7 @@ import { CollectionStates } from "./collections/state";
 import { ExtensionViews } from "./extensionHost/extensionViews";
 import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
+import { SessionArchive } from "./sessions/archive";
 import { Workspaces } from "./workspaces";
 import { importFont, inspectFont, readFontFile } from "./fonts";
 import {
@@ -102,6 +103,17 @@ const pluginsHandlers = HttpApiBuilder.group(api, "plugins", (handlers) =>
   PluginRegistry.pipe(Effect.map((registry) => handlers.handle("list", () => registry.list))),
 );
 
+const sessionsHandlers = HttpApiBuilder.group(api, "sessions", (handlers) =>
+  SessionArchive.pipe(
+    Effect.map((archive) =>
+      handlers
+        .handle("archived", () => archive.list)
+        .handle("archive", ({ payload }) => archive.archive(payload.id))
+        .handle("unarchive", ({ payload }) => archive.unarchive(payload.id)),
+    ),
+  ),
+);
+
 // A process's output as server-sent events: `?id=<process id>`. Raw, since
 // it streams. 404 for an unknown process.
 const processStreamRoute = HttpRouter.add("GET", "/processes/stream", (request) =>
@@ -156,6 +168,7 @@ const apiLive = HttpApiBuilder.layer(api).pipe(
     pagesHandlers.pipe(Layer.provide([viewsLive, statesLive])),
     processesHandlers.pipe(Layer.provide(runnerLive)),
     pluginsHandlers.pipe(Layer.provide(registryLive)),
+    sessionsHandlers.pipe(Layer.provide(SessionArchive.layer)),
   ]),
 );
 

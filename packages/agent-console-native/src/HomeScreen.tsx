@@ -45,6 +45,7 @@ import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { updateScannedRepos } from "./primaryWorktree";
+import { archiveSession, loadArchivedSessions, unarchived, useArchivedSessions } from "./sessionArchive";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
@@ -189,9 +190,16 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     void refreshPlugins(getApiAddress(address));
   }, [address]);
 
-  const sortedByRecent = [...sessions].sort((a, b) => b.time.updated - a.time.updated);
+  // The archive, so archived sessions stay out of every list.
+  React.useEffect(() => {
+    void loadArchivedSessions(getApiAddress(address));
+  }, [address]);
+  const archivedSet = useArchivedSessions();
+  const visible = unarchived(sessions, archivedSet);
+
+  const sortedByRecent = [...visible].sort((a, b) => b.time.updated - a.time.updated);
   const recent = sortedByRecent.slice(0, groupSize);
-  const groups = groupByRepo(sessions, scanned);
+  const groups = groupByRepo(visible, scanned);
   const knownGroups = groups.filter((g) => g.isKnownRepo);
   const otherGroups = groups.filter((g) => !g.isKnownRepo);
 
@@ -269,7 +277,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         ListHeaderComponent={
           loading ? (
             <HomeSkeleton />
-          ) : sessions.length === 0 && error === undefined ? (
+          ) : visible.length === 0 && error === undefined ? (
             <Text style={styles.hint}>No sessions yet.</Text>
           ) : error !== undefined ? (
             <Text style={styles.error}>{error}</Text>
@@ -296,6 +304,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
                 onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
                 onDelete={() => confirmDeleteSession(client, item.session.id, item.session.title, () => void loadSessions())}
+                onArchive={() => archiveSession(getApiAddress(address), item.session.id)}
               />
             );
           }
