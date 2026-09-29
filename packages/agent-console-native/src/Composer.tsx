@@ -141,7 +141,7 @@ export const Composer = (props: {
   const [held, setHeld] = React.useState(false);
   const expanded = focused || held || text.length > 0;
   const dubz = useDubz();
-  const { pageX, slidingCompose, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, registerCompose } = dubz;
+  const { pageX, slidingCompose, barAway, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, registerCompose } = dubz;
   const withDubz = useAgentButtonVisible(props.agentSurface);
   const isFocused = useIsFocused();
   const [id] = React.useState(() => {
@@ -249,9 +249,10 @@ export const Composer = (props: {
   );
 
   // Off to the left by how far the pages stand from the composer; only this
-  // composer, when it is the one sliding.
+  // composer, when it is the one sliding. Wholly off while Dubz stands in for
+  // the bar.
   const slide = useAnimatedStyle(() => {
-    const aside = slidingCompose.value === id ? pageX.value * screenW : 0;
+    const aside = barAway.value === 1 ? screenW : slidingCompose.value === id ? pageX.value * screenW : 0;
     return {
       marginLeft: -aside,
       marginRight: aside,
@@ -365,32 +366,44 @@ export const DubzBar = (props: {
 }): React.ReactElement | null => {
   const { colors: themeColors } = useTheme();
   const dubz = useDubz();
+  const { barAway } = dubz;
   const visible = useAgentButtonVisible(props.agentSurface);
+  const { width: screenW } = useWindowDimensions();
+  // Off screen while Dubz stands in for it, so it never shows through.
+  const away = useAnimatedStyle(() => {
+    const aside = barAway.value === 1 ? screenW : 0;
+    return {
+      marginLeft: -aside,
+      marginRight: aside,
+    };
+  });
   if (!visible) return null;
   return (
-    <BottomBar
-      expanded={false}
-      bottomInset={props.bottomInset}
-      onExpandRequest={dubz.open}
-      input={null}
-      leading={
-        <Host style={styles.chipHost}>
-          <Button label="Attach" systemImage="plus" onPress={dubz.open} modifiers={CHIP_BUTTON_MODIFIERS} />
-        </Host>
-      }
-      expandedCenter={null}
-      collapsedCenter={
-        <Text style={[styles.mirrorText, styles.mirrorPlaceholder]} numberOfLines={1}>
-          {`Ask ${AGENT_NAME}…`}
-        </Text>
-      }
-      // Muted, as the composer's is with nothing to send.
-      trailing={
-        <Host style={styles.sendChipHost}>
-          <Button label="Send" systemImage="arrow.up" onPress={dubz.open} modifiers={sendButtonModifiers(false, themeColors.sendActiveFill, themeColors.sendMutedFill)} />
-        </Host>
-      }
-    />
+    <Reanimated.View style={away}>
+      <BottomBar
+        expanded={false}
+        bottomInset={props.bottomInset}
+        onExpandRequest={dubz.open}
+        input={null}
+        leading={
+          <Host style={styles.chipHost}>
+            <Button label="Attach" systemImage="plus" onPress={dubz.open} modifiers={CHIP_BUTTON_MODIFIERS} />
+          </Host>
+        }
+        expandedCenter={null}
+        collapsedCenter={
+          <Text style={[styles.mirrorText, styles.mirrorPlaceholder]} numberOfLines={1}>
+            {`Ask ${AGENT_NAME}…`}
+          </Text>
+        }
+        // Muted, as the composer's is with nothing to send.
+        trailing={
+          <Host style={styles.sendChipHost}>
+            <Button label="Send" systemImage="arrow.up" onPress={dubz.open} modifiers={sendButtonModifiers(false, themeColors.sendActiveFill, themeColors.sendMutedFill)} />
+          </Host>
+        }
+      />
+    </Reanimated.View>
   );
 };
 

@@ -151,6 +151,11 @@ interface DubzApi {
   /** The composer that slides with the pages (its `id`), or -1: the rest stay
    * put. */
   readonly slidingCompose: SharedValue<number>;
+  /** 1 while Dubz, grown out of the bar, stands in for it: every bar moves off
+   * screen, so the bar never shows through the window. */
+  readonly barAway: SharedValue<number>;
+  /** The window is gone (after its shrink): the bars come back. */
+  readonly closed: () => void;
   /** Whether a composer is beside Dubz (the focused screen has one). */
   readonly hasCompose: boolean;
   /** A screen's composer takes its place beside Dubz; returns its leaving. */
@@ -192,6 +197,7 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
   const [onDubz, setOnDubz] = React.useState(false);
   const pageX = useSharedValue(1);
   const slidingCompose = useSharedValue(-1);
+  const barAway = useSharedValue(0);
   const inputRef = React.useRef<TextInput>(null);
   const instantClose = React.useRef(false);
   const compose = React.useRef<ComposePage | undefined>(undefined);
@@ -228,20 +234,25 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
     preparedBy.current = -1;
     pageX.value = 1;
     slidingCompose.value = -1;
+    barAway.value = 1;
     setArrival("grow");
     showDubz(true);
     show(true);
     rememberPage("dubz");
-  }, [pageX, slidingCompose, show, showDubz]);
+  }, [pageX, slidingCompose, barAway, show, showDubz]);
   const close = React.useCallback(() => {
-    // The composer comes back to its place and collapses into the bar as the
-    // window shrinks.
-    slidingCompose.value = -1;
     preparedBy.current = -1;
     showDubz(false);
     show(false);
+  }, [show, showDubz]);
+  // Only once the window is gone does the bar come back (collapsed), so the
+  // two never show one over the other.
+  const closed = React.useCallback(() => {
+    if (openNow.current) return;
+    barAway.value = 0;
+    slidingCompose.value = -1;
     compose.current?.hold(false);
-  }, [slidingCompose, show, showDubz]);
+  }, [barAway, slidingCompose]);
   const closeIntoBar = React.useCallback(() => {
     if (!onDubzNow.current) return;
     instantClose.current = true;
@@ -298,9 +309,11 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
     const page = compose.current;
     if (page === undefined) return;
     slidingCompose.value = page.id;
+    // It slides in from the left, as the page beside Dubz, not away.
+    barAway.value = 0;
     preparedBy.current = page.id;
     page.hold(true);
-  }, [slidingCompose]);
+  }, [slidingCompose, barAway]);
   const settleOnCompose = React.useCallback(() => {
     showDubz(false);
     compose.current?.focus();
@@ -316,6 +329,8 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
       onDubz,
       pageX,
       slidingCompose,
+      barAway,
+      closed,
       hasCompose,
       registerCompose,
       prepare,
@@ -328,7 +343,7 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
       inputRef,
       instantClose,
     }),
-    [open, close, closeIntoBar, isOpen, arrival, onDubz, pageX, slidingCompose, hasCompose, registerCompose, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, beginFromDubz, settleOnCompose],
+    [open, close, closeIntoBar, isOpen, arrival, onDubz, pageX, slidingCompose, barAway, closed, hasCompose, registerCompose, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, beginFromDubz, settleOnCompose],
   );
   return <DubzContext.Provider value={api}>{props.children}</DubzContext.Provider>;
 };
@@ -342,13 +357,20 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
  * bogged the whole app down.
  */
 export const DubzOverlay = (): React.ReactElement | null => {
-  const { isOpen } = useDubz();
+  const { isOpen, closed } = useDubz();
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
     if (isOpen) setMounted(true);
   }, [isOpen]);
   if (!mounted) return null;
-  return <DubzWindow onClosed={() => setMounted(false)} />;
+  return (
+    <DubzWindow
+      onClosed={() => {
+        setMounted(false);
+        closed();
+      }}
+    />
+  );
 };
 
 /** The window itself — mounted only while open (and through its exit animation). */
