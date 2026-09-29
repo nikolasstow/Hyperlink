@@ -1,7 +1,9 @@
 /**
  * A header title that names the worktree it shows: the page's title (the
  * folder name in Files, "PNPM" on that page), and under it, as its subtitle,
- * the worktree. Tapping it opens the native menu of the
+ * the worktree. When the title already names the worktree (Files at a worktree's
+ * root, where the folder is named for it), the subtitle would repeat it, so
+ * there is none. Tapping it opens the native menu of the
  * repo's worktrees; choosing one makes it the repo's primary worktree
  * (primaryWorktree.ts), so every worktree page follows.
  *
@@ -50,8 +52,9 @@ export const WorktreePicker = (props: {
   const { primary, worktrees } = usePrimaryWorktree(props.repo, props.fallback);
   const { width: screenWidth } = useWindowDimensions();
   if (primary === undefined) return null;
-  const subtitle = worktreeName(primary);
-  const width = Math.min(Math.max(widthFor(props.title, subtitle), MIN_WIDTH), Math.round(screenWidth * MAX_WIDTH_RATIO));
+  const name = worktreeName(primary);
+  const subtitle = name === props.title ? undefined : name;
+  const width = Math.min(Math.max(widthFor(props.title, subtitle ?? ""), MIN_WIDTH), Math.round(screenWidth * MAX_WIDTH_RATIO));
   return (
     <Host style={{ width, height: PILL_HEIGHT }}>
       <Menu
@@ -62,7 +65,9 @@ export const WorktreePicker = (props: {
             modifiers={[frame({ width, height: PILL_HEIGHT }), padding({ horizontal: PILL_PAD_H }), glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" })]}
           >
             <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1), truncationMode("tail")]}>{props.title}</UIText>
-            <UIText modifiers={[font({ size: SUBTITLE_SIZE }), foregroundStyle(colors.secondaryLabel), lineLimit(1), truncationMode("tail")]}>{subtitle}</UIText>
+            {subtitle === undefined ? null : (
+              <UIText modifiers={[font({ size: SUBTITLE_SIZE }), foregroundStyle(colors.secondaryLabel), lineLimit(1), truncationMode("tail")]}>{subtitle}</UIText>
+            )}
           </VStack>
         }
         modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
