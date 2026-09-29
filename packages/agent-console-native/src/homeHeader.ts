@@ -10,7 +10,8 @@
  *
  * @internal
  */
-import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
+import type { NativeStackHeaderItemMenuAction, NativeStackNavigationOptions } from "@react-navigation/native-stack";
+import { DevSettings } from "react-native";
 
 /** Height of the transparent nav bar's content (standard portrait bar). Content
  * pads its top by `insets.top + this`. Shared by Home and the launch screen so
@@ -22,6 +23,15 @@ export const HOME_HEADER_HEIGHT = 44;
  * header's blur/scroll-edge effect instead of sitting under it. Shared by Home
  * and the launch skeleton so they stay aligned. */
 export const HOME_CONTENT_TOP_GAP = 14;
+
+/** Reloads the JS bundle (development builds only), as the Expo dev menu's
+ * Reload does. */
+const RELOAD: NativeStackHeaderItemMenuAction = {
+  type: "action",
+  label: "Reload",
+  icon: { type: "sfSymbol", name: "arrow.clockwise" },
+  onPress: () => DevSettings.reload(),
+};
 
 export type HomeHeaderHandlers = {
   readonly onSettings: () => void;
@@ -56,7 +66,8 @@ export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavi
     // A spacing item breaks the shared capsule so each button gets its own
     // circle, matching the single left-hand button.
     { type: "spacing", spacing: 24 },
-    // The 3-dot menu: Archived (sessions, and tasks to come).
+    // The 3-dot menu: Archived (sessions, and tasks to come); in development
+    // builds, Reload too, so the Expo dev menu's button can stay hidden.
     {
       type: "menu",
       label: "More",
@@ -69,6 +80,7 @@ export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavi
             icon: { type: "sfSymbol", name: "archivebox" },
             onPress: handlers.onArchived,
           },
+          ...(__DEV__ ? [RELOAD] : []),
         ],
       },
     },

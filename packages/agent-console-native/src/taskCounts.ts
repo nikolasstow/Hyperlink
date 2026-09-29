@@ -61,7 +61,24 @@ export const countByKind = (issues: ReadonlyArray<Issue>): ReadonlyArray<TaskCou
 };
 
 /** The repo's open tasks by kind (the first 100 open issues). */
-export const fetchTaskCounts = async (apiBase: string, repo: GitHubRepo): Promise<ReadonlyArray<TaskCount>> => {
+const fetchTaskCounts = async (apiBase: string, repo: GitHubRepo): Promise<ReadonlyArray<TaskCount>> => {
   const url = `${base(apiBase)}/github/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}/issues?state=open&per_page=100`;
   return countByKind(Schema.decodeUnknownSync(Issues)(await request(url)));
+};
+
+/** How long counts are reused: every screen's Dubz asks, and GitHub allows an
+ * unauthenticated caller 60 requests an hour. */
+const FRESH_MS = 2 * 60 * 1000;
+const loaded = new Map<string, { readonly at: number; readonly counts: Promise<ReadonlyArray<TaskCount>> }>();
+
+/** The repo's counts, shared by every caller for a couple of minutes; a failed
+ * load is not kept, so the next caller tries again. */
+export const loadTaskCounts = (apiBase: string, repo: GitHubRepo): Promise<ReadonlyArray<TaskCount>> => {
+  const key = `${apiBase} ${repo.owner}/${repo.name}`;
+  const known = loaded.get(key);
+  if (known !== undefined && Date.now() - known.at < FRESH_MS) return known.counts;
+  const counts = fetchTaskCounts(apiBase, repo);
+  loaded.set(key, { at: Date.now(), counts });
+  counts.catch(() => loaded.delete(key));
+  return counts;
 };

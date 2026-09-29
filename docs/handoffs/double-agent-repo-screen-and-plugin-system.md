@@ -686,19 +686,21 @@ Owner-stated.
 
 ## 28. Dubz suggestions by page and context (DECISIONS, 2026-09-29)
 
-- **One place decides what Dubz suggests** (`dubzSuggestions.ts`). Each page says where it is: its
-  surface, and what it is about (every repo, one repo, or a folder that isn't a repo). The rules
-  turn that into suggestions.
-- **Suggestions come in kinds.** A **block** is full width. Smaller kinds come later.
-- **The first block is tasks.** It has no border or background, and two columns of about 35/65:
-  - **Left:** a tinted glass pill per kind of open task, with how many there are.
-  - **Right:** the repo, then **New Task** under it. The repo is its name where the page is about
-    one repo, and a dropdown to pick one otherwise (Home, sessions for now).
-  - A folder that isn't a repo gets no tasks block.
-- *Built so far (Claude's choices, open to change):*
-  - Counts are the repo's open GitHub issues (the first 100), read through the backend's `/github`
-    proxy.
-  - A kind is the issue's GitHub type. Without a type, it comes from GitHub's default labels
-    (`bug` → Bug, `enhancement` → Feature). Otherwise it is Task.
-  - The block shows once the window has room, above the input.
-  - New Task says the form comes next.
+Owner-stated.
+
+- **A system decides what Dubz suggests**, from the page and its context (`dubzSuggestions.ts`).
+  Each page says its surface and what it is about: every repo, one repo, or a folder that isn't a
+  repo.
+- **Suggestions come in kinds.** The first is a **block**, which is full width. Smaller kinds come later.
+- **The first block is task suggestions.** It has no border or background.
+  - **Left, left-aligned:** tinted glass pills with a task kind and its count. Every kind shows,
+    even at zero.
+  - **Right, right-aligned:** the repo name, or a repo dropdown where the page isn't about one
+    repo. **New Task** is under it.
+  - **No text-measured widths.** The first build estimated widths from text and mounted on a
+    height threshold. It was glitchy and was redone.
+- **Counts** come from the repo's open GitHub issues, read through the backend's `/github` proxy
+  and shared for two minutes. A kind is the issue's GitHub type. Without one, it comes from
+  GitHub's default labels (`bug` → Bug, `enhancement` → Feature). Otherwise it is Task.
+- **The block stays mounted** in the space above Dubz's input, which the window reveals as it
+  grows.

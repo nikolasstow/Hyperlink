@@ -1,15 +1,15 @@
 /**
- * The tasks suggestion: a full-width block, no border or background. Two
- * columns, about 35/65: on the left a tinted glass pill per kind of open task
- * with how many; on the right the repo (its name, or a dropdown to pick one
- * where the page is not about one repo), and under it New Task.
+ * The tasks suggestion: a full-width block, no border or background. On the
+ * left, a tinted glass pill per kind of task with its count (every kind, zero
+ * included); on the right, the repo (its name, or a dropdown where the page is
+ * not about one repo) with New Task under it. Left column left-aligned, right
+ * column right-aligned; nothing is sized from its text.
  *
- * Tasks are the repo's GitHub issues (taskCounts.ts); a repo not on GitHub has
- * none, and the block leaves it out.
+ * Tasks are the repo's GitHub issues (taskCounts.ts).
  *
  * @internal
  */
-import { Host, HStack, Image, Menu, Text as UIText, Toggle } from "@expo/ui/swift-ui";
+import { Host, HStack, Image, Menu, Spacer, Text as UIText, Toggle } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, lineLimit } from "@expo/ui/swift-ui/modifiers";
 import { Ionicons } from "@expo/vector-icons";
 import { GlassView } from "expo-glass-effect";
@@ -19,13 +19,11 @@ import { showToast } from "./AppToast";
 import { colors } from "./colors";
 import type { GitHubRepo, ScannedRepo } from "./repoScan";
 import { readWorkspace } from "./repoScanCache";
-import { fetchTaskCounts, KINDS, type TaskCount } from "./taskCounts";
+import { KINDS, loadTaskCounts, type TaskCount } from "./taskCounts";
 
 const PILL_HEIGHT = 30;
 const REPO_SIZE = 20;
-/** Average glyph advance at the repo's size, generous so it never truncates. */
-const REPO_GLYPH = REPO_SIZE * 0.62;
-const CHEVRON_ROOM = 24;
+const REPO_HEIGHT = 28;
 
 /** Each kind's tint; a kind the app does not know is gray. */
 const KIND_TINT: Readonly<Record<string, string>> = {
@@ -71,8 +69,7 @@ export const TaskSuggestion = (props: {
   React.useEffect(() => {
     if (github === undefined) return undefined;
     let cancelled = false;
-    setCounts({ kind: "loading" });
-    fetchTaskCounts(props.apiBase, github).then(
+    loadTaskCounts(props.apiBase, github).then(
       (next) => {
         if (!cancelled) setCounts({ kind: "ready", counts: next });
       },
@@ -101,43 +98,40 @@ export const TaskSuggestion = (props: {
     setPicked(name);
   };
 
+  // Every kind, always; while loading, each count a dash.
+  const shown: ReadonlyArray<{ readonly kind: string; readonly count: number | undefined }> =
+    counts.kind === "ready" ? counts.counts : KINDS.map((kind) => ({ kind, count: undefined }));
+
   return (
     <View style={styles.block}>
-      <View style={styles.kinds}>
-        {counts.kind === "failed" ? (
-          <Text style={styles.note} numberOfLines={3}>
-            Couldn’t load tasks: {counts.message}
-          </Text>
-        ) : (
-          // Loading: every kind, its count a dash, so nothing moves when the
-          // counts come.
-          (counts.kind === "ready" ? counts.counts : KINDS.map((kind): TaskCount | { readonly kind: string; readonly count: undefined } => ({ kind, count: undefined }))).map((count) => (
-            <View key={count.kind} style={styles.pill}>
-              {/* Tinted glass, rounded on itself; nothing around it clips. */}
-              <GlassView
-                style={[StyleSheet.absoluteFill, styles.pillGlass]}
-                glassEffectStyle="regular"
-                tintColor={KIND_TINT[count.kind] ?? OTHER_TINT}
-                colorScheme={scheme}
-              />
-              <Text style={styles.pillKind} numberOfLines={1}>
-                {plural(count.kind, count.count ?? 0)}
-              </Text>
-              <Text style={styles.pillCount}>{count.count ?? "–"}</Text>
-            </View>
-          ))
-        )}
+      <View style={styles.left}>
+        {shown.map((count) => (
+          <View key={count.kind} style={styles.pill}>
+            {/* Tinted glass, rounded on itself; nothing around it rounds it. */}
+            <GlassView
+              style={[StyleSheet.absoluteFill, styles.pillGlass]}
+              glassEffectStyle="regular"
+              tintColor={KIND_TINT[count.kind] ?? OTHER_TINT}
+              colorScheme={scheme}
+            />
+            <Text style={styles.pillText}>
+              {plural(count.kind, count.count ?? 0)} <Text style={styles.pillCount}>{count.count ?? "–"}</Text>
+            </Text>
+          </View>
+        ))}
       </View>
-      <View style={styles.repoColumn}>
+      <View style={styles.right}>
         {props.repo !== undefined ? (
           <Text style={styles.repo} numberOfLines={1}>
             {repoName}
           </Text>
         ) : (
-          <Host style={{ height: REPO_SIZE + 8, width: Math.ceil(repoName.length * REPO_GLYPH) + CHEVRON_ROOM }}>
+          // Fills the right column; the Spacer puts the name at its right.
+          <Host style={styles.repoMenu}>
             <Menu
               label={
                 <HStack spacing={6}>
+                  <Spacer />
                   <UIText modifiers={[font({ size: REPO_SIZE, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{repoName}</UIText>
                   <Image systemName="chevron.down" size={12} color={colors.secondaryLabel} />
                 </HStack>
@@ -156,12 +150,12 @@ export const TaskSuggestion = (props: {
             </Menu>
           </Host>
         )}
-        <Pressable
-          style={styles.newTask}
-          hitSlop={8}
-          accessibilityRole="button"
-          onPress={() => showToast({ message: "New Task: the form comes next" })}
-        >
+        {counts.kind === "failed" ? (
+          <Text style={styles.failed} numberOfLines={2}>
+            Couldn’t load tasks: {counts.message}
+          </Text>
+        ) : null}
+        <Pressable style={styles.newTask} hitSlop={8} accessibilityRole="button" onPress={() => showToast({ message: "New Task: the form comes next" })}>
           <Ionicons name="add-circle" size={20} color={colors.tint} />
           <Text style={styles.newTaskText}>New Task</Text>
         </Pressable>
@@ -173,50 +167,55 @@ export const TaskSuggestion = (props: {
 const styles = StyleSheet.create({
   block: {
     flexDirection: "row",
-    gap: 12,
+    justifyContent: "space-between",
+    gap: 16,
   },
-  kinds: {
-    flex: 35,
+  left: {
+    alignItems: "flex-start",
     gap: 8,
   },
-  repoColumn: {
-    flex: 65,
+  right: {
+    flex: 1,
+    alignItems: "flex-end",
     gap: 10,
   },
   pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
     height: PILL_HEIGHT,
+    justifyContent: "center",
     paddingHorizontal: 12,
-    gap: 6,
   },
   pillGlass: {
     borderRadius: PILL_HEIGHT / 2,
   },
-  pillKind: {
+  pillText: {
     color: colors.label,
     fontSize: 14,
     fontWeight: "500",
   },
   pillCount: {
-    color: colors.label,
-    fontSize: 14,
     fontWeight: "700",
   },
   note: {
     color: colors.secondaryLabel,
     fontSize: 13,
   },
+  failed: {
+    color: colors.secondaryLabel,
+    fontSize: 13,
+    textAlign: "right",
+  },
   repo: {
     color: colors.label,
     fontSize: REPO_SIZE,
     fontWeight: "600",
   },
+  repoMenu: {
+    alignSelf: "stretch",
+    height: REPO_HEIGHT,
+  },
   newTask: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
     gap: 6,
   },
   newTaskText: {

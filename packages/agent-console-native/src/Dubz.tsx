@@ -95,10 +95,6 @@ const DISMISS_MARGIN = 48;
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
 const INPUT_MAX_LINES = 8;
-/** Room the suggestions need above the pill: they show only once the window
- * is this much taller than the bar, so they never stand out above it while it
- * grows. */
-const SUGGESTIONS_ROOM = 200;
 
 /** How long a page slides on after a swipe is let go. */
 export const PAGE_MS = 260;
@@ -438,15 +434,6 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   };
   const windowStyle = useAnimatedStyle(() => ({ height: windowHeight() }));
 
-  // Whether the suggestions fit: crossing the room they need mounts or
-  // unmounts them, so they never stand out above a window still growing.
-  const [roomy, setRoomy] = React.useState(false);
-  useAnimatedReaction(
-    () => windowHeight() >= MIN_HEIGHT + SUGGESTIONS_ROOM,
-    (fits, previous) => {
-      if (fits !== previous) runOnJS(setRoomy)(fits);
-    },
-  );
 
   // How open the window reads: 0 collapsed or at the smallest detent (the
   // bar), 1 open above the pill's inset range. The pill's inset and padding
@@ -499,8 +486,11 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
               tintColor="rgba(0,0,0,0.18)"
               colorScheme={glassScheme}
             >
-              {/* What Dubz suggests here, above the pill, once there is room. */}
-              {open && roomy && suggestions.length > 0 ? (
+              {/* What Dubz suggests here: always mounted, in the space above
+               * the pill, which the window's own height reveals as it grows
+               * (none collapsed). A plain rectangular clip, as a scroll view's,
+               * which glass inside renders under. */}
+              {suggestions.length > 0 ? (
                 <View style={styles.suggestions}>
                   {suggestions.map((suggestion) => (
                     <Suggestion key={suggestion.kind} suggestion={suggestion} apiBase={apiBase} />
@@ -612,8 +602,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
-  // Full width inside the window, above the pill.
+  // Full width inside the window, filling the space above the pill, the
+  // suggestions at its bottom.
   suggestions: {
+    flex: 1,
+    overflow: "hidden",
+    justifyContent: "flex-end",
     paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 16,
