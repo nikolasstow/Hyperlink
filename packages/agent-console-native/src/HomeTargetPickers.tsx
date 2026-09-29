@@ -24,7 +24,6 @@ import {
   menuIndicator,
   menuStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Alert, DynamicColorIOS, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { useAppContext } from "./AppContext";
@@ -95,8 +94,6 @@ const MENU_MODIFIERS = [
 ] as const;
 
 const PILL_HEIGHT = 32;
-/** Room between the glass capsule's edge and the label. */
-const PILL_PAD = 11;
 const PILL_MAX_WIDTH = 160;
 const PILL_MIN_WIDTH = 56;
 
@@ -106,7 +103,7 @@ const PILL_MIN_WIDTH = 56;
  * from the label string instead (same idea as SystemIcon’s explicit box).
  */
 const pillHostWidth = (text: string, hasIcon = false): number =>
-  Math.min(PILL_MAX_WIDTH, Math.max(PILL_MIN_WIDTH, Math.ceil(text.length * 8.6) + 44 + (PILL_PAD - 2) * 2 + (hasIcon ? 22 : 0)));
+  Math.min(PILL_MAX_WIDTH, Math.max(PILL_MIN_WIDTH, Math.ceil(text.length * 8.6) + 44 + (hasIcon ? 22 : 0)));
 
 const PillLabel = (props: {
   readonly text: string;
@@ -117,18 +114,12 @@ const PillLabel = (props: {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
     <RNHostView matchContents>
-      <View style={styles.pill}>
-        {/* A clear glass capsule behind the label (the Dubz window's glass),
-         * rounded on itself. Dimming fades the label only: fading the glass (or
-         * a parent of it) stops it rendering as glass. */}
-        <GlassView style={[StyleSheet.absoluteFill, styles.pillGlass]} glassEffectStyle="clear" colorScheme={scheme} />
-        <View style={[styles.pillContent, props.dimmed === true && styles.pillDimmed]}>
-          {props.icon !== undefined ? <Feather name={props.icon} size={14} color={PILL_FG} /> : null}
-          <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
-            {props.text}
-          </Text>
-          <Feather name="chevron-down" size={12} color={PILL_CHEVRON[scheme]} />
-        </View>
+      <View style={[styles.pill, props.dimmed === true && styles.pillDimmed]}>
+        {props.icon !== undefined ? <Feather name={props.icon} size={14} color={PILL_FG} /> : null}
+        <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">
+          {props.text}
+        </Text>
+        <Feather name="chevron-down" size={12} color={PILL_CHEVRON[scheme]} />
       </View>
     </RNHostView>
   );
@@ -634,18 +625,10 @@ const styles = StyleSheet.create({
     // (pillHostWidth), and centring pushed the text in from the left edge. This
     // makes the label hug the left so the leading dropdown lines up flush.
     justifyContent: "flex-start",
+    gap: 4,
     height: PILL_HEIGHT,
     width: "100%",
-  },
-  pillGlass: {
-    borderRadius: PILL_HEIGHT / 2,
-  },
-  pillContent: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: PILL_PAD,
+    paddingHorizontal: 2,
   },
   pillDimmed: {
     opacity: 0.4,
@@ -664,7 +647,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "flex-start",
     gap: 4,
-    paddingHorizontal: PILL_PAD,
+    paddingHorizontal: 2,
   },
   // The locked-repo label: plain static text (no background, no chevron), a
   // little larger than the pickers since it names the page.
