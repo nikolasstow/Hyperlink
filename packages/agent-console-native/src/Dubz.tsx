@@ -45,6 +45,7 @@ import Reanimated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
+import { composerRestingBottom } from "./useKeyboardSlide";
 import { getBarPage, getDubzDetent, setBarPage, setDubzDetent, type BarPage } from "./settings";
 import { useTheme } from "./theme";
 
@@ -59,6 +60,9 @@ const ANIM_MS = 320;
 /** The glass fades in (none → clear) over the first ~55% of the grow — native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
+/** The bottom bar's gap under its pill (BottomBar's bottom padding): at the
+ * pill detent the window sits where the bar does. */
+const BAR_GAP = 8;
 /** Smallest height — the "pill" detent. A full capsule at the window radius; the
  * composer keeps its natural height and is centred within it (pillWrapFill). */
 const MIN_HEIGHT = 58;
@@ -131,6 +135,9 @@ interface DubzApi {
   readonly open: () => void;
   /** Shrink it back into the bar. */
   readonly close: () => void;
+  /** Become the bar at once: the window, at the pill detent, already sits
+   * where the bar is and looks as it does. */
+  readonly closeIntoBar: () => void;
   readonly isOpen: boolean;
   readonly arrival: Arrival;
   /** Whether Dubz is the page showing (the window is mounted beside the
@@ -233,6 +240,11 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
     show(false);
     compose.current?.hold(false);
   }, [slidingCompose, show, showDubz]);
+  const closeIntoBar = React.useCallback(() => {
+    if (!onDubzNow.current) return;
+    instantClose.current = true;
+    close();
+  }, [close]);
   const registerCompose = React.useCallback((page: ComposePage) => {
     compose.current = page;
     setHasCompose(true);
@@ -296,6 +308,7 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
     () => ({
       open,
       close,
+      closeIntoBar,
       isOpen,
       arrival,
       onDubz,
@@ -313,7 +326,7 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
       inputRef,
       instantClose,
     }),
-    [open, close, isOpen, arrival, onDubz, pageX, slidingCompose, hasCompose, registerCompose, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, beginFromDubz, settleOnCompose],
+    [open, close, closeIntoBar, isOpen, arrival, onDubz, pageX, slidingCompose, hasCompose, registerCompose, prepare, unprepare, beginFromCompose, settleOnDubz, stayOnCompose, beginFromDubz, settleOnCompose],
   );
   return <DubzContext.Provider value={api}>{props.children}</DubzContext.Provider>;
 };
@@ -338,7 +351,7 @@ export const DubzOverlay = (): React.ReactElement | null => {
 
 /** The window itself — mounted only while open (and through its exit animation). */
 const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.ReactElement => {
-  const { isOpen, close, arrival, onDubz, pageX, hasCompose, beginFromDubz, settleOnCompose, inputRef, instantClose } = useDubz();
+  const { isOpen, close, closeIntoBar, arrival, onDubz, pageX, hasCompose, beginFromDubz, settleOnCompose, inputRef, instantClose } = useDubz();
   // How this mount came: fixed for its life (a later open is a new mount).
   const [arrivedBy] = React.useState(arrival);
   const insets = useSafeAreaInsets();
@@ -384,6 +397,21 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     () => kbHeight.value,
     (h) => {
       if (h > kbFull.value) kbFull.value = h;
+    },
+  );
+  // At the pill detent the window is the bottom bar with a grab handle; when
+  // the keyboard goes down there, it is just the bar: Dubz closes into it.
+  const pillNow = React.useRef(pillMode);
+  React.useEffect(() => {
+    pillNow.current = pillMode;
+  }, [pillMode]);
+  const keyboardDown = React.useCallback(() => {
+    if (pillNow.current) closeIntoBar();
+  }, [closeIntoBar]);
+  useAnimatedReaction(
+    () => kbHeight.value,
+    (h, previous) => {
+      if (h === 0 && previous !== null && previous > 0) runOnJS(keyboardDown)();
     },
   );
   // True from the moment a resize drag touches down until it finalizes — the
@@ -551,12 +579,21 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // unfolds upward from the bottom.
   const windowStyle = useAnimatedStyle(() => {
     const fullTop = insets.top + TOP_MARGIN;
-    // Bottom edge rides the LIVE keyboard (sits above it, or above the home
-    // indicator when the keyboard is gone).
-    const bottomEdge = screenH - (Math.max(kbHeight.value, insets.bottom) + MARGIN);
     // Expanded height is derived from the STABLE keyboard height, so it doesn't
     // change as the keyboard opens/closes — only the position (bottomEdge) does.
     const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
+    // How near the pill detent (0 above the composer's collapse range, 1 at
+    // it), as pillPadStyle measures it.
+    const maxDrag = Math.max(screenH - fullTop - stableBottom - MIN_HEIGHT, 0);
+    const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
+    const raw = maxDrag - start <= 0 ? 0 : (dragY.value - start) / (maxDrag - start);
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    // Bottom edge rides the LIVE keyboard (sits above it, or above the home
+    // indicator when the keyboard is gone); toward the pill detent it moves to
+    // where the bottom bar's pill sits, so there the window covers the bar.
+    const windowGap = Math.max(kbHeight.value, insets.bottom) + MARGIN;
+    const barGap = Math.max(kbHeight.value, composerRestingBottom(insets.bottom)) + BAR_GAP;
+    const bottomEdge = screenH - (windowGap + (barGap - windowGap) * p);
     const fullHeight = screenH - stableBottom - fullTop;
     const height = Math.max(fullHeight * grow.value - dragY.value, 0);
     // Off to the right by how far the pages stand from Dubz.
@@ -632,10 +669,13 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
               // Fades in via the native animate (none → clear) — no opacity, which
               // would composite and kill the glass. Short duration so it finishes
               // ~30% into the grow.
-              glassEffectStyle={{ style: entered ? "clear" : "none", animate: true, animationDuration: FADE_S }}
+              // At the pill detent it is the bottom bar, in the bar's regular
+              // glass.
+              glassEffectStyle={{ style: entered ? (pillMode ? "regular" : "clear") : "none", animate: true, animationDuration: FADE_S }}
               // A slight dark tint (tints the glass material, not a solid fill) to
-              // give the clear glass some body over bright content.
-              tintColor="rgba(0,0,0,0.18)"
+              // give the clear glass some body over bright content; none as the
+              // bar.
+              {...(pillMode ? {} : { tintColor: "rgba(0,0,0,0.18)" })}
               colorScheme={scheme === "dark" ? "dark" : "light"}
             >
               {/* Conversation area — empty for now; flexes so the composer pill sits
