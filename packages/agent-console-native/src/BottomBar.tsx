@@ -72,9 +72,6 @@ export interface BottomBarProps {
   readonly agentSurface: AgentSurface;
   /** Opens the assistant; wired later, so optional. */
   readonly onAgent?: () => void;
-  /** The field's glass: `regular` (frosted, the default) or `clear` (see-
-   * through, as the Dubz window is; the new-session composer tries it). */
-  readonly glass?: "regular" | "clear";
 }
 
 export const BottomBar = (props: BottomBarProps): React.ReactElement => {
@@ -113,7 +110,7 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
         {/* Measures the pill; it does not clip or round it (the glass rounds
          * itself). */}
         <View onLayout={(e) => onFieldLayout(e.nativeEvent.layout.height)}>
-          <GlassView style={styles.field} glassEffectStyle={props.glass ?? "regular"} colorScheme={scheme === "dark" ? "dark" : "light"}>
+          <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
             {props.topSection !== undefined ? (
               <View style={[styles.topSection, !expanded && styles.topSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
                 {props.topSection}

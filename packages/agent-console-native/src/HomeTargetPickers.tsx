@@ -118,10 +118,10 @@ const PillLabel = (props: {
   return (
     <RNHostView matchContents>
       <View style={styles.pill}>
-        {/* A regular glass capsule behind the label, rounded on itself. Dimming
-         * fades the label only: fading the glass (or a parent of it) stops it
-         * rendering as glass. */}
-        <GlassView style={[StyleSheet.absoluteFill, styles.pillGlass]} glassEffectStyle="regular" colorScheme={scheme} />
+        {/* A clear glass capsule behind the label (the Dubz window's glass),
+         * rounded on itself. Dimming fades the label only: fading the glass (or
+         * a parent of it) stops it rendering as glass. */}
+        <GlassView style={[StyleSheet.absoluteFill, styles.pillGlass]} glassEffectStyle="clear" colorScheme={scheme} />
         <View style={[styles.pillContent, props.dimmed === true && styles.pillDimmed]}>
           {props.icon !== undefined ? <Feather name={props.icon} size={14} color={PILL_FG} /> : null}
           <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="head">

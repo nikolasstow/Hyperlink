@@ -353,8 +353,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       <KeyboardDismissOverlay active={keyboardHeight > 0} dim />
       <Animated.View style={[styles.composerFloat, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
-          // The new-session composer tries the Dubz window's clear glass.
-          glass="clear"
           onSend={onSend}
           disabled={sending || target === undefined}
           bottomInset={0}
