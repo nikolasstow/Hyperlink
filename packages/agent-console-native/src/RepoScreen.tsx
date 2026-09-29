@@ -39,7 +39,7 @@ import type { ViewInfo } from "./extensionViewsClient";
 import { ensureWorkspace, reloadWorkspace, useWorkspaceViews } from "./extensionViewsStore";
 import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
 import { getApiAddress } from "./settings";
-import { abortSession, promptRenameSession } from "./sessionActions";
+import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
 import { useSessionActivity } from "./useSessionActivity";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -288,6 +288,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         onOpen={() => props.navigation.navigate("Chat", { sessionID: session.id })}
         onRename={() => promptRenameSession(client, session.id, session.title, () => void load())}
         onStop={() => abortSession(client, session.id, () => void load())}
+        onDelete={() => confirmDeleteSession(client, session.id, session.title, () => void load())}
       />
     );
   };

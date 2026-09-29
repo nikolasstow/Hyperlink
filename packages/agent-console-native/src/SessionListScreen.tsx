@@ -22,7 +22,7 @@ import { readWorkspace } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
-import { abortSession, promptRenameSession } from "./sessionActions";
+import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
 import { relativeTime } from "./time";
 import { useSessionActivity } from "./useSessionActivity";
@@ -108,6 +108,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
             onOpen={() => props.navigation.navigate("Chat", { sessionID: item.id })}
             onRename={() => promptRenameSession(client, item.id, item.title, () => void load())}
             onStop={() => abortSession(client, item.id, () => void load())}
+            onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void load())}
           />
         )}
       />

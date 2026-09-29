@@ -68,3 +68,36 @@ export const abortSession = (
     })
     .catch(() => Alert.alert("Couldn't stop", "Couldn't reach the server."));
 };
+
+/**
+ * Delete a session, after asking: it cannot be undone. `onDeleted` runs on
+ * success (refresh a list, …); failures are surfaced rather than swallowed —
+ * the SDK reports HTTP errors on `.error`, so a resolved-but-failed response is
+ * checked explicitly.
+ */
+export const confirmDeleteSession = (
+  client: OpencodeClient,
+  sessionID: string,
+  title: string,
+  onDeleted?: () => void,
+): void => {
+  Alert.alert(`Delete “${title}”?`, "The session and its messages are deleted. This can’t be undone.", [
+    { text: "Cancel", style: "cancel" },
+    {
+      text: "Delete",
+      style: "destructive",
+      onPress: () => {
+        void client.session
+          .delete({ path: { id: sessionID } })
+          .then(({ error }) => {
+            if (error !== undefined) {
+              Alert.alert("Couldn't delete", "The server rejected the delete.");
+              return;
+            }
+            onDeleted?.();
+          })
+          .catch(() => Alert.alert("Couldn't delete", "Couldn't reach the server."));
+      },
+    },
+  ]);
+};

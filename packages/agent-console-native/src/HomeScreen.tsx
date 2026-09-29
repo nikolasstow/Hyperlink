@@ -18,7 +18,7 @@ import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scro
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
-import { abortSession, promptRenameSession } from "./sessionActions";
+import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { getSetupDate, loadReads } from "./sessionReads";
 import { RepoCard } from "./RepoCard";
 import { SessionCard } from "./SessionCard";
@@ -295,6 +295,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 onOpen={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}
                 onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
                 onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
+                onDelete={() => confirmDeleteSession(client, item.session.id, item.session.title, () => void loadSessions())}
               />
             );
           }

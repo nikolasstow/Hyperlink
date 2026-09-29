@@ -48,6 +48,7 @@ export type SessionCardProps = {
   readonly onOpen: () => void;
   readonly onRename: () => void;
   readonly onStop: () => void;
+  readonly onDelete: () => void;
 };
 
 const summaryLabel = (role: "user" | "assistant", text: string): string => (role === "user" ? `You: ${text}` : text);
@@ -105,11 +106,10 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         <ContextMenu.Items>
           <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
           <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
-          {props.running ? (
-            <Section>
-              <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} />
-            </Section>
-          ) : null}
+          <Section>
+            {props.running ? <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} /> : null}
+            <Button label="Delete" role="destructive" systemImage="trash" onPress={props.onDelete} />
+          </Section>
         </ContextMenu.Items>
         <ContextMenu.Preview>
           <RNHostView matchContents>
