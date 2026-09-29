@@ -722,7 +722,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       </Animated.View>
 
       {/* New-session composer — the Home bottom bar, repo locked to this page. */}
-      <KeyboardDismissOverlay active={keyboardHeight > 0} />
+      <KeyboardDismissOverlay active={keyboardHeight > 0} dim />
       {/* Only the BOTTOM feather here — the repo header draws its own top blur
        * above, and a second top feather would sit over the header. */}
       <EdgeBlurBars bottomInset={keyboardHeight} variant="bottom" />

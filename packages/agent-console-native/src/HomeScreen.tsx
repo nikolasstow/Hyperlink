@@ -350,7 +350,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       <EdgeBlurBars bottomInset={keyboardHeight} />
       {/* One tap outside the composer collapses it (consumed) instead of hitting
        * a card behind it while the keyboard is up. */}
-      <KeyboardDismissOverlay active={keyboardHeight > 0} />
+      <KeyboardDismissOverlay active={keyboardHeight > 0} dim />
       <Animated.View style={[styles.composerFloat, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
         <Composer
           // The new-session composer tries the Dubz window's clear glass.
