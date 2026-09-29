@@ -626,6 +626,8 @@ Owner-stated. Not built yet.
   is to have all work inside issues.
 - **Naming:** the app calls them **Tasks** everywhere, except on the Git page (to be added later),
   where they are **Issues**.
+- **Lists show tasks and sessions together**, and **a task's sessions show within the task**,
+  not beside it.
 - **Creating a task is a page tool Dubz can use** (pages have details and tools Dubz can use,
   §23.3). Since Dubz sees it, **one of its suggestions can be creating a new task**:
   - **Tapping the suggestion opens the form**, to fill in by hand, or to type in the input and
@@ -647,4 +649,10 @@ Owner-stated.
   up.
 - opencode has no archive, so the backend keeps one (`/sessions/archived`, archive, unarchive),
   shared by every device.
-- *Later:* a page of archived sessions (to unarchive from).
+- **Archived sessions are not stored on the phone**; they load from the server. The phone's
+  session cache leaves them out, and the **Archived** page loads the archive and the sessions
+  fresh each time it opens.
+- **Archived** is in **Home's 3-dot menu** (it replaces the new-folder button) and in the **repo
+  and workspace screen's 3-dot menu** (that repo's only). It is where archived **sessions and
+  tasks** appear; there, a session can be unarchived (swipe or menu, with Undo) or deleted.
+- **Tasks and sessions are listed together**; a **task's sessions show within the task** (§25).

@@ -13,6 +13,7 @@ import * as React from "react";
 import { Alert } from "react-native";
 import { showToast } from "./AppToast";
 import { base, request } from "./extensionsClient";
+import { forgetCachedSession } from "./sessionCache";
 
 const archived = Schema.Record(Schema.String, Schema.Number);
 
@@ -43,10 +44,12 @@ const post = (apiBase: string, path: string, id: string) =>
     body: JSON.stringify({ id }),
   });
 
-/** Archive a session: gone from the lists now, saved behind. */
+/** Archive a session: gone from the lists, and from the phone's session
+ * cache (archived sessions live on the server alone), now; saved behind. */
 export const archiveSession = (apiBase: string, id: string): void => {
   const before = archivedIds;
   set(new Set([...archivedIds, id]));
+  void forgetCachedSession(id);
   post(apiBase, "/sessions/archive", id).then(
     (value) => set(decode(value)),
     (error: unknown) => {
@@ -91,6 +94,30 @@ export const useArchivedSessions = (): ReadonlySet<string> => {
   React.useSyncExternalStore(subscribe, () => version);
   return archivedIds;
 };
+
+/** The archive from the server, fresh: for the Archived page, which keeps
+ * nothing on the phone. Also brings the lists up to date. */
+export const fetchArchive = async (apiBase: string): Promise<Readonly<Record<string, number>>> => {
+  const value = Schema.decodeUnknownSync(archived)(await request(`${base(apiBase)}/sessions/archived`));
+  set(new Set(Object.keys(value)));
+  return value;
+};
+
+/** Unarchive a session and say so, with Undo. */
+export const unarchiveWithUndo = (apiBase: string, id: string): void => {
+  unarchiveSession(apiBase, id);
+  showToast({
+    message: "Unarchived",
+    action: {
+      label: "Undo",
+      run: () => archiveSession(apiBase, id),
+    },
+  });
+};
+
+/** A list without the archived sessions known now: what the phone's session
+ * cache may keep. */
+export const withoutArchived = <S extends { readonly id: string }>(sessions: ReadonlyArray<S>): ReadonlyArray<S> => unarchived(sessions, archivedIds);
 
 /** Sessions that are not archived. */
 export const unarchived = <S extends { readonly id: string }>(sessions: ReadonlyArray<S>, archivedSet: ReadonlySet<string>): ReadonlyArray<S> =>

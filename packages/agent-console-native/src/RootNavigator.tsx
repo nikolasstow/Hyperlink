@@ -36,6 +36,7 @@ import { ThemeImportValuesScreen } from "./ThemeImportValuesScreen";
 import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
 import { ThemeTokensScreen } from "./ThemeTokensScreen";
 import { FileExplorerScreen } from "./FileExplorerScreen";
+import { ArchivedScreen } from "./ArchivedScreen";
 import { CollectionScreen, type CollectionView } from "./CollectionScreen";
 import { ExtensionViewScreen } from "./ExtensionViewScreen";
 import { PluginPageScreen } from "./PluginPageScreen";
@@ -89,6 +90,8 @@ export type RootStackParamList = {
   Collection: { repo: string; dir: string; page: string; title: string; view: CollectionView };
   // Live output of a process on the backend's process runner.
   ProcessOutput: { id: string; title: string; commandLine: string };
+  // Archived sessions (tasks to come), all of them or one repo's.
+  Archived: { repo?: string };
   // The plugin manager, and one installed plugin (`name` is the nav title).
   Plugins: undefined;
   PluginDetail: { id: string; name: string };
@@ -237,7 +240,7 @@ export const RootNavigator = (): React.ReactElement => {
             homeHeaderOptions({
               onSettings: () => navigation.navigate("Settings"),
               onSearch: () => {},
-              onNewRepo: () => {},
+              onArchived: () => navigation.navigate("Archived", {}),
             })
           }
         />
@@ -350,6 +353,19 @@ export const RootNavigator = (): React.ReactElement => {
             headerStyle: { backgroundColor: "transparent" },
             headerShadowVisible: false,
             headerBackButtonDisplayMode: "minimal",
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          }}
+        />
+        <Stack.Screen
+          name="Archived"
+          component={ArchivedScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            title: "Archived",
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           }}
         />

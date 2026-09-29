@@ -15,7 +15,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { getApiAddress } from "./settings";
-import { archiveWithUndo, unarchived, useArchivedSessions } from "./sessionArchive";
+import { archiveWithUndo, unarchived, useArchivedSessions, withoutArchived } from "./sessionArchive";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
@@ -61,7 +61,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
     if (list.error === undefined && list.data !== undefined) {
       const visible = list.data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
       setSessions(visible);
-      void setCachedSessions(visible);
+      void setCachedSessions(withoutArchived(visible));
     }
     if (scan !== undefined) setScanned(scan);
   }, [client]);

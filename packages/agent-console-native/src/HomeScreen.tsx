@@ -45,7 +45,7 @@ import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { updateScannedRepos } from "./primaryWorktree";
-import { archiveWithUndo, loadArchivedSessions, unarchived, useArchivedSessions } from "./sessionArchive";
+import { archiveWithUndo, loadArchivedSessions, unarchived, useArchivedSessions, withoutArchived } from "./sessionArchive";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
@@ -91,7 +91,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     }
     const visible = data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
     setSessions(visible);
-    void setCachedSessions(visible);
+    void setCachedSessions(withoutArchived(visible));
   }, [client]);
 
   const loadScan = React.useCallback(

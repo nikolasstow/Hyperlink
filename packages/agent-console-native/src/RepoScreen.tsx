@@ -15,6 +15,8 @@
  * @internal
  */
 import type { Session } from "@opencode-ai/sdk";
+import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
+import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
@@ -46,7 +48,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
 import { readWorkspace, refreshWorkspace } from "./repoScanCache";
-import { archiveWithUndo, unarchived, useArchivedSessions } from "./sessionArchive";
+import { archiveWithUndo, unarchived, useArchivedSessions, withoutArchived } from "./sessionArchive";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
@@ -165,7 +167,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     if (list.error === undefined && list.data !== undefined) {
       const visible = list.data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
       setSessions(visible);
-      void setCachedSessions(visible);
+      void setCachedSessions(withoutArchived(visible));
     }
     if (scan !== undefined) setScanned(scan);
   }, [client]);
@@ -686,21 +688,33 @@ export const RepoScreen = (props: Props): React.ReactElement => {
             </Text>
           </View>
 
-          <Pressable
-            onPress={() => {}}
-            hitSlop={8}
-          >
-            <GlassView
-              style={styles.glassButton}
-              isInteractive
+          {/* The 3-dot menu: the native menu, its label the glass button (as
+           * the composer's pickers host theirs). Archived, for now. */}
+          <Host style={{ width: GLASS_BUTTON, height: GLASS_BUTTON }}>
+            <Menu
+              label={
+                <RNHostView matchContents>
+                  <GlassView
+                    style={styles.glassButton}
+                    isInteractive
+                  >
+                    <SystemIcon
+                      name="ellipsis"
+                      size={BUTTON_ICON}
+                      color={colors.label}
+                    />
+                  </GlassView>
+                </RNHostView>
+              }
+              modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
             >
-              <SystemIcon
-                name="ellipsis"
-                size={BUTTON_ICON}
-                color={colors.label}
+              <Button
+                label="Archived"
+                systemImage="archivebox"
+                onPress={() => props.navigation.navigate("Archived", { repo: name })}
               />
-            </GlassView>
-          </Pressable>
+            </Menu>
+          </Host>
         </Animated.View>
       </Animated.View>
 

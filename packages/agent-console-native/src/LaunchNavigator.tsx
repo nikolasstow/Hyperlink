@@ -26,7 +26,7 @@ export const LaunchNavigator = (): React.ReactElement => (
       <Stack.Screen
         name="Launch"
         component={LaunchScreen}
-        options={homeHeaderOptions({ onSettings: noop, onSearch: noop, onNewRepo: noop })}
+        options={homeHeaderOptions({ onSettings: noop, onSearch: noop, onArchived: noop })}
       />
     </Stack.Navigator>
   </NavigationContainer>

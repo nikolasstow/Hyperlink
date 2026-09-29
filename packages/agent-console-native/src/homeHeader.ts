@@ -26,7 +26,7 @@ export const HOME_CONTENT_TOP_GAP = 14;
 export type HomeHeaderHandlers = {
   readonly onSettings: () => void;
   readonly onSearch: () => void;
-  readonly onNewRepo: () => void;
+  readonly onArchived: () => void;
 };
 
 export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavigationOptions => ({
@@ -56,11 +56,21 @@ export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavi
     // A spacing item breaks the shared capsule so each button gets its own
     // circle, matching the single left-hand button.
     { type: "spacing", spacing: 24 },
+    // The 3-dot menu: Archived (sessions, and tasks to come).
     {
-      type: "button",
-      label: "New repo or empty project",
-      icon: { type: "sfSymbol", name: "folder.badge.plus" },
-      onPress: handlers.onNewRepo,
+      type: "menu",
+      label: "More",
+      icon: { type: "sfSymbol", name: "ellipsis" },
+      menu: {
+        items: [
+          {
+            type: "action",
+            label: "Archived",
+            icon: { type: "sfSymbol", name: "archivebox" },
+            onPress: handlers.onArchived,
+          },
+        ],
+      },
     },
   ],
   scrollEdgeEffects: { top: "soft", bottom: "soft" },

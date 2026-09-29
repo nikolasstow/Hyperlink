@@ -53,8 +53,10 @@ export type SessionCardProps = {
   readonly onStop: () => void;
   readonly onDelete: () => void;
   /** Put the session away (swipe left and tap, or the menu); the list
-   * leaves it out. */
+   * leaves it out. On the Archived page (`archived`), take it back out. */
   readonly onArchive: () => void;
+  /** An archived session (the Archived page): its action is Unarchive. */
+  readonly archived?: boolean;
 };
 
 /** The swipe actions, as Messages draws them: circles beside the card. */
@@ -67,10 +69,15 @@ const ACTIONS_WIDTH = CIRCLE * 2 + CIRCLE_GAP * 3;
  * What swiping a session left reveals (it reveals only; nothing happens until
  * a tap), as in Messages: two circles, Archive and Delete.
  */
-const SwipeActions = (props: { readonly onArchive: () => void; readonly onDelete: () => void }): React.ReactElement => (
+const SwipeActions = (props: { readonly archived: boolean; readonly onArchive: () => void; readonly onDelete: () => void }): React.ReactElement => (
   <View style={styles.actions}>
-    <Pressable style={[styles.circle, styles.archiveCircle]} onPress={props.onArchive} accessibilityRole="button" accessibilityLabel="Archive">
-      <SystemIcon name="archivebox.fill" size={22} color="#FFFFFF" />
+    <Pressable
+      style={[styles.circle, styles.archiveCircle]}
+      onPress={props.onArchive}
+      accessibilityRole="button"
+      accessibilityLabel={props.archived ? "Unarchive" : "Archive"}
+    >
+      <SystemIcon name={props.archived ? "tray.and.arrow.up.fill" : "archivebox.fill"} size={22} color="#FFFFFF" />
     </Pressable>
     <Pressable style={[styles.circle, styles.deleteCircle]} onPress={props.onDelete} accessibilityRole="button" accessibilityLabel="Delete">
       <SystemIcon name="trash.fill" size={22} color="#FFFFFF" />
@@ -173,6 +180,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
       rightThreshold={ACTIONS_WIDTH / 3}
       renderRightActions={() => (
         <SwipeActions
+          archived={props.archived === true}
           onArchive={archive}
           onDelete={() => {
             // Close first; Delete asks before it deletes.
@@ -187,7 +195,11 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         <ContextMenu.Items>
           <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
           <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
-          <Button label="Archive" systemImage="archivebox" onPress={archive} />
+          {props.archived === true ? (
+            <Button label="Unarchive" systemImage="tray.and.arrow.up" onPress={archive} />
+          ) : (
+            <Button label="Archive" systemImage="archivebox" onPress={archive} />
+          )}
           <Section>
             {props.running ? <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} /> : null}
             <Button label="Delete" role="destructive" systemImage="trash" onPress={props.onDelete} />
