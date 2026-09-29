@@ -47,7 +47,7 @@ import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
-import { getApiAddress, getBarPage, getDubzDetent, setBarPage, setDubzDetent, type BarPage } from "./settings";
+import { getBarPage, getDubzDetent, setBarPage, setDubzDetent, type BarPage } from "./settings";
 import { TaskSuggestion } from "./TaskSuggestion";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 
@@ -69,15 +69,6 @@ const ANIM_MS = 320;
  * grow: native glassEffectStyle `animate` (seconds), the only opacity-free way
  * to fade glass. */
 const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** The pill's inset inside the expanded window; none collapsed. */
-const COMPOSER_INSET = 12;
-/** Drag distance (px before the smallest detent) over which the pill's inset
- * closes, so it eases into the bar instead of snapping. */
-const COMPOSER_INSET_RANGE = 110;
-/** The pill's padding: the bar's collapsed; a little tighter expanded (the
- * window's composer). */
-const PILL_PAD_V_EXPANDED = 7;
-const PILL_PAD_H_EXPANDED = 8;
 /** The handle's top inset at larger detents (a line inside the window top). */
 const GRABBER_TOP_EXPANDED = 8;
 /** The handle lifts to this (above the pill) at the smallest detent, over the
@@ -209,19 +200,10 @@ const unit = (value: number): number => {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 };
 
-/** How near the smallest detent a drag is: 0 above the pill's inset range, 1
- * at it. */
-const pillProgress = (drag: number, maxDrag: number): number => {
-  "worklet";
-  const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
-  const span = maxDrag - start;
-  return span <= 0 ? 0 : unit((drag - start) / span);
-};
-
 export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  // The backend that proxies GitHub (githubPlugin.ts), not the API server.
+  const { backend } = useAppContext();
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -435,24 +417,6 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const windowStyle = useAnimatedStyle(() => ({ height: windowHeight() }));
 
 
-  // How open the window reads: 0 collapsed or at the smallest detent (the
-  // bar), 1 open above the pill's inset range. The pill's inset and padding
-  // follow it, so it is the bar at 0 and the window's composer at 1.
-  const pillWrapStyle = useAnimatedStyle(() => {
-    const openness = grow.value * (1 - pillProgress(dragY.value, maxDragFor(kbFull.value)));
-    return {
-      paddingHorizontal: COMPOSER_INSET * openness,
-      paddingBottom: COMPOSER_INSET * openness,
-    };
-  });
-  const pillStyle = useAnimatedStyle(() => {
-    const openness = grow.value * (1 - pillProgress(dragY.value, maxDragFor(kbFull.value)));
-    return {
-      paddingVertical: COMPOSER_FIELD_PADDING + (PILL_PAD_V_EXPANDED - COMPOSER_FIELD_PADDING) * openness,
-      paddingHorizontal: COMPOSER_FIELD_PADDING + (PILL_PAD_H_EXPANDED - COMPOSER_FIELD_PADDING) * openness,
-    };
-  });
-
   // The handle: a plain line (not glass), so it may fade with the grow.
   const handleStyle = useAnimatedStyle(() => ({
     top: GRABBER_TOP_EXPANDED + (TAB_TOP - GRABBER_TOP_EXPANDED) * handleT.value,
@@ -486,24 +450,26 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
               tintColor="rgba(0,0,0,0.18)"
               colorScheme={glassScheme}
             >
-              {/* The window's content, cropped to the window: a plain
-               * rectangular clip, as a scroll view's, which glass inside
-               * renders under. The pill sits at its bottom: the bar
-               * collapsed, the window's composer open. */}
-              <View style={styles.content}>
-                <Reanimated.View style={pillWrapStyle}>
-                  {/* What Dubz suggests, tied to the top of the pill: it never
-                   * moves with the window's height; the window only reveals it,
-                   * and crops it out at the smallest detent and collapsed. */}
-                  {suggestions.length > 0 ? (
-                    <View style={styles.suggestions} pointerEvents={open ? "box-none" : "none"}>
+              {/* The window's content, cropped to the window (a real native
+               * view, never flattened, so the crop holds): a plain rectangular
+               * clip, as a scroll view's, which glass inside renders under.
+               * The pill sits at its bottom, the same fixed size open or
+               * collapsed: the window grows above it; nothing in it resizes. */}
+              <View style={styles.content} collapsable={false}>
+                <View>
+                  {/* What Dubz suggests, a fixed box sitting on the pill: the
+                   * window only reveals it, and crops it out at the smallest
+                   * detent. Only there while open, so a closed bar carries none
+                   * of it. */}
+                  {open && suggestions.length > 0 ? (
+                    <View style={styles.suggestions} pointerEvents="box-none">
                       {suggestions.map((suggestion) => (
-                        <Suggestion key={suggestion.kind} suggestion={suggestion} apiBase={apiBase} />
+                        <Suggestion key={suggestion.kind} suggestion={suggestion} backend={backend} />
                       ))}
                     </View>
                   ) : null}
                   <GestureDetector gesture={dismissKb}>
-                    <Reanimated.View style={[styles.pill, pillStyle]}>
+                    <View style={styles.pill}>
                       {/* The bar's regular glass, never faded (opacity on glass
                        * or its parents stops it rendering). */}
                       <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -527,9 +493,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
                       {open ? null : (
                         <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
                       )}
-                    </Reanimated.View>
+                    </View>
                   </GestureDetector>
-                </Reanimated.View>
+                </View>
               </View>
             </GlassView>
           </GlassContainer>
@@ -558,10 +524,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
 };
 
 /** One suggestion, by its kind. */
-const Suggestion = (props: { readonly suggestion: DubzSuggestion; readonly apiBase: string }): React.ReactElement | null => {
+const Suggestion = (props: { readonly suggestion: DubzSuggestion; readonly backend: string }): React.ReactElement | null => {
   switch (props.suggestion.kind) {
     case "tasks":
-      return <TaskSuggestion repo={props.suggestion.repo} apiBase={props.apiBase} />;
+      return <TaskSuggestion repo={props.suggestion.repo} backend={props.backend} />;
   }
 };
 
@@ -679,10 +645,12 @@ const styles = StyleSheet.create({
   // The bar's pill: +, the text, send, bottom-aligned so they hold their place
   // as the text grows upward. The small drop shadow is the bar's (it does not
   // clip; the glass rounds itself).
+  // The bar's pill, a fixed padding: the same at every detent.
   pill: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 8,
+    padding: COMPOSER_FIELD_PADDING,
     borderRadius: WINDOW_RADIUS,
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 1.5 },

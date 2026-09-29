@@ -44,19 +44,15 @@ const plural = (kind: string, count: number): string => (count === 1 ? kind : `$
 export const TaskSuggestion = (props: {
   /** The repo, when the page is about one; otherwise the block picks. */
   readonly repo: string | undefined;
-  readonly apiBase: string;
+  /** The backend that proxies GitHub. */
+  readonly backend: string;
 }): React.ReactElement | null => {
   const workspace = useWorkspaceRepos();
   const repos = React.useMemo(() => (workspace ?? []).filter((repo) => repo.github !== undefined), [workspace]);
   const [picked, setPicked] = React.useState(pickedRepo);
   const repoName = props.repo ?? picked ?? repos[0]?.repo;
   const github: GitHubRepo | undefined = repos.find((repo) => repo.repo === repoName)?.github;
-  const counts = useTaskCounts(props.apiBase, github);
-
-  // TEMPORARY diagnosis: what the block renders with, on the device.
-  React.useEffect(() => {
-    console.log("[tasks-diag]", JSON.stringify({ repos: workspace?.length, github: repos.length, repoName, gh: github, counts: counts.counts, error: counts.error }));
-  }, [workspace, repos, repoName, github, counts]);
+  const counts = useTaskCounts(props.backend, github);
 
   // Only in the app's first moments, before the saved scan has loaded.
   if (workspace === undefined) return null;

@@ -198,8 +198,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // Every repo's task counts too, so Dubz's tasks block shows them the
   // instant it renders.
   React.useEffect(() => {
-    prefetchTaskCounts(getApiAddress(address), scanned);
-  }, [scanned, address]);
+    prefetchTaskCounts(backend, scanned);
+  }, [scanned, backend]);
 
   // The plugin manager's list too, so Settings → Plugins opens with it.
   React.useEffect(() => {
