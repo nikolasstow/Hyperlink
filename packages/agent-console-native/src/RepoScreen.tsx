@@ -731,6 +731,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}
       >
         <Composer
+          // The new-session composer tries the Dubz window's clear glass.
+          glass="clear"
           onSend={onSend}
           disabled={sending || target === undefined}
           bottomInset={0}

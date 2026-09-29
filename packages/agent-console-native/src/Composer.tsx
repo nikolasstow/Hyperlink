@@ -116,6 +116,8 @@ export const Composer = (props: {
   readonly agentSurface: AgentSurface;
   /** Opens the app-wide assistant; wired later, so optional. */
   readonly onAgent?: () => void;
+  /** The bar's glass (BottomBar): `clear` for the new-session composer. */
+  readonly glass?: "regular" | "clear";
 }): React.ReactElement => {
   const { client } = useAppContext();
   const { colors: themeColors } = useTheme();
@@ -197,6 +199,7 @@ export const Composer = (props: {
 
   return (
     <BottomBar
+      {...(props.glass === undefined ? {} : { glass: props.glass })}
       expanded={expanded}
       bottomInset={props.bottomInset}
       error={error}
