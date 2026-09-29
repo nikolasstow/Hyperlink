@@ -39,6 +39,7 @@ import { useRunCountdown } from "./runCountdown";
 import { SkeletonPage } from "./Skeleton";
 import { usePrimaryWorktree } from "./primaryWorktree";
 import { WorktreePicker } from "./WorktreePicker";
+import { HeaderTitlePill } from "./HeaderTitlePill";
 import { SystemIcon } from "./SystemIcon";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
@@ -342,10 +343,10 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
   const add = React.useMemo((): ReadonlyArray<FormSpec> => (load.kind === "ready" ? load.value.add : []), [load]);
   React.useLayoutEffect(() => {
     navigation.setOptions({
-      title: shownTitle,
       // A page opened from the repo menu names its worktree under its title,
-      // and opens the worktree menu; a page about one package keeps its title.
-      ...(showPicker ? { headerTitle: () => <WorktreePicker repo={repo} fallback={props.route.params.dir} title={shownTitle} /> } : {}),
+      // and opens the worktree menu; a page about one package has its title
+      // in the glass pill, as every page does.
+      headerTitle: showPicker ? () => <WorktreePicker repo={repo} fallback={props.route.params.dir} title={shownTitle} /> : () => <HeaderTitlePill title={shownTitle} />,
       // The + menu adds (a dependency, a package); the 3-dot menu has the
       // rest. Each only when the page offers something for it.
       unstable_headerRightItems: () => [

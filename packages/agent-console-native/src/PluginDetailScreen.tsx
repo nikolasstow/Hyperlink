@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
 import { colors } from "./colors";
+import { HeaderTitlePill } from "./HeaderTitlePill";
 import { permissionText, requirementText, type InstalledPlugin } from "./pluginsClient";
 import { refreshPlugins, usePlugins } from "./pluginsStore";
 import type { RootStackParamList } from "./RootNavigator";
@@ -29,7 +30,7 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
   const plugins = usePlugins();
 
   React.useLayoutEffect(() => {
-    navigation.setOptions({ title: name });
+    navigation.setOptions({ headerTitle: () => <HeaderTitlePill title={name} /> });
   }, [navigation, name]);
 
   React.useEffect(() => {

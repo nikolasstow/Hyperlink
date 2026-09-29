@@ -11,6 +11,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
+import { HeaderTitlePill } from "./HeaderTitlePill";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { followProcess, stopProcess } from "./extensionViewsClient";
 import type { RootStackParamList } from "./RootNavigator";
@@ -59,7 +60,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
-      title,
+      headerTitle: () => <HeaderTitlePill title={title} />,
       headerRight:
         status.kind === "running"
           ? () => (

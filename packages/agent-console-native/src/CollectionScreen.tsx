@@ -49,6 +49,7 @@ import { ItemRow, NodeRow, SectionHeader, SeeAllRow, Tile, type MenuAction } fro
 import { CategoriesSheet, FormSheet, type GroupOption } from "./CollectionSheets";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { HeaderTitlePill } from "./HeaderTitlePill";
 import { usePrimaryWorktree } from "./primaryWorktree";
 import { useRunCountdown } from "./runCountdown";
 import { usePullToRefresh } from "./pullToRefresh";
@@ -951,7 +952,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   };
   React.useLayoutEffect(() => {
     navigation.setOptions({
-      title: screenTitle,
+      headerTitle: () => <HeaderTitlePill title={screenTitle} />,
       unstable_headerRightItems: () => (selection === undefined ? [...pinButton, addMenu, moreMenu] : [doneButton]),
       headerSearchBarOptions: {
         placeholder: data?.content.search?.placeholder ?? `Search ${title}`,

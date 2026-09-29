@@ -25,6 +25,7 @@ import { useAppContext } from "./AppContext";
 import { isRunIcon, symbolForIcon } from "./codicons";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
+import { HeaderTitlePill } from "./HeaderTitlePill";
 import { invokeViewAction, type TreeEntry, type ViewAction, type ViewNode } from "./extensionViewsClient";
 import { followResult } from "./followResult";
 import { ensureWorkspace, revalidateTree, useViewTree } from "./extensionViewsStore";
@@ -188,7 +189,7 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   const pull = usePullToRefresh(() => revalidateTree(apiBase, dir, view, "force"));
 
   React.useLayoutEffect(() => {
-    navigation.setOptions({ title });
+    navigation.setOptions({ headerTitle: () => <HeaderTitlePill title={title} /> });
   }, [navigation, title]);
 
   // Cached rows are already on screen; bring them up to date behind them.

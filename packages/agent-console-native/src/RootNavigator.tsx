@@ -8,7 +8,7 @@
  * @internal
  */
 import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import * as React from "react";
 import { AppState, Linking, useColorScheme } from "react-native";
 import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
@@ -98,6 +98,20 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+/**
+ * The app's page header, the one every page uses: no bar behind it (the
+ * content scrolls under it, with a soft edge), no shadow, and its title in
+ * the glass pill (HeaderTitlePill), which each page sets as `headerTitle`.
+ */
+const pageHeader: NativeStackNavigationOptions = {
+  headerShown: true,
+  headerTransparent: true,
+  headerStyle: { backgroundColor: "transparent" },
+  headerShadowVisible: false,
+  headerBackButtonDisplayMode: "minimal",
+  scrollEdgeEffects: { top: "soft", bottom: "soft" },
+};
 
 /** react-navigation's `Theme` type requires plain string colors (it can't
  * accept `PlatformColor`, unlike a real RN `ViewStyle`), so this can't just
@@ -269,8 +283,8 @@ export const RootNavigator = (): React.ReactElement => {
          * collapses on scroll (not the custom glass header). */}
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
         <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
-        <Stack.Screen name="Plugins" component={PluginsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Plugins" }} />
-        <Stack.Screen name="PluginDetail" component={PluginDetailScreen} options={{ headerShown: true, title: "Plugin" }} />
+        <Stack.Screen name="Plugins" component={PluginsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Plugins" /> }} />
+        <Stack.Screen name="PluginDetail" component={PluginDetailScreen} options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={route.params.name} /> })} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
@@ -347,65 +361,30 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="ExtensionView"
           component={ExtensionViewScreen}
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            headerStyle: { backgroundColor: "transparent" },
-            headerShadowVisible: false,
-            headerBackButtonDisplayMode: "minimal",
-            scrollEdgeEffects: { top: "soft", bottom: "soft" },
-          }}
+          options={pageHeader}
         />
         <Stack.Screen
           name="Archived"
           component={ArchivedScreen}
           options={{
-            headerShown: true,
-            headerTransparent: true,
-            headerStyle: { backgroundColor: "transparent" },
-            headerShadowVisible: false,
-            headerBackButtonDisplayMode: "minimal",
-            title: "Archived",
-            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+            ...pageHeader,
+            headerTitle: () => <HeaderTitlePill title="Archived" />,
           }}
         />
         <Stack.Screen
           name="PluginPage"
           component={PluginPageScreen}
-          // No bar behind the header, as the other pages: the content scrolls
-          // under a transparent header with a soft edge.
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            headerStyle: { backgroundColor: "transparent" },
-            headerShadowVisible: false,
-            headerBackButtonDisplayMode: "minimal",
-            scrollEdgeEffects: { top: "soft", bottom: "soft" },
-          }}
+          options={pageHeader}
         />
         <Stack.Screen
           name="Collection"
           component={CollectionScreen}
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            headerStyle: { backgroundColor: "transparent" },
-            headerShadowVisible: false,
-            headerBackButtonDisplayMode: "minimal",
-            scrollEdgeEffects: { top: "soft", bottom: "soft" },
-          }}
+          options={pageHeader}
         />
         <Stack.Screen
           name="ProcessOutput"
           component={ProcessOutputScreen}
-          options={{
-            headerShown: true,
-            headerTransparent: true,
-            headerStyle: { backgroundColor: "transparent" },
-            headerShadowVisible: false,
-            headerBackButtonDisplayMode: "minimal",
-            scrollEdgeEffects: { top: "soft", bottom: "soft" },
-          }}
+          options={pageHeader}
         />
       </Stack.Navigator>
     </NavigationContainer>
