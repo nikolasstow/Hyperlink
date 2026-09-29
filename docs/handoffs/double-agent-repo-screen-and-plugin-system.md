@@ -683,3 +683,22 @@ Owner-stated.
 - **No page dots** for now.
 - The Dubz settings still choose where Dubz appears, now as a page of the bar. Where it is
   off, the composer is the only page.
+
+## 28. Dubz suggestions by page and context (DECISIONS, 2026-09-29)
+
+- **One place decides what Dubz suggests** (`dubzSuggestions.ts`). Each page says where it is: its
+  surface, and what it is about (every repo, one repo, or a folder that isn't a repo). The rules
+  turn that into suggestions.
+- **Suggestions come in kinds.** A **block** is full width. Smaller kinds come later.
+- **The first block is tasks.** It has no border or background, and two columns of about 35/65:
+  - **Left:** a tinted glass pill per kind of open task, with how many there are.
+  - **Right:** the repo, then **New Task** under it. The repo is its name where the page is about
+    one repo, and a dropdown to pick one otherwise (Home, sessions for now).
+  - A folder that isn't a repo gets no tasks block.
+- *Built so far (Claude's choices, open to change):*
+  - Counts are the repo's open GitHub issues (the first 100), read through the backend's `/github`
+    proxy.
+  - A kind is the issue's GitHub type. Without a type, it comes from GitHub's default labels
+    (`bug` → Bug, `enhancement` → Feature). Otherwise it is Task.
+  - The block shows once the window has room, above the input.
+  - New Task says the form comes next.

@@ -36,6 +36,7 @@ import {
   type FolderTarget,
   type SessionTarget,
 } from "./HomeTargetPickers";
+import type { DubzContext } from "./dubzSuggestions";
 import type { ModelOption } from "./models";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
@@ -53,6 +54,12 @@ import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
+
+/** Dubz on Home: about every repo, so its suggestions pick one. */
+const HOME_DUBZ: DubzContext = {
+  surface: "home",
+  scope: { kind: "all" },
+};
 
 type Row =
   | { readonly kind: "heading"; readonly title: string }
@@ -357,7 +364,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           disabled={sending || target === undefined}
           bottomInset={0}
           placeholder="Plan, ask, build…"
-          agentSurface="home"
+          dubzContext={HOME_DUBZ}
           topSection={
             <HomeTargetPickers
               scanned={scanned}

@@ -4,7 +4,7 @@
  * multiline input, model selection, send-and-clear) and composes {@link BottomBar}
  * for everything structural: the glass field, the squircle clip, the collapse
  * layout. Screens vary it through `placeholder`, `topSection` (Home's
- * repo/worktree/branch pickers), and `agentSurface`.
+ * repo/worktree/branch pickers), and `dubzContext`.
  *
  * The bar has two pages side by side: this composer, then Dubz (Dubz.tsx).
  * Each is one component with a collapsed state (the bar; the two are the same
@@ -36,11 +36,12 @@ import { LayoutAnimation, StyleSheet, Text, TextInput, useWindowDimensions, View
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useAppContext } from "./AppContext";
-import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
+import { useAgentButtonVisible } from "./agentButtonSettings";
 import { BottomBar } from "./BottomBar";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import { colors } from "./colors";
+import type { DubzContext } from "./dubzSuggestions";
 import { findModel, getDefaultModel, listModels, type ModelOption } from "./models";
 import { ModelPicker } from "./ModelPicker";
 import { getLastModel, setLastModel } from "./settings";
@@ -73,9 +74,9 @@ export const Composer = (props: {
   readonly seedModel?: ModelOption;
   /** Rendered inside the bubble above the input — Home's pickers; chat omits it. */
   readonly topSection?: React.ReactNode;
-  /** Which surface this composer is on — whether Dubz is its second page, per
-   * the user's settings. */
-  readonly agentSurface: AgentSurface;
+  /** Where this bar is: whether Dubz is its second page (per the user's
+   * settings, by surface), and what Dubz suggests there. */
+  readonly dubzContext: DubzContext;
 }): React.ReactElement => {
   const { client } = useAppContext();
   const inputRef = React.useRef<TextInput>(null);
@@ -88,7 +89,7 @@ export const Composer = (props: {
   // input is not the focused one.
   const [held, setHeld] = React.useState(false);
   const expanded = focused || held || text.length > 0;
-  const withDubz = useAgentButtonVisible(props.agentSurface);
+  const withDubz = useAgentButtonVisible(props.dubzContext.surface);
   const lastPage = useBarPage();
   const [dubzOpen, setDubzOpen] = React.useState(false);
   // Open or collapse Dubz without its grow: it slid in, or away.
@@ -322,7 +323,7 @@ export const Composer = (props: {
       </GestureDetector>
       {withDubz ? (
         <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
-          <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} pageBack={pageBack} />
+          <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} />
         </Reanimated.View>
       ) : null}
     </View>

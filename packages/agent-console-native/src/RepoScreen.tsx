@@ -35,6 +35,7 @@ import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
+import type { DubzContext } from "./dubzSuggestions";
 import { useTheme } from "./theme";
 import { symbolForIcon } from "./codicons";
 import type { ViewInfo } from "./extensionViewsClient";
@@ -193,6 +194,14 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const [composerHeight, setComposerHeight] = React.useState(0);
   const keyboardHeight = useKeyboardHeight();
   const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
+  // Dubz here is about this repo; a workspace (not a repo) has no tasks.
+  const dubzContext = React.useMemo(
+    (): DubzContext => ({
+      surface: "repo",
+      scope: isRepo ? { kind: "repo", repo: name } : { kind: "folder" },
+    }),
+    [isRepo, name],
+  );
 
   const onSend = React.useCallback(
     async (text: string, model: ModelOption | undefined): Promise<void> => {
@@ -735,7 +744,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           disabled={sending || target === undefined}
           bottomInset={0}
           placeholder="Plan, ask, build…"
-          agentSurface="repo"
+          dubzContext={dubzContext}
           topSection={
             <HomeTargetPickers
               scanned={scanned}

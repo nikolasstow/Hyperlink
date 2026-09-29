@@ -30,6 +30,7 @@ import { useAppContext } from "./AppContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
 import { DubzBar } from "./Dubz";
+import type { DubzContext } from "./dubzSuggestions";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { iconForFile } from "./fileIcon";
@@ -127,6 +128,14 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const { navigation } = props;
   const forwardTarget = useForwardTarget();
   const insets = useSafeAreaInsets();
+  // Dubz here is about the repo these files are in.
+  const dubzContext = React.useMemo(
+    (): DubzContext => ({
+      surface: "repo",
+      scope: { kind: "repo", repo },
+    }),
+    [repo],
+  );
 
   // Build the code surfaces now, while someone is reading a directory listing,
   // so the first file they tap opens against a web view that has already parsed
@@ -236,7 +245,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       )}
       <EdgeBlurBars variant="top" />
       {/* The bottom bar, with Dubz its only page: nothing to compose here. */}
-      <DubzBar agentSurface="repo" />
+      <DubzBar context={dubzContext} />
     </View>
   );
 };

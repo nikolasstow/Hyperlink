@@ -23,9 +23,17 @@ export type ScannedWorktree = {
   readonly isMain: boolean;
 };
 
+/** Where a repo lives on GitHub, when its remote is there. */
+export type GitHubRepo = {
+  readonly owner: string;
+  readonly name: string;
+};
+
 export type ScannedRepo = {
   readonly repo: string;
   readonly worktrees: ReadonlyArray<ScannedWorktree>;
+  /** Its GitHub repo (its tasks are that repo's issues), when on GitHub. */
+  readonly github?: GitHubRepo;
 };
 
 export class RepoScanError extends Data.TaggedError("RepoScanError")<{
@@ -142,20 +150,38 @@ const listLinkedWorktrees = (base: string, mainCheckoutDir: string): Effect.Effe
     return worktrees.filter((w): w is ScannedWorktree => w !== undefined);
   });
 
-const resolveRepoName = (base: string, mainCheckoutDir: string): Effect.Effect<string, never, HttpClient.HttpClient> =>
+/** The repo's name (from its remote, else its folder) and its GitHub repo. */
+const resolveRepo = (
+  base: string,
+  mainCheckoutDir: string,
+): Effect.Effect<{ readonly repo: string; readonly github: GitHubRepo | undefined }, never, HttpClient.HttpClient> =>
   readFileText(base, mainCheckoutDir, ".git/config").pipe(
-    Effect.map((config) => (config === undefined ? undefined : repoNameFromConfig(config)) ?? basename(mainCheckoutDir)),
+    Effect.map((config) => {
+      const url = config === undefined ? undefined : remoteUrlFromConfig(config);
+      return {
+        repo: (url === undefined ? undefined : repoNameFromRemoteUrl(url)) ?? basename(mainCheckoutDir),
+        github: url === undefined ? undefined : githubRepoFromRemoteUrl(url),
+      };
+    }),
   );
 
-const repoNameFromConfig = (config: string): string | undefined => {
+const remoteUrlFromConfig = (config: string): string | undefined => {
   const originSection = config.match(/\[remote "origin"\][^[]*/);
   const anySection = originSection?.[0] ?? config.match(/\[remote "[^"]+"\][^[]*/)?.[0];
   if (anySection === undefined) return undefined;
 
   const urlMatch = anySection.match(/url\s*=\s*(\S+)/);
-  if (urlMatch === null || urlMatch[1] === undefined) return undefined;
+  return urlMatch?.[1];
+};
 
-  return repoNameFromRemoteUrl(urlMatch[1]);
+/** `https://github.com/o/n(.git)` or `git@github.com:o/n(.git)` → o/n. */
+export const githubRepoFromRemoteUrl = (url: string): GitHubRepo | undefined => {
+  const match = url.trim().match(/github\.com[/:]([^/]+)\/([^/]+?)(?:\.git)?\/?$/);
+  if (match === null || match[1] === undefined || match[2] === undefined) return undefined;
+  return {
+    owner: match[1],
+    name: match[2],
+  };
 };
 
 const repoNameFromRemoteUrl = (url: string): string | undefined => {
@@ -182,12 +208,16 @@ export const scanRepos = (base: string, rootDir: string): Effect.Effect<Readonly
       Array.from(mains),
       (mainCheckoutDir) =>
         Effect.gen(function* () {
-          const [linked, repo] = yield* Effect.all([
+          const [linked, { repo, github }] = yield* Effect.all([
             listLinkedWorktrees(base, mainCheckoutDir),
-            resolveRepoName(base, mainCheckoutDir),
+            resolveRepo(base, mainCheckoutDir),
           ]);
           const main: ScannedWorktree = { name: "(main)", path: mainCheckoutDir, isMain: true };
-          const scanned: ScannedRepo = { repo, worktrees: [main, ...linked] };
+          const scanned: ScannedRepo = {
+            repo,
+            worktrees: [main, ...linked],
+            ...(github === undefined ? {} : { github }),
+          };
           return scanned;
         }),
       { concurrency: 8 },
@@ -198,7 +228,9 @@ export const scanRepos = (base: string, rootDir: string): Effect.Effect<Readonly
     // one repo, all its worktrees — deduped by path. Without this a name shared
     // by two checkouts collides as a duplicate React key downstream.
     const byName = new Map<string, ScannedWorktree[]>();
+    const githubByName = new Map<string, GitHubRepo>();
     for (const scanned of perMain) {
+      if (scanned.github !== undefined && !githubByName.has(scanned.repo)) githubByName.set(scanned.repo, scanned.github);
       const existing = byName.get(scanned.repo);
       if (existing === undefined) {
         byName.set(scanned.repo, [...scanned.worktrees]);
@@ -208,5 +240,12 @@ export const scanRepos = (base: string, rootDir: string): Effect.Effect<Readonly
         }
       }
     }
-    return Array.from(byName, ([repo, worktrees]): ScannedRepo => ({ repo, worktrees }));
+    return Array.from(byName, ([repo, worktrees]): ScannedRepo => {
+      const github = githubByName.get(repo);
+      return {
+        repo,
+        worktrees,
+        ...(github === undefined ? {} : { github }),
+      };
+    });
   });

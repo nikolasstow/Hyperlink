@@ -41,11 +41,14 @@ import Reanimated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
+import { useAppContext } from "./AppContext";
+import { AGENT_NAME, useAgentButtonVisible } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
-import { getBarPage, getDubzDetent, setBarPage, setDubzDetent, type BarPage } from "./settings";
+import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
+import { getApiAddress, getBarPage, getDubzDetent, setBarPage, setDubzDetent, type BarPage } from "./settings";
+import { TaskSuggestion } from "./TaskSuggestion";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 
 /** The bar's side inset (BottomBar's), and so the window's. */
@@ -92,6 +95,10 @@ const DISMISS_MARGIN = 48;
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
 const INPUT_MAX_LINES = 8;
+/** Room the suggestions need above the pill: they show only once the window
+ * is this much taller than the bar, so they never stand out above it while it
+ * grows. */
+const SUGGESTIONS_ROOM = 200;
 
 /** How long a page slides on after a swipe is let go. */
 export const PAGE_MS = 260;
@@ -194,6 +201,8 @@ export interface DubzPageProps {
    * detent. */
   readonly onClose: () => void;
   readonly inputRef: React.RefObject<TextInput | null>;
+  /** Where it was opened: decides its suggestions (dubzSuggestions.ts). */
+  readonly context: DubzContext;
   /** Where the composer is beside it; omitted where Dubz is the only page. */
   readonly pageBack?: PageBack;
 }
@@ -214,7 +223,10 @@ const pillProgress = (drag: number, maxDrag: number): number => {
 };
 
 export const DubzPage = (props: DubzPageProps): React.ReactElement => {
-  const { open, instant, onOpen, onClose, inputRef, pageBack } = props;
+  const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
+  const { address } = useAppContext();
+  const apiBase = getApiAddress(address);
+  const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const scheme = useColorScheme();
@@ -417,12 +429,24 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     [open, pageBack, pageX, begin, turn, stay, screenW],
   );
 
-  // The window's height: the bar's collapsed, growing to the detent open.
-  const windowStyle = useAnimatedStyle(() => {
+  /** The window's height: the bar's collapsed, growing to the detent open. */
+  const windowHeight = (): number => {
+    "worklet";
     const maxDrag = maxDragFor(kbFull.value);
     const detent = Math.max(maxDrag + MIN_HEIGHT - dragY.value, MIN_HEIGHT);
-    return { height: MIN_HEIGHT + (detent - MIN_HEIGHT) * grow.value };
-  });
+    return MIN_HEIGHT + (detent - MIN_HEIGHT) * grow.value;
+  };
+  const windowStyle = useAnimatedStyle(() => ({ height: windowHeight() }));
+
+  // Whether the suggestions fit: crossing the room they need mounts or
+  // unmounts them, so they never stand out above a window still growing.
+  const [roomy, setRoomy] = React.useState(false);
+  useAnimatedReaction(
+    () => windowHeight() >= MIN_HEIGHT + SUGGESTIONS_ROOM,
+    (fits, previous) => {
+      if (fits !== previous) runOnJS(setRoomy)(fits);
+    },
+  );
 
   // How open the window reads: 0 collapsed or at the smallest detent (the
   // bar), 1 open above the pill's inset range. The pill's inset and padding
@@ -475,6 +499,14 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
               tintColor="rgba(0,0,0,0.18)"
               colorScheme={glassScheme}
             >
+              {/* What Dubz suggests here, above the pill, once there is room. */}
+              {open && roomy && suggestions.length > 0 ? (
+                <View style={styles.suggestions}>
+                  {suggestions.map((suggestion) => (
+                    <Suggestion key={suggestion.kind} suggestion={suggestion} apiBase={apiBase} />
+                  ))}
+                </View>
+              ) : null}
               {/* The pill sits at the window's bottom: the bar collapsed, the
                * window's composer open. */}
               <Reanimated.View style={pillWrapStyle}>
@@ -532,13 +564,21 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   );
 };
 
+/** One suggestion, by its kind. */
+const Suggestion = (props: { readonly suggestion: DubzSuggestion; readonly apiBase: string }): React.ReactElement | null => {
+  switch (props.suggestion.kind) {
+    case "tasks":
+      return <TaskSuggestion repo={props.suggestion.repo} apiBase={props.apiBase} />;
+  }
+};
+
 /**
  * The bar where Dubz is the only page (nothing to compose there, as in Files):
  * a Dubz page riding the keyboard where the composer's bar would. Nothing where
  * Dubz is off for the surface.
  */
-export const DubzBar = (props: { readonly agentSurface: AgentSurface }): React.ReactElement | null => {
-  const visible = useAgentButtonVisible(props.agentSurface);
+export const DubzBar = (props: { readonly context: DubzContext }): React.ReactElement | null => {
+  const visible = useAgentButtonVisible(props.context.surface);
   const [open, setOpen] = React.useState(false);
   const inputRef = React.useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
@@ -551,7 +591,7 @@ export const DubzBar = (props: { readonly agentSurface: AgentSurface }): React.R
   if (!visible) return null;
   return (
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
-      <DubzPage open={open} instant={false} onOpen={onOpen} onClose={onClose} inputRef={inputRef} />
+      <DubzPage open={open} instant={false} onOpen={onOpen} onClose={onClose} inputRef={inputRef} context={props.context} />
     </Reanimated.View>
   );
 };
@@ -571,6 +611,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
+  },
+  // Full width inside the window, above the pill.
+  suggestions: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: 16,
   },
   catcher: {
     position: "absolute",

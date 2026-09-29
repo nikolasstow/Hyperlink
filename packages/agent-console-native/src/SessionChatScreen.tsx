@@ -13,6 +13,7 @@
  * @internal
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
 import { ActionSheetIOS, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
 import Animated from "react-native-reanimated";
@@ -45,6 +46,12 @@ import { runStartedAt, useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
+
+/** Dubz in a session: its suggestions pick a repo, for now. */
+const SESSION_DUBZ: DubzContext = {
+  surface: "session",
+  scope: { kind: "all" },
+};
 
 /** Sentinel row id for the pending-permission bubble. Prefixed so it can
  * never collide with a real message id (`msg_…`). */
@@ -400,7 +407,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           bottomInset={0}
           placeholder="Message"
           seedModel={resolvedSeed}
-          agentSurface="session"
+          dubzContext={SESSION_DUBZ}
         />
       </Animated.View>
     </View>
