@@ -64,6 +64,9 @@ export type PendingPermission = {
   /** Concrete targets — file paths, commands — when the server names them. */
   readonly resources: ReadonlyArray<string>;
   readonly api: "v1" | "v2";
+  /** The directory the session runs in: opencode keeps a v1 ask per
+   * directory, so the reply must name it or it is not found. */
+  readonly directory: string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -77,7 +80,7 @@ const asStrings = (value: unknown): ReadonlyArray<string> =>
  * ask event is in the pinned v1 types, and the running server is newer. Fails
  * closed — an unrecognized shape is ignored rather than throwing mid-stream.
  */
-export const asPendingPermission = (event: unknown): PendingPermission | undefined => {
+export const asPendingPermission = (event: unknown, directory: string): PendingPermission | undefined => {
   if (!isRecord(event)) return undefined;
 
   if (event.type === "permission.asked" && isRecord(event.properties)) {
@@ -89,6 +92,7 @@ export const asPendingPermission = (event: unknown): PendingPermission | undefin
       action: typeof p.permission === "string" ? p.permission : "this action",
       resources: asStrings(p.patterns),
       api: "v1",
+      directory,
     };
   }
 
@@ -103,6 +107,7 @@ export const asPendingPermission = (event: unknown): PendingPermission | undefin
       action: typeof p.action === "string" ? p.action : "this action",
       resources: asStrings(p.resources),
       api: "v2",
+      directory,
     };
   }
 
@@ -123,7 +128,7 @@ export const replyToPermission = async (
 ): Promise<void> => {
   const path =
     pending.api === "v1"
-      ? `/permission/${pending.requestID}/reply`
+      ? `/permission/${encodeURIComponent(pending.requestID)}/reply?directory=${encodeURIComponent(pending.directory)}`
       : `/api/session/${pending.sessionID}/permission/${pending.requestID}/reply`;
 
   const response = await fetch(`${address}${path}`, {

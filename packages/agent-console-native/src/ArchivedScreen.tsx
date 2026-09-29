@@ -18,6 +18,7 @@ import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -114,52 +115,55 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      <Reanimated.FlatList
-        // Rows glide to their places as sessions leave (archived) or come back
-        // (Undo), instead of snapping.
-        itemLayoutAnimation={LinearTransition.duration(LAYOUT_MS)}
-        data={listed}
-        keyExtractor={(session) => session.id}
-        contentInsetAdjustmentBehavior="never"
-        contentContainerStyle={{ paddingTop: headerHeight + 8, paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              void fetchAll().finally(() => setRefreshing(false));
-            }}
-            tintColor={colors.secondaryLabel}
-          />
-        }
-        ListHeaderComponent={listed.length === 0 ? null : <Text style={styles.sectionLabel}>Sessions</Text>}
-        ListEmptyComponent={<Text style={styles.empty}>Nothing archived{repo === undefined ? "" : ` in ${repo}`}.</Text>}
-        renderItem={({ item }) => {
-          const match = matchSession(item.directory, load.scanned);
-          return (
-            <SessionCard
-              client={client}
-              sessionId={item.id}
-              updatedAt={item.time.updated}
-              title={item.title}
-              {...(repo === undefined ? { repo: match.repo } : {})}
-              worktree={displayWorktree(match.worktree)}
-              meta={`Archived ${relativeTime(load.archivedAt[item.id] ?? item.time.updated)}`}
-              running={busy.has(item.id)}
-              unread={false}
-              previewEnabled={isFocused}
-              archived
-              onOpen={() => props.navigation.navigate("Chat", { sessionID: item.id })}
-              onRename={() => promptRenameSession(client, item.id, item.title, () => void fetchAll())}
-              onStop={() => abortSession(client, item.id, () => void fetchAll())}
-              onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void fetchAll())}
-              onArchive={() => unarchiveWithUndo(apiBase, item.id)}
-              muted={mutedSet.has(item.id)}
-              onMute={() => toggleMute(apiBase, item.id)}
+      {/* Ties the list to the native bar's scroll-edge effect, as the other
+       * list pages do. */}
+      <ScrollViewMarker style={styles.fill} scrollEdgeEffects={{ top: "soft", bottom: "soft" }}>
+        <Reanimated.FlatList
+          // Rows glide to their places as sessions leave (archived) or come back
+          // (Undo), instead of snapping.
+          itemLayoutAnimation={LinearTransition.duration(LAYOUT_MS)}
+          data={listed}
+          keyExtractor={(session) => session.id}
+          contentContainerStyle={{ paddingTop: headerHeight + 8, paddingBottom: 40 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                void fetchAll().finally(() => setRefreshing(false));
+              }}
+              tintColor={colors.secondaryLabel}
             />
-          );
-        }}
-      />
+          }
+          ListHeaderComponent={listed.length === 0 ? null : <Text style={styles.sectionLabel}>Sessions</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>Nothing archived{repo === undefined ? "" : ` in ${repo}`}.</Text>}
+          renderItem={({ item }) => {
+            const match = matchSession(item.directory, load.scanned);
+            return (
+              <SessionCard
+                client={client}
+                sessionId={item.id}
+                updatedAt={item.time.updated}
+                title={item.title}
+                {...(repo === undefined ? { repo: match.repo } : {})}
+                worktree={displayWorktree(match.worktree)}
+                meta={`Archived ${relativeTime(load.archivedAt[item.id] ?? item.time.updated)}`}
+                running={busy.has(item.id)}
+                unread={false}
+                previewEnabled={isFocused}
+                archived
+                onOpen={() => props.navigation.navigate("Chat", { sessionID: item.id })}
+                onRename={() => promptRenameSession(client, item.id, item.title, () => void fetchAll())}
+                onStop={() => abortSession(client, item.id, () => void fetchAll())}
+                onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void fetchAll())}
+                onArchive={() => unarchiveWithUndo(apiBase, item.id)}
+                muted={mutedSet.has(item.id)}
+                onMute={() => toggleMute(apiBase, item.id)}
+              />
+            );
+          }}
+        />
+      </ScrollViewMarker>
       <EdgeBlurBars variant="top" />
     </View>
   );
@@ -169,6 +173,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  fill: {
+    flex: 1,
   },
   center: {
     alignItems: "center",

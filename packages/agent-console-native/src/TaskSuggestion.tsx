@@ -53,6 +53,11 @@ export const TaskSuggestion = (props: {
   const github: GitHubRepo | undefined = repos.find((repo) => repo.repo === repoName)?.github;
   const counts = useTaskCounts(props.apiBase, github);
 
+  // TEMPORARY diagnosis: what the block renders with, on the device.
+  React.useEffect(() => {
+    console.log("[tasks-diag]", JSON.stringify({ repos: workspace?.length, github: repos.length, repoName, gh: github, counts: counts.counts, error: counts.error }));
+  }, [workspace, repos, repoName, github, counts]);
+
   // Only in the app's first moments, before the saved scan has loaded.
   if (workspace === undefined) return null;
 

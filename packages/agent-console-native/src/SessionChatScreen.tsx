@@ -15,7 +15,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
-import { ActionSheetIOS, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -370,7 +370,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               <PermissionPrompt
                 pending={pendingPermission}
                 onReply={(reply) => {
-                  void replyPermission(reply);
+                  replyPermission(reply).catch((error: unknown) =>
+                    Alert.alert("Couldn’t answer the permission", error instanceof Error ? error.message : String(error)),
+                  );
                 }}
               />
             );
