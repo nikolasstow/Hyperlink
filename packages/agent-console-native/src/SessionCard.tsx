@@ -17,9 +17,9 @@
 import { Button, Circle, ContextMenu, Host, HStack, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { LayoutAnimation, Pressable, StyleSheet, Text, useWindowDimensions } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions } from "react-native";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
+import Animated, { Easing, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
@@ -145,21 +145,49 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
   const summary = lastMessageSummary(transcript);
 
-  // A long swipe archives on release; the row then closes up (LayoutAnimation
-  // runs the list's change as the session leaves it).
+  // A long swipe archives on release. The row leaves as in Messages: it slides
+  // off to the left, the gap closes, and only then does the session leave the
+  // list (removing it at once made it snap out of existence).
   const armed = React.useRef(false);
   const onArmedChange = React.useCallback((next: boolean) => {
     armed.current = next;
   }, []);
   const { onArchive } = props;
+  const rowHeight = useSharedValue(0);
+  const slide = useSharedValue(0);
+  const collapse = useSharedValue(0);
+  const leaving = React.useRef(false);
   const archive = React.useCallback(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    onArchive();
-  }, [onArchive]);
+    if (leaving.current) return;
+    leaving.current = true;
+    slide.value = withTiming(1, { duration: SLIDE_MS, easing: Easing.in(Easing.cubic) }, (slid) => {
+      if (slid !== true) return;
+      collapse.value = withTiming(1, { duration: COLLAPSE_MS, easing: Easing.inOut(Easing.cubic) }, (collapsed) => {
+        if (collapsed === true) runOnJS(onArchive)();
+      });
+    });
+  }, [onArchive, slide, collapse]);
+  const leave = useAnimatedStyle(() => {
+    if (collapse.value === 0 && slide.value === 0) return {};
+    return {
+      transform: [{ translateX: -screenWidth * slide.value }],
+      ...(collapse.value === 0
+        ? {}
+        : {
+            height: rowHeight.value * (1 - collapse.value),
+            marginBottom: ROW_GAP * (1 - collapse.value),
+          }),
+    };
+  });
 
   return (
+    <Animated.View
+      style={[styles.row, leave]}
+      onLayout={(event) => {
+        if (!leaving.current) rowHeight.value = event.nativeEvent.layout.height;
+      }}
+    >
     <Swipeable
-      containerStyle={styles.row}
       friction={1}
       overshootRight
       rightThreshold={ACTION_WIDTH / 2}
@@ -203,12 +231,20 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
       </ContextMenu>
     </Host>
     </Swipeable>
+    </Animated.View>
   );
 };
 
+/** How the row leaves when archived: sliding off, then closing up. */
+const SLIDE_MS = 220;
+const COLLAPSE_MS = 240;
+/** Space under each card. */
+const ROW_GAP = 10;
+
 const styles = StyleSheet.create({
   row: {
-    marginBottom: 10,
+    marginBottom: ROW_GAP,
+    overflow: "hidden",
   },
   action: {
     marginLeft: -CARD_GUTTER + ACTION_GAP,
