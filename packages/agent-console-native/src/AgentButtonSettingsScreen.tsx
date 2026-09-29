@@ -1,9 +1,9 @@
 /**
- * Visibility settings for the assistant (Dubz) button: a master switch at the
- * top, then a per-surface switch for each place it can appear. Turning the
+ * Where the assistant (Dubz) is a page of the bottom bar: a master switch at
+ * the top, then a per-surface switch for each place it can appear. Turning the
  * master off dims and disables the per-surface list. State lives in
  * `agentButtonSettings` (a live store), so toggles here reflect immediately
- * wherever the button renders.
+ * in every bar.
  *
  * @internal
  */
@@ -40,8 +40,8 @@ export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => 
         </View>
       </View>
       <Text style={styles.hint}>
-        {AGENT_NAME} is the app-wide assistant. Turn this off to hide the button everywhere; turn it on to
-        choose where it appears below.
+        {AGENT_NAME} is the app-wide assistant, a page of the bottom bar. Turn this off to leave it out
+        everywhere; turn it on to choose where it appears below.
       </Text>
 
       <Text style={styles.sectionLabel}>Show in</Text>
@@ -57,7 +57,7 @@ export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => 
           </View>
         ))}
       </View>
-      <Text style={styles.hint}>Each place the button can ride the bottom bar. Applies only while {AGENT_NAME} is on.</Text>
+      <Text style={styles.hint}>Each place {AGENT_NAME} can be a page of the bottom bar. Applies only while {AGENT_NAME} is on.</Text>
     </ScrollView>
   );
 };

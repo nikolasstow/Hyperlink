@@ -9,7 +9,7 @@
  * Repo, Both); choosing moves the pin, is remembered for the next, and the
  * toast settles back and goes.
  *
- * Built by the glass rules the app has learned (AgentButton, TitlePill):
+ * Built by the glass rules the app has learned (Dubz, TitlePill):
  * - one width always (it never shrinks to its text);
  * - motion is layout, not transform or opacity on the glass or its
  *   ancestors (either composites it into a layer that cannot see the

@@ -3,9 +3,15 @@
  * the intricate, timing-sensitive state (focus → animate → collapse, growing
  * multiline input, model selection, send-and-clear) and composes {@link BottomBar}
  * for everything structural: the glass field, the squircle clip, the collapse
- * layout, and the app-wide assistant accessory. Screens vary it through
- * `placeholder`, `topSection` (Home's repo/worktree/branch pickers), and
- * `agentSurface`.
+ * layout. Screens vary it through `placeholder`, `topSection` (Home's
+ * repo/worktree/branch pickers), and `agentSurface`.
+ *
+ * It is the first of the bar's two pages, Dubz the second (Dubz.tsx): while
+ * expanded, a swipe left slides it off and Dubz in beside it, both by layout
+ * (margins here, `left` there), never a transform (glass dies under one). A tap
+ * on the collapsed bar opens the page opened last. Where Dubz is off for the
+ * surface, the composer is the only page. `DubzBar` is the bar where Dubz is the
+ * only page: the same collapsed bar, opening Dubz.
  *
  * This is the "component that takes other components" split: the fragile glass
  * and collapse mechanics live once in `BottomBar` (see its header for the
@@ -28,10 +34,14 @@
 import { Button, Host } from "@expo/ui/swift-ui";
 import { buttonStyle, foregroundStyle, frame, glassEffect, imageScale, labelStyle } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { LayoutAnimation, StyleSheet, Text, TextInput } from "react-native";
+import { LayoutAnimation, StyleSheet, Text, TextInput, useWindowDimensions } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, { runOnJS, useAnimatedStyle, withTiming } from "react-native-reanimated";
+import { useIsFocused } from "@react-navigation/native";
 import { useAppContext } from "./AppContext";
-import { type AgentSurface } from "./agentButtonSettings";
+import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { BottomBar } from "./BottomBar";
+import { barPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useDubz } from "./Dubz";
 import { colors } from "./colors";
 import { useTheme } from "./theme";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
@@ -102,6 +112,9 @@ const sendButtonModifiers = (active: boolean, activeFill: string, mutedFill: str
   foregroundStyle("#FFFFFF"),
 ];
 
+/** Each composer's id, so only the one on screen slides with the pages. */
+let nextComposeId = 0;
+
 export const Composer = (props: {
   readonly onSend: (text: string, model: ModelOption | undefined) => Promise<void>;
   readonly disabled: boolean;
@@ -112,10 +125,9 @@ export const Composer = (props: {
   readonly seedModel?: ModelOption;
   /** Rendered inside the bubble above the input — Home's pickers; chat omits it. */
   readonly topSection?: React.ReactNode;
-  /** Which surface this composer is on — gates the assistant button per settings. */
+  /** Which surface this composer is on — whether Dubz is its second page, per
+   * the user's settings. */
   readonly agentSurface: AgentSurface;
-  /** Opens the app-wide assistant; wired later, so optional. */
-  readonly onAgent?: () => void;
 }): React.ReactElement => {
   const { client } = useAppContext();
   const { colors: themeColors } = useTheme();
@@ -125,7 +137,18 @@ export const Composer = (props: {
   const [focused, setFocused] = React.useState(false);
   const [models, setModels] = React.useState<ReadonlyArray<ModelOption>>([]);
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
-  const expanded = focused || text.length > 0;
+  // Held open while it slides back in from Dubz, until its input takes focus.
+  const [held, setHeld] = React.useState(false);
+  const expanded = focused || held || text.length > 0;
+  const dubz = useDubz();
+  const { pageX, slidingCompose, beginFromCompose, settleOnDubz, dropDubz, registerCompose } = dubz;
+  const withDubz = useAgentButtonVisible(props.agentSurface);
+  const isFocused = useIsFocused();
+  const [id] = React.useState(() => {
+    nextComposeId += 1;
+    return nextComposeId;
+  });
+  const { width: screenW } = useWindowDimensions();
   const hasContent = text.trim().length > 0 && !props.disabled;
   // iOS multiline TextInput's intrinsic-size reporting doesn't reliably account
   // for its own padding; measure the content height directly instead.
@@ -172,7 +195,66 @@ export const Composer = (props: {
   const onFocus = (): void => {
     LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(true);
+    setHeld(false);
+    if (withDubz) rememberPage("compose");
   };
+
+  const focusInput = React.useCallback(() => inputRef.current?.focus(), []);
+
+  /** Open the bar to the page opened last. */
+  const expand = (): void => {
+    if (withDubz && barPage() === "dubz") dubz.open();
+    else focusInput();
+  };
+
+  // On screen, with Dubz on, this composer is the page beside Dubz.
+  React.useEffect(() => {
+    if (!isFocused || !withDubz) return undefined;
+    return registerCompose({
+      id,
+      hold: setHeld,
+      focus: focusInput,
+    });
+  }, [isFocused, withDubz, id, registerCompose, focusInput]);
+
+  // Swipe left, while expanded, to slide Dubz in. Only a clear sideways drag
+  // pages, so typing, selecting and the controls are left alone.
+  const toDubz = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(expanded && withDubz && isFocused)
+        .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
+        .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
+        .onStart(() => {
+          pageX.value = 0;
+          runOnJS(beginFromCompose)(id);
+        })
+        .onUpdate((e) => {
+          const moved = -e.translationX / screenW;
+          pageX.value = moved < 0 ? 0 : moved > 1 ? 1 : moved;
+        })
+        .onEnd((e) => {
+          if (pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING) {
+            runOnJS(settleOnDubz)();
+            pageX.value = withTiming(1, { duration: PAGE_MS, easing: pageEasing });
+            return;
+          }
+          pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+            if (finished === true) runOnJS(dropDubz)();
+          });
+        }),
+    [expanded, withDubz, isFocused, pageX, beginFromCompose, id, screenW, settleOnDubz, dropDubz],
+  );
+
+  // Off to the left by how far the pages stand from the composer; only this
+  // composer, when it is the one sliding.
+  const slide = useAnimatedStyle(() => {
+    const aside = slidingCompose.value === id ? pageX.value * screenW : 0;
+    return {
+      marginLeft: -aside,
+      marginRight: aside,
+    };
+  });
 
   const onBlur = (): void => {
     // Only animate the collapse when it will actually happen — typed text keeps
@@ -196,70 +278,114 @@ export const Composer = (props: {
   };
 
   return (
-    <BottomBar
-      expanded={expanded}
-      bottomInset={props.bottomInset}
-      error={error}
-      topSection={props.topSection}
-      agentSurface={props.agentSurface}
-      onAgent={props.onAgent}
-      onExpandRequest={() => inputRef.current?.focus()}
-      input={
-        <TextInput
-          ref={inputRef}
-          style={[
-            styles.input,
-            // Ignore `contentHeight` while empty — belt and suspenders with
-            // onContentSizeChange's own guard, so the field always shrinks back
-            // after a send.
-            { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
-          ]}
-          value={text}
-          onChangeText={setText}
-          onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
-          editable={!props.disabled}
-          placeholder={props.placeholder}
-          placeholderTextColor={colors.placeholderText}
-          multiline
-          submitBehavior="blurAndSubmit"
-          onSubmitEditing={() => void send()}
-          onFocus={onFocus}
-          onBlur={onBlur}
+    <GestureDetector gesture={toDubz}>
+      <Reanimated.View style={slide}>
+        <BottomBar
+          expanded={expanded}
+          bottomInset={props.bottomInset}
+          error={error}
+          topSection={props.topSection}
+          onExpandRequest={expand}
+          input={
+            <TextInput
+              ref={inputRef}
+              style={[
+                styles.input,
+                // Ignore `contentHeight` while empty — belt and suspenders with
+                // onContentSizeChange's own guard, so the field always shrinks back
+                // after a send.
+                { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
+              ]}
+              value={text}
+              onChangeText={setText}
+              onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
+              editable={!props.disabled}
+              placeholder={props.placeholder}
+              placeholderTextColor={colors.placeholderText}
+              multiline
+              submitBehavior="blurAndSubmit"
+              onSubmitEditing={() => void send()}
+              onFocus={onFocus}
+              onBlur={onBlur}
+            />
+          }
+          leading={
+            <Host style={styles.chipHost}>
+              <Button
+                label="Attach"
+                systemImage="plus"
+                onPress={() => {
+                  // Collapsed: whole bar expands. Expanded: attach is still a stub.
+                  if (!expanded) expand();
+                }}
+                modifiers={CHIP_BUTTON_MODIFIERS}
+              />
+            </Host>
+          }
+          expandedCenter={<ModelPicker models={models} selected={selectedModel} onChange={pickModel} />}
+          collapsedCenter={
+            <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
+              {text.length > 0 ? text : props.placeholder}
+            </Text>
+          }
+          trailing={
+            <Host style={styles.sendChipHost}>
+              <Button
+                label="Send"
+                systemImage="arrow.up"
+                onPress={() => {
+                  if (!expanded) {
+                    expand();
+                    return;
+                  }
+                  void send();
+                }}
+                modifiers={sendButtonModifiers(hasContent, themeColors.sendActiveFill, themeColors.sendMutedFill)}
+              />
+            </Host>
+          }
         />
-      }
+      </Reanimated.View>
+    </GestureDetector>
+  );
+};
+
+/**
+ * The bar where Dubz is the only page (nothing to compose there, as in Files):
+ * the composer's collapsed bar, the same to the pixel, and any tap on it opens
+ * Dubz. Nothing where Dubz is off for the surface.
+ */
+export const DubzBar = (props: {
+  /** Home-indicator safe-area inset. */
+  readonly bottomInset: number;
+  readonly agentSurface: AgentSurface;
+}): React.ReactElement | null => {
+  const { colors: themeColors } = useTheme();
+  const dubz = useDubz();
+  const visible = useAgentButtonVisible(props.agentSurface);
+  if (!visible) return null;
+  return (
+    <BottomBar
+      expanded={false}
+      bottomInset={props.bottomInset}
+      onExpandRequest={dubz.open}
+      input={null}
       leading={
         <Host style={styles.chipHost}>
-          <Button
-            label="Attach"
-            systemImage="plus"
-            onPress={() => {
-              // Collapsed: whole bar expands. Expanded: attach is still a stub.
-              if (!expanded) inputRef.current?.focus();
-            }}
-            modifiers={CHIP_BUTTON_MODIFIERS}
-          />
+          <Button label="Attach" systemImage="plus" onPress={dubz.open} modifiers={CHIP_BUTTON_MODIFIERS} />
         </Host>
       }
-      expandedCenter={<ModelPicker models={models} selected={selectedModel} onChange={pickModel} />}
+      expandedCenter={null}
       collapsedCenter={
-        <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
-          {text.length > 0 ? text : props.placeholder}
+        <Text style={[styles.mirrorText, styles.mirrorPlaceholder]} numberOfLines={1}>
+          {`Ask ${AGENT_NAME}…`}
         </Text>
       }
+      // Collapsed to no width, as the composer's is; kept so the bar is the
+      // composer's height.
       trailing={
         <Host style={styles.sendChipHost}>
-          <Button
-            label="Send"
-            systemImage="arrow.up"
-            onPress={() => {
-              if (!expanded) {
-                inputRef.current?.focus();
-                return;
-              }
-              void send();
-            }}
-            modifiers={sendButtonModifiers(hasContent, themeColors.sendActiveFill, themeColors.sendMutedFill)}
-          />
+          <Button label="Send" systemImage="arrow.up" onPress={dubz.open} modifiers={sendButtonModifiers(false, themeColors.sendActiveFill, themeColors.sendMutedFill)} />
         </Host>
       }
     />

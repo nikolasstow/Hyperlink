@@ -1,21 +1,21 @@
 /**
- * Visibility settings for the app-wide assistant (Dubz) button: one global
- * on/off, plus a per-surface toggle for each place the button can appear. Lives
+ * Where the app-wide assistant (Dubz) is a page of the bottom bar: one global
+ * on/off, plus a per-surface toggle for each place it can appear. Lives
  * in a small module store (read live via `useSyncExternalStore`) backed by
  * AsyncStorage — the same shape `sessionPermissions` uses — so a change on the
- * settings screen reflects immediately wherever the button renders.
+ * settings screen reflects immediately in every bar.
  *
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
 
-/** The assistant's name — shown on the button (a11y) and the Dubz window. Lives
- * here (a leaf module) so both AgentButton and the Dubz overlay can use it
+/** The assistant's name — shown in the bar ("Ask Dubz…") and the Dubz window.
+ * Lives here (a leaf module) so the bar and the Dubz overlay can use it
  * without an import cycle. */
 export const AGENT_NAME = "Dubz";
 
-/** The surfaces the assistant button can be shown on. */
+/** The surfaces whose bar can have Dubz as a page. */
 export type AgentSurface = "home" | "repo" | "session" | "editor";
 
 export const AGENT_SURFACES: ReadonlyArray<{ readonly key: AgentSurface; readonly label: string }> = [

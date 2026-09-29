@@ -30,8 +30,6 @@ import Reanimated, {
 } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AgentButton } from "./AgentButton";
-import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { composerRestingBottom } from "./useKeyboardSlide";
@@ -106,15 +104,10 @@ export const BottomSearchPill = (props: {
   readonly onChangeText: (value: string) => void;
   readonly placeholder: string;
   readonly hidden: SharedValue<number>;
-  /** Which surface this is, gating the assistant button per the user's settings. */
-  readonly agentSurface: AgentSurface;
-  /** Opens the app-wide assistant; wired later, so optional. */
-  readonly onAgent?: () => void;
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const keyboard = useAnimatedKeyboard();
-  const showAgent = useAgentButtonVisible(props.agentSurface);
 
   // One animated `bottom`: rest tucked toward the bottom edge — the SAME rest as
   // the composer (composerRestingBottom), so the search pill hugs the bottom the
@@ -128,8 +121,6 @@ export const BottomSearchPill = (props: {
 
   return (
     <Reanimated.View style={[styles.wrap, { paddingBottom: 8 }, animatedStyle]} pointerEvents="box-none">
-      {/* Pill + the assistant button on the right, matching the composer. */}
-      <View style={styles.row}>
         {/* The drop shadow lives on this OUTER wrapper, matching the composer
          * pill. The glass rounds itself (`borderRadius` on the GlassView, no
          * `borderCurve`, which broke it); nothing around it clips or rounds
@@ -157,10 +148,6 @@ export const BottomSearchPill = (props: {
           </GlassView>
         </View>
         </View>
-        {/* A touch smaller than the pill and centred beside it, matching the
-         * composer's assistant button. */}
-        {showAgent ? <AgentButton onPress={props.onAgent} size={SEARCH_PILL_HEIGHT - 6} /> : null}
-      </View>
     </Reanimated.View>
   );
 };
@@ -172,18 +159,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     // Match the composer bar's side inset (BottomBar root paddingHorizontal).
-    paddingHorizontal: 20,
-  },
-  // Pill + assistant button on one row, button vertically centred with the pill.
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    paddingHorizontal: 12,
   },
   // Carries the pill's flex and its small drop shadow (no overflow, so the shadow
   // isn't clipped) — same values as the composer's pillShadow.
   pillShadow: {
-    flex: 1,
     borderRadius: SEARCH_PILL_HEIGHT / 2,
     borderCurve: "continuous",
     shadowColor: "#000000",

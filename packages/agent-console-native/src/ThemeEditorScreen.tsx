@@ -408,7 +408,6 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
         onChangeText={setQuery}
         placeholder={`Search ${colorCount + theme.tokenColors.length} values`}
         hidden={pill.hidden}
-        agentSurface="editor"
       />
     </View>
   );

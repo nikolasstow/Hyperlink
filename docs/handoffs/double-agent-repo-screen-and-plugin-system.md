@@ -660,3 +660,20 @@ Owner-stated.
   and workspace screen's 3-dot menu** (that repo's only). It is where archived **sessions and
   tasks** appear; there, a session can be unarchived (swipe or menu, with Undo) or deleted.
 - **Tasks and sessions are listed together**; a **task's sessions show within the task** (§25).
+
+## 27. The bottom bar's pages: composer and Dubz (DECISIONS, 2026-09-29)
+
+- **One bar.** It is the full-width pill from before Dubz; there is no Dubz button beside it.
+  Collapsed, it is the same bar on every page.
+- **Pages of the expanded bar.** Where a composer makes sense (Home and repos: new session;
+  a session: message), the expanded bar has two pages. The composer is first and Dubz second, each
+  its own glass card. **Swiping works only while expanded.** Either page collapses back to
+  the bar.
+- **Where there is nothing to compose** (Files), Dubz is the bar's only page. Files no longer
+  has search; it will return another way.
+- **The bar opens to the page opened last**, remembered across launches.
+- **Dubz expanded is unchanged.** It keeps its window, detents and grow-in. Each page keeps
+  its own height as you swipe.
+- **No page dots** for now.
+- The Dubz settings still choose where Dubz appears, now as a page of the bar. Where it is
+  off, the composer is the only page.

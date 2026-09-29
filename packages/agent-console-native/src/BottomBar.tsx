@@ -1,9 +1,9 @@
 /**
  * The app's bottom bar as a compositional shell: it owns the hard, load-bearing
- * parts once — the glass field, the squircle clip, the collapse layout, and the
- * app-wide assistant (Dubz) accessory — and takes the variable parts as
+ * parts once — the glass field, the squircle clip, the collapse layout — and
+ * takes the variable parts as
  * **slots** rather than as a pile of variant params. A variant (the chat/Home
- * `Composer` today; search later) supplies its `input`, `leading`, centre and
+ * `Composer`, or `DubzBar` where Dubz is the only page) supplies its `input`, `leading`, centre and
  * `trailing` elements and drives the shell with a single `expanded` flag.
  *
  * Why a presentational shell driven by `expanded`, not a context that owns the
@@ -14,10 +14,10 @@
  * handoff intact **by construction**:
  *
  * - Nothing here unmounts across the collapse cycle — `GlassView`, the `input`
- *   slot, both centre slots, `trailing` and the assistant all stay mounted;
- *   collapse is height/width/opacity, never conditional rendering. (The one
- *   `expandHit` Pressable and the settings-gated assistant are plain toggles,
- *   not part of the glass/Host first-mount hazard.)
+ *   slot, both centre slots and `trailing` all stay mounted; collapse is
+ *   height/width/opacity, never conditional rendering. (The one `expandHit`
+ *   Pressable is a plain toggle, not part of the glass/Host first-mount
+ *   hazard.)
  * - The glass is rounded by `borderRadius` on the `GlassView` itself (native
  *   UIGlassEffect corner configuration), never clipped by a rounded
  *   `overflow: hidden` parent: that crops iOS's glass to a hard shape and it
@@ -32,19 +32,12 @@
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
-import { AgentButton } from "./AgentButton";
-import { useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
-import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 
 // Comfortably under half the field's smallest (idle) rendered height, so the
 // rounded corners never overlap/distort no matter which row arrangement shows.
 const FIELD_RADIUS = 30;
-
-// How much smaller the assistant button is than the pill it sits beside. The
-// button stays vertically centred with the pill (still aligned); this just gives
-// it a little inset top and bottom so it doesn't read as bulky.
-const AGENT_BUTTON_INSET = 6;
 
 export interface BottomBarProps {
   /** Focused or non-empty — the variant computes it and owns the animation. */
@@ -66,97 +59,57 @@ export interface BottomBarProps {
   readonly collapsedCenter: React.ReactNode;
   /** Right control shown only while expanded (Send); slides to 0 width collapsed. */
   readonly trailing: React.ReactNode;
-  /** Focus the input — bound to taps on the collapsed pill / mirror. */
+  /** Open the bar — bound to taps on the collapsed pill / mirror. */
   readonly onExpandRequest: () => void;
-  /** Which surface this is, gating the assistant per the user's settings. */
-  readonly agentSurface: AgentSurface;
-  /** Opens the assistant; wired later, so optional. */
-  readonly onAgent?: () => void;
 }
 
 export const BottomBar = (props: BottomBarProps): React.ReactElement => {
   const scheme = useColorScheme();
-  const showAgent = useAgentButtonVisible(props.agentSurface);
   const { expanded } = props;
-
-  // The assistant button must be exactly the pill's COLLAPSED height so its
-  // circle sits flush with the pill (not taller, not floating centred). That
-  // height depends on which controls are visible, so rather than recompute it
-  // from constants and risk drift, measure the real glass pill while collapsed
-  // and size the button to it. Seeded with the computed value so the common case
-  // needs no resize (a resize can jog the native Host's first-mount alignment).
-  const [pillHeight, setPillHeight] = React.useState(COMPOSER_PILL_HEIGHT);
-  // The assistant button, a touch smaller than the pill and centred beside it.
-  const agentSize = Math.max(pillHeight - AGENT_BUTTON_INSET, 24);
-  const onFieldLayout = React.useCallback(
-    (height: number): void => {
-      // Only the collapsed height is the button's reference — the field grows
-      // tall when expanded, but the button is hidden then.
-      if (expanded) return;
-      const next = Math.round(height);
-      if (next > 0) setPillHeight((current) => (current === next ? current : next));
-    },
-    [expanded],
-  );
 
   return (
     <View style={[styles.root, { paddingBottom: Math.max(props.bottomInset, 8) }]}>
       {props.error !== undefined ? <Text style={styles.error}>{props.error}</Text> : null}
-      {/* The pill and the assistant sit in one row: the pill flexes to fill,
-       * the assistant rides its right edge. */}
-      <View style={styles.barRow}>
-        {/* The small drop shadow lives on this OUTER wrapper. */}
-        <View style={styles.pillShadow}>
-        {/* Measures the pill; it does not clip or round it (the glass rounds
-         * itself). */}
-        <View onLayout={(e) => onFieldLayout(e.nativeEvent.layout.height)}>
-          <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
-            {props.topSection !== undefined ? (
-              <View style={[styles.topSection, !expanded && styles.topSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
-                {props.topSection}
-              </View>
-            ) : null}
-            {/* inputSection — the input alone, grows upward, collapses to 0
-             * height + 0 opacity when idle; never unmounts. */}
-            <View style={[styles.inputSection, !expanded && styles.inputSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
-              {props.input}
+      {/* The small drop shadow lives on this OUTER wrapper; it does not clip or
+       * round the glass (the glass rounds itself). */}
+      <View style={styles.pillShadow}>
+        <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+          {props.topSection !== undefined ? (
+            <View style={[styles.topSection, !expanded && styles.topSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
+              {props.topSection}
             </View>
-            {/* controlsRow — always visible: leading | centre | trailing. */}
-            <View style={[styles.controlsRow, !expanded && styles.controlsRowCollapsed]}>
-              {props.leading}
-              {/* Two always-mounted, absolutely-stacked centre slots, cross-faded
-               * by opacity/pointerEvents on `expanded` — never conditionally
-               * rendered, which is what removes the icon-settles-late race. */}
-              <View style={styles.pickerSlot}>
-                <View style={[styles.slotContent, styles.autoContent, { opacity: expanded ? 1 : 0 }]} pointerEvents={expanded ? "auto" : "none"}>
-                  {props.expandedCenter}
-                </View>
-                <Pressable style={[styles.slotContent, { opacity: expanded ? 0 : 1 }]} pointerEvents={expanded ? "none" : "auto"} onPress={props.onExpandRequest}>
-                  {props.collapsedCenter}
-                </Pressable>
-              </View>
-              {/* Send: shown expanded, slides to 0 width collapsed. overflow clips
-               * the still-mounted Host so nothing unmounts. */}
-              <View style={[styles.sendSlot, !expanded && styles.sendSlotCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
-                {props.trailing}
-              </View>
-            </View>
-            {/* Collapsed: catch taps anywhere the buttons don't claim so the
-             * whole pill expands. Expanded: gone, so the controls work normally. */}
-            {!expanded ? (
-              <Pressable style={styles.expandHit} onPress={props.onExpandRequest} accessibilityRole="button" />
-            ) : null}
-          </GlassView>
-        </View>
-        </View>
-        {showAgent ? (
-          <View
-            style={[styles.agentSlot, { width: agentSize, height: agentSize }, expanded && styles.agentSlotCollapsed]}
-            pointerEvents={expanded ? "none" : "auto"}
-          >
-            <AgentButton onPress={props.onAgent} size={agentSize} />
+          ) : null}
+          {/* inputSection — the input alone, grows upward, collapses to 0
+           * height + 0 opacity when idle; never unmounts. */}
+          <View style={[styles.inputSection, !expanded && styles.inputSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
+            {props.input}
           </View>
-        ) : null}
+          {/* controlsRow — always visible: leading | centre | trailing. */}
+          <View style={[styles.controlsRow, !expanded && styles.controlsRowCollapsed]}>
+            {props.leading}
+            {/* Two always-mounted, absolutely-stacked centre slots, cross-faded
+             * by opacity/pointerEvents on `expanded` — never conditionally
+             * rendered, which is what removes the icon-settles-late race. */}
+            <View style={styles.pickerSlot}>
+              <View style={[styles.slotContent, styles.autoContent, { opacity: expanded ? 1 : 0 }]} pointerEvents={expanded ? "auto" : "none"}>
+                {props.expandedCenter}
+              </View>
+              <Pressable style={[styles.slotContent, { opacity: expanded ? 0 : 1 }]} pointerEvents={expanded ? "none" : "auto"} onPress={props.onExpandRequest}>
+                {props.collapsedCenter}
+              </Pressable>
+            </View>
+            {/* Send: shown expanded, slides to 0 width collapsed. overflow clips
+             * the still-mounted Host so nothing unmounts. */}
+            <View style={[styles.sendSlot, !expanded && styles.sendSlotCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
+              {props.trailing}
+            </View>
+          </View>
+          {/* Collapsed: catch taps anywhere the buttons don't claim so the
+           * whole pill expands. Expanded: gone, so the controls work normally. */}
+          {!expanded ? (
+            <Pressable style={styles.expandHit} onPress={props.onExpandRequest} accessibilityRole="button" />
+          ) : null}
+        </GlassView>
       </View>
     </View>
   );
@@ -164,7 +117,8 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
 
 const styles = StyleSheet.create({
   root: {
-    paddingHorizontal: 20,
+    // The Dubz window's margin, so the two pages line up side by side.
+    paddingHorizontal: 12,
     paddingTop: 8,
   },
   error: {
@@ -173,14 +127,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     paddingHorizontal: 4,
   },
-  barRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
   // Carries the pill's flex and its small drop shadow (no overflow, so the
   // shadow isn't clipped); the rounded rect gives the shadow its shape.
   pillShadow: {
-    flex: 1,
     borderRadius: FIELD_RADIUS,
     borderCurve: "continuous",
     shadowColor: "#000000",
@@ -248,18 +197,6 @@ const styles = StyleSheet.create({
     // overflow clips the still-mounted Host down to 0 width ONLY while
     // collapsed — never when shown, where it would crop the glass button's edge
     // (the same crop the assistant button had).
-    overflow: "hidden",
-  },
-  agentSlot: {
-    // width/height set inline to the measured pill height so the button is flush.
-    marginLeft: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  agentSlotCollapsed: {
-    width: 0,
-    marginLeft: 0,
-    opacity: 0,
     overflow: "hidden",
   },
 });

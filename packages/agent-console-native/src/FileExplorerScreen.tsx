@@ -27,8 +27,10 @@ import {
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
-import { BottomSearchPill, useSearchPill } from "./BottomSearchPill";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
+import { DubzBar } from "./Composer";
+import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { iconForFile } from "./fileIcon";
 import { clearForward, popForward, pushForward, useForwardTarget } from "./fileNavHistory";
@@ -40,6 +42,7 @@ import { SetiIcon } from "./SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { SystemIcon } from "./SystemIcon";
 import { usePrimaryWorktree } from "./primaryWorktree";
+import { composerRestingBottom } from "./useKeyboardSlide";
 import { WorktreePicker } from "./WorktreePicker";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
@@ -124,7 +127,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   const tree = useFileTree(backend, dir);
   const { navigation } = props;
   const forwardTarget = useForwardTarget();
-  const [query, setQuery] = React.useState("");
+  const insets = useSafeAreaInsets();
 
   // Build the code surfaces now, while someone is reading a directory listing,
   // so the first file they tap opens against a web view that has already parsed
@@ -139,13 +142,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       .catch((cause: unknown) => console.error("[code surface] warming the pool failed", cause));
   }, []);
 
-  // Filter the visible rows by name. A trimmed, case-insensitive substring
-  // match over what's loaded — expanded folders included.
-  const q = query.trim().toLowerCase();
-  const rows = q.length === 0 ? tree.rows : tree.rows.filter((row) => row.name.toLowerCase().includes(q));
-
-  // Bottom search pill behaviour, shared with the theme editor.
-  const pill = useSearchPill();
+  const { rows } = tree;
 
   // When this folder is popped (back button or swipe-back), remember it so the
   // forward button can return here. Native stacks otherwise discard it.
@@ -230,24 +227,19 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
       ) : (
         <ScrollView
           style={styles.fill}
-          keyboardDismissMode="interactive"
-          onScroll={pill.onScroll}
-          scrollEventThrottle={16}
-          contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: pill.listPaddingBottom, paddingHorizontal: 14 }}
+          // Room to scroll the last row up past the bottom bar.
+          contentContainerStyle={{ paddingTop: headerHeight + 4, paddingBottom: insets.bottom + COMPOSER_PILL_HEIGHT + 28, paddingHorizontal: 14 }}
         >
-          {rows.length === 0 ? (
-            <Text style={styles.noMatch}>No matches.</Text>
-          ) : (
-            rows.map((row, index) => (
-              <Row key={row.path} row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
-            ))
-          )}
+          {rows.map((row, index) => (
+            <Row key={row.path} row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={onOpen} />
+          ))}
         </ScrollView>
       )}
       <EdgeBlurBars variant="top" />
-      {!tree.rootLoading && !tree.rootFailed && tree.rows.length > 0 ? (
-        <BottomSearchPill value={query} onChangeText={setQuery} placeholder="Search" hidden={pill.hidden} agentSurface="repo" />
-      ) : null}
+      {/* The bottom bar, with Dubz its only page: nothing to compose here. */}
+      <View style={[styles.bar, { bottom: composerRestingBottom(insets.bottom) }]}>
+        <DubzBar bottomInset={0} agentSurface="repo" />
+      </View>
     </View>
   );
 };
@@ -306,11 +298,11 @@ const styles = StyleSheet.create({
     color: colors.secondaryLabel,
     textAlign: "center",
   },
-  noMatch: {
-    color: colors.secondaryLabel,
-    fontSize: 15,
-    textAlign: "center",
-    marginTop: 24,
+  // Where Home's composer floats (`bottom` set inline).
+  bar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
   },
   error: {
     color: colors.secondaryLabel,

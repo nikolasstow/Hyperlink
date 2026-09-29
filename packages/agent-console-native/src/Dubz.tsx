@@ -1,19 +1,22 @@
 /**
- * Dubz — the app-wide assistant surface. Tapping any {@link AgentButton} opens a
- * big glass window that animates in and fills most of the screen above the
- * keyboard, with margins all round (like tapping the composer pill, but instead
- * of the pill growing, this whole window appears).
+ * Dubz — the app-wide assistant surface: a big glass window that animates in
+ * and fills most of the screen above the keyboard, with margins all round.
+ *
+ * It is one of the bottom bar's pages. Where the bar is a composer (Home, a
+ * repo, a session), the expanded bar has two pages side by side: the composer,
+ * then Dubz; a swipe while expanded slides from one to the other, and either
+ * collapses back to the bar. Where there is nothing to compose (Files), Dubz is
+ * the bar's only page. The bar opens to the page opened last.
  *
  * It's a single GLOBAL overlay mounted once at the app root (see App.tsx), driven
- * by {@link DubzProvider}'s open/closed state — so the same window opens from
- * Home, a repo page, the search pill, wherever Dubz is shown. `useDubz().open()`
- * opens it.
+ * by {@link DubzProvider}'s open/closed state. `useDubz().open()` grows it in
+ * from the bar; a swipe from the composer slides it in beside it (`pageX`).
  *
  * For now this is JUST the glass window (keyboard pops up via an autofocused
  * field, but with only placeholder text inside). The actual Dubz agent — chat,
  * content, controls — is a separate later spec that fills this shell in.
  *
- * Glass invariants (learned the hard way — see AgentButton / RepoScreen):
+ * Glass invariants (learned the hard way — see BottomBar / RepoScreen):
  * - Round the GlassView via `borderRadius` on the GlassView itself (native
  *   UIGlassEffect corner config); never clip it with an `overflow: hidden`
  *   parent — that crops the material.
@@ -29,11 +32,20 @@ import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { Easing, runOnJS, useAnimatedKeyboard, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Reanimated, {
+  Easing,
+  runOnJS,
+  useAnimatedKeyboard,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME } from "./agentButtonSettings";
 import { colors } from "./colors";
-import { getDubzDetent, setDubzDetent } from "./settings";
+import { getBarPage, getDubzDetent, setBarPage, setDubzDetent, type BarPage } from "./settings";
 import { useTheme } from "./theme";
 
 /** Gap between the window and the screen edges (left/right) / the keyboard. */
@@ -67,6 +79,27 @@ const FLING_VELOCITY = 1400;
  * which (last detent + margin) the window dismisses instead of snapping back. */
 const DISMISS_ZONE = 120;
 const DISMISS_MARGIN = 48;
+/** How long a page slides on after a swipe is let go. */
+export const PAGE_MS = 260;
+/** How far (a fraction of the screen) a swipe must carry a page to turn it,
+ * unless it is flung. */
+export const PAGE_TURN = 0.35;
+/** Fling speed (px/s) that turns the page however far it went. */
+export const PAGE_FLING = 700;
+/** How far a finger moves sideways before a swipe starts paging, and up or
+ * down before it gives way to the vertical gestures. */
+export const PAGE_SLOP_X = 16;
+export const PAGE_SLOP_Y = 12;
+export const pageEasing = Easing.out(Easing.cubic);
+
+// The page the bar last opened to, remembered across launches.
+let lastPage: BarPage = "compose";
+export const rememberPage = (page: BarPage): void => {
+  lastPage = page;
+  void setBarPage(page);
+};
+/** The page the bottom bar opens to: the one opened last. */
+export const barPage = (): BarPage => lastPage;
 
 // Last detent the window was left at, remembered across close/reopen (session
 // lifetime): a fraction of maxDrag (0 = full, 0.5 = mid, 1 = pill) plus the
@@ -81,10 +114,54 @@ const rememberDetent = (frac: number, kb: number): void => {
   void setDubzDetent({ frac, kbFull: kb });
 };
 
+/** A screen's composer, the page beside Dubz while that screen shows. */
+export interface ComposePage {
+  readonly id: number;
+  /** Keep the composer expanded (it is sliding in, not yet focused), or stop. */
+  readonly hold: (held: boolean) => void;
+  readonly focus: () => void;
+}
+
+/** How the window arrives: grown out of the bar, or slid in beside the
+ * composer by a swipe. */
+type Arrival = "grow" | "slide";
+
 interface DubzApi {
+  /** Grow the window out of the bar. */
   readonly open: () => void;
+  /** Shrink it back into the bar. */
   readonly close: () => void;
   readonly isOpen: boolean;
+  readonly arrival: Arrival;
+  /** Where the pages stand: 0 the composer, 1 Dubz, between while sliding.
+   * Both follow it by layout (`left`, margins), never a transform. */
+  readonly pageX: SharedValue<number>;
+  /** The composer that slides with the pages (its `id`), or -1: the rest stay
+   * put. */
+  readonly slidingCompose: SharedValue<number>;
+  /** Whether a composer is beside Dubz (the focused screen has one). */
+  readonly hasCompose: boolean;
+  /** A screen's composer takes its place beside Dubz; returns its leaving. */
+  readonly registerCompose: (page: ComposePage) => () => void;
+  /** A swipe from the composer begins: the window mounts off to the right. */
+  readonly beginFromCompose: (composeId: number) => void;
+  /** The swipe turned the page: Dubz takes the keyboard. */
+  readonly settleOnDubz: () => void;
+  /** The swipe fell back: the window goes, as if it never came. */
+  readonly dropDubz: () => void;
+  /** A swipe from Dubz begins: the composer holds itself expanded, off to the
+   * left. */
+  readonly beginFromDubz: () => void;
+  /** That swipe turned the page: the composer takes the keyboard. */
+  readonly settleOnCompose: () => void;
+  /** The composer page has slid in: the window goes. */
+  readonly finishOnCompose: () => void;
+  /** That swipe fell back: the composer lets go. */
+  readonly releaseCompose: () => void;
+  /** The window's input, focused when a swipe lands on Dubz. */
+  readonly inputRef: React.RefObject<TextInput | null>;
+  /** Set when the window should go at once, without shrinking. */
+  readonly instantClose: React.RefObject<boolean>;
 }
 
 const DubzContext = React.createContext<DubzApi | undefined>(undefined);
@@ -98,8 +175,15 @@ export const useDubz = (): DubzApi => {
 
 export const DubzProvider = (props: { readonly children: React.ReactNode }): React.ReactElement => {
   const [isOpen, setIsOpen] = React.useState(false);
-  // Load the persisted detent once, before the user can open the window, so the
-  // first open after an app restart lands where it was left.
+  const [arrival, setArrival] = React.useState<Arrival>("grow");
+  const pageX = useSharedValue(1);
+  const slidingCompose = useSharedValue(-1);
+  const inputRef = React.useRef<TextInput>(null);
+  const instantClose = React.useRef(false);
+  const compose = React.useRef<ComposePage | undefined>(undefined);
+  const [hasCompose, setHasCompose] = React.useState(false);
+  // Load the persisted detent and page once, before the user can open the
+  // window, so the first open after an app restart lands where it was left.
   React.useEffect(() => {
     void getDubzDetent().then((v) => {
       if (v !== undefined) {
@@ -107,10 +191,84 @@ export const DubzProvider = (props: { readonly children: React.ReactNode }): Rea
         savedKbFull = v.kbFull;
       }
     });
+    void getBarPage().then((page) => {
+      if (page !== undefined) lastPage = page;
+    });
   }, []);
-  const open = React.useCallback(() => setIsOpen(true), []);
-  const close = React.useCallback(() => setIsOpen(false), []);
-  const api = React.useMemo<DubzApi>(() => ({ open, close, isOpen }), [open, close, isOpen]);
+  const open = React.useCallback(() => {
+    // A drop the window never mounted for must not make this close instant.
+    instantClose.current = false;
+    pageX.value = 1;
+    slidingCompose.value = -1;
+    setArrival("grow");
+    setIsOpen(true);
+    rememberPage("dubz");
+  }, [pageX, slidingCompose]);
+  const close = React.useCallback(() => {
+    // The composer comes back to its place, collapsed, as the window shrinks.
+    slidingCompose.value = -1;
+    setIsOpen(false);
+  }, [slidingCompose]);
+  const closeAtOnce = React.useCallback(() => {
+    instantClose.current = true;
+    slidingCompose.value = -1;
+    setIsOpen(false);
+  }, [slidingCompose]);
+  const registerCompose = React.useCallback((page: ComposePage) => {
+    compose.current = page;
+    setHasCompose(true);
+    return () => {
+      if (compose.current?.id !== page.id) return;
+      compose.current = undefined;
+      setHasCompose(false);
+    };
+  }, []);
+  const beginFromCompose = React.useCallback(
+    (composeId: number) => {
+      instantClose.current = false;
+      slidingCompose.value = composeId;
+      setArrival("slide");
+      setIsOpen(true);
+    },
+    [slidingCompose],
+  );
+  const settleOnDubz = React.useCallback(() => {
+    inputRef.current?.focus();
+    rememberPage("dubz");
+  }, []);
+  const beginFromDubz = React.useCallback(() => {
+    const page = compose.current;
+    if (page === undefined) return;
+    slidingCompose.value = page.id;
+    page.hold(true);
+  }, [slidingCompose]);
+  const settleOnCompose = React.useCallback(() => {
+    compose.current?.focus();
+    rememberPage("compose");
+  }, []);
+  const releaseCompose = React.useCallback(() => compose.current?.hold(false), []);
+  const api = React.useMemo<DubzApi>(
+    () => ({
+      open,
+      close,
+      isOpen,
+      arrival,
+      pageX,
+      slidingCompose,
+      hasCompose,
+      registerCompose,
+      beginFromCompose,
+      settleOnDubz,
+      dropDubz: closeAtOnce,
+      beginFromDubz,
+      settleOnCompose,
+      finishOnCompose: closeAtOnce,
+      releaseCompose,
+      inputRef,
+      instantClose,
+    }),
+    [open, close, isOpen, arrival, pageX, slidingCompose, hasCompose, registerCompose, beginFromCompose, settleOnDubz, closeAtOnce, beginFromDubz, settleOnCompose, releaseCompose],
+  );
   return <DubzContext.Provider value={api}>{props.children}</DubzContext.Provider>;
 };
 
@@ -132,14 +290,16 @@ export const DubzOverlay = (): React.ReactElement | null => {
 
 /** The window itself — mounted only while open (and through its exit animation). */
 const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.ReactElement => {
-  const { isOpen, close } = useDubz();
+  const { isOpen, close, arrival, pageX, hasCompose, beginFromDubz, settleOnCompose, finishOnCompose, releaseCompose, inputRef, instantClose } = useDubz();
+  // How this mount came: fixed for its life (a later open is a new mount).
+  const [arrivedBy] = React.useState(arrival);
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const { colors: themeColors } = useTheme();
   // Destructure the height SHARED VALUE — capturing the whole useAnimatedKeyboard
   // object (KeyboardImpl) in a worklet fails to serialize to the UI thread.
   const { height: kbHeight } = useAnimatedKeyboard();
-  const { height: screenH } = useWindowDimensions();
+  const { height: screenH, width: screenW } = useWindowDimensions();
   const [text, setText] = React.useState("");
 
   // `entered` toggles the native glass none↔clear (its own animate fades it, no
@@ -192,12 +352,18 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const stableBottom = Math.max(savedKbFull, insets.bottom) + MARGIN;
     const maxDrag = Math.max(screenH - (insets.top + TOP_MARGIN) - stableBottom - MIN_HEIGHT, 0);
     dragY.value = savedDetentFrac * maxDrag;
+    // Slid in by a swipe: already full size, beside the composer.
+    if (arrivedBy === "slide") {
+      grow.value = 1;
+      setEntered(true);
+      return undefined;
+    }
     const id = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
       setEntered(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [grow, dragY, insets.top, insets.bottom, screenH]);
+  }, [grow, dragY, insets.top, insets.bottom, screenH, arrivedBy]);
 
   // Slide the handle to its new spot only after a drag settles (pillMode changes),
   // never during the drag itself.
@@ -208,12 +374,19 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // Exit when closed: fade + shrink out, then unmount via onClosed.
   React.useEffect(() => {
     if (isOpen) return undefined;
+    // Gone at once (a page turned away, or never arrived): no shrink, and the
+    // keyboard stays with the composer.
+    if (instantClose.current) {
+      instantClose.current = false;
+      onClosed();
+      return undefined;
+    }
     Keyboard.dismiss();
     setEntered(false);
     grow.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
     const t = setTimeout(onClosed, ANIM_MS + 40);
     return () => clearTimeout(t);
-  }, [isOpen, onClosed, grow]);
+  }, [isOpen, onClosed, grow, instantClose]);
 
   // Drag the top bar down to lower the window (revealing what's behind), snapping
   // to detents like an iOS sheet — but anchored above the keyboard, not the very
@@ -298,6 +471,35 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     [dismissKeyboard, resizing],
   );
 
+  // Swipe right, while a composer is beside Dubz, to slide back to it. Only a
+  // clear sideways drag pages; up and down stay the resize and keyboard drags.
+  const pageBack = React.useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(hasCompose)
+        .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
+        .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
+        .onStart(() => {
+          runOnJS(beginFromDubz)();
+        })
+        .onUpdate((e) => {
+          const moved = e.translationX / screenW;
+          pageX.value = 1 - (moved < 0 ? 0 : moved > 1 ? 1 : moved);
+        })
+        .onEnd((e) => {
+          if (1 - pageX.value > PAGE_TURN || e.velocityX > PAGE_FLING) {
+            runOnJS(settleOnCompose)();
+            pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+              if (finished === true) runOnJS(finishOnCompose)();
+            });
+            return;
+          }
+          runOnJS(releaseCompose)();
+          pageX.value = withTiming(1, { duration: PAGE_MS, easing: pageEasing });
+        }),
+    [hasCompose, screenW, pageX, beginFromDubz, settleOnCompose, finishOnCompose, releaseCompose],
+  );
+
   // Grows via LAYOUT (animating `top`), never a transform — a transform/opacity
   // would composite the subtree and stop the glass rendering. Full width the whole
   // time (left/right fixed); the bottom is anchored at the keyboard, and the top
@@ -313,11 +515,13 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
     const stableBottom = Math.max(kbFull.value, insets.bottom) + MARGIN;
     const fullHeight = screenH - stableBottom - fullTop;
     const height = Math.max(fullHeight * grow.value - dragY.value, 0);
+    // Off to the right by how far the pages stand from Dubz.
+    const aside = (1 - pageX.value) * screenW;
     return {
       top: bottomEdge - height,
       height,
-      left: MARGIN,
-      right: MARGIN,
+      left: MARGIN + aside,
+      right: MARGIN - aside,
     };
   });
 
@@ -375,93 +579,98 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
       {/* The clear glass window, hosted in a GlassContainer. See-through with
        * refraction (no tint, no scrim); the autofocused input pops the keyboard
        * so the window sits above it. */}
-      <Reanimated.View style={[styles.window, windowStyle]}>
-        <GlassContainer style={styles.glassContainer}>
-          <GlassView
-            style={styles.glass}
-            // Fades in via the native animate (none → clear) — no opacity, which
-            // would composite and kill the glass. Short duration so it finishes
-            // ~30% into the grow.
-            glassEffectStyle={{ style: entered ? "clear" : "none", animate: true, animationDuration: FADE_S }}
-            // A slight dark tint (tints the glass material, not a solid fill) to
-            // give the clear glass some body over bright content.
-            tintColor="rgba(0,0,0,0.18)"
-            colorScheme={scheme === "dark" ? "dark" : "light"}
-          >
-            {/* Conversation area — empty for now; flexes so the composer pill sits
-             * at the bottom of the window. Hidden in pill mode. */}
-            {pillMode ? null : <View style={styles.conversationArea} />}
+      <GestureDetector gesture={pageBack}>
+        <Reanimated.View style={[styles.window, windowStyle]}>
+          <GlassContainer style={styles.glassContainer}>
+            <GlassView
+              style={styles.glass}
+              // Fades in via the native animate (none → clear) — no opacity, which
+              // would composite and kill the glass. Short duration so it finishes
+              // ~30% into the grow.
+              glassEffectStyle={{ style: entered ? "clear" : "none", animate: true, animationDuration: FADE_S }}
+              // A slight dark tint (tints the glass material, not a solid fill) to
+              // give the clear glass some body over bright content.
+              tintColor="rgba(0,0,0,0.18)"
+              colorScheme={scheme === "dark" ? "dark" : "light"}
+            >
+              {/* Conversation area — empty for now; flexes so the composer pill sits
+               * at the bottom of the window. Hidden in pill mode. */}
+              {pillMode ? null : <View style={styles.conversationArea} />}
 
-            {/* Glass-in-glass: a frosted composer pill inside the clear window —
-             * the bottom-bar design: (+) | input | (send). Its margins collapse
-             * continuously (pillPadStyle) toward the pill detent, and its frosted
-             * background (a separate GlassView) FADES OUT over the same travel
-             * (frostStyle opacity) so the frost→clear fade rides the shrink and the
-             * pill blends into the clear window at the detent — no pill-in-pill. The
-             * pill radius stays at the window radius in every mode, so it's a full
-             * capsule throughout — no radius pop. */}
-            <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
-              <GestureDetector gesture={dismissKb}>
-                <View style={styles.pill}>
-                  {/* Frosted glass background, faded by the drag. Regular glass
-                   * survives an animated-opacity layer (only CLEAR glass dies under
-                   * compositing), and this is a descendant of the window glass, not
-                   * an ancestor, so the window's own clear glass is unaffected. */}
-                  <Reanimated.View style={[StyleSheet.absoluteFill, frostStyle]} pointerEvents="none">
-                    <GlassView
-                      style={styles.pillGlass}
-                      glassEffectStyle="regular"
-                      colorScheme={scheme === "dark" ? "dark" : "light"}
+              {/* Glass-in-glass: a frosted composer pill inside the clear window —
+               * the bottom-bar design: (+) | input | (send). Its margins collapse
+               * continuously (pillPadStyle) toward the pill detent, and its frosted
+               * background (a separate GlassView) FADES OUT over the same travel
+               * (frostStyle opacity) so the frost→clear fade rides the shrink and the
+               * pill blends into the clear window at the detent — no pill-in-pill. The
+               * pill radius stays at the window radius in every mode, so it's a full
+               * capsule throughout — no radius pop. */}
+              <Reanimated.View style={[styles.pillWrap, pillMode && styles.pillWrapFill, pillPadStyle]}>
+                <GestureDetector gesture={dismissKb}>
+                  <View style={styles.pill}>
+                    {/* Frosted glass background, faded by the drag. Regular glass
+                     * survives an animated-opacity layer (only CLEAR glass dies under
+                     * compositing), and this is a descendant of the window glass, not
+                     * an ancestor, so the window's own clear glass is unaffected. */}
+                    <Reanimated.View style={[StyleSheet.absoluteFill, frostStyle]} pointerEvents="none">
+                      <GlassView
+                        style={styles.pillGlass}
+                        glassEffectStyle="regular"
+                        colorScheme={scheme === "dark" ? "dark" : "light"}
+                      />
+                    </Reanimated.View>
+                    <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
+                      <Ionicons name="add" size={22} color={colors.secondaryLabel} />
+                    </Pressable>
+                    <TextInput
+                      ref={inputRef}
+                      style={styles.pillInput}
+                      value={text}
+                      onChangeText={setText}
+                      placeholder={`Ask ${AGENT_NAME}…`}
+                      placeholderTextColor={colors.placeholderText}
+                      // Grown in, it takes the keyboard at once; slid in, when the
+                      // page turns (settleOnDubz).
+                      autoFocus={arrivedBy === "grow"}
+                      multiline
                     />
-                  </Reanimated.View>
-                  <Pressable style={styles.plusChip} hitSlop={6} accessibilityRole="button" accessibilityLabel="Add">
-                    <Ionicons name="add" size={22} color={colors.secondaryLabel} />
-                  </Pressable>
-                  <TextInput
-                    style={styles.pillInput}
-                    value={text}
-                    onChangeText={setText}
-                    placeholder={`Ask ${AGENT_NAME}…`}
-                    placeholderTextColor={colors.placeholderText}
-                    autoFocus
-                    multiline
-                  />
-                  <Pressable
-                    style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.sendActiveFill : themeColors.sendMutedFill }]}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel="Send"
-                    onPress={() => setText("")}
-                  >
-                    <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-                  </Pressable>
-                </View>
-              </GestureDetector>
+                    <Pressable
+                      style={[styles.sendChip, { backgroundColor: text.trim().length > 0 ? themeColors.sendActiveFill : themeColors.sendMutedFill }]}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel="Send"
+                      onPress={() => setText("")}
+                    >
+                      <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </GestureDetector>
+              </Reanimated.View>
+            </GlassView>
+          </GlassContainer>
+
+          {/* Glass tab — a SEPARATE element, fixed just above the pill's top edge. It
+           * crossfades in/out via the native glassEffectStyle `animate` (none↔regular),
+           * NOT an opacity wrapper: a standalone GlassView under an animated-opacity
+           * ancestor stops rendering its glass. */}
+          <View style={styles.tabGlassWrap} pointerEvents="none">
+            <GlassView
+              style={styles.tabGlass}
+              glassEffectStyle={{ style: pillMode ? "regular" : "none", animate: true, animationDuration: FADE_S }}
+              colorScheme={scheme === "dark" ? "dark" : "light"}
+            />
+          </View>
+
+          {/* The ONE grabber — a line that just moves up and down (handleStyle): a
+           * handle inside the window top at larger detents that floats up over the
+           * glass tab at the min detent. The single drag handle at every detent. */}
+          <GestureDetector gesture={drag}>
+            <Reanimated.View style={[styles.grabHandle, handleStyle]}>
+              <View style={styles.grabber} />
             </Reanimated.View>
-          </GlassView>
-        </GlassContainer>
-
-        {/* Glass tab — a SEPARATE element, fixed just above the pill's top edge. It
-         * crossfades in/out via the native glassEffectStyle `animate` (none↔regular),
-         * NOT an opacity wrapper: a standalone GlassView under an animated-opacity
-         * ancestor stops rendering its glass. */}
-        <View style={styles.tabGlassWrap} pointerEvents="none">
-          <GlassView
-            style={styles.tabGlass}
-            glassEffectStyle={{ style: pillMode ? "regular" : "none", animate: true, animationDuration: FADE_S }}
-            colorScheme={scheme === "dark" ? "dark" : "light"}
-          />
-        </View>
-
-        {/* The ONE grabber — a line that just moves up and down (handleStyle): a
-         * handle inside the window top at larger detents that floats up over the
-         * glass tab at the min detent. The single drag handle at every detent. */}
-        <GestureDetector gesture={drag}>
-          <Reanimated.View style={[styles.grabHandle, handleStyle]}>
-            <View style={styles.grabber} />
-          </Reanimated.View>
-        </GestureDetector>
-      </Reanimated.View>
+          </GestureDetector>
+        </Reanimated.View>
+      </GestureDetector>
     </View>
   );
 };

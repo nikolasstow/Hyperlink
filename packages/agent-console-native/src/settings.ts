@@ -33,6 +33,7 @@ const DEFAULT_PERMISSION_MODE_KEY = "agent-console-native:defaultPermissionMode"
 const SESSION_PERMISSION_MODES_KEY = "agent-console-native:sessionPermissionModes";
 const BACKEND_ADDRESS_KEY = "agent-console-native:backendAddress";
 const DUBZ_DETENT_KEY = "agent-console-native:dubzDetent";
+const BAR_PAGE_KEY = "agent-console-native:barPage";
 /** The vite dev server's port. Same host as opencode in every setup so far,
  * so the backend address is derived rather than asked for — one address to
  * type stays one address to type. */
@@ -143,6 +144,17 @@ export const getDubzDetent = async (): Promise<{ frac: number; kbFull: number } 
 
 export const setDubzDetent = (value: { readonly frac: number; readonly kbFull: number }): Promise<void> =>
   AsyncStorage.setItem(DUBZ_DETENT_KEY, JSON.stringify(value));
+
+/** The bottom bar's pages: the screen's composer, or Dubz. */
+export type BarPage = "compose" | "dubz";
+
+/** The page the bottom bar last opened to; it opens to it again. */
+export const getBarPage = async (): Promise<BarPage | undefined> => {
+  const value = await AsyncStorage.getItem(BAR_PAGE_KEY);
+  return value === "compose" || value === "dubz" ? value : undefined;
+};
+
+export const setBarPage = (value: BarPage): Promise<void> => AsyncStorage.setItem(BAR_PAGE_KEY, value);
 
 export const getDefaultWorktreePreference = async (): Promise<DefaultWorktreePreference> => {
   const value = await AsyncStorage.getItem(DEFAULT_WORKTREE_PREF_KEY);
