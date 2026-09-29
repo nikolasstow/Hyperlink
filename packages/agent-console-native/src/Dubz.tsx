@@ -160,7 +160,14 @@ const DubzWindow = ({ onClosed }: { readonly onClosed: () => void }): React.Reac
   // window's height and just drops it to the bottom of the screen (rather than
   // growing it downward), and the detents are the same with the keyboard present
   // or gone.
-  const kbFull = useSharedValue(0);
+  //
+  // Seeded with the keyboard height remembered with the detent: the window
+  // opens at a position computed from that height, so every size must start
+  // from it too. Starting at 0 laid the composer out as if there were no
+  // keyboard (margins and frost at the wrong point of their collapse) until
+  // the keyboard appeared and put it right: the misalignment that "fixed
+  // itself".
+  const kbFull = useSharedValue(savedKbFull);
   // Drives the handle's position: 0 = the line inside the window top, 1 = lifted
   // over the glass tab. Animated on RELEASE (when pillMode settles), not during the
   // drag — so the handle holds still while dragging and slides only after you let go.
