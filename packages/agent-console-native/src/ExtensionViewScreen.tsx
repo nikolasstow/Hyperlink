@@ -154,7 +154,7 @@ const Row = (props: {
   );
   return (
     <View>
-      <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }}>
+      <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }} ignoreSafeArea="all">
         {menu.length === 0 ? (
           trigger
         ) : (

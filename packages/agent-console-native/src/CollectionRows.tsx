@@ -4,7 +4,9 @@
  *
  * Rows and tiles are SwiftUI so each carries the native context menu (a hard
  * press lifts it, with what it offers below, each with its icon), the same
- * structure the extension tree view and SessionCard run.
+ * structure the extension tree view and SessionCard run. Their Hosts ignore
+ * the safe area: SwiftUI otherwise pads a row as it scrolls under the header
+ * or the home indicator, so it changes height mid-scroll and overlaps.
  *
  * @internal
  */
@@ -125,7 +127,7 @@ export const ItemRow = (props: {
   );
   return (
     <View>
-      <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }}>
+      <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }} ignoreSafeArea="all">
         {withMenu(props.selecting ? [] : props.menu, trigger)}
       </Host>
       <Separator inset={12 + props.depth * INDENT + CHEVRON_COL + 10} />
@@ -175,7 +177,7 @@ export const NodeRow = (props: {
   );
   return (
     <View>
-      <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }}>
+      <Host matchContents={{ vertical: true, horizontal: false }} style={{ width: props.width }} ignoreSafeArea="all">
         {withMenu(props.menu, trigger)}
       </Host>
       <Separator inset={12 + props.depth * INDENT + CHEVRON_COL + ICON_COL + 20} />
@@ -238,7 +240,7 @@ export const Tile = (props: {
     </VStack>
   );
   return (
-    <Host matchContents style={{ width: props.width }}>
+    <Host matchContents style={{ width: props.width }} ignoreSafeArea="all">
       {withMenu(props.selecting === true ? [] : props.menu, trigger)}
     </Host>
   );

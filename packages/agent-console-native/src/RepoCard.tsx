@@ -89,7 +89,14 @@ export const RepoCard = (props: RepoCardProps): React.ReactElement => {
   const menu = repoMenuFor(props.isKnownRepo);
 
   return (
-    <Host style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }} matchContents={{ vertical: true, horizontal: false }}>
+    <Host
+      style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }}
+      matchContents={{ vertical: true, horizontal: false }}
+      // Ignores the safe area: otherwise SwiftUI pads it as it scrolls under
+      // the header or the home indicator, so it stretches and shrinks while
+      // scrolling and overlaps its neighbours.
+      ignoreSafeArea="all"
+    >
       <ContextMenu>
         <ContextMenu.Items>
           {menu.map((item) => (

@@ -139,7 +139,6 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   // existence). The toast that says so, with Undo, is the caller's.
   const { onArchive, onDelete } = props;
   const swipeable = React.useRef<SwipeableMethods>(null);
-  const knownHeight = cardHeights.get(props.sessionId);
   const rowHeight = useSharedValue(0);
   const slide = useSharedValue(0);
   const collapse = useSharedValue(0);
@@ -173,10 +172,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
 
   return (
     <Animated.View
-      // Its last known height, reserved up front: the card's height comes
-      // from the native side a moment after it mounts, and a card scrolling
-      // back into view started small and grew into the next one.
-      style={[styles.row, knownHeight === undefined ? null : { minHeight: knownHeight }, leave]}
+      style={[styles.row, leave]}
       onLayout={(event) => {
         if (!leaving.current) rowHeight.value = event.nativeEvent.layout.height;
       }}
@@ -198,15 +194,14 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         />
       )}
     >
-    {/* Measures the card as the native side sizes it (a Host reports no
-     * layout of its own). */}
-    <View
-      onLayout={(event) => {
-        const measured = event.nativeEvent.layout.height;
-        if (measured > 0) cardHeights.set(props.sessionId, measured);
-      }}
+    <Host
+      style={{ marginHorizontal: CARD_GUTTER }}
+      matchContents={{ vertical: true, horizontal: false }}
+      // Ignores the safe area: otherwise SwiftUI pads it as it scrolls under
+      // the header or the home indicator, so it stretches and shrinks while
+      // scrolling and overlaps its neighbours.
+      ignoreSafeArea="all"
     >
-    <Host style={{ marginHorizontal: CARD_GUTTER }} matchContents={{ vertical: true, horizontal: false }}>
       <ContextMenu>
         <ContextMenu.Items>
           <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
@@ -242,16 +237,10 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         </ContextMenu.Trigger>
       </ContextMenu>
     </Host>
-    </View>
     </Swipeable>
     </Animated.View>
   );
 };
-
-/** Each session card's height as the native side last measured it, by
- * session id: what a card reserves when it mounts again (scrolling back into
- * view) before its native height arrives. */
-const cardHeights = new Map<string, number>();
 
 /** How the row leaves when archived: sliding off, then closing up. */
 const SLIDE_MS = 220;
