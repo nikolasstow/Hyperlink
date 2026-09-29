@@ -3,7 +3,9 @@
  * left, a tinted glass pill per kind of task with its count (every kind, zero
  * included); on the right, the repo (its name, or a dropdown where the page is
  * not about one repo) with New Task under it. Left column left-aligned, right
- * column right-aligned; nothing is sized from its text.
+ * column right-aligned. Every size is set (the block, each pill, each line);
+ * nothing is measured or sized from its text, so nothing moves when data
+ * comes.
  *
  * Tasks are the repo's GitHub issues (taskCounts.ts). The repos and counts
  * are read from stores loaded as the app starts, so the block is whole the
@@ -23,9 +25,14 @@ import type { GitHubRepo } from "./repoScan";
 import { useWorkspaceRepos } from "./repoScanCache";
 import { KINDS, useTaskCounts } from "./taskCounts";
 
+const PILL_WIDTH = 120;
 const PILL_HEIGHT = 30;
+const PILL_GAP = 8;
+/** Always the three kinds, so always this tall. */
+const BLOCK_HEIGHT = PILL_HEIGHT * KINDS.length + PILL_GAP * (KINDS.length - 1);
 const REPO_SIZE = 20;
-const REPO_HEIGHT = 28;
+const LINE_HEIGHT = 28;
+const NEW_TASK_WIDTH = 110;
 
 /** Each kind's tint; a kind the app does not know is gray. */
 const KIND_TINT: Readonly<Record<string, string>> = {
@@ -58,7 +65,7 @@ export const TaskSuggestion = (props: {
   // Nothing to show tasks for: say why, rather than show nothing.
   if (repoName === undefined || github === undefined) {
     return (
-      <Text style={styles.note}>
+      <Text style={styles.note} numberOfLines={3}>
         {repoName === undefined ? "No GitHub repos found yet. Pull to refresh on Home to scan." : `${repoName} isn’t on GitHub, so it has no tasks.`}
       </Text>
     );
@@ -69,9 +76,11 @@ export const TaskSuggestion = (props: {
     setPicked(name);
   };
 
-  // Every kind, always; before the first load ever, each count a dash.
-  const shown: ReadonlyArray<{ readonly kind: string; readonly count: number | undefined }> =
-    counts.counts ?? KINDS.map((kind) => ({ kind, count: undefined }));
+  // The three kinds, always; before the first load ever, each count a dash.
+  const shown = KINDS.map((kind) => ({
+    kind,
+    count: counts.counts?.find((count) => count.kind === kind)?.count,
+  }));
 
   return (
     <View style={styles.block}>
@@ -85,8 +94,11 @@ export const TaskSuggestion = (props: {
               tintColor={KIND_TINT[count.kind] ?? OTHER_TINT}
               colorScheme={scheme}
             />
-            <Text style={styles.pillText}>
-              {plural(count.kind, count.count ?? 0)} <Text style={styles.pillCount}>{count.count ?? "–"}</Text>
+            <Text style={styles.pillText} numberOfLines={1}>
+              {plural(count.kind, count.count ?? 0)}
+            </Text>
+            <Text style={styles.pillCount} numberOfLines={1}>
+              {count.count ?? "–"}
             </Text>
           </View>
         ))}
@@ -121,15 +133,16 @@ export const TaskSuggestion = (props: {
             </Menu>
           </Host>
         )}
+        <Pressable style={styles.newTask} hitSlop={8} accessibilityRole="button" onPress={() => showToast({ message: "New Task: the form comes next" })}>
+          <Ionicons name="add-circle" size={20} color={colors.tint} />
+          <Text style={styles.newTaskText}>New Task</Text>
+        </Pressable>
+        {/* Last, so nothing above it moves when it shows. */}
         {counts.error !== undefined ? (
           <Text style={styles.failed} numberOfLines={2}>
             Couldn’t load tasks: {counts.error}
           </Text>
         ) : null}
-        <Pressable style={styles.newTask} hitSlop={8} accessibilityRole="button" onPress={() => showToast({ message: "New Task: the form comes next" })}>
-          <Ionicons name="add-circle" size={20} color={colors.tint} />
-          <Text style={styles.newTaskText}>New Task</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -137,56 +150,75 @@ export const TaskSuggestion = (props: {
 
 const styles = StyleSheet.create({
   block: {
+    height: BLOCK_HEIGHT,
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 16,
   },
   left: {
-    alignItems: "flex-start",
-    gap: 8,
+    width: PILL_WIDTH,
+    gap: PILL_GAP,
   },
+  // The rest of the (fixed) window width; every line in it a set height.
   right: {
     flex: 1,
     alignItems: "flex-end",
     gap: 10,
   },
   pill: {
+    width: PILL_WIDTH,
     height: PILL_HEIGHT,
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 12,
   },
   pillGlass: {
     borderRadius: PILL_HEIGHT / 2,
   },
   pillText: {
+    flex: 1,
     color: colors.label,
     fontSize: 14,
     fontWeight: "500",
   },
   pillCount: {
+    width: 28,
+    textAlign: "right",
+    color: colors.label,
+    fontSize: 14,
     fontWeight: "700",
   },
   note: {
+    height: BLOCK_HEIGHT,
     color: colors.secondaryLabel,
     fontSize: 13,
   },
   failed: {
+    width: "100%",
+    height: 32,
     color: colors.secondaryLabel,
     fontSize: 13,
     textAlign: "right",
   },
   repo: {
+    width: "100%",
+    height: LINE_HEIGHT,
     color: colors.label,
     fontSize: REPO_SIZE,
     fontWeight: "600",
+    textAlign: "right",
   },
   repoMenu: {
-    alignSelf: "stretch",
-    height: REPO_HEIGHT,
+    width: "100%",
+    height: LINE_HEIGHT,
   },
   newTask: {
+    width: NEW_TASK_WIDTH,
+    height: LINE_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: 6,
   },
   newTaskText: {
