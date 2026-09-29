@@ -67,6 +67,23 @@ const formsMenu = (label: string, icon: SFSymbol, forms: ReadonlyArray<FormSpec>
   },
 });
 
+/** The + in the header: with one thing to add, a button that opens it; with
+ * several, a menu of them. */
+const addItem = (forms: ReadonlyArray<FormSpec>, open: (form: FormSpec) => void): NativeStackHeaderItem => {
+  const only = forms.length === 1 ? forms[0] : undefined;
+  return only === undefined
+    ? formsMenu("Add", "plus", forms, open)
+    : {
+        type: "button",
+        label: only.title,
+        icon: {
+          type: "sfSymbol",
+          name: "plus",
+        },
+        onPress: () => open(only),
+      };
+};
+
 /** A page opened from the menu is about nothing beyond its workspace. */
 const noParams: Readonly<Record<string, string>> = {};
 
@@ -332,7 +349,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
       // The + menu adds (a dependency, a package); the 3-dot menu has the
       // rest. Each only when the page offers something for it.
       unstable_headerRightItems: () => [
-        ...(add.length === 0 ? [] : [formsMenu("Add", "plus", add, setForm)]),
+        ...(add.length === 0 ? [] : [addItem(add, setForm)]),
         ...(menu.length === 0 ? [] : [formsMenu("More", "ellipsis", menu, setForm)]),
       ],
     });
