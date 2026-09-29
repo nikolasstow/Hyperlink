@@ -356,9 +356,15 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="PluginPage"
           component={PluginPageScreen}
+          // No bar behind the header, as the other pages: the content scrolls
+          // under a transparent header with a soft edge.
           options={{
             headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
             headerBackButtonDisplayMode: "minimal",
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
           }}
         />
         <Stack.Screen
