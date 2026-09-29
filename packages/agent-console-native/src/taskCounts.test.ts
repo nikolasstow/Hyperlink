@@ -23,11 +23,22 @@ describe("kindOf", () => {
 });
 
 describe("countByKind", () => {
-  it("counts issues by kind, most first, leaving out pull requests", () => {
+  it("counts every kind, zero included, leaving out pull requests", () => {
     expect(countByKind([issue(["bug"]), issue([]), issue(["bug"]), { ...issue([]), pull_request: {} }])).toEqual([
       { kind: "Bug", count: 2 },
+      { kind: "Feature", count: 0 },
       { kind: "Task", count: 1 },
     ]);
+  });
+  it("shows every kind with no issues at all", () => {
+    expect(countByKind([])).toEqual([
+      { kind: "Bug", count: 0 },
+      { kind: "Feature", count: 0 },
+      { kind: "Task", count: 0 },
+    ]);
+  });
+  it("puts a repo's own kinds after the standard ones", () => {
+    expect(countByKind([issue([], "Epic")]).map((count) => count.kind)).toEqual(["Bug", "Feature", "Task", "Epic"]);
   });
 });
 

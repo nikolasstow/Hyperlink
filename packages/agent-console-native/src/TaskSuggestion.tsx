@@ -19,7 +19,7 @@ import { showToast } from "./AppToast";
 import { colors } from "./colors";
 import type { GitHubRepo, ScannedRepo } from "./repoScan";
 import { readWorkspace } from "./repoScanCache";
-import { fetchTaskCounts, type TaskCount } from "./taskCounts";
+import { fetchTaskCounts, KINDS, type TaskCount } from "./taskCounts";
 
 const PILL_HEIGHT = 30;
 const REPO_SIZE = 20;
@@ -104,16 +104,14 @@ export const TaskSuggestion = (props: {
   return (
     <View style={styles.block}>
       <View style={styles.kinds}>
-        {counts.kind === "loading" ? (
-          <Text style={styles.note}>Loading…</Text>
-        ) : counts.kind === "failed" ? (
+        {counts.kind === "failed" ? (
           <Text style={styles.note} numberOfLines={3}>
             Couldn’t load tasks: {counts.message}
           </Text>
-        ) : counts.counts.length === 0 ? (
-          <Text style={styles.note}>No open tasks</Text>
         ) : (
-          counts.counts.map((count) => (
+          // Loading: every kind, its count a dash, so nothing moves when the
+          // counts come.
+          (counts.kind === "ready" ? counts.counts : KINDS.map((kind): TaskCount | { readonly kind: string; readonly count: undefined } => ({ kind, count: undefined }))).map((count) => (
             <View key={count.kind} style={styles.pill}>
               {/* Tinted glass, rounded on itself; nothing around it clips. */}
               <GlassView
@@ -123,9 +121,9 @@ export const TaskSuggestion = (props: {
                 colorScheme={scheme}
               />
               <Text style={styles.pillKind} numberOfLines={1}>
-                {plural(count.kind, count.count)}
+                {plural(count.kind, count.count ?? 0)}
               </Text>
-              <Text style={styles.pillCount}>{count.count}</Text>
+              <Text style={styles.pillCount}>{count.count ?? "–"}</Text>
             </View>
           ))
         )}

@@ -36,24 +36,28 @@ const KIND_BY_LABEL: Readonly<Record<string, string>> = {
   enhancement: "Feature",
 };
 const DEFAULT_KIND = "Task";
+/** The kinds always shown, in this order, even at zero; any other kind (a
+ * GitHub issue type of the repo's own) follows them. */
+export const KINDS: ReadonlyArray<string> = ["Bug", "Feature", DEFAULT_KIND];
 
 export const kindOf = (issue: Issue): string =>
   issue.type?.name ?? issue.labels.map((label) => KIND_BY_LABEL[label.name.toLowerCase()]).find((kind) => kind !== undefined) ?? DEFAULT_KIND;
 
-/** Open issues (not pull requests) counted by kind, most first. */
+/** Open issues (not pull requests) counted by kind: every kind in `KINDS`,
+ * zero or not, then any others the repo has, most first. */
 export const countByKind = (issues: ReadonlyArray<Issue>): ReadonlyArray<TaskCount> => {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, number>(KINDS.map((kind) => [kind, 0]));
   for (const issue of issues) {
     if (issue.pull_request !== undefined) continue;
     const kind = kindOf(issue);
     counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
-  return [...counts]
-    .map(([kind, count]): TaskCount => ({
-      kind,
-      count,
-    }))
-    .sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
+  const all = [...counts].map(([kind, count]): TaskCount => ({
+    kind,
+    count,
+  }));
+  const others = all.filter((count) => !KINDS.includes(count.kind)).sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind));
+  return [...all.filter((count) => KINDS.includes(count.kind)), ...others];
 };
 
 /** The repo's open tasks by kind (the first 100 open issues). */
