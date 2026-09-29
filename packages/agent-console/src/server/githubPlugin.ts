@@ -4,11 +4,13 @@
  * Native (and the web app) must not shell `gh` through OpenCode for search /
  * metadata — that is the wrong process and the wrong credential boundary.
  * Callers hit this origin instead; the Vite server forwards with optional
- * `GITHUB_TOKEN` / `GH_TOKEN` so rate limits and private visibility work from
- * the machine running the console, not from the phone.
+ * `GITHUB_TOKEN` / `GH_TOKEN` (else the GitHub CLI's signed-in token) so rate
+ * limits and private visibility work from the machine running the console, not
+ * from the phone.
  *
  * @internal
  */
+import { execFileSync } from "node:child_process";
 import type { Connect, Plugin } from "vite";
 
 const PREFIX = "/github";
@@ -16,12 +18,27 @@ const GITHUB_API = "https://api.github.com";
 /** GitHub requires a User-Agent; without it many endpoints 403. */
 const USER_AGENT = "agent-console-github-proxy";
 
+/** The GitHub CLI's token for this machine's signed-in account, read once:
+ * without a token GitHub answers 404 for private repos. */
+let ghCliToken: string | undefined | null = null;
+const readGhCliToken = (): string | undefined => {
+  if (ghCliToken !== null) return ghCliToken;
+  try {
+    const token = execFileSync("gh", ["auth", "token"], { encoding: "utf8", timeout: 5000 }).trim();
+    ghCliToken = token.length > 0 ? token : undefined;
+  } catch (error: unknown) {
+    console.error("[github proxy] no GITHUB_TOKEN/GH_TOKEN and `gh auth token` failed; private repos will 404", error);
+    ghCliToken = undefined;
+  }
+  return ghCliToken;
+};
+
 const githubToken = (): string | undefined => {
   const fromGithub = process.env.GITHUB_TOKEN;
   if (fromGithub !== undefined && fromGithub.length > 0) return fromGithub;
   const fromGh = process.env.GH_TOKEN;
   if (fromGh !== undefined && fromGh.length > 0) return fromGh;
-  return undefined;
+  return readGhCliToken();
 };
 
 const handler: Connect.NextHandleFunction = (req, res, next) => {
