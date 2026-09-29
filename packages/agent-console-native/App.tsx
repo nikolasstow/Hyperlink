@@ -4,6 +4,7 @@ import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
+import { AppToastHost } from "./src/AppToast";
 import { DubzOverlay, DubzProvider } from "./src/Dubz";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
@@ -192,6 +193,7 @@ const AppInner = (): React.ReactElement => {
            * screen opens the same glass window. */}
           <DubzProvider>
             <RootNavigator />
+            <AppToastHost />
             <DubzOverlay />
           </DubzProvider>
         </AppContextProvider>

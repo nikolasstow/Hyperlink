@@ -15,7 +15,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { getApiAddress } from "./settings";
-import { archiveSession, unarchived, useArchivedSessions } from "./sessionArchive";
+import { archiveWithUndo, unarchived, useArchivedSessions } from "./sessionArchive";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
@@ -112,7 +112,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
             onRename={() => promptRenameSession(client, item.id, item.title, () => void load())}
             onStop={() => abortSession(client, item.id, () => void load())}
             onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void load())}
-            onArchive={() => archiveSession(getApiAddress(address), item.id)}
+            onArchive={() => archiveWithUndo(getApiAddress(address), item.id)}
           />
         )}
       />

@@ -46,7 +46,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
 import { readWorkspace, refreshWorkspace } from "./repoScanCache";
-import { archiveSession, unarchived, useArchivedSessions } from "./sessionArchive";
+import { archiveWithUndo, unarchived, useArchivedSessions } from "./sessionArchive";
 import type { RootStackParamList } from "./RootNavigator";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
@@ -291,7 +291,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         onRename={() => promptRenameSession(client, session.id, session.title, () => void load())}
         onStop={() => abortSession(client, session.id, () => void load())}
         onDelete={() => confirmDeleteSession(client, session.id, session.title, () => void load())}
-        onArchive={() => archiveSession(getApiAddress(address), session.id)}
+        onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
       />
     );
   };

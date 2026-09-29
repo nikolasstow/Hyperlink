@@ -17,9 +17,9 @@
 import { Button, Circle, ContextMenu, Host, HStack, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { Pressable, StyleSheet, Text, useWindowDimensions } from "react-native";
-import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, { Easing, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
+import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
+import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
@@ -52,49 +52,31 @@ export type SessionCardProps = {
   readonly onRename: () => void;
   readonly onStop: () => void;
   readonly onDelete: () => void;
-  /** Put the session away (swipe left, or the menu); the list leaves it out. */
+  /** Put the session away (swipe left and tap, or the menu); the list
+   * leaves it out. */
   readonly onArchive: () => void;
 };
 
-/** The Archive action's width when revealed and left open. */
-const ACTION_WIDTH = 88;
-/** How far a swipe must go, as a share of the card, to archive on release
- * without a tap (a full swipe, as in Messages). */
-const FULL_SWIPE_FRACTION = 0.55;
+/** The swipe actions, as Messages draws them: circles beside the card. */
+const CIRCLE = 58;
+const CIRCLE_GAP = 12;
+/** Room the revealed actions take: both circles, the gaps around them. */
+const ACTIONS_WIDTH = CIRCLE * 2 + CIRCLE_GAP * 3;
 
 /**
- * The Archive action behind a session card, revealed by swiping left: a
- * purple panel with the archive box, growing with the drag. A short swipe
- * leaves it open to tap; a long one archives on release.
+ * What swiping a session left reveals (it reveals only; nothing happens until
+ * a tap), as in Messages: two circles, Archive and Delete.
  */
-const ArchiveAction = (props: {
-  readonly translation: SharedValue<number>;
-  readonly fullSwipeAt: number;
-  readonly onArmedChange: (armed: boolean) => void;
-  readonly onPress: () => void;
-}): React.ReactElement => {
-  const { fullSwipeAt, onArmedChange } = props;
-  // Track whether the drag is past the full-swipe point, for the release.
-  useAnimatedReaction(
-    () => -props.translation.value >= fullSwipeAt,
-    (armed, previous) => {
-      if (armed !== previous) runOnJS(onArmedChange)(armed);
-    },
-    [fullSwipeAt, onArmedChange],
-  );
-  const grow = useAnimatedStyle(() => ({ width: Math.max(ACTION_WIDTH, -props.translation.value - ACTION_GAP) }));
-  return (
-    <Animated.View style={[styles.action, grow]}>
-      <Pressable style={styles.actionHit} onPress={props.onPress} accessibilityRole="button" accessibilityLabel="Archive">
-        <SystemIcon name="archivebox.fill" size={20} color="#FFFFFF" />
-        <Text style={styles.actionLabel}>Archive</Text>
-      </Pressable>
-    </Animated.View>
-  );
-};
-
-/** Space between the card and the action, and the action and the edge. */
-const ACTION_GAP = 8;
+const SwipeActions = (props: { readonly onArchive: () => void; readonly onDelete: () => void }): React.ReactElement => (
+  <View style={styles.actions}>
+    <Pressable style={[styles.circle, styles.archiveCircle]} onPress={props.onArchive} accessibilityRole="button" accessibilityLabel="Archive">
+      <SystemIcon name="archivebox.fill" size={22} color="#FFFFFF" />
+    </Pressable>
+    <Pressable style={[styles.circle, styles.deleteCircle]} onPress={props.onDelete} accessibilityRole="button" accessibilityLabel="Delete">
+      <SystemIcon name="trash.fill" size={22} color="#FFFFFF" />
+    </Pressable>
+  </View>
+);
 
 const summaryLabel = (role: "user" | "assistant", text: string): string => (role === "user" ? `You: ${text}` : text);
 
@@ -145,14 +127,11 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
   const summary = lastMessageSummary(transcript);
 
-  // A long swipe archives on release. The row leaves as in Messages: it slides
-  // off to the left, the gap closes, and only then does the session leave the
-  // list (removing it at once made it snap out of existence).
-  const armed = React.useRef(false);
-  const onArmedChange = React.useCallback((next: boolean) => {
-    armed.current = next;
-  }, []);
-  const { onArchive } = props;
+  // Archiving: the row slides off to the left, the gap closes, and only then
+  // does the session leave the list (removing it at once made it snap out of
+  // existence). The toast that says so, with Undo, is the caller's.
+  const { onArchive, onDelete } = props;
+  const swipeable = React.useRef<SwipeableMethods>(null);
   const rowHeight = useSharedValue(0);
   const slide = useSharedValue(0);
   const collapse = useSharedValue(0);
@@ -188,15 +167,20 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
       }}
     >
     <Swipeable
-      friction={1}
-      overshootRight
-      rightThreshold={ACTION_WIDTH / 2}
-      renderRightActions={(_progress, translation) => (
-        <ArchiveAction translation={translation} fullSwipeAt={cardWidth * FULL_SWIPE_FRACTION} onArmedChange={onArmedChange} onPress={archive} />
+      ref={swipeable}
+      friction={1.4}
+      overshootRight={false}
+      rightThreshold={ACTIONS_WIDTH / 3}
+      renderRightActions={() => (
+        <SwipeActions
+          onArchive={archive}
+          onDelete={() => {
+            // Close first; Delete asks before it deletes.
+            swipeable.current?.close();
+            onDelete();
+          }}
+        />
       )}
-      onSwipeableWillOpen={() => {
-        if (armed.current) archive();
-      }}
     >
     <Host style={{ marginHorizontal: CARD_GUTTER }} matchContents={{ vertical: true, horizontal: false }}>
       <ContextMenu>
@@ -246,22 +230,26 @@ const styles = StyleSheet.create({
     marginBottom: ROW_GAP,
     overflow: "hidden",
   },
-  action: {
-    marginLeft: -CARD_GUTTER + ACTION_GAP,
-    marginRight: CARD_GUTTER,
-    borderRadius: 14,
-    backgroundColor: colors.archive,
-    overflow: "hidden",
-  },
-  actionHit: {
-    flex: 1,
+  // The circles sit centred beside the card, inside its right gutter.
+  actions: {
+    width: ACTIONS_WIDTH,
+    marginLeft: -CARD_GUTTER,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: CIRCLE_GAP,
   },
-  actionLabel: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
+  circle: {
+    width: CIRCLE,
+    height: CIRCLE,
+    borderRadius: CIRCLE / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  archiveCircle: {
+    backgroundColor: colors.archive,
+  },
+  deleteCircle: {
+    backgroundColor: colors.destructive,
   },
 });

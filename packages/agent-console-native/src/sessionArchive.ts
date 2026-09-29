@@ -11,6 +11,7 @@
 import { Schema } from "effect";
 import * as React from "react";
 import { Alert } from "react-native";
+import { showToast } from "./AppToast";
 import { base, request } from "./extensionsClient";
 
 const archived = Schema.Record(Schema.String, Schema.Number);
@@ -55,7 +56,19 @@ export const archiveSession = (apiBase: string, id: string): void => {
   );
 };
 
-/** Take a session out of the archive (the archive page, to come). */
+/** Archive a session and say so, with Undo (the toast outlives the row). */
+export const archiveWithUndo = (apiBase: string, id: string): void => {
+  archiveSession(apiBase, id);
+  showToast({
+    message: "Archived",
+    action: {
+      label: "Undo",
+      run: () => unarchiveSession(apiBase, id),
+    },
+  });
+};
+
+/** Take a session out of the archive (Undo, and the archive page to come). */
 export const unarchiveSession = (apiBase: string, id: string): void => {
   const before = archivedIds;
   set(new Set([...archivedIds].filter((archivedId) => archivedId !== id)));

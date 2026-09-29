@@ -45,7 +45,7 @@ import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { updateScannedRepos } from "./primaryWorktree";
-import { archiveSession, loadArchivedSessions, unarchived, useArchivedSessions } from "./sessionArchive";
+import { archiveWithUndo, loadArchivedSessions, unarchived, useArchivedSessions } from "./sessionArchive";
 import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
@@ -304,7 +304,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
                 onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
                 onDelete={() => confirmDeleteSession(client, item.session.id, item.session.title, () => void loadSessions())}
-                onArchive={() => archiveSession(getApiAddress(address), item.session.id)}
+                onArchive={() => archiveWithUndo(getApiAddress(address), item.session.id)}
               />
             );
           }

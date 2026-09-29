@@ -640,9 +640,11 @@ Owner-stated. Not built yet.
 Owner-stated.
 
 - **Archive** is an option on a session (its hard-press menu), beside Delete.
-- **Swiping left on a session archives it, and shows that, as in Apple Messages**: the swipe
-  reveals an Archive action; a long swipe archives on release, a short one leaves the action to
-  tap. The session leaves the lists.
+- **Swiping left on a session only reveals its actions, as in Apple Messages**: two circles,
+  **Archive** (indigo, where Messages has Mute) and **Delete** (red; it asks first). No swipe
+  acts by itself.
+- **Archiving shows a toast, "Archived", with Undo.** The session slides off and the list closes
+  up.
 - opencode has no archive, so the backend keeps one (`/sessions/archived`, archive, unarchive),
   shared by every device.
 - *Later:* a page of archived sessions (to unarchive from).
