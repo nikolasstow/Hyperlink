@@ -41,7 +41,7 @@ import { BottomBar } from "./BottomBar";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import type { DubzContext } from "./dubzSuggestions";
-import { findModel, getDefaultModel, listModels, type ModelOption } from "./models";
+import { findModel, getDefaultModel, type ModelOption, useModels } from "./models";
 import { ModelPicker } from "./ModelPicker";
 import { getLastModel, setLastModel } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -90,7 +90,7 @@ export const Composer = (props: {
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [focused, setFocused] = React.useState(false);
-  const [models, setModels] = React.useState<ReadonlyArray<ModelOption>>([]);
+  const models = useModels(client);
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
   // Held expanded while it is a page sliding (away to Dubz, or back), when its
   // input is not the focused one.
@@ -111,23 +111,26 @@ export const Composer = (props: {
   // for its own padding; measure the content height directly instead.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
 
+  // The model last sent with, once read; picked from the models once they load.
+  const [lastModel, setLastModelRead] = React.useState<{ providerID: string; modelID: string } | undefined | null>(null);
   React.useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const [options, last] = await Promise.all([listModels(client), getLastModel()]);
-      if (cancelled) return;
-      setModels(options);
-      const fromSeed =
-        props.seedModel !== undefined
-          ? findModel(options, props.seedModel.providerID, props.seedModel.modelID) ?? props.seedModel
-          : undefined;
-      const fromLast = last !== undefined ? findModel(options, last.providerID, last.modelID) : undefined;
-      setSelectedModel(fromSeed ?? fromLast ?? getDefaultModel(client) ?? options[0]);
-    })();
+    void getLastModel().then((last) => {
+      if (!cancelled) setLastModelRead(last);
+    });
     return () => {
       cancelled = true;
     };
-  }, [client]); // eslint-disable-line react-hooks/exhaustive-deps -- seed applied in the effect below
+  }, []);
+  React.useEffect(() => {
+    if (selectedModel !== undefined || models.length === 0 || lastModel === null) return;
+    const fromSeed =
+      props.seedModel !== undefined
+        ? findModel(models, props.seedModel.providerID, props.seedModel.modelID) ?? props.seedModel
+        : undefined;
+    const fromLast = lastModel !== undefined ? findModel(models, lastModel.providerID, lastModel.modelID) : undefined;
+    setSelectedModel(fromSeed ?? fromLast ?? getDefaultModel(client) ?? models[0]);
+  }, [models, lastModel]); // eslint-disable-line react-hooks/exhaustive-deps -- seed applied in the effect below
 
   React.useEffect(() => {
     if (props.seedModel === undefined || models.length === 0) return;

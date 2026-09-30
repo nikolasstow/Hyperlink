@@ -5,6 +5,8 @@
  *
  * @internal
  */
+import * as React from "react";
+import { AppState } from "react-native";
 import type { OpencodeClient } from "./client";
 
 export type ModelOption = {
@@ -23,12 +25,22 @@ type Cache = {
   readonly defaultModel: ModelOption | undefined;
 };
 
+const EMPTY: ReadonlyArray<ModelOption> = [];
+
 const caches = new WeakMap<OpencodeClient, Cache>();
-const inFlight = new WeakMap<OpencodeClient, Promise<Cache>>();
+const inFlight = new WeakMap<OpencodeClient, Promise<Cache | undefined>>();
+const listeners = new Set<() => void>();
+
+const subscribe = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
 
 const load = async (client: OpencodeClient): Promise<Cache> => {
-  const { data } = await client.provider.list();
-  if (data === undefined) return { options: [], defaultModel: undefined };
+  const { data, error } = await client.provider.list();
+  if (data === undefined) throw new Error(`Couldn't load the models: ${JSON.stringify(error)}`);
 
   const connected = new Set(data.connected);
   const options: Array<ModelOption> = [];
@@ -54,25 +66,50 @@ const load = async (client: OpencodeClient): Promise<Cache> => {
   return { options, defaultModel };
 };
 
-/** Connected models for this client, cached for the process lifetime. */
-export const listModels = async (client: OpencodeClient): Promise<ReadonlyArray<ModelOption>> => {
-  const hit = caches.get(client);
-  if (hit !== undefined) return hit.options;
+/**
+ * Loads the server's models afresh (one load at a time per client), keeping
+ * the last list if the load fails. Resolves to the list now known.
+ */
+export const refreshModels = (client: OpencodeClient): Promise<Cache | undefined> => {
   const pending = inFlight.get(client);
-  if (pending !== undefined) return (await pending).options;
-  const promise = load(client).then((cache) => {
-    caches.set(client, cache);
-    return cache;
-  });
+  if (pending !== undefined) return pending;
+  const promise = load(client)
+    .then(
+      (cache): Cache | undefined => {
+        caches.set(client, cache);
+        for (const listener of listeners) listener();
+        return cache;
+      },
+      (cause: unknown) => {
+        console.warn("[models] refresh failed", cause);
+        return caches.get(client);
+      },
+    )
+    .finally(() => inFlight.delete(client));
   inFlight.set(client, promise);
-  try {
-    return (await promise).options;
-  } finally {
-    inFlight.delete(client);
-  }
+  return promise;
 };
 
-/** Server default model once `listModels` has resolved for this client. */
+/** Connected models: the last-known list, or the first load's. */
+export const listModels = async (client: OpencodeClient): Promise<ReadonlyArray<ModelOption>> =>
+  (caches.get(client) ?? (await refreshModels(client)))?.options ?? EMPTY;
+
+/**
+ * Connected models, refreshed when the caller mounts and whenever the app
+ * comes back to the foreground; the last-known list meanwhile.
+ */
+export const useModels = (client: OpencodeClient): ReadonlyArray<ModelOption> => {
+  React.useEffect(() => {
+    void refreshModels(client);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void refreshModels(client);
+    });
+    return () => subscription.remove();
+  }, [client]);
+  return React.useSyncExternalStore(subscribe, () => caches.get(client)?.options ?? EMPTY);
+};
+
+/** Server default model once the models have loaded for this client. */
 export const getDefaultModel = (client: OpencodeClient): ModelOption | undefined =>
   caches.get(client)?.defaultModel;
 
