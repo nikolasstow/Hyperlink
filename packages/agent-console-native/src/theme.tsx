@@ -139,12 +139,14 @@ export const useScreenBackground = (kind: "grouped" | "plain" = "grouped"): Colo
 };
 
 /** Relative luminance (WCAG) of a hex colour, 0 (black) to 1 (white). */
-export const luminance = (hex: string): number => {
+export const luminance = (hex: string): number => luminanceOf(toRgb(hex));
+
+/** Relative luminance (WCAG) of an sRGB colour, 0 to 1. */
+const luminanceOf = ([r, g, b]: readonly [number, number, number]): number => {
   const channel = (value: number): number => {
     const c = value / 255;
     return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
-  const [r, g, b] = toRgb(hex);
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 };
 
@@ -184,6 +186,12 @@ const SYSTEM_TEXT: TextColors = {
   placeholderText: colors.placeholderText,
 };
 
+/** The secondary text of each palette (iOS's): a colour at 60%, so what is
+ * read is it blended over the background. */
+const SECONDARY_ALPHA = 0.6;
+const SECONDARY_DARK: readonly [number, number, number] = [60, 60, 67];
+const SECONDARY_LIGHT: readonly [number, number, number] = [235, 235, 245];
+
 /** Text for a light background, in either mode: iOS's light-mode values. */
 const TEXT_ON_LIGHT: TextColors = {
   label: "#000000",
@@ -200,17 +208,27 @@ const TEXT_ON_DARK: TextColors = {
   placeholderText: "rgba(235,235,245,0.3)",
 };
 
-/** Black and white, the two text colours' luminances. */
-const BLACK = 0;
-const WHITE = 1;
+/** A translucent colour over an opaque one, as seen. */
+const blend = (
+  over: readonly [number, number, number],
+  alpha: number,
+  under: readonly [number, number, number],
+): readonly [number, number, number] => {
+  const mix = (a: number, b: number): number => a * alpha + b * (1 - alpha);
+  return [mix(over[0], under[0]), mix(over[1], under[1]), mix(over[2], under[2])];
+};
 
-/** The text for a background: whichever of dark and light text contrasts
- * more with it (WCAG ratio), so a bright saturated colour still gets dark text
- * and a deep one light text. They tie at a luminance of about 0.18, well
- * below middle grey: people see mid tones as lighter than they measure. */
+/** The text for a background: whichever palette's secondary text contrasts
+ * more with it (WCAG ratio), judged on the secondary because it is the
+ * hardest to read (60% of its colour, blended into the background); where it
+ * reads, the full-strength label does too. A bright saturated colour gets dark
+ * text, a deep one light text. */
 export const textFor = (background: string): TextColors => {
-  const l = luminance(background);
-  return contrastRatio(l, BLACK) >= contrastRatio(l, WHITE) ? TEXT_ON_LIGHT : TEXT_ON_DARK;
+  const under = toRgb(background);
+  const l = luminanceOf(under);
+  const darkSecondary = contrastRatio(luminanceOf(blend(SECONDARY_DARK, SECONDARY_ALPHA, under)), l);
+  const lightSecondary = contrastRatio(luminanceOf(blend(SECONDARY_LIGHT, SECONDARY_ALPHA, under)), l);
+  return darkSecondary >= lightSecondary ? TEXT_ON_LIGHT : TEXT_ON_DARK;
 };
 
 /** The text colours for the background: light text on a darkish colour, dark
