@@ -37,6 +37,8 @@ export interface ThemeContribution {
   readonly colors?: {
     readonly primary: string;
     readonly secondary: string;
+    /** The theme's editor background, for the app's screen background. */
+    readonly background?: string;
   };
 }
 
@@ -161,7 +163,7 @@ const PRIMARY_KEYS = ["activityBarBadge.background", "progressBar.background", "
 const SECONDARY_KEYS = ["textLink.foreground", "focusBorder", "badge.background", "textLink.activeForeground", "button.background", "activityBarBadge.background"];
 
 /** Derive our {primary, secondary} from a VS Code colour theme's `colors`. */
-const deriveThemeColors = (themeJson: unknown): { primary: string; secondary: string } | undefined => {
+const deriveThemeColors = (themeJson: unknown): { primary: string; secondary: string; background?: string } | undefined => {
   if (typeof themeJson !== "object" || themeJson === null || !("colors" in themeJson)) return undefined;
   const { colors } = themeJson;
   if (typeof colors !== "object" || colors === null) return undefined;
@@ -175,7 +177,12 @@ const deriveThemeColors = (themeJson: unknown): { primary: string; secondary: st
   };
   const primary = pick(PRIMARY_KEYS);
   if (primary === undefined) return undefined;
-  return { primary, secondary: pick(SECONDARY_KEYS) ?? primary };
+  const background = pick(["editor.background"]);
+  return {
+    primary,
+    secondary: pick(SECONDARY_KEYS) ?? primary,
+    ...(background === undefined ? {} : { background }),
+  };
 };
 
 /** Read each colour theme's JSON from `filesBase` and attach derived colors. */

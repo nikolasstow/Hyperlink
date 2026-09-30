@@ -71,6 +71,10 @@ interface SelectableTheme {
    * the "Uninstall Extension …" action. */
   readonly extId: string;
   readonly extName: string;
+  /** Its editor background, and whether it is a dark theme (the mode that
+   * background is for). */
+  readonly background?: string;
+  readonly dark: boolean;
 }
 
 /** Swatch geometry, used to fit exactly one row with no scroll. */
@@ -140,6 +144,11 @@ const withBackground = (theme: Theme, key: "backgroundLight" | "backgroundDark",
       };
 };
 
+/** The theme with a chosen colour theme's background pre-selected for the
+ * mode that theme is made for; unchanged when the theme has none. */
+const withThemeBackground = (theme: Theme, background: string | undefined, dark: boolean): Theme =>
+  background === undefined ? theme : withBackground(theme, dark ? "backgroundDark" : "backgroundLight", background);
+
 /** What "System" is for each mode: the grouped background iOS gives screens. */
 const SYSTEM_BACKGROUND = {
   light: "#F2F2F7",
@@ -152,10 +161,21 @@ const BackgroundRow = (props: {
   readonly label: string;
   readonly value: string | undefined;
   readonly systemColor: string;
+  /** The enabled colour theme's background, when it is made for this mode. */
+  readonly themeColor: string | undefined;
   readonly onChange: (color: string | undefined) => void;
 }): React.ReactElement => (
   <View style={styles.backgroundRow}>
     <Text style={styles.backgroundLabel}>{props.label}</Text>
+    {props.themeColor === undefined ? null : (
+      <TouchableOpacity
+        accessibilityLabel={`${props.label} background: theme`}
+        onPress={() => props.onChange(props.themeColor)}
+        style={[styles.swatch, { backgroundColor: props.themeColor }, props.value !== undefined && eq(props.value, props.themeColor) ? styles.swatchSelected : null]}
+      >
+        <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
+      </TouchableOpacity>
+    )}
     <TouchableOpacity
       accessibilityLabel={`${props.label} background: System`}
       onPress={() => props.onChange(undefined)}
@@ -220,6 +240,8 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             file: ct.file,
             extId: ext.id,
             extName: ext.displayName,
+            ...(ct.colors?.background === undefined ? {} : { background: ct.colors.background }),
+            dark: ct.uiTheme !== "vs" && ct.uiTheme !== "hc-light",
           })),
       ),
     );
@@ -244,14 +266,55 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
 
   // Selecting a theme seeds the accents AND records it as the code theme;
   // changing colours afterwards leaves `code` intact.
+  // It pre-selects the theme's background too, for the mode the theme is made
+  // for (a dark theme sets Dark, a light one Light).
   const selectTheme = (t: SelectableTheme): void =>
-    setTheme({ ...theme, primary: t.primary, secondary: t.secondary, code: { label: t.label, file: t.file, primary: t.primary, secondary: t.secondary } });
+    setTheme(
+      withThemeBackground(
+        {
+          ...theme,
+          primary: t.primary,
+          secondary: t.secondary,
+          code: {
+            label: t.label,
+            file: t.file,
+            primary: t.primary,
+            secondary: t.secondary,
+            dark: t.dark,
+            ...(t.background === undefined ? {} : { background: t.background }),
+          },
+        },
+        t.background,
+        t.dark,
+      ),
+    );
 
   // A created theme has no server file, so its accents come from its own colours
   // and it is recorded by `createdId`; the preview reads it from local storage.
   const selectCreated = (mine: CreatedTheme): void => {
     const { primary, secondary } = deriveThemeAccents(mine.theme, DEFAULT_THEME);
-    setTheme({ ...theme, primary, secondary, code: { label: mine.theme.name, file: "", primary, secondary, createdId: mine.id } });
+    const background = toOpaqueHex(mine.theme.colors["editor.background"]);
+    const dark = mine.theme.type === "dark";
+    setTheme(
+      withThemeBackground(
+        {
+          ...theme,
+          primary,
+          secondary,
+          code: {
+            label: mine.theme.name,
+            file: "",
+            primary,
+            secondary,
+            createdId: mine.id,
+            dark,
+            ...(background === undefined ? {} : { background }),
+          },
+        },
+        background,
+        dark,
+      ),
+    );
   };
 
   const selectDefault = (): void => setTheme({ ...theme, primary: DEFAULT_THEME.primary, secondary: DEFAULT_THEME.secondary, code: undefined });
@@ -405,8 +468,18 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>Background</Text>
         <View style={styles.card}>
           <Text style={styles.hint}>Behind every screen, in each mode. System follows iOS.</Text>
-          <BackgroundRow label="Light" value={theme.backgroundLight} systemColor={SYSTEM_BACKGROUND.light} onChange={(color) => setTheme(withBackground(theme, "backgroundLight", color))} />
-          <BackgroundRow label="Dark" value={theme.backgroundDark} systemColor={SYSTEM_BACKGROUND.dark} onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
+          <BackgroundRow
+            label="Light"
+            value={theme.backgroundLight}
+            systemColor={SYSTEM_BACKGROUND.light}
+            themeColor={theme.code?.dark === false ? theme.code.background : undefined}
+            onChange={(color) => setTheme(withBackground(theme, "backgroundLight", color))} />
+          <BackgroundRow
+            label="Dark"
+            value={theme.backgroundDark}
+            systemColor={SYSTEM_BACKGROUND.dark}
+            themeColor={theme.code?.dark === true ? theme.code.background : undefined}
+            onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
         </View>
 
         <Text style={styles.sectionLabel}>Code font</Text>

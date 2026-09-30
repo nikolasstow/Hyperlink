@@ -279,6 +279,10 @@ export type CodeTheme = {
   /** Set when the enabled theme is one created on this device — its document is
    * read from `createdThemes` storage rather than fetched from the server. */
   readonly createdId?: string;
+  /** The theme's own background (its editor background), for the mode it is
+   * made for: the Background picker's "theme" swatch for that mode. */
+  readonly background?: string;
+  readonly dark?: boolean;
 };
 
 /** The app's theme. `primary` drives the send button and (as a tint) the user's
@@ -345,7 +349,17 @@ const parseCodeTheme = (value: unknown): CodeTheme | undefined => {
   const { label, file, primary, secondary } = value;
   if (typeof label !== "string" || typeof file !== "string" || typeof primary !== "string" || typeof secondary !== "string") return undefined;
   const createdId = "createdId" in value && typeof value.createdId === "string" ? value.createdId : undefined;
-  return { label, file, primary, secondary, ...(createdId === undefined ? {} : { createdId }) };
+  const background = "background" in value && typeof value.background === "string" ? value.background : undefined;
+  const dark = "dark" in value && typeof value.dark === "boolean" ? value.dark : undefined;
+  return {
+    label,
+    file,
+    primary,
+    secondary,
+    ...(createdId === undefined ? {} : { createdId }),
+    ...(background === undefined ? {} : { background }),
+    ...(dark === undefined ? {} : { dark }),
+  };
 };
 
 export const setStoredTheme = (value: Theme): Promise<void> =>

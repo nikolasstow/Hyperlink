@@ -24,6 +24,8 @@ export interface ThemeContribution {
   readonly colors?: {
     readonly primary: string;
     readonly secondary: string;
+    /** The theme's editor background. */
+    readonly background?: string;
   };
 }
 
@@ -51,7 +53,7 @@ const ThemeContributionSchema = Schema.Struct({
   label: Schema.String,
   uiTheme: Schema.optional(Schema.String),
   file: Schema.String,
-  colors: Schema.optional(Schema.Struct({ primary: Schema.String, secondary: Schema.String })),
+  colors: Schema.optional(Schema.Struct({ primary: Schema.String, secondary: Schema.String, background: Schema.optional(Schema.String) })),
 });
 
 const ManifestSchema = Schema.Struct({
