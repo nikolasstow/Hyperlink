@@ -43,6 +43,7 @@ import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pag
 import type { DubzContext } from "./dubzSuggestions";
 import { findModel, getDefaultModel, type ModelOption, useModels } from "./models";
 import { ModelPicker } from "./ModelPicker";
+import { recordModelUse } from "./modelUsage";
 import { getLastModel, setLastModel } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -277,6 +278,7 @@ export const Composer = (props: {
     setError(undefined);
     try {
       await props.onSend(value, selectedModel);
+      if (selectedModel !== undefined) void recordModelUse(selectedModel);
     } catch {
       setError("Message failed to send — is the OpenCode server running?");
     }

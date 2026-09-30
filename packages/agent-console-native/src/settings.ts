@@ -112,12 +112,12 @@ export const getLastModel = async (): Promise<{ providerID: string; modelID: str
   if (raw === null) return undefined;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return undefined;
-    const providerID = (parsed as { providerID?: unknown }).providerID;
-    const modelID = (parsed as { modelID?: unknown }).modelID;
+    if (typeof parsed !== "object" || parsed === null || !("providerID" in parsed) || !("modelID" in parsed)) return undefined;
+    const { providerID, modelID } = parsed;
     if (typeof providerID !== "string" || typeof modelID !== "string") return undefined;
     return { providerID, modelID };
-  } catch {
+  } catch (cause) {
+    console.warn("[settings] unreadable last model", cause);
     return undefined;
   }
 };
