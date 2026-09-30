@@ -377,6 +377,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         <Composer
           onSend={onSend}
           disabled={sending || target === undefined}
+          directory={target !== undefined ? sessionDirectory(target) : undefined}
           bottomInset={0}
           placeholder="Plan, ask, build…"
           dubzContext={HOME_DUBZ}

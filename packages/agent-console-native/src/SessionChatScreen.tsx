@@ -403,14 +403,14 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       return;
     }
     let cancelled = false;
-    void listModels(client).then((options) => {
+    void listModels(client, directory).then((options) => {
       if (cancelled) return;
       setResolvedSeed(findModel(options, seedModel.providerID, seedModel.modelID) ?? seedModel);
     });
     return () => {
       cancelled = true;
     };
-  }, [client, seedModel?.providerID, seedModel?.modelID]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [client, directory, seedModel?.providerID, seedModel?.modelID]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // No `paddingBottom: keyboardHeight` on root — the composer is
   // absolutely positioned, and absolute children weren't being offset by
@@ -491,6 +491,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         <Composer
           onSend={onSend}
           disabled={transcript.busy}
+          directory={directory}
           bottomInset={0}
           placeholder="Message"
           seedModel={resolvedSeed}

@@ -27,8 +27,13 @@ type Cache = {
 
 const EMPTY: ReadonlyArray<ModelOption> = [];
 
-const caches = new WeakMap<OpencodeClient, Cache>();
-const inFlight = new WeakMap<OpencodeClient, Promise<Cache | undefined>>();
+/**
+ * Lists by client, then by directory: opencode keeps one list per directory
+ * (its instance there), so the models a session can run are its directory's.
+ * `undefined` is the server's own directory.
+ */
+const caches = new WeakMap<OpencodeClient, Map<string | undefined, Cache>>();
+const inFlight = new WeakMap<OpencodeClient, Map<string | undefined, Promise<Cache | undefined>>>();
 const listeners = new Set<() => void>();
 
 const subscribe = (listener: () => void): (() => void) => {
@@ -38,8 +43,18 @@ const subscribe = (listener: () => void): (() => void) => {
   };
 };
 
-const load = async (client: OpencodeClient): Promise<Cache> => {
-  const { data, error } = await client.provider.list();
+const cached = (client: OpencodeClient, directory: string | undefined): Cache | undefined => caches.get(client)?.get(directory);
+
+const inFlightFor = (client: OpencodeClient): Map<string | undefined, Promise<Cache | undefined>> => {
+  const existing = inFlight.get(client);
+  if (existing !== undefined) return existing;
+  const created = new Map<string | undefined, Promise<Cache | undefined>>();
+  inFlight.set(client, created);
+  return created;
+};
+
+const load = async (client: OpencodeClient, directory: string | undefined): Promise<Cache> => {
+  const { data, error } = await client.provider.list(directory !== undefined ? { query: { directory } } : undefined);
   if (data === undefined) throw new Error(`Couldn't load the models: ${JSON.stringify(error)}`);
 
   const connected = new Set(data.connected);
@@ -67,51 +82,55 @@ const load = async (client: OpencodeClient): Promise<Cache> => {
 };
 
 /**
- * Loads the server's models afresh (one load at a time per client), keeping
- * the last list if the load fails. Resolves to the list now known.
+ * Loads a directory's models afresh (one load at a time per directory),
+ * keeping the last list if the load fails. Resolves to the list now known.
  */
-export const refreshModels = (client: OpencodeClient): Promise<Cache | undefined> => {
-  const pending = inFlight.get(client);
-  if (pending !== undefined) return pending;
-  const promise = load(client)
+export const refreshModels = (client: OpencodeClient, directory: string | undefined): Promise<Cache | undefined> => {
+  const pending = inFlightFor(client);
+  const existing = pending.get(directory);
+  if (existing !== undefined) return existing;
+  const promise = load(client, directory)
     .then(
       (cache): Cache | undefined => {
-        caches.set(client, cache);
+        const byDirectory = caches.get(client) ?? new Map<string | undefined, Cache>();
+        byDirectory.set(directory, cache);
+        caches.set(client, byDirectory);
         for (const listener of listeners) listener();
         return cache;
       },
       (cause: unknown) => {
-        console.warn("[models] refresh failed", cause);
-        return caches.get(client);
+        console.warn("[models] refresh failed", directory, cause);
+        return cached(client, directory);
       },
     )
-    .finally(() => inFlight.delete(client));
-  inFlight.set(client, promise);
+    .finally(() => pending.delete(directory));
+  pending.set(directory, promise);
   return promise;
 };
 
-/** Connected models: the last-known list, or the first load's. */
-export const listModels = async (client: OpencodeClient): Promise<ReadonlyArray<ModelOption>> =>
-  (caches.get(client) ?? (await refreshModels(client)))?.options ?? EMPTY;
+/** A directory's models: the last-known list, or the first load's. */
+export const listModels = async (client: OpencodeClient, directory: string | undefined): Promise<ReadonlyArray<ModelOption>> =>
+  (cached(client, directory) ?? (await refreshModels(client, directory)))?.options ?? EMPTY;
 
 /**
- * Connected models, refreshed when the caller mounts and whenever the app
- * comes back to the foreground; the last-known list meanwhile.
+ * A directory's models, refreshed when the caller mounts or its directory
+ * changes, and whenever the app comes back to the foreground; the last-known
+ * list meanwhile.
  */
-export const useModels = (client: OpencodeClient): ReadonlyArray<ModelOption> => {
+export const useModels = (client: OpencodeClient, directory: string | undefined): ReadonlyArray<ModelOption> => {
   React.useEffect(() => {
-    void refreshModels(client);
+    void refreshModels(client, directory);
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void refreshModels(client);
+      if (state === "active") void refreshModels(client, directory);
     });
     return () => subscription.remove();
-  }, [client]);
-  return React.useSyncExternalStore(subscribe, () => caches.get(client)?.options ?? EMPTY);
+  }, [client, directory]);
+  return React.useSyncExternalStore(subscribe, () => cached(client, directory)?.options ?? EMPTY);
 };
 
-/** Server default model once the models have loaded for this client. */
-export const getDefaultModel = (client: OpencodeClient): ModelOption | undefined =>
-  caches.get(client)?.defaultModel;
+/** A directory's default model once its models have loaded. */
+export const getDefaultModel = (client: OpencodeClient, directory: string | undefined): ModelOption | undefined =>
+  cached(client, directory)?.defaultModel;
 
 export const findModel = (
   options: ReadonlyArray<ModelOption>,
