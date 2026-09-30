@@ -14,7 +14,6 @@ import { AppState, Linking, useColorScheme } from "react-native";
 import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
 import { AGENT, normalizeServerAddress } from "./client";
-import { useSystemScheme } from "./appearanceOverride";
 import { useScreenBackground, useTheme } from "./theme";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
@@ -131,8 +130,7 @@ export const RootNavigator = (): React.ReactElement => {
   const background = useScreenBackground();
   const plainBackground = useScreenBackground("plain");
   const { theme } = useTheme();
-  // Which background: by iOS's actual mode, not the look the app may force.
-  const customBackground = useSystemScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  const customBackground = scheme === "dark" ? theme.backgroundDark : theme.backgroundLight;
   const baseTheme = scheme === "dark" ? DARK_THEME : LIGHT_THEME;
   const navigationTheme =
     customBackground === undefined ? baseTheme : { ...baseTheme, colors: { ...baseTheme.colors, background: customBackground } };
