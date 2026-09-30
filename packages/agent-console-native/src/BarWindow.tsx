@@ -58,8 +58,9 @@ const COMPOSER_INSET_RANGE = 110;
  * window's input). */
 const PILL_PAD_V_EXPANDED = 7;
 const PILL_PAD_H_EXPANDED = 8;
-/** The handle's top inset at larger detents (a line inside the window top). */
-const GRABBER_TOP_EXPANDED = 8;
+/** The handle's top at larger detents (a line just inside the window top: its
+ * 10pt top padding puts the line 7pt down). */
+const GRABBER_TOP_EXPANDED = -3;
 /** The handle lifts to this (above the pill) at the smallest detent, over the
  * glass tab. */
 const TAB_TOP = -24;
