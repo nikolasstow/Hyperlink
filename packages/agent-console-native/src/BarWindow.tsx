@@ -79,11 +79,13 @@ const TAB_TOP = -24;
 const SNAP_MS = 240;
 /** Fling-down velocity (px/s) that collapses the window. */
 const FLING_VELOCITY = 1400;
-/** How far past the last detent you can keep pulling, and the release point
- * past which (last detent + margin) the window collapses instead of snapping
- * back. */
+/** How far past the lowest detent the window can be pulled (it gives less the
+ * farther it goes, never reaching this), and the release point past which
+ * (lowest detent + margin) it collapses instead of snapping back. */
 const DISMISS_ZONE = 120;
 const DISMISS_MARGIN = 48;
+/** The pull's resistance past the lowest detent (iOS's rubber band is 0.55). */
+const RUBBER_BAND = 0.55;
 
 /** Where a window opens, and keeping where a drag leaves it: a fraction of the
  * drag range (0 = full, 0.5 = half, 1 = the smallest) plus the keyboard height
@@ -295,9 +297,13 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
         })
         .onUpdate((e) => {
           const maxDrag = maxDragFor(kbFull.value);
-          const limit = maxDrag + DISMISS_ZONE;
+          // Past the lowest detent it gives less and less, like iOS's rubber
+          // band: never more than DISMISS_ZONE, however far the finger goes.
+          const lowest = stopDragFor(maxDrag);
           const next = dragStart.value + e.translationY;
-          dragY.value = next < 0 ? 0 : next > limit ? limit : next;
+          const past = next - lowest;
+          dragY.value =
+            next < 0 ? 0 : past > 0 ? lowest + DISMISS_ZONE * (1 - 1 / ((past * RUBBER_BAND) / DISMISS_ZONE + 1)) : next;
           const above = stop !== undefined || dragY.value < maxDrag - 4;
           if (above !== abovePillNow.value) {
             abovePillNow.value = above;
@@ -307,7 +313,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
         .onEnd((e) => {
           const maxDrag = maxDragFor(kbFull.value);
           // Flung down hard, or released past the last detent → collapse.
-          if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
+          if (e.velocityY > FLING_VELOCITY || dragY.value > stopDragFor(maxDrag) + DISMISS_MARGIN) {
             runOnJS(dismiss)();
             return;
           }
