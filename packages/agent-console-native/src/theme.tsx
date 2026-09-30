@@ -192,12 +192,14 @@ type Rgb = readonly [number, number, number];
  * (secondary, tertiary, placeholder) show at partial opacity (iOS's). */
 const DARK_TEXT = {
   label: "#000000",
+  full: [0, 0, 0],
   dim: [60, 60, 67],
-} satisfies { readonly label: string; readonly dim: Rgb };
+} satisfies { readonly label: string; readonly full: Rgb; readonly dim: Rgb };
 const LIGHT_TEXT = {
   label: "#FFFFFF",
+  full: [255, 255, 255],
   dim: [235, 235, 245],
-} satisfies { readonly label: string; readonly dim: Rgb };
+} satisfies { readonly label: string; readonly full: Rgb; readonly dim: Rgb };
 
 /** iOS's opacity for each dimmer role, the least it is ever shown at. */
 const SECONDARY_ALPHA = 0.6;
@@ -229,19 +231,28 @@ const rgba = ([r, g, b]: Rgb, alpha: number): string => `rgba(${r},${g},${b},${a
  * (1). */
 const boosted = (alpha: number, contrast: number): number => Math.round((alpha + (1 - alpha) * contrast) * 100) / 100;
 
+/** Increase Contrast's pull on a dim colour: toward the label's (darker on a
+ * light background, brighter on a dark one), all the way at full. */
+const toward = (from: Rgb, to: Rgb, contrast: number): Rgb => {
+  const mix = (a: number, b: number): number => Math.round(a + (b - a) * contrast);
+  return [mix(from[0], to[0]), mix(from[1], to[1]), mix(from[2], to[2])];
+};
+
 /** The text for a background, in either mode: dark or light, whichever label
  * contrasts more with it (WCAG ratio), so a bright saturated colour gets dark
  * text and a deep one light text; the dimmer roles made more opaque, only as
  * far as they need, to stay readable on it; and then, with Increase Contrast,
- * more opaque again, toward full as its slider rises. */
+ * darker (or brighter) and more opaque, toward the label as its slider rises. */
 export const textFor = (background: string, contrast = 0): TextColors => {
   const under = toRgb(background);
   const l = luminanceOf(under);
   const side = contrastRatio(l, 0) >= contrastRatio(l, 1) ? DARK_TEXT : LIGHT_TEXT;
-  const tertiary = rgba(side.dim, boosted(opacityFor(side.dim, under, TERTIARY_ALPHA, TERTIARY_RATIO), contrast));
+  // The slider darkens (or brightens) the dim colour and raises its opacity.
+  const dim = toward(side.dim, side.full, contrast);
+  const tertiary = rgba(dim, boosted(opacityFor(side.dim, under, TERTIARY_ALPHA, TERTIARY_RATIO), contrast));
   return {
     label: side.label,
-    secondaryLabel: rgba(side.dim, boosted(opacityFor(side.dim, under, SECONDARY_ALPHA, SECONDARY_RATIO), contrast)),
+    secondaryLabel: rgba(dim, boosted(opacityFor(side.dim, under, SECONDARY_ALPHA, SECONDARY_RATIO), contrast)),
     tertiaryLabel: tertiary,
     placeholderText: tertiary,
   };
