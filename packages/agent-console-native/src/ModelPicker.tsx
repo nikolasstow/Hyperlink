@@ -210,7 +210,7 @@ export const ModelWindow = (props: {
         alignment="leading"
         modifiers={[
           glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
-          padding({ horizontal: SIDE, top: SIDE, bottom: SIDE }),
+          padding({ horizontal: SIDE, top: SIDE }),
         ]}
       >
         {models.map((model, index) => (
