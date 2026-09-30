@@ -127,7 +127,6 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   content: {
     paddingHorizontal: 16,

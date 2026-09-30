@@ -253,7 +253,6 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.systemBackground,
   },
   fill: {
     flex: 1,

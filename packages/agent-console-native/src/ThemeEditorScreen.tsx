@@ -416,7 +416,6 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scroll: {
     flex: 1,

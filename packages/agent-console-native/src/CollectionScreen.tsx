@@ -1149,7 +1149,6 @@ const styles = StyleSheet.create({
   // tiles on a white page were invisible).
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   center: {
     alignItems: "center",

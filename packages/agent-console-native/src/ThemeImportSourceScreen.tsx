@@ -158,7 +158,6 @@ const toSource = (extensionId: string, contribution: ThemeContribution): Install
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   content: {
     paddingHorizontal: 16,

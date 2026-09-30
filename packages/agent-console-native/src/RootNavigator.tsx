@@ -14,7 +14,7 @@ import { AppState, Linking, useColorScheme } from "react-native";
 import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
 import { AGENT, normalizeServerAddress } from "./client";
-import { colors } from "./colors";
+import { useScreenBackground, useTheme } from "./theme";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
@@ -125,6 +125,15 @@ const DARK_THEME = { ...DarkTheme, colors: { ...DarkTheme.colors, background: "#
 
 export const RootNavigator = (): React.ReactElement => {
   const scheme = useColorScheme();
+  // The screens' background, from the theme (Appearance → Background) or the
+  // system's: painted here, behind every screen, so a change shows at once.
+  const background = useScreenBackground();
+  const plainBackground = useScreenBackground("plain");
+  const { theme } = useTheme();
+  const customBackground = scheme === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  const baseTheme = scheme === "dark" ? DARK_THEME : LIGHT_THEME;
+  const navigationTheme =
+    customBackground === undefined ? baseTheme : { ...baseTheme, colors: { ...baseTheme.colors, background: customBackground } };
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const { client, address } = useAppContext();
 
@@ -223,8 +232,8 @@ export const RootNavigator = (): React.ReactElement => {
   }, [navigationRef, client]);
 
   return (
-    <NavigationContainer ref={navigationRef} theme={scheme === "dark" ? DARK_THEME : LIGHT_THEME}>
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: background } }}>
         {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
          * applies it via `useScrollEdgeEffects` after mount instead. See
          * that hook for why a static option silently does nothing. */}
@@ -333,6 +342,7 @@ export const RootNavigator = (): React.ReactElement => {
           name="FileExplorer"
           component={FileExplorerScreen}
           options={({ route }) => ({
+            contentStyle: { backgroundColor: plainBackground },
             headerShown: true,
             headerTransparent: true,
             headerStyle: { backgroundColor: "transparent" },
@@ -361,7 +371,7 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="ExtensionView"
           component={ExtensionViewScreen}
-          options={pageHeader}
+          options={{ ...pageHeader, contentStyle: { backgroundColor: plainBackground } }}
         />
         <Stack.Screen
           name="Archived"
@@ -384,7 +394,7 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="ProcessOutput"
           component={ProcessOutputScreen}
-          options={pageHeader}
+          options={{ ...pageHeader, contentStyle: { backgroundColor: plainBackground } }}
         />
       </Stack.Navigator>
     </NavigationContainer>

@@ -98,7 +98,6 @@ export const FileViewerScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   surface: {
     flex: 1,

@@ -291,6 +291,10 @@ export type Theme = {
   readonly secondary: string;
   readonly code?: CodeTheme;
   readonly codeFont: string;
+  /** The screens' background in light mode, when not the system's. */
+  readonly backgroundLight?: string;
+  /** The screens' background in dark mode, when not the system's. */
+  readonly backgroundDark?: string;
 };
 
 /** Default code font — a guaranteed-present iOS monospace. */
@@ -313,7 +317,16 @@ export const parseTheme = (parsed: unknown): Theme | undefined => {
   if (typeof primary !== "string" || typeof secondary !== "string") return undefined;
   const codeFont = "codeFont" in parsed && typeof parsed.codeFont === "string" ? parsed.codeFont : DEFAULT_CODE_FONT;
   const code = "code" in parsed ? parseCodeTheme(parsed.code) : undefined;
-  return { primary, secondary, codeFont, ...(code === undefined ? {} : { code }) };
+  const backgroundLight = "backgroundLight" in parsed && typeof parsed.backgroundLight === "string" ? parsed.backgroundLight : undefined;
+  const backgroundDark = "backgroundDark" in parsed && typeof parsed.backgroundDark === "string" ? parsed.backgroundDark : undefined;
+  return {
+    primary,
+    secondary,
+    codeFont,
+    ...(code === undefined ? {} : { code }),
+    ...(backgroundLight === undefined ? {} : { backgroundLight }),
+    ...(backgroundDark === undefined ? {} : { backgroundDark }),
+  };
 };
 
 export const getStoredTheme = async (): Promise<Theme | undefined> => {

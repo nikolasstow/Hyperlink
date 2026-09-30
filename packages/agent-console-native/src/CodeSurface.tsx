@@ -356,7 +356,6 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   web: {
     flex: 1,

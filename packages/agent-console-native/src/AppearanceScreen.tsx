@@ -23,7 +23,7 @@ import { colors } from "./colors";
 import { getThemeJson, listExtensions, removeExtension } from "./extensionsClient";
 import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
-import { DEFAULT_THEME, getApiAddress, type CodeTheme } from "./settings";
+import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { useTheme } from "./theme";
 import { useCodeTheme } from "./useCodeTheme";
@@ -127,6 +127,52 @@ const ColorSwatches = (props: {
     </View>
   );
 };
+
+/** The theme with one mode's background set, or back to System (the key
+ * dropped). */
+const withBackground = (theme: Theme, key: "backgroundLight" | "backgroundDark", color: string | undefined): Theme => {
+  const { [key]: _previous, ...rest } = theme;
+  return color === undefined
+    ? rest
+    : {
+        ...rest,
+        [key]: color,
+      };
+};
+
+/** What "System" is for each mode: the grouped background iOS gives screens. */
+const SYSTEM_BACKGROUND = {
+  light: "#F2F2F7",
+  dark: "#000000",
+};
+
+/** One mode's background: System (the default, and the way back to it) or a
+ * colour from Apple's picker. */
+const BackgroundRow = (props: {
+  readonly label: string;
+  readonly value: string | undefined;
+  readonly systemColor: string;
+  readonly onChange: (color: string | undefined) => void;
+}): React.ReactElement => (
+  <View style={styles.backgroundRow}>
+    <Text style={styles.backgroundLabel}>{props.label}</Text>
+    <TouchableOpacity
+      accessibilityLabel={`${props.label} background: System`}
+      onPress={() => props.onChange(undefined)}
+      style={[styles.swatch, { backgroundColor: props.systemColor }, props.value === undefined ? styles.swatchSelected : null]}
+    />
+    <Host style={styles.pickerSwatch} matchContents>
+      <ColorPicker
+        label=""
+        selection={props.value ?? props.systemColor}
+        onSelectionChange={(next) => {
+          const hex = next.length >= 7 ? next.slice(0, 7) : next;
+          if (isHex(hex)) props.onChange(hex.toUpperCase());
+        }}
+      />
+    </Host>
+  </View>
+);
 
 export const AppearanceScreen = (props: Props): React.ReactElement => {
   const { theme, setTheme } = useTheme();
@@ -356,6 +402,13 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
           <ColorSwatches value={theme.secondary} themeColor={anchor.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
         </View>
 
+        <Text style={styles.sectionLabel}>Background</Text>
+        <View style={styles.card}>
+          <Text style={styles.hint}>Behind every screen, in each mode. System follows iOS.</Text>
+          <BackgroundRow label="Light" value={theme.backgroundLight} systemColor={SYSTEM_BACKGROUND.light} onChange={(color) => setTheme(withBackground(theme, "backgroundLight", color))} />
+          <BackgroundRow label="Dark" value={theme.backgroundDark} systemColor={SYSTEM_BACKGROUND.dark} onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
+        </View>
+
         <Text style={styles.sectionLabel}>Code font</Text>
         <View style={styles.card}>
           {[...CODE_FONTS, ...customFonts.map((f) => f.family)].map((font) => (
@@ -548,7 +601,6 @@ const ThemeList = (props: ThemeListProps): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   scroll: {
     flex: 1,
@@ -640,5 +692,16 @@ const styles = StyleSheet.create({
   pickerSwatch: {
     width: 32,
     height: 32,
+  },
+  backgroundRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingTop: 4,
+  },
+  backgroundLabel: {
+    flex: 1,
+    color: colors.label,
+    fontSize: 16,
   },
 });

@@ -13,21 +13,25 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import * as React from "react";
-import { colors } from "./colors";
+import { useScreenBackground } from "./theme";
 import { homeHeaderOptions } from "./homeHeader";
 import { LaunchScreen } from "./LaunchScreen";
 
 const Stack = createNativeStackNavigator();
 const noop = (): void => {};
 
-export const LaunchNavigator = (): React.ReactElement => (
-  <NavigationContainer>
-    <Stack.Navigator screenOptions={{ animation: "none", contentStyle: { backgroundColor: colors.background } }}>
-      <Stack.Screen
-        name="Launch"
-        component={LaunchScreen}
-        options={homeHeaderOptions({ onSettings: noop, onSearch: noop, onArchived: noop })}
-      />
-    </Stack.Navigator>
-  </NavigationContainer>
-);
+export const LaunchNavigator = (): React.ReactElement => {
+  // The theme's background (Appearance → Background), as the app's screens.
+  const background = useScreenBackground();
+  return (
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ animation: "none", contentStyle: { backgroundColor: background } }}>
+        <Stack.Screen
+          name="Launch"
+          component={LaunchScreen}
+          options={homeHeaderOptions({ onSettings: noop, onSearch: noop, onArchived: noop })}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};

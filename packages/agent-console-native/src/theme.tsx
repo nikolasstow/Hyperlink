@@ -16,6 +16,8 @@
  * @internal
  */
 import * as React from "react";
+import { useColorScheme, type ColorValue } from "react-native";
+import { colors } from "./colors";
 import { DEFAULT_THEME, getStoredTheme, setStoredTheme, type Theme } from "./settings";
 
 /** Derived colours computed from a theme's `primary`/`secondary`. */
@@ -118,4 +120,15 @@ export const useTheme = (): ThemeContextValue => {
   const value = React.useContext(ThemeContext);
   if (value === undefined) throw new Error("useTheme() called outside ThemeProvider");
   return value;
+};
+
+/** The screens' background: the theme's for the current mode (Appearance →
+ * Background), else the system's. `plain` screens (Files, output views) are
+ * the system's plain background by default rather than the grouped one; a
+ * custom colour is the same for every screen. Read live, so a change shows at
+ * once. */
+export const useScreenBackground = (kind: "grouped" | "plain" = "grouped"): ColorValue => {
+  const { theme } = useTheme();
+  const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  return custom ?? (kind === "plain" ? colors.systemBackground : colors.background);
 };

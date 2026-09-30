@@ -38,7 +38,6 @@ export const LaunchScreen = (): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   composer: {
     position: "absolute",

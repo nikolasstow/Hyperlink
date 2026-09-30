@@ -769,7 +769,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   composerFloat: {
     position: "absolute",

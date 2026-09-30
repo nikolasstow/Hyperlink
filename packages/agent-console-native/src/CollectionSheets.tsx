@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { membership, type Category } from "./collectionModel";
 import { symbolForIcon } from "./codicons";
 import { colors } from "./colors";
+import { useScreenBackground } from "./theme";
 import type { CollectionItem, CollectionState, FormField, FormSpec } from "./pagesClient";
 import { SystemIcon } from "./SystemIcon";
 
@@ -116,6 +117,9 @@ export const FormSheet = (props: {
   readonly onSubmit: (values: Readonly<Record<string, string>>) => Promise<void>;
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
+  // The theme's background (Appearance → Background): a sheet is its own
+  // window, outside the navigator that paints the screens.
+  const background = useScreenBackground();
   const { spec } = props;
   const [values, setValues] = React.useState<Readonly<Record<string, string>>>({});
   const [busy, setBusy] = React.useState(false);
@@ -144,7 +148,7 @@ export const FormSheet = (props: {
   return (
     <Modal visible={spec !== undefined} animationType="slide" presentationStyle="pageSheet" onRequestClose={props.onCancel}>
       {spec === undefined ? null : (
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { backgroundColor: background }]}>
           <SheetBar title={spec.title} action={spec.submitTitle} busy={busy} onCancel={props.onCancel} onAction={submit} />
           <ScrollView contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
             {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
@@ -190,6 +194,7 @@ export const CategoriesSheet = (props: {
   readonly onSave: (choices: ReadonlyMap<string, boolean>) => Promise<void>;
 }): React.ReactElement => {
   const insets = useSafeAreaInsets();
+  const background = useScreenBackground();
   const { items } = props;
   const [choices, setChoices] = React.useState<ReadonlyMap<string, boolean>>(new Map());
   const [busy, setBusy] = React.useState(false);
@@ -226,7 +231,7 @@ export const CategoriesSheet = (props: {
   return (
     <Modal visible={items !== undefined} animationType="slide" presentationStyle="pageSheet" onRequestClose={props.onCancel}>
       {items === undefined ? null : (
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { backgroundColor: background }]}>
           <SheetBar title={count === 1 ? "Categories" : `Categories for ${count} Scripts`} action="Save" busy={busy} onCancel={props.onCancel} onAction={() => run(props.onSave(choices))} />
           <ScrollView contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 24 }]}>
             {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
@@ -266,7 +271,6 @@ export const CategoriesSheet = (props: {
 const styles = StyleSheet.create({
   sheet: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   bar: {
     flexDirection: "row",

@@ -490,7 +490,6 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   center: {
     alignItems: "center",

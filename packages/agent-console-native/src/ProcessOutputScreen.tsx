@@ -109,7 +109,6 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.systemBackground,
   },
   content: {
     paddingHorizontal: 12,

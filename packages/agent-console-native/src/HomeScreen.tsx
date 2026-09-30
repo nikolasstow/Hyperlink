@@ -396,7 +396,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   list: {
     flex: 1,
