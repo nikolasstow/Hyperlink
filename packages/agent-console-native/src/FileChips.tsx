@@ -29,7 +29,7 @@ export const FileChips = (props: {
   return (
     <Host style={{ width: props.width, height: FILE_CHIPS_HEIGHT }} ignoreSafeArea="all">
       <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
-        <HStack spacing={8} modifiers={[padding({ horizontal: 12, vertical: 5 })]}>
+        <HStack spacing={8} modifiers={[padding({ horizontal: 20, vertical: 5 })]}>
           {props.files.map((file) => (
             <HStack
               key={file.path}
