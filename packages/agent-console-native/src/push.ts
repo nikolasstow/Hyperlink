@@ -20,6 +20,9 @@
  *
  * @internal
  */
+import * as React from "react";
+import { AppState } from "react-native";
+
 declare const require: (moduleName: string) => unknown;
 
 /** Only the members used here. Deliberately not the module's full type: this
@@ -270,4 +273,22 @@ export const registerForPush = async (backendAddress: string): Promise<PushResul
   }).catch(() => undefined);
 
   return { ok: true, token, registered: response?.ok === true };
+};
+
+/**
+ * Re-registers this app's push token every time it comes to the foreground.
+ * The backend sends each notification to one app per device, the one
+ * registered last (every build on the phone, the main app and each worktree
+ * variant, has its own token), so this makes it the app you last opened.
+ */
+export const useRegisterOnForeground = (backendAddress: string): void => {
+  React.useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      void registerForPush(backendAddress).then((result) => {
+        if (!result.ok) console.warn("[push] re-registering on foreground:", result.reason);
+      });
+    });
+    return () => subscription.remove();
+  }, [backendAddress]);
 };

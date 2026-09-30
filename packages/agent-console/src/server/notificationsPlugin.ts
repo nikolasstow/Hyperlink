@@ -257,9 +257,28 @@ export const notificationsPlugin = (): Plugin => {
     await writeFile(tokensPath, JSON.stringify([...registrations.values()], null, 2)).catch(() => undefined);
   };
 
+  /** Who a push goes to: one app per device, the one opened last. Every build
+   * of the app on a phone (the main app and each worktree's variant) registers
+   * its own token, and each app re-registers whenever it comes to the
+   * foreground; sending to all of them showed every notification in each app
+   * not open, however many times over. */
+  const recipients = (): ReadonlyArray<string> => {
+    const latestByDevice = new Map<string, Registration>();
+    const unnamed: string[] = [];
+    for (const registration of registrations.values()) {
+      if (registration.deviceName === undefined) {
+        unnamed.push(registration.token);
+        continue;
+      }
+      const known = latestByDevice.get(registration.deviceName);
+      if (known === undefined || registration.registeredAt > known.registeredAt) latestByDevice.set(registration.deviceName, registration);
+    }
+    return [...[...latestByDevice.values()].map((registration) => registration.token), ...unnamed];
+  };
+
   const send = async (message: Omit<PushMessage, "to">): Promise<void> => {
     if (registrations.size === 0) return;
-    const messages: PushMessage[] = [...registrations.keys()].map((to) => ({ ...message, to }));
+    const messages: PushMessage[] = recipients().map((to) => ({ ...message, to }));
 
     const response = await fetch(EXPO_PUSH_URL, {
       method: "POST",

@@ -3,7 +3,7 @@ import * as React from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppContextProvider } from "./src/AppContext";
+import { AppContextProvider, useAppContext } from "./src/AppContext";
 import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
@@ -25,7 +25,7 @@ import {
   setServerAddress,
 } from "./src/settings";
 import { primeDefaultPermissionMode, primeSessionPermissionModes } from "./src/sessionPermissions";
-import { registerForPush } from "./src/push";
+import { registerForPush, useRegisterOnForeground } from "./src/push";
 import { KeyboardHeightProvider } from "./src/keyboardHeight";
 
 /** Only the one-time async bootstrap (resolve a server address, connect,
@@ -191,6 +191,8 @@ const AppInner = (): React.ReactElement => {
           <ThemeSync />
           {/* Answers permission asks for allow-all sessions, app-wide. */}
           <PermissionAutoApprover />
+          {/* Makes this the app notifications go to whenever it is opened. */}
+          <PushOnForeground />
           {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}
           <KeyboardHeightProvider>
             <RootNavigator />
@@ -200,6 +202,13 @@ const AppInner = (): React.ReactElement => {
       )}
     </View>
   );
+};
+
+/** Re-registers for pushes on each foreground (push.ts). */
+const PushOnForeground = (): null => {
+  const { backend } = useAppContext();
+  useRegisterOnForeground(backend);
+  return null;
 };
 
 export default function App() {
