@@ -19,6 +19,7 @@ import { Divider, Host, HStack, Image, ScrollView, Spacer, TabView, Text, VStack
 import {
   Animation,
   animation,
+  background,
   clipped,
   contentShape,
   fixedSize,
@@ -51,7 +52,9 @@ const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
 /** The list's side margin, for the tabs and the list alike. */
 const SIDE = 16;
-const TAB_HEIGHT = 34;
+/** The search list's inset inside its card, so a highlight rounds inside it. */
+const PICK_INSET = 4;
+const TAB_HEIGHT = 28;
 const TAB_TITLE_MAX_WIDTH = 200;
 const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
 /** The search's one line, sized so the pill is the bar's height. */
@@ -203,12 +206,15 @@ export const ModelWindow = (props: {
       },
     );
 
-  const rows = (models: ReadonlyArray<ModelOption>, showProvider: boolean): React.ReactElement => (
+  // Searching, the first match is the one Return picks: highlighted, the list
+  // inset a little so its highlight rounds inside the card.
+  const rows = (models: ReadonlyArray<ModelOption>, showProvider: boolean, pickFirst: boolean): React.ReactElement => (
     <ScrollView modifiers={[scrollDismissesKeyboard("immediately"), refreshable(pull)]}>
       <VStack
         spacing={0}
         alignment="leading"
         modifiers={[
+          padding({ all: pickFirst ? PICK_INSET : 0 }),
           glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
           padding({ horizontal: SIDE, top: HANDLE_CLEARANCE }),
         ]}
@@ -216,7 +222,13 @@ export const ModelWindow = (props: {
         {models.map((model, index) => (
           <VStack key={modelKey(model)} spacing={0} alignment="leading">
             {index > 0 ? <Divider modifiers={[padding({ leading: 16 })]} /> : null}
-            <ModelRow model={model} showProvider={showProvider} active={modelKey(model) === selectedKey} onPress={props.onChoose} />
+            <ModelRow
+              model={model}
+              showProvider={showProvider}
+              active={modelKey(model) === selectedKey}
+              picked={pickFirst && index === 0 ? themeColors.bubbleGlassTint : undefined}
+              onPress={props.onChoose}
+            />
           </VStack>
         ))}
       </VStack>
@@ -241,7 +253,7 @@ export const ModelWindow = (props: {
             <VStack spacing={0} modifiers={[frame({ maxHeight: Infinity, alignment: "top" })]}>
               {searching ? (
                 results.length > 0 ? (
-                  rows(results, true)
+                  rows(results, true, true)
                 ) : (
                   <Empty text="No models match" />
                 )
@@ -249,7 +261,7 @@ export const ModelWindow = (props: {
                 <TabView selection={current} onSelectionChange={setTab} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
                   {tabs.map((t) => (
                     <TabView.Tab key={t.id} value={t.id}>
-                      {t.models.length > 0 ? rows(t.models, t.showProvider) : <Empty text="Models you send with show here" />}
+                      {t.models.length > 0 ? rows(t.models, t.showProvider, false) : <Empty text="Models you send with show here" />}
                     </TabView.Tab>
                   ))}
                 </TabView>
@@ -297,6 +309,12 @@ export const ModelWindow = (props: {
             autoCorrect={false}
             autoCapitalize="none"
             editable={props.open}
+            returnKeyType="go"
+            submitBehavior="submit"
+            onSubmitEditing={() => {
+              const first = searching ? results[0] : undefined;
+              if (first !== undefined) props.onChoose(first);
+            }}
           />
         </>
       }
@@ -313,8 +331,8 @@ const FallbackTabs = (props: {
 }): React.ReactElement => (
   <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
     <HStack
-      spacing={8}
-      modifiers={[padding({ horizontal: SIDE, vertical: 14 })]}
+      spacing={6}
+      modifiers={[padding({ horizontal: SIDE, vertical: 10 })]}
     >
       {props.tabs.map((t) => {
         const active = t.id === props.current;
@@ -327,10 +345,10 @@ const FallbackTabs = (props: {
             key={t.id}
             spacing={0}
             modifiers={[
-              font({ size: 14, weight: active ? "semibold" : "medium" }),
+              font({ size: 13, weight: active ? "semibold" : "medium" }),
               foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
               frame({ minWidth: TAB_HEIGHT, height: TAB_HEIGHT }),
-              padding({ horizontal: collapsed ? 0 : 14 }),
+              padding({ horizontal: collapsed ? 0 : 11 }),
               glassEffect({
                 glass: { variant: "regular", tint: active ? props.tint : undefined },
                 shape: "capsule",
@@ -345,7 +363,7 @@ const FallbackTabs = (props: {
               modifiers={[
                 lineLimit(1),
                 fixedSize(),
-                padding({ leading: t.icon !== undefined ? 6 : 0 }),
+                padding({ leading: t.icon !== undefined ? 5 : 0 }),
                 frame({ maxWidth: collapsed ? 0 : TAB_TITLE_MAX_WIDTH, alignment: "leading" }),
                 clipped(),
                 animation(TAB_SPRING, active),
@@ -370,6 +388,8 @@ const ModelRow = (props: {
   readonly model: ModelOption;
   readonly showProvider: boolean;
   readonly active: boolean;
+  /** Return picks this row: its highlight's colour. */
+  readonly picked: string | undefined;
   readonly onPress: (model: ModelOption) => void;
 }): React.ReactElement => (
   <HStack
@@ -377,6 +397,7 @@ const ModelRow = (props: {
     modifiers={[
       padding({ horizontal: 16, vertical: 12 }),
       frame({ maxWidth: Infinity, alignment: "leading" }),
+      ...(props.picked !== undefined ? [background(props.picked, shapes.roundedRectangle({ cornerRadius: CARD_RADIUS - PICK_INSET }))] : []),
       contentShape(shapes.rectangle()),
       onTapGesture(() => props.onPress(props.model)),
     ]}
@@ -392,7 +413,11 @@ const ModelRow = (props: {
       ) : null}
     </VStack>
     <Spacer />
-    {props.active ? <Image systemName="checkmark" size={13} /> : null}
+    {props.picked !== undefined ? (
+      <Image systemName="return" size={13} color="secondary" />
+    ) : props.active ? (
+      <Image systemName="checkmark" size={13} />
+    ) : null}
   </HStack>
 );
 

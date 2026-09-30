@@ -33,13 +33,13 @@ public struct CapsuleTabsView: ExpoSwiftUI.View {
 
   public var body: some View {
     ScrollView(.horizontal, showsIndicators: false) {
-      HStack(spacing: 8) {
+      HStack(spacing: 6) {
         ForEach(props.tabs, id: \.id) { tab in
           tabView(tab)
         }
       }
       .padding(.horizontal, props.sideMargin)
-      .padding(.vertical, 14)
+      .padding(.vertical, 10)
     }
     .onAppear { shown = props.selection }
     .onChange(of: props.selection) { selection in
@@ -57,14 +57,14 @@ public struct CapsuleTabsView: ExpoSwiftUI.View {
       Text(tab.title)
         .lineLimit(1)
         .fixedSize()
-        .padding(.leading, tab.systemImage != nil ? 6 : 0)
+        .padding(.leading, tab.systemImage != nil ? 5 : 0)
         .frame(maxWidth: collapsed ? 0 : nil, alignment: .leading)
         .clipped()
     }
-    .font(.system(size: 14, weight: active ? .semibold : .medium))
+    .font(.system(size: 13, weight: active ? .semibold : .medium))
     .foregroundStyle(active ? HierarchicalShapeStyle.primary : HierarchicalShapeStyle.secondary)
-    .padding(.horizontal, collapsed ? 10 : 14)
-    .frame(height: 34)
+    .padding(.horizontal, collapsed ? 8 : 11)
+    .frame(height: 28)
     .modifier(SelectedGlass(active: active, tint: props.tint))
     .contentShape(Capsule())
     .onTapGesture {
