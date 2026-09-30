@@ -36,9 +36,10 @@ import { markSessionRead } from "./sessionReads";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
+import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { FILE_CHIPS_HEIGHT, FileChips } from "./FileChips";
-import { mentionOf, sessionFiles, type SessionFile } from "./sessionFiles";
+import { sessionFiles, type SessionFile } from "./sessionFiles";
 import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
@@ -108,13 +109,38 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       cancelled = true;
     };
   }, [client, sessionID]);
-  const files = React.useMemo(() => sessionFiles(transcript, directory), [transcript, directory]);
+  // Every file seen this session stays: a transcript that reloads or
+  // reconnects (briefly empty) never empties the row.
+  const seenFiles = React.useRef<ReadonlyArray<SessionFile>>([]);
+  const touched = React.useMemo(() => {
+    const current = sessionFiles(transcript, directory);
+    const known = new Set(current.map((file) => file.path));
+    const merged = [...current, ...seenFiles.current.filter((file) => !known.has(file.path))];
+    seenFiles.current = merged;
+    return merged;
+  }, [transcript, directory]);
+  // Chips selected for the next message, in the order chosen: they lead the
+  // row, tinted, and go with the message as file references.
+  const [selected, setSelected] = React.useState<ReadonlyArray<string>>([]);
+  const [orderVersion, setOrderVersion] = React.useState(0);
+  const selectedSet = React.useMemo(() => new Set(selected), [selected]);
+  const files = React.useMemo(() => {
+    const byPath = new Map(touched.map((file) => [file.path, file]));
+    const chosen = selected.flatMap((path) => {
+      const file = byPath.get(path);
+      return file === undefined ? [] : [file];
+    });
+    return [...chosen, ...touched.filter((file) => !selectedSet.has(file.path))];
+  }, [touched, selected, selectedSet]);
   const { width: screenWidth } = useWindowDimensions();
-  const insertRef = React.useRef<((insert: string) => void) | null>(null);
-  // Keyboard up: into the message, for the agent to reference. Down: open it.
+  // Keyboard up: select it for the message (or unselect). Down: open it.
   const onFile = (file: SessionFile): void => {
-    if (keyboardHeight > 0) insertRef.current?.(mentionOf(file, directory));
-    else props.navigation.navigate("FileViewer", { path: file.path, name: file.name });
+    if (keyboardHeight === 0) {
+      props.navigation.navigate("FileViewer", { path: file.path, name: file.name });
+      return;
+    }
+    setSelected((current) => (current.includes(file.path) ? current.filter((path) => path !== file.path) : [file.path, ...current]));
+    setOrderVersion((version) => version + 1);
   };
   // Mirrors the module-level store so the menu re-renders with the choice.
   const [permissionMode, setMode] = React.useState<PermissionMode>(() => getPermissionMode(sessionID));
@@ -296,6 +322,25 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   };
 
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
+    // The chips selected go with this message; the selection clears.
+    const attached = files.filter((file) => selectedSet.has(file.path));
+    // The text, and each selected file as a file reference.
+    const parts: Array<TextPartInput | FilePartInput> = [
+      {
+        type: "text",
+        text,
+      },
+      ...attached.map(
+        (file): FilePartInput => ({
+          type: "file",
+          mime: "text/plain",
+          url: `file://${file.path}`,
+          filename: file.name,
+        }),
+      ),
+    ];
+    setSelected([]);
+    setOrderVersion((version) => version + 1);
     sendOptimistic(text);
     markBusy();
     // Start the Live Activity synchronously at the tap, while the app is
@@ -323,7 +368,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         path: { id: sessionID },
         body: {
           agent: AGENT,
-          parts: [{ type: "text", text }],
+          parts,
           model:
             model === undefined
               ? undefined
@@ -450,8 +495,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           placeholder="Message"
           seedModel={resolvedSeed}
           dubzContext={SESSION_DUBZ}
-          accessory={<FileChips files={files} width={screenWidth} onPress={onFile} />}
-          insertRef={insertRef}
+          accessory={<FileChips files={files} selected={selectedSet} orderVersion={orderVersion} width={screenWidth} onPress={onFile} />}
         />
       </Animated.View>
     </View>

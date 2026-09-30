@@ -82,9 +82,6 @@ export const Composer = (props: {
   /** Above the bar, on its page, staying on top of it as it expands (the
    * chat's file chips). */
   readonly accessory?: React.ReactNode;
-  /** Filled with a function that puts text into the message (and focuses
-   * it), for the screen to call. */
-  readonly insertRef?: React.RefObject<((insert: string) => void) | null>;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -162,19 +159,6 @@ export const Composer = (props: {
 
   const expand = React.useCallback(() => inputRef.current?.focus(), []);
 
-  // What the screen calls to put text into the message: after what is there,
-  // spaced, with the input focused to carry on.
-  const { insertRef } = props;
-  React.useEffect(() => {
-    if (insertRef === undefined) return undefined;
-    insertRef.current = (insert: string) => {
-      setText((current) => `${current.length === 0 || current.endsWith(" ") ? current : `${current} `}${insert} `);
-      inputRef.current?.focus();
-    };
-    return () => {
-      insertRef.current = null;
-    };
-  }, [insertRef]);
 
   // Collapsed, the bar shows this page type's page.
   React.useEffect(() => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mentionOf, sessionFiles } from "./sessionFiles";
+import { sessionFiles } from "./sessionFiles";
 import type { PartsSource } from "./sessionFiles";
 
 const toolPart = (id: string, tool: string, input: Record<string, unknown>) => ({
@@ -34,8 +34,4 @@ describe("sessionFiles", () => {
     expect(sessionFiles(t, "/r").find((f) => f.path === "/r/src/b.ts")?.edited).toBe(false);
   });
 
-  it("mentions a file relative to the session's folder", () => {
-    expect(mentionOf({ path: "/r/src/a.ts", name: "a.ts", edited: false }, "/r")).toBe("@src/a.ts");
-    expect(mentionOf({ path: "/elsewhere/x.ts", name: "x.ts", edited: false }, "/r")).toBe("@/elsewhere/x.ts");
-  });
 });

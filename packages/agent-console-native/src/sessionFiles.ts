@@ -75,11 +75,3 @@ export const sessionFiles = (transcript: PartsSource, directory: string | undefi
   }
   return [...seen.values()];
 };
-
-/** How a file is referenced in a message: `@` and its path, relative to the
- * session's folder when inside it. */
-export const mentionOf = (file: SessionFile, directory: string | undefined): string => {
-  const root = directory?.replace(/\/+$/, "");
-  const relative = root !== undefined && file.path.startsWith(`${root}/`) ? file.path.slice(root.length + 1) : file.path;
-  return `@${relative}`;
-};
