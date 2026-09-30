@@ -61,9 +61,6 @@ const PILL_PAD_H_EXPANDED = 8;
 /** The handle's top at larger detents (a line just inside the window top: its
  * 10pt top padding puts the line 7pt down). */
 const GRABBER_TOP_EXPANDED = -3;
-/** Below the handle's line (7pt down, 5pt tall), the space before the
- * window's content: where a body's content starts. */
-export const HANDLE_CLEARANCE = GRABBER_TOP_EXPANDED + 10 + 5 + 18;
 /** The handle lifts to this (above the pill) at the smallest detent, over the
  * glass tab. */
 const TAB_TOP = -24;

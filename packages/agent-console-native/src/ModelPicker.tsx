@@ -39,7 +39,7 @@ import {
 import * as React from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import { CapsuleTabs } from "../modules/capsule-tabs";
-import { BarWindow, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
+import { BarWindow, type CloseReason, detentMemory } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
@@ -210,7 +210,7 @@ export const ModelWindow = (props: {
         alignment="leading"
         modifiers={[
           glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
-          padding({ horizontal: SIDE, top: HANDLE_CLEARANCE }),
+          padding({ horizontal: SIDE, top: SIDE }),
         ]}
       >
         {models.map((model, index) => (
