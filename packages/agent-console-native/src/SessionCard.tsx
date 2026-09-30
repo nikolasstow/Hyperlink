@@ -176,6 +176,10 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
     >
     <Swipeable
       ref={swipeable}
+      // The swipeable clips to itself by default, which cut the card's glass
+      // shadow off above and below; the row spans the screen, and the swipe
+      // actions keep their own clip.
+      containerStyle={styles.swipeable}
       friction={1.4}
       overshootRight={false}
       rightThreshold={ACTIONS_WIDTH / 3}
@@ -251,6 +255,9 @@ const ROW_GAP = 10;
 const styles = StyleSheet.create({
   row: {
     marginBottom: ROW_GAP,
+  },
+  swipeable: {
+    overflow: "visible",
   },
   // The circles sit centred beside the card, inside its right gutter.
   actions: {
