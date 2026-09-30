@@ -12,12 +12,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
 
-/** The lengths offered (a slider, whole seconds); the default is 3. */
-export const RUN_COUNTDOWN_MIN = 1;
-export const RUN_COUNTDOWN_MAX = 30;
+/** The lengths offered, the slider's stops (evenly spaced on it, so the
+ * short ones do not crowd its start); the default is 3. */
+export const RUN_DELAY_STOPS: ReadonlyArray<number> = [1, 2, 3, 5, 10, 15, 30];
 const defaultSeconds = 3;
 
-const isLength = (value: number): boolean => Number.isInteger(value) && value >= RUN_COUNTDOWN_MIN && value <= RUN_COUNTDOWN_MAX;
+const isLength = (value: number): boolean => RUN_DELAY_STOPS.includes(value);
 const storageKey = "runCountdownSeconds";
 /** Whether scripts count down at all (on by default); off, a tap runs one at
  * once. */
@@ -64,9 +64,8 @@ export const setRunCountdownEnabled = (next: boolean): void => {
 
 export const useRunCountdownEnabled = (): boolean => React.useSyncExternalStore(subscribe, () => enabled);
 
-export const setRunCountdownSeconds = (value: number): void => {
-  const next = Math.min(RUN_COUNTDOWN_MAX, Math.max(RUN_COUNTDOWN_MIN, Math.round(value)));
-  if (next === seconds) return;
+export const setRunCountdownSeconds = (next: number): void => {
+  if (next === seconds || !isLength(next)) return;
   seconds = next;
   emit();
   AsyncStorage.setItem(storageKey, String(next)).catch((error: unknown) => console.error("[run countdown] saving the length failed", error));

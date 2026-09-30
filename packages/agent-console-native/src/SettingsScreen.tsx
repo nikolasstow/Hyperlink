@@ -48,7 +48,7 @@ import {
   setWorktreeTemplate,
   type DefaultWorktreePreference,
 } from "./settings";
-import { RUN_COUNTDOWN_MAX, RUN_COUNTDOWN_MIN, setRunCountdownEnabled, setRunCountdownSeconds, useRunCountdownEnabled, useRunCountdownSeconds } from "./runCountdown";
+import { RUN_DELAY_STOPS, setRunCountdownEnabled, setRunCountdownSeconds, useRunCountdownEnabled, useRunCountdownSeconds } from "./runCountdown";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -389,7 +389,18 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           </View>
           {runDelayOn ? (
             <Host style={{ width: windowWidth - 32 - 28, height: SLIDER_HEIGHT }}>
-              <Slider value={runCountdown} min={RUN_COUNTDOWN_MIN} max={RUN_COUNTDOWN_MAX} step={1} onValueChange={setRunCountdownSeconds} />
+              {/* The slider moves between the stops by their place, not their
+               * seconds: 1, 2, 3, 5, 10, 15, 30, evenly spaced. */}
+              <Slider
+                value={Math.max(0, RUN_DELAY_STOPS.indexOf(runCountdown))}
+                min={0}
+                max={RUN_DELAY_STOPS.length - 1}
+                step={1}
+                onValueChange={(stop) => {
+                  const seconds = RUN_DELAY_STOPS[Math.round(stop)];
+                  if (seconds !== undefined) setRunCountdownSeconds(seconds);
+                }}
+              />
             </Host>
           ) : null}
         </View>
