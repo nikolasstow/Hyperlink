@@ -1,9 +1,11 @@
 /**
- * Composer model selector: the model's name, and on a tap a native popover of
- * the connected models in pages, a tab strip over them. Recents first (the
- * models last sent with), then a page per provider, the most used providers
- * first. Swipe between pages or tap a tab. The popover reads the models store
- * live, so a refresh landing while it is open shows at once.
+ * Composer model selector: the model's name, and on a tap a native sheet of
+ * the connected models: a search field (focused as it opens) over the models
+ * in pages, a tab strip over them. Recents first (the models last sent with),
+ * then a page per provider, the most used providers first. Swipe between pages
+ * or tap a tab; typing swaps the pages for every model matching. The sheet
+ * reads the models store live, so a refresh landing while it is open shows at
+ * once.
  *
  * Label is the model name (or “Model” while loading); not “Auto” (Cursor’s
  * routing feature, which we don’t replicate). Provider titles are the server’s
@@ -11,8 +13,9 @@
  *
  * @internal
  */
-import { Host, HStack, Image, Popover, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
+import { BottomSheet, Group, Host, HStack, Image, ScrollView, Spacer, TabView, Text, TextField, VStack } from "@expo/ui/swift-ui";
 import {
+  autocorrectionDisabled,
   contentShape,
   font,
   foregroundStyle,
@@ -21,9 +24,14 @@ import {
   lineLimit,
   onTapGesture,
   padding,
+  presentationDetents,
+  presentationDragIndicator,
+  scrollDismissesKeyboard,
   scrollIndicators,
   shapes,
   tabViewStyle,
+  textFieldStyle,
+  textInputAutocapitalization,
   truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
@@ -35,8 +43,6 @@ import { useTextColors, useTheme } from "./theme";
 
 const RECENTS = "recents";
 const RECENTS_LIMIT = 8;
-const POPOVER_WIDTH = 300;
-const POPOVER_HEIGHT = 380;
 const LABEL_MAX_WIDTH = 220;
 
 type Props = {
@@ -102,33 +108,67 @@ const tabsOf = (models: ReadonlyArray<ModelOption>, usage: ModelUsage): Readonly
   ];
 };
 
+/** Every model whose name, id or provider holds each word of `query`, A to Z. */
+const matching = (models: ReadonlyArray<ModelOption>, query: string): ReadonlyArray<ModelOption> => {
+  const words = query.toLowerCase().split(/\s+/).filter((word) => word.length > 0);
+  return models
+    .filter((model) => {
+      const haystack = `${model.name} ${model.modelID} ${model.providerName}`.toLowerCase();
+      return words.every((word) => haystack.includes(word));
+    })
+    .sort((a, b) => byName(a.name, b.name) || byName(a.providerName, b.providerName));
+};
+
 export const ModelPicker = (props: Props): React.ReactElement => {
   const textColors = useTextColors();
   const { colors: themeColors } = useTheme();
   const usage = useModelUsage();
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState(RECENTS);
+  const [query, setQuery] = React.useState("");
+  // Each opening mounts a fresh sheet: an empty, focused search.
+  const [opening, setOpening] = React.useState(0);
   const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
   const tabs = React.useMemo(() => tabsOf(props.models, usage), [props.models, usage]);
   const current = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? RECENTS;
   const selectedKey = props.selected !== undefined ? modelKey(props.selected) : undefined;
+  const results = React.useMemo(() => matching(props.models, query), [props.models, query]);
+  const searching = query.trim().length > 0;
+
+  const show = (): void => {
+    setQuery("");
+    setOpening((n) => n + 1);
+    setOpen(true);
+  };
 
   const choose = (model: ModelOption): void => {
     props.onChange(model);
     setOpen(false);
   };
 
+  const rows = (models: ReadonlyArray<ModelOption>, showProvider: boolean): React.ReactElement => (
+    <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>
+      <VStack spacing={0} alignment="leading" modifiers={[padding({ bottom: 8 })]}>
+        {models.map((model) => (
+          <ModelRow key={modelKey(model)} model={model} showProvider={showProvider} active={modelKey(model) === selectedKey} onPress={choose} />
+        ))}
+      </VStack>
+    </ScrollView>
+  );
+
   return (
     <Host style={styles.host} matchContents={{ horizontal: true }} ignoreSafeArea="all">
-      <Popover isPresented={open} onIsPresentedChange={setOpen} attachmentAnchor="top" arrowEdge="bottom">
-        <Popover.Trigger>
+      <BottomSheet
+        isPresented={open}
+        onIsPresentedChange={setOpen}
+        anchor={
           <HStack
             spacing={4}
             modifiers={[
               frame({ maxWidth: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE }),
               padding({ trailing: 4 }),
               contentShape(shapes.rectangle()),
-              onTapGesture(() => setOpen(true)),
+              onTapGesture(show),
             ]}
           >
             <Text
@@ -143,56 +183,76 @@ export const ModelPicker = (props: Props): React.ReactElement => {
             </Text>
             <Image systemName="chevron.down" size={11} color={textColors.secondaryLabel} />
           </HStack>
-        </Popover.Trigger>
-        <Popover.Content>
-          <VStack spacing={0} modifiers={[frame({ width: POPOVER_WIDTH, height: POPOVER_HEIGHT })]}>
-            <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
-              <HStack spacing={6} modifiers={[padding({ horizontal: 12, vertical: 10 })]}>
-                {tabs.map((t) => {
-                  const active = t.id === current;
-                  return (
-                    <Text
-                      key={t.id}
-                      modifiers={[
-                        font({ size: 13, weight: active ? "semibold" : "medium" }),
-                        foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
-                        lineLimit(1),
-                        padding({ horizontal: 12, vertical: 6 }),
-                        ...(active
-                          ? [glassEffect({ glass: { variant: "regular", tint: themeColors.bubbleGlassTint }, shape: "capsule" })]
-                          : []),
-                        contentShape(shapes.capsule()),
-                        onTapGesture(() => setTab(t.id)),
-                      ]}
-                    >
-                      {t.title}
-                    </Text>
-                  );
-                })}
-              </HStack>
-            </ScrollView>
-            <TabView selection={current} onSelectionChange={setTab} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
-              {tabs.map((t) => (
-                <TabView.Tab key={t.id} value={t.id}>
-                  <ScrollView>
-                    <VStack spacing={0} alignment="leading" modifiers={[padding({ bottom: 8 })]}>
-                      {t.models.map((model) => (
-                        <ModelRow
-                          key={modelKey(model)}
-                          model={model}
-                          showProvider={t.showProvider}
-                          active={modelKey(model) === selectedKey}
-                          onPress={choose}
-                        />
-                      ))}
-                    </VStack>
-                  </ScrollView>
-                </TabView.Tab>
-              ))}
-            </TabView>
+        }
+      >
+        <Group key={opening} modifiers={[presentationDetents(["medium", "large"]), presentationDragIndicator("visible")]}>
+          <VStack spacing={0} modifiers={[padding({ top: 20 })]}>
+            <HStack
+              spacing={8}
+              modifiers={[
+                padding({ horizontal: 14 }),
+                frame({ height: 40 }),
+                glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+                padding({ horizontal: 16 }),
+              ]}
+            >
+              <Image systemName="magnifyingglass" size={15} color="secondary" />
+              <TextField
+                autoFocus
+                placeholder="Search models"
+                onTextChange={setQuery}
+                modifiers={[textFieldStyle("plain"), autocorrectionDisabled(), textInputAutocapitalization("never")]}
+              />
+            </HStack>
+            {searching ? (
+              <VStack spacing={0} modifiers={[padding({ top: 10 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
+                {results.length > 0 ? (
+                  rows(results, true)
+                ) : (
+                  <Text modifiers={[font({ size: 15 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), padding({ top: 24 })]}>
+                    No models match
+                  </Text>
+                )}
+              </VStack>
+            ) : (
+              <VStack spacing={0}>
+                <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
+                  <HStack spacing={6} modifiers={[padding({ horizontal: 12, vertical: 10 })]}>
+                    {tabs.map((t) => {
+                      const active = t.id === current;
+                      return (
+                        <Text
+                          key={t.id}
+                          modifiers={[
+                            font({ size: 13, weight: active ? "semibold" : "medium" }),
+                            foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
+                            lineLimit(1),
+                            padding({ horizontal: 12, vertical: 6 }),
+                            ...(active
+                              ? [glassEffect({ glass: { variant: "regular", tint: themeColors.bubbleGlassTint }, shape: "capsule" })]
+                              : []),
+                            contentShape(shapes.capsule()),
+                            onTapGesture(() => setTab(t.id)),
+                          ]}
+                        >
+                          {t.title}
+                        </Text>
+                      );
+                    })}
+                  </HStack>
+                </ScrollView>
+                <TabView selection={current} onSelectionChange={setTab} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
+                  {tabs.map((t) => (
+                    <TabView.Tab key={t.id} value={t.id}>
+                      {rows(t.models, t.showProvider)}
+                    </TabView.Tab>
+                  ))}
+                </TabView>
+              </VStack>
+            )}
           </VStack>
-        </Popover.Content>
-      </Popover>
+        </Group>
+      </BottomSheet>
     </Host>
   );
 };
@@ -207,7 +267,7 @@ const ModelRow = (props: {
     spacing={8}
     modifiers={[
       padding({ horizontal: 16, vertical: 10 }),
-      frame({ maxWidth: POPOVER_WIDTH, alignment: "leading" }),
+      frame({ maxWidth: Infinity, alignment: "leading" }),
       contentShape(shapes.rectangle()),
       onTapGesture(() => props.onPress(props.model)),
     ]}
