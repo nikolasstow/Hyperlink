@@ -42,7 +42,7 @@ import * as React from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { CapsuleTabs } from "../modules/capsule-tabs";
-import { BarWindow, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
+import { BarWindow, barWindowRenders, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
@@ -228,11 +228,24 @@ export const ModelWindow = (props: {
   // The search and the tabs float over the lists and slide down out of the way
   // as a list scrolls down, back as it scrolls up (or reaches its top). Read on
   // the UI thread, from the list's scroll geometry.
+  // DIAG(model-perf): counts, logged each second; remove once found.
+  const diagGeometry = useSharedValue(0);
+  const diagRenders = React.useRef(0);
+  diagRenders.current += 1;
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      console.log("[model-perf]", JSON.stringify({ open: props.open, windowRenders: diagRenders.current, geometry: diagGeometry.value, barWindowRenders: barWindowRenders() }));
+      diagRenders.current = 0;
+      diagGeometry.value = 0;
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [props.open, diagGeometry]);
   const barsDrop = useSharedValue(0);
   const barsHidden = useSharedValue(false);
   const lastOffset = useSharedValue(0);
   const scrollGeometry = useScrollGeometryChange((g) => {
     "worklet";
+    diagGeometry.value += 1; // DIAG(model-perf)
     const dy = g.contentOffsetY - lastOffset.value;
     lastOffset.value = g.contentOffsetY;
     // A jump is another page's list, not a scroll.

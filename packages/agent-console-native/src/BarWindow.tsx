@@ -149,7 +149,16 @@ const pillProgress = (drag: number, maxDrag: number): number => {
   return span <= 0 ? 0 : unit((drag - start) / span);
 };
 
+// DIAG(model-perf): renders since last read; remove once found.
+let renders = 0;
+export const barWindowRenders = (): number => {
+  const count = renders;
+  renders = 0;
+  return count;
+};
+
 export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
+  renders += 1;
   const { open, instant, onClose, inputRef, detent, stop } = props;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
