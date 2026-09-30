@@ -48,6 +48,7 @@ import { COMPOSER_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
 import { type ModelUsage, useModelUsage } from "./modelUsage";
 import { useCardTint, useTextColors, useTheme } from "./theme";
+import { lastKeyboardHeight } from "./useKeyboardHeight";
 
 const RECENTS = "recents";
 const RECENTS_LIMIT = 8;
@@ -58,10 +59,17 @@ const SEARCH_HEIGHT = 44;
 const TAB_HEIGHT = 34;
 const TAB_TITLE_MAX_WIDTH = 200;
 const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
-/** The sheet's opening height, a share of the screen. iOS stacks a sheet on
- * the keyboard at its own height, so this is kept short enough to leave room
- * above it with the keyboard up. */
-const SHORT: PresentationDetent = { fraction: 0.35 };
+/** Above the keyboard's top edge, the sheet's top edge. */
+const KEYBOARD_MARGIN = 16;
+/** The sheet's opening height before the keyboard has ever shown. */
+const FALLBACK: PresentationDetent = { fraction: 0.4 };
+
+/** The sheet's opening height: its top a margin above where the keyboard's top
+ * edge is (or was, last it was up). */
+const shortDetent = (): PresentationDetent => {
+  const keyboard = lastKeyboardHeight();
+  return keyboard > 0 ? { height: keyboard + KEYBOARD_MARGIN } : FALLBACK;
+};
 
 type Props = {
   readonly models: ReadonlyArray<ModelOption>;
@@ -156,7 +164,9 @@ export const ModelPicker = (props: Props): React.ReactElement => {
   const [opening, setOpening] = React.useState(0);
   // The sheet's height, and whether the search holds the keyboard: while it
   // does, the sheet keeps only its current height.
-  const [detent, setDetent] = React.useState<PresentationDetent>(SHORT);
+  // Set as the sheet opens, from the keyboard then.
+  const [short, setShort] = React.useState<PresentationDetent>(FALLBACK);
+  const [detent, setDetent] = React.useState<PresentationDetent>(FALLBACK);
   const [searchFocused, setSearchFocused] = React.useState(true);
   const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
   const tabs = React.useMemo(() => tabsOf(props.models, usage), [props.models, usage]);
@@ -167,7 +177,9 @@ export const ModelPicker = (props: Props): React.ReactElement => {
 
   const show = (): void => {
     setQuery("");
-    setDetent(SHORT);
+    const height = shortDetent();
+    setShort(height);
+    setDetent(height);
     setSearchFocused(true);
     setRefreshError(undefined);
     setOpening((n) => n + 1);
@@ -241,9 +253,9 @@ export const ModelPicker = (props: Props): React.ReactElement => {
         <Group
           key={opening}
           modifiers={[
-            presentationDetents(searchFocused ? [detent] : [SHORT, "large"], {
+            presentationDetents(searchFocused ? [detent] : [short, "large"], {
               selection: detent,
-              onSelectionChange: (next) => setDetent(next === "large" ? "large" : SHORT),
+              onSelectionChange: (next) => setDetent(next === "large" ? "large" : short),
             }),
             presentationDragIndicator("visible"),
           ]}
