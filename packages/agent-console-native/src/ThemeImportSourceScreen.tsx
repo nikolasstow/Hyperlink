@@ -18,6 +18,7 @@ import * as React from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { listCreatedThemes, type CreatedTheme } from "./createdThemes";
 import { listExtensions, type ThemeContribution } from "./extensionsClient";
@@ -87,6 +88,7 @@ export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
 
       <Text style={styles.sectionLabel}>Installed</Text>
       <View style={styles.card}>
+        <CardGlass />
         {loading && installed.length === 0 ? (
           <ActivityIndicator style={styles.loading} size="small" color={colors.secondaryLabel} />
         ) : installed.length === 0 ? (
@@ -118,6 +120,7 @@ export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
         <>
           <Text style={styles.sectionLabel}>Themes you made</Text>
           <View style={styles.card}>
+            <CardGlass />
             {created
               .filter((mine) => draft.kind !== "open" || mine.id !== draft.id)
               .map((mine, index) => (
@@ -174,11 +177,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

@@ -11,6 +11,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import type { InstalledPlugin } from "./pluginsClient";
 import { refreshPlugins, usePlugins } from "./pluginsStore";
@@ -54,6 +55,7 @@ export const PluginsScreen = (props: Props): React.ReactElement => {
           {load.error === undefined ? null : <Text style={styles.staleNote}>Showing the last loaded list. Refreshing failed: {load.error}</Text>}
           <Text style={styles.sectionLabel}>Installed</Text>
           <View style={styles.card}>
+            <CardGlass />
             {load.plugins.map((plugin, index) => (
               <TouchableOpacity
                 key={plugin.id}
@@ -111,11 +113,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

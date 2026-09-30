@@ -17,6 +17,7 @@ import * as React from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getCreatedTheme } from "./createdThemes";
 import { getThemeJson } from "./extensionsClient";
@@ -133,6 +134,7 @@ export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 92 }]}
       >
         <View style={styles.card}>
+          <CardGlass />
           {groups.map((group, groupIndex) => {
             const paths = group.items.map((item) => item.path);
             const state = selectionOf(paths, selected);
@@ -227,11 +229,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

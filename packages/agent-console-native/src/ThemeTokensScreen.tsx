@@ -13,6 +13,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
@@ -63,6 +64,7 @@ export const ThemeTokensScreen = (props: Props): React.ReactElement => {
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
     >
       <View style={styles.card}>
+        <CardGlass />
         {readonly && theme.tokenColors.length === 0 ? <Text style={styles.empty}>This theme sets no token colours.</Text> : null}
         {theme.tokenColors.map((rule, index) => (
           <TouchableOpacity
@@ -113,11 +115,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

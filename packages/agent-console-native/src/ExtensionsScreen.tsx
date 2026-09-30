@@ -12,6 +12,7 @@ import * as React from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import {
   discoverLocalExtensions,
@@ -101,6 +102,7 @@ export const ExtensionsScreen = (): React.ReactElement => {
     >
         <Text style={styles.sectionLabel}>Install from Marketplace</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>A publisher.extension id (e.g. dracula-theme.theme-dracula) or a marketplace URL.</Text>
           <View style={styles.installRow}>
             <TextInput
@@ -132,6 +134,7 @@ export const ExtensionsScreen = (): React.ReactElement => {
               const already = installedIds.has(ext.id);
               return (
                 <View key={`${ext.source}:${ext.id}`} style={styles.card}>
+                  <CardGlass />
                   <View style={styles.extHeader}>
                     <View style={styles.extText}>
                       <Text style={styles.extName} numberOfLines={1}>
@@ -163,6 +166,7 @@ export const ExtensionsScreen = (): React.ReactElement => {
         ) : (
           items.map((ext) => (
             <View key={ext.id} style={styles.card}>
+              <CardGlass />
               <View style={styles.extHeader}>
                 <View style={styles.extText}>
                   <Text style={styles.extName} numberOfLines={1}>
@@ -210,7 +214,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,

@@ -21,6 +21,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
 import { THEME_COLOR_KEYS } from "./themeColorKeys";
@@ -151,6 +152,7 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
     >
       <Text style={styles.sectionLabel}>Set in this theme · {keys.length}</Text>
       <View style={styles.card}>
+        <CardGlass />
         {keys.length === 0 ? (
           <Text style={styles.empty}>
             {focusKey === undefined ? "Nothing set in this group." : "This theme does not set this key."}
@@ -177,6 +179,7 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
         <>
           <Text style={styles.sectionLabel}>Not set · {unset.length}</Text>
           <View style={styles.card}>
+            <CardGlass />
             {unset.map((key, index) => (
               <TouchableOpacity
                 key={key}
@@ -224,11 +227,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

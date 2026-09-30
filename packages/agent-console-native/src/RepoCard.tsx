@@ -10,7 +10,7 @@
  * @internal
  */
 import { Button, ContextMenu, Host, HStack, Image, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
@@ -41,7 +41,7 @@ const Face = (props: { readonly width: number } & RepoCardProps): React.ReactEle
     <VStack
       alignment="leading"
       spacing={6}
-      modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), background(colors.cardBackground), cornerRadius(14)]}
+      modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
     >
       <HStack spacing={7} alignment="center">
         <Image systemName={icon} size={15} color={colors.secondaryLabel} />
@@ -63,7 +63,7 @@ const Preview = (props: { readonly width: number } & RepoCardProps): React.React
     <VStack
       alignment="leading"
       spacing={12}
-      modifiers={[padding({ all: 18 }), frame({ width: props.width, alignment: "leading" }), background(colors.cardBackground), cornerRadius(16)]}
+      modifiers={[padding({ all: 18 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 16 })]}
     >
       <HStack spacing={9} alignment="center">
         <Image systemName={icon} size={20} color={colors.tint} />

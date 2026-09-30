@@ -12,7 +12,7 @@
  */
 import * as React from "react";
 import { Button, ContextMenu, Host, HStack, Image, ProgressView, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import { DynamicColorIOS, Pressable, StyleSheet, Text, View } from "react-native";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { colors } from "./colors";
@@ -212,8 +212,7 @@ export const Tile = (props: {
       modifiers={[
         padding({ all: 12 }),
         frame({ width: props.width, height: 80, alignment: "topLeading" }),
-        background(colors.cardBackground),
-        cornerRadius(14),
+        glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 }),
         onTapGesture(props.countdownMs !== undefined && props.onCancel !== undefined ? props.onCancel : props.onPress),
       ]}
     >

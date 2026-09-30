@@ -10,6 +10,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { permissionText, requirementText, type InstalledPlugin } from "./pluginsClient";
@@ -70,6 +71,7 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
   return (
     <ScrollView style={styles.root} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}>
       <View style={styles.card}>
+        <CardGlass />
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Version</Text>
           <Text style={styles.rowValue}>{plugin.version}</Text>
@@ -87,6 +89,7 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
 
       <Text style={styles.sectionLabel}>Pages</Text>
       <View style={styles.card}>
+        <CardGlass />
         {plugin.pages.length === 0 ? (
           <View style={styles.row}>
             <Text style={styles.rowValue}>This plugin adds no pages.</Text>
@@ -108,6 +111,7 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
 
       <Text style={styles.sectionLabel}>Permissions</Text>
       <View style={styles.card}>
+        <CardGlass />
         {plugin.permissions.length === 0 ? (
           <View style={styles.row}>
             <Text style={styles.rowValue}>Reads your repos only.</Text>
@@ -146,11 +150,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

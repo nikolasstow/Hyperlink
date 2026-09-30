@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
 import { filterTitle, pinsShownOn, pinTitle } from "./collectionModel";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { ensureWorkspace } from "./extensionViewsStore";
 import { followResult } from "./followResult";
@@ -150,6 +151,7 @@ const PinTile = (props: {
   readonly onLongPress?: () => void;
 }): React.ReactElement => (
   <Pressable style={styles.tile} onPress={props.onPress} {...(props.onLongPress === undefined ? {} : { onLongPress: props.onLongPress })}>
+    <CardGlass />
     <View style={styles.tileTop}>
       <SystemIcon name={props.icon} size={16} color={colors.tint} />
       <Text style={styles.tileTitle} numberOfLines={2}>
@@ -295,12 +297,14 @@ const PinnedCard = (props: {
       <Text style={styles.sectionLabel}>{block.title}</Text>
       {load.kind === "failed" ? (
         <View style={[styles.card, styles.row]}>
+          <CardGlass />
           <Text style={styles.hint}>Couldn’t load pins: {load.message}</Text>
         </View>
       ) : (
         <View style={styles.grid}>{tiles}</View>
       )}
       <View style={[styles.card, styles.linkCard]}>
+        <CardGlass />
         <LinkRow title={block.viewAll} icon={block.collection.icon} onPress={() => openLink(navigation, props.repo, dir, block.collection)} />
       </View>
     </View>
@@ -391,6 +395,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
           <View key={`facts ${index}`}>
             {block.title === undefined ? <View style={styles.gap} /> : <Text style={styles.sectionLabel}>{block.title}</Text>}
             <Pressable style={styles.card} disabled={block.opens === undefined} onPress={() => (block.opens === undefined ? undefined : openLink(navigation, repo, dir, block.opens))}>
+              <CardGlass />
               <Rows rows={block.rows} chevron={block.opens !== undefined} />
               {block.links.map((link, linkIndex) => (
                 <LinkRow key={linkKey(link)} title={link.title} icon={link.icon} {...(link.detail === undefined ? {} : { detail: link.detail })} border={block.rows.length > 0 || linkIndex > 0} onPress={() => openLink(navigation, repo, dir, link)} />
@@ -401,6 +406,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
       case "Link":
         return (
           <View key={`link ${linkKey(block.link)}`} style={[styles.card, styles.linkCard]}>
+            <CardGlass />
             <LinkRow title={block.link.title} icon={block.link.icon} onPress={() => openLink(navigation, repo, dir, block.link)} />
           </View>
         );
@@ -412,6 +418,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
           <View key={`card ${block.key}`}>
             <View style={styles.gap} />
             <View style={styles.card}>
+              <CardGlass />
               <Pressable style={styles.cardHeader} disabled={opens === undefined} onPress={() => (opens === undefined ? undefined : openLink(navigation, repo, dir, opens))}>
                 <SystemIcon name={symbolForIcon(block.icon)} size={22} color={colors.tint} />
                 <Text style={styles.cardTitle}>{block.title}</Text>
@@ -438,6 +445,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
           <View key={`actions ${block.key}`}>
             {block.title === undefined ? <View style={styles.gap} /> : <Text style={styles.sectionLabel}>{block.title}</Text>}
             <View style={styles.card}>
+              <CardGlass />
               {block.actions.map((action, actionIndex) => (
                 <Pressable
                   key={action.command}
@@ -517,9 +525,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
-    overflow: "hidden",
   },
   linkCard: {
     marginTop: 12,
@@ -586,7 +592,6 @@ const styles = StyleSheet.create({
     minHeight: 72,
     padding: 12,
     borderRadius: 14,
-    backgroundColor: colors.cardBackground,
     justifyContent: "space-between",
   },
   tileTop: {

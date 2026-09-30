@@ -15,7 +15,7 @@
  * @internal
  */
 import { Button, Circle, ContextMenu, Host, HStack, Image, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, cornerRadius, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -115,7 +115,7 @@ const CardBody = (props: {
   <VStack
     alignment="leading"
     spacing={8}
-    modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), background(colors.cardBackground), cornerRadius(14)]}
+    modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
   >
     <HStack spacing={7} alignment="center">
       {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(props.unreadColor)]} /> : null}

@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getLastScanAt, rescan } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
@@ -187,6 +188,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
     >
         <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Customize</Text>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Appearance")} activeOpacity={0.6}>
+          <CardGlass />
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Appearance</Text>
@@ -196,6 +198,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Extensions")} activeOpacity={0.6}>
+          <CardGlass />
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Extensions</Text>
@@ -205,6 +208,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Plugins")} activeOpacity={0.6}>
+          <CardGlass />
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Plugins</Text>
@@ -216,6 +220,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Dubz</Text>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("AgentButtonSettings")} activeOpacity={0.6}>
+          <CardGlass />
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Assistant Button</Text>
@@ -227,6 +232,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Workspace</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.fieldLabel}>Root folder</Text>
           <Text style={styles.hint}>Base path for discovery, new clones, and new worktrees.</Text>
           <TextInput
@@ -244,6 +250,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         </View>
 
         <View style={styles.card}>
+          <CardGlass />
           <View style={styles.rowBetween}>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Repo scan</Text>
@@ -269,6 +276,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>New repos (main checkout)</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.fieldLabel}>Path template</Text>
           <Text style={styles.hint}>
             Where clone / create puts the main checkout. Default keeps it beside linked worktrees
@@ -294,6 +302,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Linked worktrees</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.fieldLabel}>Path template</Text>
           <Text style={styles.hint}>
             Where “Create new…” puts extra checkouts. Default is a sibling of main
@@ -319,6 +328,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>When opening a repo</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>Which worktree the composer selects after you pick a repo.</Text>
           {(
             [
@@ -345,6 +355,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>New sessions start with</Text>
         <View style={styles.card}>
+          <CardGlass />
           {(
             [
               { value: "full", title: "Allow all" },
@@ -370,6 +381,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Scripts</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>Tapping a script counts down before it runs, so a stray tap starts nothing. Tap the ring to stop it.</Text>
           {runCountdownChoices.map((choice, index) => (
             <TouchableOpacity key={choice} style={[styles.optionRow, index > 0 && styles.optionRowBorder]} activeOpacity={0.6} onPress={() => setRunCountdownSeconds(choice)}>
@@ -381,6 +393,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Server</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.fieldLabel}>Address</Text>
           <Text style={styles.serverAddress} numberOfLines={1} ellipsizeMode="middle">
             {address}
@@ -391,6 +404,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         </View>
         <Text style={styles.sectionLabel}>Notifications</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>
             Alerts when a run finishes or needs approval while the app is closed. iOS only shows its permission
             prompt once per install, so if it was dismissed, this is the way back to it.
@@ -437,7 +451,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,

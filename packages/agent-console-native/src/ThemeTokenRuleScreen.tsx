@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
 import { updateDraft, useThemeDraft } from "./themeDraft";
@@ -97,6 +98,7 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
     >
       <Text style={styles.sectionLabel}>Scopes · {rule.scope.length}</Text>
       <View style={styles.card}>
+        <CardGlass />
         {rule.scope.length === 0 && readonly ? <Text style={styles.empty}>This rule matches no scopes.</Text> : null}
         {rule.scope.map((scope, position) => (
           <View key={`${position}:${scope}`} style={[styles.row, position > 0 && styles.rowBorder]}>
@@ -136,6 +138,7 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
 
       <Text style={styles.sectionLabel}>Foreground</Text>
       <View style={styles.card}>
+        <CardGlass />
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Colour</Text>
           <Text style={styles.rowValue}>{(foreground ?? "Not set").toUpperCase()}</Text>
@@ -172,6 +175,7 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
 
       <Text style={styles.sectionLabel}>Font style</Text>
       <View style={styles.card}>
+        <CardGlass />
         {STYLE_FIELDS.map(([field, label], position) => (
           <View key={field} style={[styles.row, position > 0 && styles.rowBorder]}>
             <Text style={styles.rowTitle}>{label}</Text>
@@ -221,11 +225,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

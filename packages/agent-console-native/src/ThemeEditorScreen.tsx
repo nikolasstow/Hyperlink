@@ -22,6 +22,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { BottomSearchPill, useSearchPill } from "./BottomSearchPill";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getCreatedTheme, newThemeId, saveCreatedTheme } from "./createdThemes";
 import { getApiAddress } from "./settings";
@@ -245,6 +246,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
           <>
             <Text style={styles.sectionLabel}>Colors · {results.colors.length}</Text>
             <View style={styles.card}>
+              <CardGlass />
               {results.colors.length === 0 ? (
                 <Text style={styles.empty}>No colours match “{query.trim()}”.</Text>
               ) : (
@@ -269,6 +271,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
               <>
                 <Text style={styles.sectionLabel}>Add keys · {addable.length}</Text>
                 <View style={styles.card}>
+                  <CardGlass />
                   {addable.map((hit, index) => (
                     <TouchableOpacity
                       key={hit.key}
@@ -292,6 +295,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
 
             <Text style={styles.sectionLabel}>Token scopes · {results.tokens.length}</Text>
             <View style={styles.card}>
+              <CardGlass />
               {results.tokens.length === 0 ? (
                 <Text style={styles.empty}>No scopes match “{query.trim()}”.</Text>
               ) : (
@@ -315,6 +319,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
         ) : (
           <>
             <View style={styles.card}>
+              <CardGlass />
               <View style={styles.row}>
                 <Text style={styles.rowTitle}>Name</Text>
                 <TextInput
@@ -357,6 +362,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
 
             <Text style={styles.sectionLabel}>Colors · {colorCount} set</Text>
             <View style={styles.card}>
+              <CardGlass />
               {groups.map((summary, index) => (
                 <TouchableOpacity
                   key={summary.group.id}
@@ -376,6 +382,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
 
             <Text style={styles.sectionLabel}>Syntax</Text>
             <View style={styles.card}>
+              <CardGlass />
               <TouchableOpacity
                 style={styles.row}
                 activeOpacity={0.6}
@@ -443,11 +450,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
   },
   cardSpaced: {
     marginTop: 12,

@@ -18,6 +18,7 @@ import {
   setAgentSurfaceEnabled,
   useAgentButtonSettings,
 } from "./agentButtonSettings";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
 
@@ -34,6 +35,7 @@ export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => 
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
     >
       <View style={styles.card}>
+        <CardGlass />
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Show {AGENT_NAME}</Text>
           <Switch value={settings.enabled} onValueChange={setAgentButtonEnabled} />
@@ -46,6 +48,7 @@ export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => 
 
       <Text style={styles.sectionLabel}>Show in</Text>
       <View style={styles.card}>
+        <CardGlass />
         {AGENT_SURFACES.map((surface, index) => (
           <View key={surface.key} style={[styles.row, index > 0 && styles.rowBorder]}>
             <Text style={[styles.rowTitle, !settings.enabled && styles.rowTitleDim]}>{surface.label}</Text>
@@ -78,11 +81,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
-    overflow: "hidden",
     marginTop: 16,
   },
   row: {

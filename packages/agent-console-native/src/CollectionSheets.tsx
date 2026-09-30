@@ -16,6 +16,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { membership, type Category } from "./collectionModel";
 import { symbolForIcon } from "./codicons";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { useScreenBackground } from "./theme";
 import type { CollectionItem, CollectionState, FormField, FormSpec } from "./pagesClient";
@@ -55,6 +56,7 @@ const ChoiceList = (props: {
   readonly onChange: (value: string) => void;
 }): React.ReactElement => (
   <View style={styles.card}>
+    <CardGlass />
     {props.options.map((option, index) => (
       <Pressable key={option.value} style={[styles.choice, index > 0 && styles.rowBorder]} onPress={() => props.onChange(option.value)}>
         <Text style={styles.choiceLabel} numberOfLines={1}>
@@ -236,6 +238,7 @@ export const CategoriesSheet = (props: {
           <ScrollView contentContainerStyle={[styles.sheetContent, { paddingBottom: insets.bottom + 24 }]}>
             {error === undefined ? null : <Text style={styles.error}>{error}</Text>}
             <View style={styles.card}>
+              <CardGlass />
               {props.categories.map((category, index) => {
                 const standing = membership(items, category.id, props.state);
                 const choice = choices.get(category.id);
@@ -325,9 +328,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
-    overflow: "hidden",
   },
   choice: {
     flexDirection: "row",

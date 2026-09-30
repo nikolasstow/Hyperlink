@@ -15,10 +15,11 @@ import * as React from "react";
 import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, cornerRadius, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { CodeBlock } from "./CodeBlock";
+import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getThemeJson, listExtensions, removeExtension } from "./extensionsClient";
 import { getCustomFonts, type CustomFont } from "./fontsClient";
@@ -455,18 +456,21 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Primary color</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>The send button, and the shade of your chat bubbles.</Text>
           <ColorSwatches value={theme.primary} themeColor={anchor.primary} onChange={(color) => setTheme({ ...theme, primary: color })} />
         </View>
 
         <Text style={styles.sectionLabel}>Secondary color</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>Accents like the unread indicator.</Text>
           <ColorSwatches value={theme.secondary} themeColor={anchor.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
         </View>
 
         <Text style={styles.sectionLabel}>Background</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>Behind every screen, in each mode. System follows iOS.</Text>
           <BackgroundRow
             label="Light"
@@ -484,6 +488,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Code font</Text>
         <View style={styles.card}>
+          <CardGlass />
           {[...CODE_FONTS, ...customFonts.map((f) => f.family)].map((font) => (
             <TouchableOpacity key={font} onPress={() => setTheme({ ...theme, codeFont: font })} activeOpacity={0.6}>
               <View style={styles.themeRow}>
@@ -510,6 +515,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Preview</Text>
         <View style={styles.card}>
+          <CardGlass />
           <Text style={styles.hint}>How code looks with the enabled theme and font.</Text>
           <CodeBlock code={PREVIEW_CODE} lang="typescript" theme={previewTheme} fontFamily={theme.codeFont} />
         </View>
@@ -547,7 +553,7 @@ const ThemeRowCard = (props: {
 }): React.ReactElement => (
   <HStack
     spacing={12}
-    modifiers={[frame({ width: props.width, alignment: "leading" }), padding({ horizontal: 16, vertical: 14 }), background(colors.cardBackground), cornerRadius(14)]}
+    modifiers={[frame({ width: props.width, alignment: "leading" }), padding({ horizontal: 16, vertical: 14 }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
   >
     <Circle modifiers={[frame({ width: 22, height: 22 }), foregroundStyle(props.dot)]} />
     <UIText modifiers={[font({ size: 16 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.label}</UIText>
@@ -566,7 +572,7 @@ const ThemeRowPreview = (props: {
   <VStack
     alignment="leading"
     spacing={10}
-    modifiers={[padding({ all: 18 }), frame({ width: props.width, alignment: "leading" }), background(colors.cardBackground), cornerRadius(16)]}
+    modifiers={[padding({ all: 18 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 16 })]}
   >
     <HStack spacing={10} alignment="center">
       <Circle modifiers={[frame({ width: 24, height: 24 }), foregroundStyle(props.dot)]} />
@@ -659,7 +665,7 @@ const ThemeList = (props: ThemeListProps): React.ReactElement => {
         <VStack modifiers={[onTapGesture(props.onCreate)]}>
           <HStack
             spacing={12}
-            modifiers={[frame({ width: contentWidth, alignment: "leading" }), padding({ horizontal: 16, vertical: 14 }), background(colors.cardBackground), cornerRadius(14)]}
+            modifiers={[frame({ width: contentWidth, alignment: "leading" }), padding({ horizontal: 16, vertical: 14 }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
           >
             <Image systemName="plus" size={18} color={colors.tint} />
             <UIText modifiers={[font({ size: 16 }), foregroundStyle(colors.tint), lineLimit(1)]}>Create theme…</UIText>
@@ -690,7 +696,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: colors.cardBackground,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
