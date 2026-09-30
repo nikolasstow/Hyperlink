@@ -13,7 +13,7 @@
  *
  * @internal
  */
-import { BottomSheet, Group, Host, HStack, Image, ScrollView, Spacer, TabView, Text, TextField, VStack } from "@expo/ui/swift-ui";
+import { BottomSheet, Divider, Group, Host, HStack, Image, ScrollView, Spacer, TabView, Text, TextField, VStack } from "@expo/ui/swift-ui";
 import {
   autocorrectionDisabled,
   contentShape,
@@ -36,14 +36,18 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet } from "react-native";
+import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
 import { type ModelUsage, useModelUsage } from "./modelUsage";
-import { useTextColors, useTheme } from "./theme";
+import { useCardTint, useTextColors, useTheme } from "./theme";
 
 const RECENTS = "recents";
 const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
+/** The sheet's side margin, for the search, the tabs and the list alike. */
+const SIDE = 20;
+const SEARCH_HEIGHT = 44;
 
 type Props = {
   readonly models: ReadonlyArray<ModelOption>;
@@ -122,12 +126,18 @@ const matching = (models: ReadonlyArray<ModelOption>, query: string): ReadonlyAr
 export const ModelPicker = (props: Props): React.ReactElement => {
   const textColors = useTextColors();
   const { colors: themeColors } = useTheme();
+  const cardTint = useCardTint();
   const usage = useModelUsage();
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState(RECENTS);
   const [query, setQuery] = React.useState("");
   // Each opening mounts a fresh sheet: an empty, focused search.
   const [opening, setOpening] = React.useState(0);
+  // The sheet's height, and whether the search holds the keyboard: while it
+  // does, the sheet keeps only its current height, since iOS otherwise answers
+  // the keyboard by growing a half-height sheet to full.
+  const [detent, setDetent] = React.useState<"medium" | "large">("medium");
+  const [searchFocused, setSearchFocused] = React.useState(true);
   const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
   const tabs = React.useMemo(() => tabsOf(props.models, usage), [props.models, usage]);
   const current = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? RECENTS;
@@ -137,6 +147,8 @@ export const ModelPicker = (props: Props): React.ReactElement => {
 
   const show = (): void => {
     setQuery("");
+    setDetent("medium");
+    setSearchFocused(true);
     setOpening((n) => n + 1);
     setOpen(true);
   };
@@ -148,9 +160,19 @@ export const ModelPicker = (props: Props): React.ReactElement => {
 
   const rows = (models: ReadonlyArray<ModelOption>, showProvider: boolean): React.ReactElement => (
     <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>
-      <VStack spacing={0} alignment="leading" modifiers={[padding({ bottom: 8 })]}>
-        {models.map((model) => (
-          <ModelRow key={modelKey(model)} model={model} showProvider={showProvider} active={modelKey(model) === selectedKey} onPress={choose} />
+      <VStack
+        spacing={0}
+        alignment="leading"
+        modifiers={[
+          glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
+          padding({ horizontal: SIDE, bottom: SIDE }),
+        ]}
+      >
+        {models.map((model, index) => (
+          <VStack key={modelKey(model)} spacing={0} alignment="leading">
+            {index > 0 ? <Divider modifiers={[padding({ leading: 16 })]} /> : null}
+            <ModelRow model={model} showProvider={showProvider} active={modelKey(model) === selectedKey} onPress={choose} />
+          </VStack>
         ))}
       </VStack>
     </ScrollView>
@@ -185,15 +207,26 @@ export const ModelPicker = (props: Props): React.ReactElement => {
           </HStack>
         }
       >
-        <Group key={opening} modifiers={[presentationDetents(["medium", "large"]), presentationDragIndicator("visible")]}>
-          <VStack spacing={0} modifiers={[padding({ top: 20 })]}>
+        <Group
+          key={opening}
+          modifiers={[
+            presentationDetents(searchFocused ? [detent] : ["medium", "large"], {
+              selection: detent,
+              onSelectionChange: (next) => {
+                if (next === "medium" || next === "large") setDetent(next);
+              },
+            }),
+            presentationDragIndicator("visible"),
+          ]}
+        >
+          <VStack spacing={0} modifiers={[padding({ top: 24 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
             <HStack
-              spacing={8}
+              spacing={10}
               modifiers={[
-                padding({ horizontal: 14 }),
-                frame({ height: 40 }),
-                glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
                 padding({ horizontal: 16 }),
+                frame({ height: SEARCH_HEIGHT }),
+                glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "capsule" }),
+                padding({ horizontal: SIDE }),
               ]}
             >
               <Image systemName="magnifyingglass" size={15} color="secondary" />
@@ -201,33 +234,34 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                 autoFocus
                 placeholder="Search models"
                 onTextChange={setQuery}
+                onFocusChange={setSearchFocused}
                 modifiers={[textFieldStyle("plain"), autocorrectionDisabled(), textInputAutocapitalization("never")]}
               />
             </HStack>
             {searching ? (
-              <VStack spacing={0} modifiers={[padding({ top: 10 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
+              <VStack spacing={0} modifiers={[padding({ top: 16 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
                 {results.length > 0 ? (
                   rows(results, true)
                 ) : (
-                  <Text modifiers={[font({ size: 15 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), padding({ top: 24 })]}>
+                  <Text modifiers={[font({ size: 15 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), padding({ top: 32 })]}>
                     No models match
                   </Text>
                 )}
               </VStack>
             ) : (
-              <VStack spacing={0}>
+              <VStack spacing={0} modifiers={[frame({ maxHeight: Infinity, alignment: "top" })]}>
                 <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
-                  <HStack spacing={6} modifiers={[padding({ horizontal: 12, vertical: 10 })]}>
+                  <HStack spacing={8} modifiers={[padding({ horizontal: SIDE, vertical: 14 })]}>
                     {tabs.map((t) => {
                       const active = t.id === current;
                       return (
                         <Text
                           key={t.id}
                           modifiers={[
-                            font({ size: 13, weight: active ? "semibold" : "medium" }),
+                            font({ size: 14, weight: active ? "semibold" : "medium" }),
                             foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
                             lineLimit(1),
-                            padding({ horizontal: 12, vertical: 6 }),
+                            padding({ horizontal: 14, vertical: 8 }),
                             ...(active
                               ? [glassEffect({ glass: { variant: "regular", tint: themeColors.bubbleGlassTint }, shape: "capsule" })]
                               : []),
@@ -266,7 +300,7 @@ const ModelRow = (props: {
   <HStack
     spacing={8}
     modifiers={[
-      padding({ horizontal: 16, vertical: 10 }),
+      padding({ horizontal: 16, vertical: 12 }),
       frame({ maxWidth: Infinity, alignment: "leading" }),
       contentShape(shapes.rectangle()),
       onTapGesture(() => props.onPress(props.model)),
