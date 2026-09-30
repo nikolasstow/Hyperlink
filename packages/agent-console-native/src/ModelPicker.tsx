@@ -18,7 +18,9 @@ import {
   Animation,
   animation,
   autocorrectionDisabled,
+  clipped,
   contentShape,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -52,6 +54,8 @@ const LABEL_MAX_WIDTH = 220;
 const SIDE = 20;
 const SEARCH_HEIGHT = 44;
 const TAB_HEIGHT = 34;
+const TAB_TITLE_MAX_WIDTH = 200;
+const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
 /** The sheet's opening height, a share of the screen. iOS stacks a sheet on
  * the keyboard at its own height, so this is kept short enough to leave room
  * above it with the keyboard up. */
@@ -258,28 +262,45 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                 <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
                   <HStack
                     spacing={8}
-                    modifiers={[padding({ horizontal: SIDE, vertical: 14 }), animation(Animation.spring({ duration: 0.3, bounce: 0.15 }), tabs.findIndex((t) => t.id === current))]}
+                    modifiers={[padding({ horizontal: SIDE, vertical: 14 })]}
                   >
                     {tabs.map((t) => {
                       const active = t.id === current;
+                      // Recents collapses to its clock: its title stays, its
+                      // frame narrowing to nothing (clipped), so the capsule
+                      // shrinks around the icon.
+                      const collapsed = t.icon !== undefined && !active;
                       return (
                         <HStack
                           key={t.id}
-                          spacing={6}
+                          spacing={0}
                           modifiers={[
                             font({ size: 14, weight: active ? "semibold" : "medium" }),
                             foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
                             frame({ minWidth: TAB_HEIGHT, height: TAB_HEIGHT }),
-                            padding({ horizontal: t.icon !== undefined && !active ? 0 : 14 }),
-                            ...(active
-                              ? [glassEffect({ glass: { variant: "regular", tint: themeColors.bubbleGlassTint }, shape: "capsule" })]
-                              : []),
+                            padding({ horizontal: collapsed ? 0 : 14 }),
+                            glassEffect({
+                              glass: { variant: active ? "regular" : "identity", tint: themeColors.bubbleGlassTint },
+                              shape: "capsule",
+                            }),
                             contentShape(shapes.capsule()),
                             onTapGesture(() => setTab(t.id)),
+                            animation(TAB_SPRING, active),
                           ]}
                         >
                           {t.icon !== undefined ? <Image systemName={t.icon} size={14} /> : null}
-                          {t.icon === undefined || active ? <Text modifiers={[lineLimit(1)]}>{t.title}</Text> : null}
+                          <Text
+                            modifiers={[
+                              lineLimit(1),
+                              fixedSize(),
+                              padding({ leading: t.icon !== undefined ? 6 : 0 }),
+                              frame({ maxWidth: collapsed ? 0 : TAB_TITLE_MAX_WIDTH, alignment: "leading" }),
+                              clipped(),
+                              animation(TAB_SPRING, active),
+                            ]}
+                          >
+                            {t.title}
+                          </Text>
                         </HStack>
                       );
                     })}
