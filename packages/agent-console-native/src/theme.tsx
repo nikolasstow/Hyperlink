@@ -16,7 +16,8 @@
  * @internal
  */
 import * as React from "react";
-import { useColorScheme, type ColorValue } from "react-native";
+import { type ColorValue } from "react-native";
+import { forceScheme, useSystemScheme, type Scheme } from "./appearanceOverride";
 import { colors } from "./colors";
 import { DEFAULT_THEME, getStoredTheme, setStoredTheme, type Theme } from "./settings";
 
@@ -91,6 +92,16 @@ export const ThemeProvider = (props: { readonly children: React.ReactNode }): Re
   const [theme, setThemeState] = React.useState<Theme>(DEFAULT_THEME);
   const [ready, setReady] = React.useState(false);
 
+  // The app's look follows the background: forced to the background's
+  // lightness when a custom colour disagrees with iOS's mode (a dark colour
+  // gives white text), left to iOS otherwise.
+  const system = useSystemScheme();
+  React.useEffect(() => {
+    const custom = system === "dark" ? theme.backgroundDark : theme.backgroundLight;
+    const wants = custom === undefined ? system : schemeFor(custom);
+    forceScheme(wants === system ? undefined : wants);
+  }, [theme.backgroundDark, theme.backgroundLight, system]);
+
   React.useEffect(() => {
     let cancelled = false;
     void getStoredTheme().then((stored) => {
@@ -127,22 +138,16 @@ export const useTheme = (): ThemeContextValue => {
   return value;
 };
 
-/** The screens' background: the theme's for the current mode (Appearance →
+/** The screens' background: the theme's for iOS's mode (Appearance →
  * Background), else the system's. `plain` screens (Files, output views) are
  * the system's plain background by default rather than the grouped one; a
- * custom colour is the same for every screen. Read live, so a change shows at
- * once. */
+ * custom colour is the same for every screen. Chosen by iOS's actual mode, not
+ * the look the app may force for it (appearanceOverride.ts). Read live, so a
+ * change shows at once. */
 export const useScreenBackground = (kind: "grouped" | "plain" = "grouped"): ColorValue => {
   const { theme } = useTheme();
-  const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  const custom = useSystemScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
   return custom ?? (kind === "plain" ? colors.systemBackground : colors.background);
-};
-
-/** The system's screen background in each mode (systemGroupedBackground), for
- * judging how light the background is when the theme sets none. */
-const SYSTEM_BACKGROUND_HEX = {
-  light: "#F2F2F7",
-  dark: "#000000",
 };
 
 /** Relative luminance (WCAG) of a hex colour, 0 (black) to 1 (white). */
@@ -157,26 +162,21 @@ export const luminance = (hex: string): number => {
 
 /** Above this luminance a background counts as light. */
 const LIGHT_BACKGROUND = 0.4;
+
+/** The look the app takes for a background: light text on a dark colour, dark
+ * text on a light one. */
+export const schemeFor = (background: string): Scheme => (luminance(background) > LIGHT_BACKGROUND ? "light" : "dark");
+
 /** The contrast when none is chosen (Appearance → Background): none, the
  * standard look, no tint. */
 export const DEFAULT_CARD_CONTRAST = 0;
-/** The tint's strongest, at full contrast: black over a light background,
- * white over a dark one (white reads weaker, so it goes further). */
-const MAX_DARKEN_ALPHA = 0.15;
-const MAX_LIGHTEN_ALPHA = 0.2;
+/** The glass's brightening at full contrast. */
+const MAX_BRIGHTEN_ALPHA = 0.2;
 
-/** The glass cards' tint, from how light the actual background is (the
- * theme's colour for this mode, else the system's), not from the mode: a
- * bright colour in dark mode still wants the darker tint. How much is the
- * theme's card contrast. */
+/** The glass cards' tint: contrast only brightens them (a white tint, as
+ * strong as the contrast); none at 0, the standard glass. */
 export const useCardTint = (): string | undefined => {
   const { theme } = useTheme();
-  const dark = useColorScheme() === "dark";
-  const background = (dark ? theme.backgroundDark : theme.backgroundLight) ?? (dark ? SYSTEM_BACKGROUND_HEX.dark : SYSTEM_BACKGROUND_HEX.light);
   const contrast = theme.cardContrast ?? DEFAULT_CARD_CONTRAST;
-  // No contrast is the standard glass, untinted.
-  if (contrast <= 0) return undefined;
-  return luminance(background) > LIGHT_BACKGROUND
-    ? `rgba(0,0,0,${(MAX_DARKEN_ALPHA * contrast).toFixed(3)})`
-    : `rgba(255,255,255,${(MAX_LIGHTEN_ALPHA * contrast).toFixed(3)})`;
+  return contrast <= 0 ? undefined : `rgba(255,255,255,${(MAX_BRIGHTEN_ALPHA * contrast).toFixed(3)})`;
 };

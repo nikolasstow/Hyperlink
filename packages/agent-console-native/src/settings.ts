@@ -306,8 +306,7 @@ export type Theme = {
   readonly backgroundLight?: string;
   /** The screens' background in dark mode, when not the system's. */
   readonly backgroundDark?: string;
-  /** How far the glass cards are darkened (on a light background) or lightened
-   * (on a dark one), 0 to 1; the default when unset. */
+  /** How much the glass cards are brightened, 0 (none, the default) to 1. */
   readonly cardContrast?: number;
 };
 
