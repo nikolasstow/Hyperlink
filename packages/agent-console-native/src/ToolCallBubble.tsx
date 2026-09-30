@@ -15,7 +15,8 @@
  */
 import * as React from "react";
 import type { ToolPart } from "@opencode-ai/sdk";
-import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { GlassView } from "expo-glass-effect";
+import { StyleSheet, Text, TouchableOpacity, useColorScheme } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { colors } from "./colors";
 import { asHtmlPayload, HtmlToolBlock } from "./HtmlToolBlock";
@@ -41,6 +42,7 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
   const isEditFamily = EDIT_FAMILY.has(part.tool);
   const lineCount = part.state.status === "completed" ? part.state.output.split("\n").length : 0;
   const { open, toggle } = useCollapsible(part.id);
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
 
   // `render_html` returns a page, not text. Its own output string is a short
   // summary meant for the model's next turn — showing it here instead of the
@@ -74,6 +76,9 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
 
   return (
     <Animated.View style={styles.root} layout={LinearTransition.duration(COLLAPSE_MS)}>
+      {/* A glass card, rounded on itself behind the content; nothing clips
+       * it. */}
+      <GlassView style={[StyleSheet.absoluteFill, styles.glass]} glassEffectStyle="regular" colorScheme={scheme} />
       <TouchableOpacity style={styles.header} activeOpacity={0.6} onPress={toggle}>
         <Text style={styles.toolName}>{part.tool}</Text>
         {path !== undefined ? (
@@ -96,9 +101,9 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
 const styles = StyleSheet.create({
   root: {
     marginTop: 8,
+  },
+  glass: {
     borderRadius: 10,
-    backgroundColor: colors.fillBackground,
-    overflow: "hidden",
   },
   header: {
     flexDirection: "row",

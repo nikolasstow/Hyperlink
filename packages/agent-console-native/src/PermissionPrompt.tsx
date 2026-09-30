@@ -19,6 +19,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
 import { SystemIcon } from "./SystemIcon";
+import { useTheme } from "./theme";
 import type { PendingPermission, PermissionReply } from "./sessionPermissions";
 
 export const PermissionPrompt = (props: {
@@ -26,6 +27,7 @@ export const PermissionPrompt = (props: {
   readonly onReply: (reply: PermissionReply) => void;
 }): React.ReactElement => {
   const { pending } = props;
+  const { colors: themeColors } = useTheme();
   const detail = pending.resources.length > 0 ? pending.resources.join("\n") : undefined;
 
   return (
@@ -45,13 +47,12 @@ export const PermissionPrompt = (props: {
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.button} activeOpacity={0.6} onPress={() => props.onReply("reject")}>
+            {/* Glass buttons on the glass card, rounded on themselves. */}
+            <GlassView style={[StyleSheet.absoluteFill, styles.buttonGlass]} glassEffectStyle="regular" />
             <Text style={[styles.buttonLabel, styles.denyLabel]}>Deny</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.approve]}
-            activeOpacity={0.6}
-            onPress={() => props.onReply("once")}
-          >
+          <TouchableOpacity style={styles.button} activeOpacity={0.6} onPress={() => props.onReply("once")}>
+            <GlassView style={[StyleSheet.absoluteFill, styles.buttonGlass]} glassEffectStyle="regular" tintColor={themeColors.bubbleGlassTint} />
             <Text style={[styles.buttonLabel, styles.approveLabel]}>Approve</Text>
           </TouchableOpacity>
         </View>
@@ -106,8 +107,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     paddingVertical: 10,
+  },
+  buttonGlass: {
     borderRadius: 12,
-    backgroundColor: colors.fillBackground,
   },
   buttonLabel: {
     fontSize: 15,
@@ -115,9 +117,6 @@ const styles = StyleSheet.create({
   },
   denyLabel: {
     color: colors.destructive,
-  },
-  approve: {
-    backgroundColor: colors.brandTint,
   },
   approveLabel: {
     color: colors.tint,

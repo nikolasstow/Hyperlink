@@ -22,8 +22,11 @@ import { DEFAULT_THEME, getStoredTheme, setStoredTheme, type Theme } from "./set
 export interface ThemeColors {
   readonly primary: string;
   readonly secondary: string;
-  /** `primary` at low alpha — the user's chat-bubble fill. */
+  /** `primary` at low alpha — a light primary fill. */
   readonly primaryTint: string;
+  /** `primary` at the alpha a glass tint needs to read as that colour — the
+   * user's chat-bubble glass. */
+  readonly bubbleGlassTint: string;
   /** `primary` mixed toward white — the send button's disabled/muted fill. */
   readonly primaryMuted: string;
   /** Send button, armed: `primary` slightly translucent so the glass shows. */
@@ -69,6 +72,7 @@ export const deriveColors = (theme: Theme): ThemeColors => {
     primary: theme.primary,
     secondary: theme.secondary,
     primaryTint: `rgba(${pr}, ${pg}, ${pb}, 0.18)`,
+    bubbleGlassTint: `rgba(${pr}, ${pg}, ${pb}, 0.4)`,
     primaryMuted: `rgb(${mr}, ${mg}, ${mb})`,
     sendActiveFill: `rgba(${pr}, ${pg}, ${pb}, ${SEND_FILL_ALPHA})`,
     sendMutedFill: `rgba(${mr}, ${mg}, ${mb}, ${SEND_FILL_ALPHA})`,

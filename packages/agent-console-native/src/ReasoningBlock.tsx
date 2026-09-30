@@ -17,7 +17,8 @@
  */
 import * as React from "react";
 import type { ReasoningPart } from "@opencode-ai/sdk";
-import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { GlassView } from "expo-glass-effect";
+import { StyleSheet, Text, TouchableOpacity, useColorScheme } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 import { colors } from "./colors";
 import { useCollapsible } from "./CollapsibleParts";
@@ -39,6 +40,7 @@ const durationLabel = (time: ReasoningPart["time"]): string | undefined => {
 export const ReasoningBlock = (props: { readonly part: ReasoningPart }): React.ReactElement | null => {
   const { part } = props;
   const { open, toggle } = useCollapsible(part.id);
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
 
   // Nothing to show for an empty block — reasoning parts can be created
   // before any text arrives.
@@ -48,6 +50,9 @@ export const ReasoningBlock = (props: { readonly part: ReasoningPart }): React.R
 
   return (
     <Animated.View style={styles.root} layout={LinearTransition.duration(COLLAPSE_MS)}>
+      {/* A glass card, as the tool calls are: rounded on itself behind the
+       * content; nothing clips it. */}
+      <GlassView style={[StyleSheet.absoluteFill, styles.glass]} glassEffectStyle="regular" colorScheme={scheme} />
       <TouchableOpacity style={styles.header} activeOpacity={0.6} onPress={toggle}>
         <SystemIcon name="brain" size={13} color={colors.secondaryLabel} />
         <Text style={styles.label}>{label}</Text>
@@ -72,11 +77,16 @@ const styles = StyleSheet.create({
   root: {
     marginTop: 8,
   },
+  glass: {
+    borderRadius: 10,
+  },
+  // The tool call card's padding, so the two read as one kind of card.
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   label: {
     flex: 1,
@@ -89,7 +99,8 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.separator,
     paddingLeft: 10,
     paddingVertical: 2,
-    marginTop: 2,
+    marginHorizontal: 10,
+    marginBottom: 10,
   },
   text: {
     color: colors.secondaryLabel,

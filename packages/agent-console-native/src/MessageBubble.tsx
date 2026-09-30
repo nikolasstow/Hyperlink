@@ -1,5 +1,6 @@
 /**
- * User = right-aligned tinted bubble; assistant = plain left-aligned text,
+ * User = right-aligned bubble of glass tinted with the theme's primary;
+ * assistant = plain left-aligned text,
  * no bubble — the pattern ChatGPT/Claude's own clients use, not a dev-tool
  * log. Ported from packages/agent-console/src/components/MessageBubble.tsx,
  * with markdown via `Markdown.tsx` (no Shiki — monospaced fences only).
@@ -12,8 +13,8 @@
  * @internal
  */
 import * as React from "react";
-import { StyleSheet, View } from "react-native";
-import { colors } from "./colors";
+import { GlassView } from "expo-glass-effect";
+import { StyleSheet, useColorScheme, View } from "react-native";
 import { ROW_GUTTER } from "./layout";
 import { Markdown } from "./Markdown";
 import { MessageActions } from "./MessageActions";
@@ -25,14 +26,20 @@ import type { TranscriptMessage } from "./useSessionStream";
 const MessageBubbleImpl = (props: { readonly message: TranscriptMessage; readonly hideActions?: boolean }): React.ReactElement => {
   const isUser = props.message.role === "user";
   const { colors: themeColors } = useTheme();
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
-      <View
-        style={[
-          styles.bubble,
-          isUser ? [styles.bubbleUser, { backgroundColor: themeColors.primaryTint }] : styles.bubbleAssistant,
-        ]}
-      >
+      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
+        {/* The user's bubble is glass, tinted with the theme's primary,
+         * rounded on itself behind the text; nothing clips it. */}
+        {isUser ? (
+          <GlassView
+            style={[StyleSheet.absoluteFill, styles.bubbleGlass]}
+            glassEffectStyle="regular"
+            tintColor={themeColors.bubbleGlassTint}
+            colorScheme={scheme}
+          />
+        ) : null}
         {Array.from(props.message.parts.values()).map((part) => {
           switch (part.type) {
             case "text":
@@ -74,9 +81,10 @@ const styles = StyleSheet.create({
     // Still inset — a sent message reads as a bubble, and the asymmetry is
     // what distinguishes the two sides now that replies run edge to edge.
     maxWidth: "88%",
-    backgroundColor: colors.brandTint,
-    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
+  },
+  bubbleGlass: {
+    borderRadius: 18,
   },
 });
