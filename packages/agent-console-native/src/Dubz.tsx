@@ -327,12 +327,15 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       Gesture.Pan()
         .onBegin(() => {
           resizing.value = true;
+          console.log(`[drag-diag] begin dragY=${dragY.value} grow=${grow.value} kbFull=${kbFull.value} maxDrag=${maxDragFor(kbFull.value)}`);
         })
         .onStart(() => {
           dragStart.value = dragY.value;
+          console.log(`[drag-diag] start dragY=${dragY.value}`);
         })
         .onUpdate((e) => {
           const maxDrag = maxDragFor(kbFull.value);
+          console.log(`[drag-diag] update ty=${e.translationY.toFixed(1)} dragY=${dragY.value.toFixed(1)} maxDrag=${maxDrag.toFixed(1)} kb=${kbHeight.value}`);
           const limit = maxDrag + DISMISS_ZONE;
           const next = dragStart.value + e.translationY;
           dragY.value = next < 0 ? 0 : next > limit ? limit : next;
@@ -344,6 +347,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         })
         .onEnd((e) => {
           const maxDrag = maxDragFor(kbFull.value);
+          console.log(`[drag-diag] end dragY=${dragY.value.toFixed(1)} vy=${e.velocityY.toFixed(0)}`);
           // Flung down hard, or released past the last detent → collapse.
           if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
             runOnJS(onClose)();
@@ -369,10 +373,11 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           runOnJS(setPillMode)(atPill);
           runOnJS(rememberDetent)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
         })
-        .onFinalize(() => {
+        .onFinalize((_e, success) => {
           resizing.value = false;
+          console.log(`[drag-diag] finalize success=${success}`);
         }),
-    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, onClose],
+    [dragY, dragStart, resizing, kbFull, kbHeight, grow, abovePillNow, maxDragFor, onClose],
   );
 
   // Swipe DOWN on the pill to dismiss the keyboard. Only a clear downward drag
