@@ -15,6 +15,8 @@
  */
 import { BottomSheet, Divider, Group, Host, HStack, Image, ScrollView, Spacer, TabView, Text, TextField, VStack } from "@expo/ui/swift-ui";
 import {
+  Animation,
+  animation,
   autocorrectionDisabled,
   contentShape,
   font,
@@ -49,6 +51,7 @@ const LABEL_MAX_WIDTH = 220;
 /** The sheet's side margin, for the search, the tabs and the list alike. */
 const SIDE = 20;
 const SEARCH_HEIGHT = 44;
+const TAB_HEIGHT = 34;
 /** The sheet's opening height, a share of the screen. iOS stacks a sheet on
  * the keyboard at its own height, so this is kept short enough to leave room
  * above it with the keyboard up. */
@@ -60,10 +63,12 @@ type Props = {
   readonly onChange: (model: ModelOption) => void;
 };
 
-/** One page of the popover. */
+/** One page of the sheet. */
 interface ModelTab {
   readonly id: string;
   readonly title: string;
+  /** Recents' clock: shown alone, its title only while it is the page open. */
+  readonly icon?: "clock";
   readonly models: ReadonlyArray<ModelOption>;
   /** Rows name their provider (Recents mixes them). */
   readonly showProvider: boolean;
@@ -109,6 +114,7 @@ const tabsOf = (models: ReadonlyArray<ModelOption>, usage: ModelUsage): Readonly
     {
       id: RECENTS,
       title: "Recents",
+      icon: "clock",
       models: recents,
       showProvider: true,
     },
@@ -250,17 +256,21 @@ export const ModelPicker = (props: Props): React.ReactElement => {
             ) : (
               <VStack spacing={0} modifiers={[frame({ maxHeight: Infinity, alignment: "top" })]}>
                 <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
-                  <HStack spacing={8} modifiers={[padding({ horizontal: SIDE, vertical: 14 })]}>
+                  <HStack
+                    spacing={8}
+                    modifiers={[padding({ horizontal: SIDE, vertical: 14 }), animation(Animation.spring({ duration: 0.3, bounce: 0.15 }), tabs.findIndex((t) => t.id === current))]}
+                  >
                     {tabs.map((t) => {
                       const active = t.id === current;
                       return (
-                        <Text
+                        <HStack
                           key={t.id}
+                          spacing={6}
                           modifiers={[
                             font({ size: 14, weight: active ? "semibold" : "medium" }),
                             foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
-                            lineLimit(1),
-                            padding({ horizontal: 14, vertical: 8 }),
+                            frame({ minWidth: TAB_HEIGHT, height: TAB_HEIGHT }),
+                            padding({ horizontal: t.icon !== undefined && !active ? 0 : 14 }),
                             ...(active
                               ? [glassEffect({ glass: { variant: "regular", tint: themeColors.bubbleGlassTint }, shape: "capsule" })]
                               : []),
@@ -268,8 +278,9 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                             onTapGesture(() => setTab(t.id)),
                           ]}
                         >
-                          {t.title}
-                        </Text>
+                          {t.icon !== undefined ? <Image systemName={t.icon} size={14} /> : null}
+                          {t.icon === undefined || active ? <Text modifiers={[lineLimit(1)]}>{t.title}</Text> : null}
+                        </HStack>
                       );
                     })}
                   </HStack>
