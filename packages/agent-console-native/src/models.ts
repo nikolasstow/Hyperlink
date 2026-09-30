@@ -108,6 +108,18 @@ export const refreshModels = (client: OpencodeClient, directory: string | undefi
   return promise;
 };
 
+/**
+ * Has the server fetch the models.dev catalog now and rebuild its model lists
+ * from it (`POST /provider/refresh`, from our opencode patch; raw fetch, as
+ * the pinned SDK has no such call), then loads the directory's list afresh.
+ * Throws when the server can't refresh, so the caller can say so.
+ */
+export const reloadModels = async (client: OpencodeClient, address: string, directory: string | undefined): Promise<void> => {
+  const response = await fetch(`${address}/provider/refresh`, { method: "POST" });
+  if (!response.ok) throw new Error(`Model refresh failed: HTTP ${response.status} ${await response.text()}`);
+  await refreshModels(client, directory);
+};
+
 /** A directory's models: the last-known list, or the first load's. */
 export const listModels = async (client: OpencodeClient, directory: string | undefined): Promise<ReadonlyArray<ModelOption>> =>
   (cached(client, directory) ?? (await refreshModels(client, directory)))?.options ?? EMPTY;

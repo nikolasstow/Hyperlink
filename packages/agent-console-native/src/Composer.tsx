@@ -41,7 +41,7 @@ import { BottomBar } from "./BottomBar";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import type { DubzContext } from "./dubzSuggestions";
-import { findModel, getDefaultModel, type ModelOption, useModels } from "./models";
+import { findModel, getDefaultModel, type ModelOption, refreshModels, reloadModels, useModels } from "./models";
 import { ModelPicker } from "./ModelPicker";
 import { recordModelUse } from "./modelUsage";
 import { getLastModel, setLastModel } from "./settings";
@@ -89,7 +89,7 @@ export const Composer = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { client } = useAppContext();
+  const { client, address } = useAppContext();
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
@@ -329,7 +329,13 @@ export const Composer = (props: {
                 }}
               />
             }
-            expandedCenter={<ModelPicker models={models} selected={selectedModel} onChange={pickModel} />}
+            expandedCenter={<ModelPicker
+                models={models}
+                selected={selectedModel}
+                onChange={pickModel}
+                onOpen={() => void refreshModels(client, props.directory)}
+                onRefresh={() => reloadModels(client, address, props.directory)}
+              />}
             collapsedCenter={
               <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
                 {text.length > 0 ? text : props.placeholder}

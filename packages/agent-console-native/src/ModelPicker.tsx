@@ -31,6 +31,7 @@ import {
   type PresentationDetent,
   presentationDetents,
   presentationDragIndicator,
+  refreshable,
   scrollDismissesKeyboard,
   scrollIndicators,
   shapes,
@@ -66,6 +67,10 @@ type Props = {
   readonly models: ReadonlyArray<ModelOption>;
   readonly selected: ModelOption | undefined;
   readonly onChange: (model: ModelOption) => void;
+  /** The sheet opened: load the directory's list afresh. */
+  readonly onOpen: () => void;
+  /** Pulled to refresh: the server fetches the catalog now, then the list reloads. */
+  readonly onRefresh: () => Promise<void>;
 };
 
 /** One page of the sheet. */
@@ -146,6 +151,7 @@ export const ModelPicker = (props: Props): React.ReactElement => {
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState(RECENTS);
   const [query, setQuery] = React.useState("");
+  const [refreshError, setRefreshError] = React.useState<string | undefined>(undefined);
   // Each opening mounts a fresh sheet: an empty, focused search.
   const [opening, setOpening] = React.useState(0);
   // The sheet's height, and whether the search holds the keyboard: while it
@@ -163,8 +169,10 @@ export const ModelPicker = (props: Props): React.ReactElement => {
     setQuery("");
     setDetent(SHORT);
     setSearchFocused(true);
+    setRefreshError(undefined);
     setOpening((n) => n + 1);
     setOpen(true);
+    props.onOpen();
   };
 
   const choose = (model: ModelOption): void => {
@@ -172,8 +180,17 @@ export const ModelPicker = (props: Props): React.ReactElement => {
     setOpen(false);
   };
 
+  const pull = (): Promise<void> =>
+    props.onRefresh().then(
+      () => setRefreshError(undefined),
+      (cause: unknown) => {
+        console.warn("[models] pull to refresh failed", cause);
+        setRefreshError(cause instanceof Error ? cause.message : String(cause));
+      },
+    );
+
   const rows = (models: ReadonlyArray<ModelOption>, showProvider: boolean): React.ReactElement => (
-    <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>
+    <ScrollView modifiers={[scrollDismissesKeyboard("immediately"), refreshable(pull)]}>
       <VStack
         spacing={0}
         alignment="leading"
@@ -261,6 +278,19 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                 modifiers={[textFieldStyle("plain"), autocorrectionDisabled(), textInputAutocapitalization("never")]}
               />
             </HStack>
+            {refreshError !== undefined ? (
+              <Text
+                modifiers={[
+                  font({ size: 13 }),
+                  foregroundStyle("red"),
+                  lineLimit(2),
+                  padding({ horizontal: SIDE, top: 10 }),
+                  frame({ maxWidth: Infinity, alignment: "leading" }),
+                ]}
+              >
+                {refreshError}
+              </Text>
+            ) : null}
             <VStack spacing={0} modifiers={[padding({ top: 14 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
               {searching ? (
                 results.length > 0 ? (
