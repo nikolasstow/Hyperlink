@@ -13,6 +13,7 @@ import * as React from "react";
 import { AppState, Linking, useColorScheme } from "react-native";
 import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
+import { PerfMonitor, setPerfScreen } from "./perfMonitor";
 import { AGENT, normalizeServerAddress } from "./client";
 import { useScreenBackground, useTheme } from "./theme";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
@@ -232,7 +233,13 @@ export const RootNavigator = (): React.ReactElement => {
   }, [navigationRef, client]);
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navigationTheme}
+      // DIAG(app-perf): remove with perfMonitor.
+      onStateChange={() => setPerfScreen(navigationRef.getCurrentRoute()?.name ?? "?")}
+    >
+      <PerfMonitor />
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: background } }}>
         {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
          * applies it via `useScrollEdgeEffects` after mount instead. See
