@@ -26,6 +26,7 @@ import {
   frame,
   glassEffect,
   lineLimit,
+  onGeometryChange,
   onTapGesture,
   padding,
   type PresentationDetent,
@@ -41,7 +42,7 @@ import {
   truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { StyleSheet } from "react-native";
+import { Dimensions, Keyboard, StyleSheet } from "react-native";
 import { CapsuleTabs } from "../modules/capsule-tabs";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE } from "./composerBarSpec";
@@ -178,6 +179,7 @@ export const ModelPicker = (props: Props): React.ReactElement => {
   const show = (): void => {
     setQuery("");
     const height = shortDetent();
+    console.log("[sheet-diag] open: lastKeyboard", lastKeyboardHeight(), "detent", JSON.stringify(height));
     setShort(height);
     setDetent(height);
     setSearchFocused(true);
@@ -186,6 +188,16 @@ export const ModelPicker = (props: Props): React.ReactElement => {
     setOpen(true);
     props.onOpen();
   };
+
+  // DIAG(sheet-keyboard): remove once aligned.
+  React.useEffect(() => {
+    if (!open) return;
+    const names: ReadonlyArray<"keyboardWillShow" | "keyboardDidShow" | "keyboardDidChangeFrame"> = ["keyboardWillShow", "keyboardDidShow", "keyboardDidChangeFrame"];
+    const subs = names.map((name) =>
+      Keyboard.addListener(name, (e) => console.log("[sheet-diag]", name, JSON.stringify(e.endCoordinates))),
+    );
+    return () => subs.forEach((sub) => sub.remove());
+  }, [open]);
 
   const choose = (model: ModelOption): void => {
     props.onChange(model);
@@ -255,12 +267,23 @@ export const ModelPicker = (props: Props): React.ReactElement => {
           modifiers={[
             presentationDetents(searchFocused ? [detent] : [short, "large"], {
               selection: detent,
-              onSelectionChange: (next) => setDetent(next === "large" ? "large" : short),
+              onSelectionChange: (next) => {
+                console.log("[sheet-diag] detent change", JSON.stringify(next));
+                setDetent(next === "large" ? "large" : short);
+              },
             }),
             presentationDragIndicator("visible"),
           ]}
         >
-          <VStack spacing={0} modifiers={[padding({ top: 10 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
+          <VStack
+            spacing={0}
+            modifiers={[
+              padding({ top: 10 }),
+              frame({ maxHeight: Infinity, alignment: "top" }),
+              // DIAG(sheet-keyboard): remove once aligned.
+              onGeometryChange((f) => console.log("[sheet-diag] sheet", JSON.stringify(f), "screen", Dimensions.get("window").height)),
+            ]}
+          >
             {CapsuleTabs !== undefined ? (
               <CapsuleTabs
                 tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
