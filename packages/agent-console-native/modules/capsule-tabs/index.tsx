@@ -1,7 +1,7 @@
 /**
- * A native (SwiftUI) row of capsule tabs, scrolling sideways, the selected one
- * on glass. A tab with an icon collapses to it while another is selected, its
- * title narrowing away; every change of selection springs. Put it inside an
+ * A native (SwiftUI) row of glass capsule tabs, scrolling sideways, the
+ * selected one tinted. A tab with an icon collapses to it while another is
+ * selected, its title narrowing away; every change of selection springs. Put it inside an
  * @expo/ui Host (it is a SwiftUI view, laid out by SwiftUI).
  *
  * `CapsuleTabs` is undefined in a build without the native module (it came in

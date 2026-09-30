@@ -332,7 +332,7 @@ const FallbackTabs = (props: {
               frame({ minWidth: TAB_HEIGHT, height: TAB_HEIGHT }),
               padding({ horizontal: collapsed ? 0 : 14 }),
               glassEffect({
-                glass: { variant: active ? "regular" : "identity", tint: props.tint },
+                glass: { variant: "regular", tint: active ? props.tint : undefined },
                 shape: "capsule",
               }),
               contentShape(shapes.capsule()),

@@ -16,7 +16,7 @@ public final class CapsuleTabsProps: ExpoSwiftUI.ViewProps {
   var onSelect = EventDispatcher()
 }
 
-/// A sideways-scrolling row of capsule tabs, the selected one on glass. A tab
+/// A sideways-scrolling row of glass capsule tabs, the selected one tinted. A tab
 /// with an icon collapses to it while another is selected: its title's frame
 /// narrows to nothing, clipped, so the capsule shrinks around the icon. Every
 /// change of selection, a tap here or a new `selection` from outside, springs.
@@ -74,7 +74,7 @@ public struct CapsuleTabsView: ExpoSwiftUI.View {
   }
 }
 
-/// Regular glass behind the selected tab, none behind the rest.
+/// Regular glass behind every tab, tinted behind the selected one.
 private struct SelectedGlass: ViewModifier {
   let active: Bool
   let tint: Color?
@@ -82,12 +82,12 @@ private struct SelectedGlass: ViewModifier {
   func body(content: Content) -> some View {
     if #available(iOS 26.0, *) {
 #if compiler(>=6.2)
-      content.glassEffect(active ? Glass.regular.tint(tint) : Glass.identity, in: Capsule())
+      content.glassEffect(Glass.regular.tint(active ? tint : nil), in: Capsule())
 #else
-      content.background(Capsule().fill(.thinMaterial).opacity(active ? 1 : 0))
+      content.background(Capsule().fill(.thinMaterial))
 #endif
     } else {
-      content.background(Capsule().fill(.thinMaterial).opacity(active ? 1 : 0))
+      content.background(Capsule().fill(.thinMaterial))
     }
   }
 }
