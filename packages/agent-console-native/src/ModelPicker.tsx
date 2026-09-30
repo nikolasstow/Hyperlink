@@ -41,6 +41,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet } from "react-native";
+import { CapsuleTabs } from "../modules/capsule-tabs";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
@@ -230,7 +231,18 @@ export const ModelPicker = (props: Props): React.ReactElement => {
             presentationDragIndicator("visible"),
           ]}
         >
-          <VStack spacing={0} modifiers={[padding({ top: 24 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
+          <VStack spacing={0} modifiers={[padding({ top: 10 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
+            {CapsuleTabs !== undefined ? (
+              <CapsuleTabs
+                tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
+                selection={current}
+                tint={themeColors.bubbleGlassTint}
+                sideMargin={SIDE}
+                onSelect={setTab}
+              />
+            ) : (
+              <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
+            )}
             <HStack
               spacing={10}
               modifiers={[
@@ -249,63 +261,14 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                 modifiers={[textFieldStyle("plain"), autocorrectionDisabled(), textInputAutocapitalization("never")]}
               />
             </HStack>
-            {searching ? (
-              <VStack spacing={0} modifiers={[padding({ top: 16 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
-                {results.length > 0 ? (
+            <VStack spacing={0} modifiers={[padding({ top: 14 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
+              {searching ? (
+                results.length > 0 ? (
                   rows(results, true)
                 ) : (
                   <Empty text="No models match" />
-                )}
-              </VStack>
-            ) : (
-              <VStack spacing={0} modifiers={[frame({ maxHeight: Infinity, alignment: "top" })]}>
-                <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
-                  <HStack
-                    spacing={8}
-                    modifiers={[padding({ horizontal: SIDE, vertical: 14 })]}
-                  >
-                    {tabs.map((t) => {
-                      const active = t.id === current;
-                      // Recents collapses to its clock: its title stays, its
-                      // frame narrowing to nothing (clipped), so the capsule
-                      // shrinks around the icon.
-                      const collapsed = t.icon !== undefined && !active;
-                      return (
-                        <HStack
-                          key={t.id}
-                          spacing={0}
-                          modifiers={[
-                            font({ size: 14, weight: active ? "semibold" : "medium" }),
-                            foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
-                            frame({ minWidth: TAB_HEIGHT, height: TAB_HEIGHT }),
-                            padding({ horizontal: collapsed ? 0 : 14 }),
-                            glassEffect({
-                              glass: { variant: active ? "regular" : "identity", tint: themeColors.bubbleGlassTint },
-                              shape: "capsule",
-                            }),
-                            contentShape(shapes.capsule()),
-                            onTapGesture(() => setTab(t.id)),
-                            animation(TAB_SPRING, active),
-                          ]}
-                        >
-                          {t.icon !== undefined ? <Image systemName={t.icon} size={14} /> : null}
-                          <Text
-                            modifiers={[
-                              lineLimit(1),
-                              fixedSize(),
-                              padding({ leading: t.icon !== undefined ? 6 : 0 }),
-                              frame({ maxWidth: collapsed ? 0 : TAB_TITLE_MAX_WIDTH, alignment: "leading" }),
-                              clipped(),
-                              animation(TAB_SPRING, active),
-                            ]}
-                          >
-                            {t.title}
-                          </Text>
-                        </HStack>
-                      );
-                    })}
-                  </HStack>
-                </ScrollView>
+                )
+              ) : (
                 <TabView selection={current} onSelectionChange={setTab} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
                   {tabs.map((t) => (
                     <TabView.Tab key={t.id} value={t.id}>
@@ -313,14 +276,70 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                     </TabView.Tab>
                   ))}
                 </TabView>
-              </VStack>
-            )}
+              )}
+            </VStack>
           </VStack>
         </Group>
       </BottomSheet>
     </Host>
   );
 };
+
+/** The tab strip in @expo/ui, for a build without the native CapsuleTabs. */
+const FallbackTabs = (props: {
+  readonly tabs: ReadonlyArray<ModelTab>;
+  readonly current: string;
+  readonly tint: string;
+  readonly onSelect: (id: string) => void;
+}): React.ReactElement => (
+  <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
+    <HStack
+      spacing={8}
+      modifiers={[padding({ horizontal: SIDE, vertical: 14 })]}
+    >
+      {props.tabs.map((t) => {
+        const active = t.id === props.current;
+        // Recents collapses to its clock: its title stays, its
+        // frame narrowing to nothing (clipped), so the capsule
+        // shrinks around the icon.
+        const collapsed = t.icon !== undefined && !active;
+        return (
+          <HStack
+            key={t.id}
+            spacing={0}
+            modifiers={[
+              font({ size: 14, weight: active ? "semibold" : "medium" }),
+              foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
+              frame({ minWidth: TAB_HEIGHT, height: TAB_HEIGHT }),
+              padding({ horizontal: collapsed ? 0 : 14 }),
+              glassEffect({
+                glass: { variant: active ? "regular" : "identity", tint: props.tint },
+                shape: "capsule",
+              }),
+              contentShape(shapes.capsule()),
+              onTapGesture(() => props.onSelect(t.id)),
+              animation(TAB_SPRING, active),
+            ]}
+          >
+            {t.icon !== undefined ? <Image systemName={t.icon} size={14} /> : null}
+            <Text
+              modifiers={[
+                lineLimit(1),
+                fixedSize(),
+                padding({ leading: t.icon !== undefined ? 6 : 0 }),
+                frame({ maxWidth: collapsed ? 0 : TAB_TITLE_MAX_WIDTH, alignment: "leading" }),
+                clipped(),
+                animation(TAB_SPRING, active),
+              ]}
+            >
+              {t.title}
+            </Text>
+          </HStack>
+        );
+      })}
+    </HStack>
+  </ScrollView>
+);
 
 const Empty = (props: { readonly text: string }): React.ReactElement => (
   <VStack modifiers={[padding({ top: 32 }), frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
