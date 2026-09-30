@@ -199,6 +199,9 @@ export interface DubzPageProps {
   readonly pageBack?: PageBack;
 }
 
+/** EXPERIMENT switch while narrowing the drag stutter. */
+const SUGGESTIONS_ON = false;
+
 /** Clamp to [0, 1]. */
 const unit = (value: number): number => {
   "worklet";
@@ -325,15 +328,12 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       Gesture.Pan()
         .onBegin(() => {
           resizing.value = true;
-          console.log(`[drag-diag] begin dragY=${dragY.value} grow=${grow.value} kbFull=${kbFull.value} maxDrag=${maxDragFor(kbFull.value)}`);
         })
         .onStart(() => {
           dragStart.value = dragY.value;
-          console.log(`[drag-diag] start dragY=${dragY.value}`);
         })
         .onUpdate((e) => {
           const maxDrag = maxDragFor(kbFull.value);
-          console.log(`[drag-diag] update ty=${e.translationY.toFixed(1)} dragY=${dragY.value.toFixed(1)} maxDrag=${maxDrag.toFixed(1)} kb=${kbHeight.value}`);
           const limit = maxDrag + DISMISS_ZONE;
           const next = dragStart.value + e.translationY;
           dragY.value = next < 0 ? 0 : next > limit ? limit : next;
@@ -345,7 +345,6 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         })
         .onEnd((e) => {
           const maxDrag = maxDragFor(kbFull.value);
-          console.log(`[drag-diag] end dragY=${dragY.value.toFixed(1)} vy=${e.velocityY.toFixed(0)}`);
           // Flung down hard, or released past the last detent → collapse.
           if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
             runOnJS(onClose)();
@@ -371,11 +370,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           runOnJS(setPillMode)(atPill);
           runOnJS(rememberDetent)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
         })
-        .onFinalize((_e, success) => {
+        .onFinalize(() => {
           resizing.value = false;
-          console.log(`[drag-diag] finalize success=${success}`);
         }),
-    [dragY, dragStart, resizing, kbFull, kbHeight, grow, abovePillNow, maxDragFor, onClose],
+    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, onClose],
   );
 
   // Swipe DOWN on the pill to dismiss the keyboard. Only a clear downward drag
@@ -489,10 +487,8 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
                 tintColor="rgba(0,0,0,0.18)"
                 colorScheme={glassScheme}
               >
-                {/* What Dubz suggests: the space above the pill, which alone is
-                 * cropped (no glass in it; nothing above the pill's glass ever
-                 * clips it). Its contents sit at its bottom, on the pill's top,
-                 * and never move; the window's top only reveals or hides them. */}
+                {/* EXPERIMENT (narrowing the drag stutter): suggestions off. */}
+              {SUGGESTIONS_ON ? (
                 <View style={styles.suggestionsArea} pointerEvents={open ? "box-none" : "none"}>
                   <View style={styles.suggestions}>
                     {suggestions.map((suggestion) => (
@@ -500,7 +496,8 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
                     ))}
                   </View>
                 </View>
-                {/* The pill sits at the window's bottom, a direct child of the
+              ) : null}
+              {/* The pill sits at the window's bottom, a direct child of the
                  * window's glass: the bar collapsed, the window's composer open. */}
                 <Reanimated.View style={pillWrapStyle}>
                   <GestureDetector gesture={dismissKb}>
