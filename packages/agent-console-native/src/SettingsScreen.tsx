@@ -503,7 +503,7 @@ const makeStyles = (text: TextColors) =>
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    paddingVertical: 10,
+    paddingVertical: 15,
   },
   // A card of rows: the rows carry their own vertical padding.
   listCard: {
