@@ -1,12 +1,12 @@
 /**
  * The composer's model: its name in the bar, and on a tap the model window, a
  * BarWindow (grown up out of the bar, riding the keyboard as the bar does,
- * regular glass). Its pill is the search, focused as it opens; above it the
- * pages' tabs (Recents, then each provider, the most used first); above those
- * the page's models. Swipe between pages or tap a tab; typing swaps the pages
- * for every model matching. Pull a list down to have the server fetch the
- * models.dev catalog now. The window reads the models store live, so a
- * refresh landing while it is open shows at once.
+ * regular glass). Its pill is the pages' tabs, iOS's segmented control
+ * (Recents, then each provider, the most used first); above it the search,
+ * focused as it opens; above that the page's models. Swipe between pages or
+ * tap a tab; typing swaps the pages for every model matching. Pull a list
+ * down to have the server fetch the models.dev catalog now. The window reads
+ * the models store live, so a refresh landing while it is open shows at once.
  *
  * Label is the model name (or “Model” while loading); not “Auto” (Cursor’s
  * routing feature, which we don’t replicate). Provider titles are the server’s
@@ -15,13 +15,10 @@
  * @internal
  */
 import { Feather } from "@expo/vector-icons";
-import { Divider, Host, HStack, Image, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
+import { Divider, Host, HStack, Image, Picker, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
 import {
-  Animation,
-  animation,
-  clipped,
+  accessibilityLabel,
   contentShape,
-  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -29,33 +26,31 @@ import {
   lineLimit,
   onTapGesture,
   padding,
+  pickerStyle,
   refreshable,
   scrollDismissesKeyboard,
-  scrollIndicators,
   shapes,
   tabViewStyle,
+  tag,
   truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, TextInput, View } from "react-native";
-import { CapsuleTabs } from "../modules/capsule-tabs";
 import { BarWindow, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
 import { type ModelUsage, useModelUsage } from "./modelUsage";
-import { type TextColors, useCardTint, useTextColors, useTheme, useThemedStyles } from "./theme";
+import { type TextColors, useCardTint, useTextColors, useThemedStyles } from "./theme";
 
 const RECENTS = "recents";
 const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
 /** The list's side margin, for the tabs and the list alike. */
 const SIDE = 16;
-const TAB_HEIGHT = 34;
-const TAB_TITLE_MAX_WIDTH = 200;
-const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
-/** The search's one line, sized so the pill is the bar's height. */
-const SEARCH_LINE_HEIGHT = 21;
+/** The search field's height, and its gap above the tabs' pill. */
+const SEARCH_HEIGHT = 40;
+const SEARCH_GAP = 10;
 
 /** The model window's one stop below full: its height, in points (about a
  * third of the screen). */
@@ -68,7 +63,7 @@ const modelDetent = detentMemory(1);
 interface ModelTab {
   readonly id: string;
   readonly title: string;
-  /** Recents' clock: shown alone, its title only while it is the page open. */
+  /** Recents' clock: its segment shows the icon alone. */
   readonly icon?: "clock";
   readonly models: ReadonlyArray<ModelOption>;
   /** Rows name their provider (Recents mixes them). */
@@ -174,7 +169,6 @@ export const ModelWindow = (props: {
 }): React.ReactElement | null => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { colors: themeColors } = useTheme();
   const cardTint = useCardTint();
   const usage = useModelUsage();
   const inputRef = React.useRef<TextInput>(null);
@@ -236,9 +230,9 @@ export const ModelWindow = (props: {
       stop={MODEL_STOP}
       closeLabel="Close models"
       body={
-        <Host style={styles.list} ignoreSafeArea="all">
-          <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "bottom" })]}>
-            <VStack spacing={0} modifiers={[frame({ maxHeight: Infinity, alignment: "top" })]}>
+        <View style={styles.body}>
+          <Host style={styles.list} ignoreSafeArea="all">
+            <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
               {searching ? (
                 results.length > 0 ? (
                   rows(results, true)
@@ -254,111 +248,64 @@ export const ModelWindow = (props: {
                   ))}
                 </TabView>
               )}
+              {refreshError !== undefined ? (
+                <Text
+                  modifiers={[
+                    font({ size: 13 }),
+                    foregroundStyle("red"),
+                    lineLimit(2),
+                    padding({ horizontal: SIDE, top: 8 }),
+                    frame({ maxWidth: Infinity, alignment: "leading" }),
+                  ]}
+                >
+                  {refreshError}
+                </Text>
+              ) : null}
             </VStack>
-            {refreshError !== undefined ? (
-              <Text
-                modifiers={[
-                  font({ size: 13 }),
-                  foregroundStyle("red"),
-                  lineLimit(2),
-                  padding({ horizontal: SIDE, top: 8 }),
-                  frame({ maxWidth: Infinity, alignment: "leading" }),
-                ]}
-              >
-                {refreshError}
-              </Text>
-            ) : null}
-            {CapsuleTabs !== undefined ? (
-              <CapsuleTabs
-                tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
-                selection={current}
-                tint={themeColors.bubbleGlassTint}
-                sideMargin={SIDE}
-                onSelect={setTab}
-              />
-            ) : (
-              <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
-            )}
-          </VStack>
-        </Host>
+          </Host>
+          {/* The search, above the tabs: an iOS search field (a filled capsule;
+            * no glass, as the body is cropped). */}
+          <View style={styles.searchField}>
+            <Feather name="search" size={16} color={textColors.secondaryLabel} />
+            <TextInput
+              ref={inputRef}
+              style={styles.search}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search models"
+              placeholderTextColor={textColors.placeholderText}
+              autoCorrect={false}
+              autoCapitalize="none"
+              editable={props.open}
+            />
+          </View>
+        </View>
       }
       pill={
-        <>
-          <View style={styles.searchIcon}>
-            <Feather name="search" size={17} color={textColors.secondaryLabel} />
-          </View>
-          <TextInput
-            ref={inputRef}
-            style={styles.search}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search models"
-            placeholderTextColor={textColors.placeholderText}
-            autoCorrect={false}
-            autoCapitalize="none"
-            editable={props.open}
-          />
-        </>
+        // The pages' tabs: iOS's segmented control, a pill within the pill.
+        <Host style={styles.tabs} ignoreSafeArea="all">
+          <Picker
+            selection={current}
+            onSelectionChange={(value) => {
+              if (typeof value === "string") setTab(value);
+            }}
+            modifiers={[pickerStyle("segmented")]}
+          >
+            {tabs.map((t) =>
+              t.icon !== undefined ? (
+                <Image key={t.id} systemName={t.icon} modifiers={[tag(t.id), accessibilityLabel(t.title)]} />
+              ) : (
+                <Text key={t.id} modifiers={[tag(t.id)]}>
+                  {t.title}
+                </Text>
+              ),
+            )}
+          </Picker>
+        </Host>
       }
     />
   );
 };
-
-/** The tab strip in @expo/ui, for a build without the native CapsuleTabs. */
-const FallbackTabs = (props: {
-  readonly tabs: ReadonlyArray<ModelTab>;
-  readonly current: string;
-  readonly tint: string;
-  readonly onSelect: (id: string) => void;
-}): React.ReactElement => (
-  <ScrollView axes="horizontal" modifiers={[scrollIndicators("hidden")]}>
-    <HStack
-      spacing={8}
-      modifiers={[padding({ horizontal: SIDE, vertical: 14 })]}
-    >
-      {props.tabs.map((t) => {
-        const active = t.id === props.current;
-        // Recents collapses to its clock: its title stays, its
-        // frame narrowing to nothing (clipped), so the capsule
-        // shrinks around the icon.
-        const collapsed = t.icon !== undefined && !active;
-        return (
-          <HStack
-            key={t.id}
-            spacing={0}
-            modifiers={[
-              font({ size: 14, weight: active ? "semibold" : "medium" }),
-              foregroundStyle({ type: "hierarchical", style: active ? "primary" : "secondary" }),
-              frame({ minWidth: TAB_HEIGHT, height: TAB_HEIGHT }),
-              padding({ horizontal: collapsed ? 0 : 14 }),
-              glassEffect({
-                glass: { variant: active ? "regular" : "identity", tint: props.tint },
-                shape: "capsule",
-              }),
-              contentShape(shapes.capsule()),
-              onTapGesture(() => props.onSelect(t.id)),
-              animation(TAB_SPRING, active),
-            ]}
-          >
-            {t.icon !== undefined ? <Image systemName={t.icon} size={14} /> : null}
-            <Text
-              modifiers={[
-                lineLimit(1),
-                fixedSize(),
-                padding({ leading: t.icon !== undefined ? 6 : 0 }),
-                frame({ maxWidth: collapsed ? 0 : TAB_TITLE_MAX_WIDTH, alignment: "leading" }),
-                clipped(),
-                animation(TAB_SPRING, active),
-              ]}
-            >
-              {t.title}
-            </Text>
-          </HStack>
-        );
-      })}
-    </HStack>
-  </ScrollView>
-);
 
 const Empty = (props: { readonly text: string }): React.ReactElement => (
   <VStack modifiers={[padding({ top: 32 }), frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
@@ -410,21 +357,33 @@ const makeStyles = (text: TextColors) =>
     list: {
       flex: 1,
     },
-    // The search icon, centred on the pill's one line.
-    searchIcon: {
-      width: COMPOSER_SEND_CHIP_SIZE,
-      height: COMPOSER_SEND_CHIP_SIZE,
-      alignItems: "center",
-      justifyContent: "center",
+    // The list above, the search under it.
+    body: {
+      flex: 1,
     },
-    // One line, as tall as send, so the pill is the bar's height.
+    // The search: an iOS search field, above the tabs.
+    searchField: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      height: SEARCH_HEIGHT,
+      marginHorizontal: SIDE,
+      marginBottom: SEARCH_GAP,
+      paddingHorizontal: 12,
+      borderRadius: SEARCH_HEIGHT / 2,
+      backgroundColor: "rgba(120,120,128,0.16)",
+    },
     search: {
       flex: 1,
-      height: COMPOSER_SEND_CHIP_SIZE,
+      height: SEARCH_HEIGHT,
       color: text.label,
       fontSize: 16,
-      lineHeight: SEARCH_LINE_HEIGHT,
       paddingVertical: 0,
       paddingHorizontal: 0,
+    },
+    // The segmented control fills the pill's row.
+    tabs: {
+      flex: 1,
+      height: COMPOSER_SEND_CHIP_SIZE,
     },
   });
