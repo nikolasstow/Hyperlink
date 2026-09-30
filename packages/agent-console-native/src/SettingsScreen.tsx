@@ -7,6 +7,7 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
+import { Host, Slider } from "@expo/ui/swift-ui";
 import {
   ActivityIndicator,
   ScrollView,
@@ -14,6 +15,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,7 +46,7 @@ import {
   setWorktreeTemplate,
   type DefaultWorktreePreference,
 } from "./settings";
-import { runCountdownChoices, setRunCountdownSeconds, useRunCountdownSeconds } from "./runCountdown";
+import { RUN_COUNTDOWN_MAX, RUN_COUNTDOWN_MIN, setRunCountdownSeconds, useRunCountdownSeconds } from "./runCountdown";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -61,6 +63,9 @@ const timeAgo = (ms: number): string => {
   return `${days}d ago`;
 };
 
+/** The countdown slider's box: a set height; the card's inner width. */
+const SLIDER_HEIGHT = 34;
+
 /** The Customize card's pages, a row each. */
 const CUSTOMIZE_PAGES: ReadonlyArray<"Appearance" | "Extensions" | "Plugins"> = ["Appearance", "Extensions", "Plugins"];
 
@@ -68,6 +73,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const runCountdown = useRunCountdownSeconds();
+  const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
@@ -362,12 +368,14 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>Scripts</Text>
         <View style={styles.card}>
           <CardGlass />
-          {runCountdownChoices.map((choice, index) => (
-            <TouchableOpacity key={choice} style={[styles.optionRow, index > 0 && styles.optionRowBorder]} activeOpacity={0.6} onPress={() => setRunCountdownSeconds(choice)}>
-              <Text style={styles.rowTitle}>{choice === 1 ? "1 second" : `${choice} seconds`}</Text>
-              {runCountdown === choice ? <SystemIcon name="checkmark" size={15} color={colors.tint} /> : null}
-            </TouchableOpacity>
-          ))}
+          {/* How long a script counts down before it runs. */}
+          <View style={styles.formRow}>
+            <Text style={styles.formLabel}>Countdown</Text>
+            <Text style={styles.formValue}>{runCountdown === 1 ? "1 second" : `${runCountdown} seconds`}</Text>
+          </View>
+          <Host style={{ width: windowWidth - 32 - 28, height: SLIDER_HEIGHT }}>
+            <Slider value={runCountdown} min={RUN_COUNTDOWN_MIN} max={RUN_COUNTDOWN_MAX} step={1} onValueChange={setRunCountdownSeconds} />
+          </Host>
         </View>
 
         <Text style={styles.sectionLabel}>Server</Text>
@@ -473,6 +481,11 @@ const makeStyles = (text: TextColors) =>
   formLabel: {
     color: text.label,
     fontSize: 16,
+  },
+  formValue: {
+    color: text.secondaryLabel,
+    fontSize: 16,
+    marginLeft: "auto",
   },
   formInput: {
     flex: 1,

@@ -12,9 +12,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
 
-/** The lengths offered, in seconds; the default is 3. */
-export const runCountdownChoices: ReadonlyArray<number> = [1, 2, 3, 5];
+/** The lengths offered (a slider, whole seconds); the default is 3. */
+export const RUN_COUNTDOWN_MIN = 1;
+export const RUN_COUNTDOWN_MAX = 30;
 const defaultSeconds = 3;
+
+const isLength = (value: number): boolean => Number.isInteger(value) && value >= RUN_COUNTDOWN_MIN && value <= RUN_COUNTDOWN_MAX;
 const storageKey = "runCountdownSeconds";
 
 let seconds = defaultSeconds;
@@ -25,7 +28,7 @@ const emit = (): void => listeners.forEach((listener) => listener());
 AsyncStorage.getItem(storageKey).then(
   (saved) => {
     const parsed = saved === null ? undefined : Number(saved);
-    if (parsed !== undefined && runCountdownChoices.includes(parsed)) {
+    if (parsed !== undefined && isLength(parsed)) {
       seconds = parsed;
       emit();
     }
@@ -33,7 +36,9 @@ AsyncStorage.getItem(storageKey).then(
   (error: unknown) => console.error("[run countdown] reading the saved length failed", error),
 );
 
-export const setRunCountdownSeconds = (next: number): void => {
+export const setRunCountdownSeconds = (value: number): void => {
+  const next = Math.min(RUN_COUNTDOWN_MAX, Math.max(RUN_COUNTDOWN_MIN, Math.round(value)));
+  if (next === seconds) return;
   seconds = next;
   emit();
   AsyncStorage.setItem(storageKey, String(next)).catch((error: unknown) => console.error("[run countdown] saving the length failed", error));
