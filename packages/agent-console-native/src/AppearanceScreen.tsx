@@ -489,7 +489,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
           {/* How much the glass cards darken (on a light background) or
            * lighten (on a dark one). */}
-          <Text style={[styles.backgroundLabel, styles.contrastLabel]}>Card contrast</Text>
+          <Text style={[styles.backgroundLabel, styles.contrastLabel]}>Contrast</Text>
           <Host style={{ width: contentWidth - 28, height: CONTRAST_SLIDER_HEIGHT }}>
             <Slider
               value={theme.cardContrast ?? DEFAULT_CARD_CONTRAST}

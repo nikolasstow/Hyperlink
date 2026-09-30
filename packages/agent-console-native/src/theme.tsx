@@ -157,8 +157,9 @@ export const luminance = (hex: string): number => {
 
 /** Above this luminance a background counts as light. */
 const LIGHT_BACKGROUND = 0.4;
-/** The card contrast when none is chosen (Appearance → Background). */
-export const DEFAULT_CARD_CONTRAST = 0.4;
+/** The contrast when none is chosen (Appearance → Background): none, the
+ * standard look, no tint. */
+export const DEFAULT_CARD_CONTRAST = 0;
 /** The tint's strongest, at full contrast: black over a light background,
  * white over a dark one (white reads weaker, so it goes further). */
 const MAX_DARKEN_ALPHA = 0.15;
@@ -168,11 +169,13 @@ const MAX_LIGHTEN_ALPHA = 0.2;
  * theme's colour for this mode, else the system's), not from the mode: a
  * bright colour in dark mode still wants the darker tint. How much is the
  * theme's card contrast. */
-export const useCardTint = (): string => {
+export const useCardTint = (): string | undefined => {
   const { theme } = useTheme();
   const dark = useColorScheme() === "dark";
   const background = (dark ? theme.backgroundDark : theme.backgroundLight) ?? (dark ? SYSTEM_BACKGROUND_HEX.dark : SYSTEM_BACKGROUND_HEX.light);
   const contrast = theme.cardContrast ?? DEFAULT_CARD_CONTRAST;
+  // No contrast is the standard glass, untinted.
+  if (contrast <= 0) return undefined;
   return luminance(background) > LIGHT_BACKGROUND
     ? `rgba(0,0,0,${(MAX_DARKEN_ALPHA * contrast).toFixed(3)})`
     : `rgba(255,255,255,${(MAX_LIGHTEN_ALPHA * contrast).toFixed(3)})`;
