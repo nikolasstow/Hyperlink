@@ -282,7 +282,9 @@ export const ModelWindow = (props: {
           alignment="leading"
           modifiers={[
             padding({ all: pickFirst ? PICK_INSET : 0 }),
-            glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
+            // DIAG(model-perf): glass card swapped for a plain fill, to test
+            // glass-on-glass as the frame drops' cause.
+            background("rgba(255,255,255,0.08)", shapes.roundedRectangle({ cornerRadius: CARD_RADIUS })),
           ]}
         >
           {models.map((model, index) => (
