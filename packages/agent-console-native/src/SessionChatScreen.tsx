@@ -15,7 +15,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
-import { ActionSheetIOS, Alert, FlatList, StyleSheet, Text, Vibration, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,6 +37,8 @@ import { getPermissionMode, setPermissionMode, type PermissionMode } from "./ses
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
+import { FILE_CHIPS_HEIGHT, FileChips } from "./FileChips";
+import { mentionOf, sessionFiles, type SessionFile } from "./sessionFiles";
 import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
@@ -90,6 +92,30 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   }, [streamEnabled, sessionID]);
   const { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected, refresh } =
     useSessionStream(client, sessionID, address, streamEnabled);
+
+  // The files the agent has been touching, as chips over the bar. Relative
+  // paths resolve against the session's folder.
+  const [directory, setDirectory] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => {
+    let cancelled = false;
+    client.session.get({ path: { id: sessionID } }).then(
+      ({ data }) => {
+        if (!cancelled && data !== undefined) setDirectory(data.directory);
+      },
+      (error: unknown) => console.error("[chat] reading the session's folder failed", error),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [client, sessionID]);
+  const files = React.useMemo(() => sessionFiles(transcript, directory), [transcript, directory]);
+  const { width: screenWidth } = useWindowDimensions();
+  const insertRef = React.useRef<((insert: string) => void) | null>(null);
+  // Keyboard up: into the message, for the agent to reference. Down: open it.
+  const onFile = (file: SessionFile): void => {
+    if (keyboardHeight > 0) insertRef.current?.(mentionOf(file, directory));
+    else props.navigation.navigate("FileViewer", { path: file.path, name: file.name });
+  };
   // Mirrors the module-level store so the menu re-renders with the choice.
   const [permissionMode, setMode] = React.useState<PermissionMode>(() => getPermissionMode(sessionID));
   const [title, setTitle] = React.useState<string | undefined>(undefined);
@@ -396,7 +422,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // (or the keyboard) plus the bar, and a small gap.
         contentContainerStyle={[
           styles.content,
-          { paddingBottom: topBarHeight + 16, paddingTop: Math.max(keyboardHeight, composerRestingBottom(insets.bottom)) + COMPOSER_BAR_HEIGHT + 8 },
+          {
+            paddingBottom: topBarHeight + 16,
+            paddingTop: Math.max(keyboardHeight, composerRestingBottom(insets.bottom)) + COMPOSER_BAR_HEIGHT + (files.length > 0 ? FILE_CHIPS_HEIGHT : 0) + 8,
+          },
         ]}
       />
       </ScrollViewMarker>
@@ -421,6 +450,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           placeholder="Message"
           seedModel={resolvedSeed}
           dubzContext={SESSION_DUBZ}
+          accessory={<FileChips files={files} width={screenWidth} onPress={onFile} />}
+          insertRef={insertRef}
         />
       </Animated.View>
     </View>
