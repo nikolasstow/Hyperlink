@@ -357,9 +357,12 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       <FlatList
         ref={listRef}
         inverted
-        // Scroll edge effects need automatic inset adjustment against the
-        // transparent header — without this the soft edge often never renders.
-        contentInsetAdjustmentBehavior="automatic"
+        // No automatic insets: the list is inverted, so iOS's header inset
+        // (at the scroll view's native top) landed at the visual bottom, on top
+        // of the bar's room, and "scroll to newest" (offset 0) stopped short of
+        // it, leaving blank space below. The padding below is exact instead;
+        // the scroll edge effect comes from ScrollViewMarker, as on Home.
+        contentInsetAdjustmentBehavior="never"
         style={styles.flex}
         data={listData}
         keyExtractor={(id) => id}
@@ -389,7 +392,12 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // after the last item" — renders as reserved space at the screen's
         // visual TOP (under the header), and `paddingTop`
         // renders at the visual BOTTOM (under the floating composer).
-        contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: COMPOSER_BAR_HEIGHT + keyboardHeight }]}
+        // The visual bottom reaches exactly the bar's top: its resting spot
+        // (or the keyboard) plus the bar, and a small gap.
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: topBarHeight + 16, paddingTop: Math.max(keyboardHeight, composerRestingBottom(insets.bottom)) + COMPOSER_BAR_HEIGHT + 8 },
+        ]}
       />
       </ScrollViewMarker>
       <EdgeBlurBars bottomInset={keyboardHeight} busy={transcript.busy} />
