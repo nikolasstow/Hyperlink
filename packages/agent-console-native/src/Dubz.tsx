@@ -473,84 +473,89 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         />
       ) : null}
 
-      <GestureDetector gesture={paging}>
-        <Reanimated.View style={[styles.window, windowStyle]}>
-          <GlassContainer style={styles.fill}>
-            <GlassView
-              style={styles.glass}
-              // Clear while open above the smallest detent; none collapsed and
-              // at the pill, where the pill fills it and is the bar. Faded by
-              // the native animate, never opacity.
-              glassEffectStyle={{ style: open && abovePill ? "clear" : "none", animate: true, animationDuration: FADE_S }}
-              // A slight dark tint (tints the glass material, not a solid fill)
-              // to give the clear glass some body over bright content.
-              tintColor="rgba(0,0,0,0.18)"
-              colorScheme={glassScheme}
-            >
-              {/* What Dubz suggests: the space above the pill, which alone is
-               * cropped (no glass in it; nothing above the pill's glass ever
-               * clips it). Its contents sit at its bottom, on the pill's top,
-               * and never move; the window's top only reveals or hides them. */}
-              <View style={styles.suggestionsArea} pointerEvents={open ? "box-none" : "none"}>
-                <View style={styles.suggestions}>
-                  {suggestions.map((suggestion) => (
-                    <Suggestion key={suggestion.kind} suggestion={suggestion} />
-                  ))}
+      <Reanimated.View style={[styles.window, windowStyle]}>
+        {/* The page swipe covers the window's body only, never the grab bar:
+         * over the bar it competed with the resize drag and slid the window
+         * sideways, snapping it back on release. */}
+        <GestureDetector gesture={paging}>
+          <View style={styles.fill}>
+            <GlassContainer style={styles.fill}>
+              <GlassView
+                style={styles.glass}
+                // Clear while open above the smallest detent; none collapsed and
+                // at the pill, where the pill fills it and is the bar. Faded by
+                // the native animate, never opacity.
+                glassEffectStyle={{ style: open && abovePill ? "clear" : "none", animate: true, animationDuration: FADE_S }}
+                // A slight dark tint (tints the glass material, not a solid fill)
+                // to give the clear glass some body over bright content.
+                tintColor="rgba(0,0,0,0.18)"
+                colorScheme={glassScheme}
+              >
+                {/* What Dubz suggests: the space above the pill, which alone is
+                 * cropped (no glass in it; nothing above the pill's glass ever
+                 * clips it). Its contents sit at its bottom, on the pill's top,
+                 * and never move; the window's top only reveals or hides them. */}
+                <View style={styles.suggestionsArea} pointerEvents={open ? "box-none" : "none"}>
+                  <View style={styles.suggestions}>
+                    {suggestions.map((suggestion) => (
+                      <Suggestion key={suggestion.kind} suggestion={suggestion} />
+                    ))}
+                  </View>
                 </View>
-              </View>
-              {/* The pill sits at the window's bottom, a direct child of the
-               * window's glass: the bar collapsed, the window's composer open. */}
-              <Reanimated.View style={pillWrapStyle}>
-                <GestureDetector gesture={dismissKb}>
-                  <Reanimated.View style={[styles.pill, pillStyle]}>
-                    {/* The bar's regular glass, never faded (opacity on glass
-                     * or its parents stops it rendering). */}
-                    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                      <GlassView style={styles.pillGlass} glassEffectStyle="regular" colorScheme={glassScheme} />
-                    </View>
-                    <View style={styles.plusSlot}>
-                      <PlusChip onPress={open ? noop : onOpen} />
-                    </View>
-                    <TextInput
-                      ref={inputRef}
-                      style={[styles.input, { maxHeight: open ? LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V : COMPOSER_SEND_CHIP_SIZE }]}
-                      value={text}
-                      onChangeText={setDraft}
-                      placeholder={`Ask ${AGENT_NAME}…`}
-                      placeholderTextColor={colors.placeholderText}
-                      editable={open}
-                      multiline
-                    />
-                    <SendChip active={text.trim().length > 0} onPress={open ? () => setDraft("") : onOpen} />
-                    {/* Collapsed: any tap on the bar opens it. */}
-                    {open ? null : (
-                      <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
-                    )}
-                  </Reanimated.View>
-                </GestureDetector>
-              </Reanimated.View>
-            </GlassView>
-          </GlassContainer>
-
-          {/* Glass tab above the pill at the smallest detent, open only: it
-           * comes and goes by the native animate (none ↔ regular). */}
-          <View style={styles.tabGlassWrap} pointerEvents="none">
-            <GlassView
-              style={styles.tabGlass}
-              glassEffectStyle={{ style: open && pillMode ? "regular" : "none", animate: true, animationDuration: FADE_S }}
-              colorScheme={glassScheme}
-            />
+                {/* The pill sits at the window's bottom, a direct child of the
+                 * window's glass: the bar collapsed, the window's composer open. */}
+                <Reanimated.View style={pillWrapStyle}>
+                  <GestureDetector gesture={dismissKb}>
+                    <Reanimated.View style={[styles.pill, pillStyle]}>
+                      {/* The bar's regular glass, never faded (opacity on glass
+                       * or its parents stops it rendering). */}
+                      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                        <GlassView style={styles.pillGlass} glassEffectStyle="regular" colorScheme={glassScheme} />
+                      </View>
+                      <View style={styles.plusSlot}>
+                        <PlusChip onPress={open ? noop : onOpen} />
+                      </View>
+                      <TextInput
+                        ref={inputRef}
+                        style={[styles.input, { maxHeight: open ? LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V : COMPOSER_SEND_CHIP_SIZE }]}
+                        value={text}
+                        onChangeText={setDraft}
+                        placeholder={`Ask ${AGENT_NAME}…`}
+                        placeholderTextColor={colors.placeholderText}
+                        editable={open}
+                        multiline
+                      />
+                      <SendChip active={text.trim().length > 0} onPress={open ? () => setDraft("") : onOpen} />
+                      {/* Collapsed: any tap on the bar opens it. */}
+                      {open ? null : (
+                        <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
+                      )}
+                    </Reanimated.View>
+                  </GestureDetector>
+                </Reanimated.View>
+              </GlassView>
+            </GlassContainer>
           </View>
+        </GestureDetector>
 
-          {/* The one grabber: a line inside the window top at larger detents,
-           * floating over the tab at the smallest; gone collapsed. */}
-          <GestureDetector gesture={drag}>
-            <Reanimated.View style={[styles.grabHandle, handleStyle]} pointerEvents={open ? "auto" : "none"}>
-              <View style={styles.grabber} />
-            </Reanimated.View>
-          </GestureDetector>
-        </Reanimated.View>
-      </GestureDetector>
+        {/* Glass tab above the pill at the smallest detent, open only: it
+         * comes and goes by the native animate (none ↔ regular). */}
+        <View style={styles.tabGlassWrap} pointerEvents="none">
+          <GlassView
+            style={styles.tabGlass}
+            glassEffectStyle={{ style: open && pillMode ? "regular" : "none", animate: true, animationDuration: FADE_S }}
+            colorScheme={glassScheme}
+          />
+        </View>
+
+        {/* The one grabber: a line inside the window top at larger detents,
+         * floating over the tab at the smallest; gone collapsed. */}
+        <GestureDetector gesture={drag}>
+          <Reanimated.View style={[styles.grabHandle, handleStyle]} pointerEvents={open ? "auto" : "none"}>
+            <View style={styles.grabber} />
+          </Reanimated.View>
+        </GestureDetector>
+      </Reanimated.View>
     </View>
   );
 };
