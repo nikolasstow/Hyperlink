@@ -8,14 +8,17 @@
  */
 import { Feather } from "@expo/vector-icons";
 import { Host, Menu, RNHostView, Section, Toggle } from "@expo/ui/swift-ui";
-import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
+import { buttonStyle, menuIndicator, menuOrder, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { COMPOSER_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
-const MENU_MODIFIERS = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")] as const;
+// `menuOrder("fixed")`: the menu opens upward from the composer, and iOS
+// reverses an upward menu's items by default; fixed keeps them A to Z from the
+// top.
+const MENU_MODIFIERS = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden"), menuOrder("fixed")];
 
 type Props = {
   readonly models: ReadonlyArray<ModelOption>;
@@ -69,7 +72,7 @@ export const ModelPicker = (props: Props): React.ReactElement => {
             </View>
           </RNHostView>
         }
-        modifiers={[...MENU_MODIFIERS]}
+        modifiers={MENU_MODIFIERS}
       >
         {groups.map((group) => (
           <Section key={group.providerID} title={group.title}>
