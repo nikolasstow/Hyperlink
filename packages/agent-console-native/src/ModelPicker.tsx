@@ -15,7 +15,7 @@
  * @internal
  */
 import { Feather } from "@expo/vector-icons";
-import { Divider, Host, HStack, Image, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
+import { Divider, Host, HStack, Image, LazyVStack, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   Animation,
   animation,
@@ -222,7 +222,9 @@ export const ModelWindow = (props: {
     );
 
   // Searching, the first match is the one Return picks: highlighted, the list
-  // inset a little so its highlight rounds inside the card.
+  // inset a little so its highlight rounds inside the card. Lazy stacks: the
+  // window resizes every frame as it grows or is dragged, and laying out every
+  // row of every page each frame (over a hundred) dropped frames.
   // The search and the tabs float over the lists and slide down out of the way
   // as a list scrolls down, back as it scrolls up (or reaches its top). Read on
   // the UI thread, from the list's scroll geometry.
@@ -253,14 +255,16 @@ export const ModelWindow = (props: {
   const tabsStyle = useAnimatedStyle(() => ({ bottom: PILL_AREA - barsDrop.value }));
 
   // Searching, the first match is the one Return picks: highlighted, the list
-  // inset a little so its highlight rounds inside the card.
+  // inset a little so its highlight rounds inside the card. Lazy stacks: the
+  // window resizes every frame as it grows or is dragged, and laying out every
+  // row of every page each frame (over a hundred) dropped frames.
   const rows = (models: ReadonlyArray<ModelOption>, showProvider: boolean, pickFirst: boolean): React.ReactElement => (
     <ScrollView modifiers={[scrollDismissesKeyboard("immediately"), refreshable(pull), ...(scrollGeometry !== null ? [scrollGeometry] : [])]}>
-      <VStack spacing={8} alignment="leading" modifiers={[padding({ horizontal: SIDE, top: HANDLE_CLEARANCE, bottom: UNDER_BARS })]}>
+      <LazyVStack spacing={8} alignment="leading" modifiers={[padding({ horizontal: SIDE, top: HANDLE_CLEARANCE, bottom: UNDER_BARS })]}>
         {refreshError !== undefined ? (
           <Text modifiers={[font({ size: 13 }), foregroundStyle("red"), lineLimit(2)]}>{refreshError}</Text>
         ) : null}
-        <VStack
+        <LazyVStack
           spacing={0}
           alignment="leading"
           modifiers={[
@@ -280,8 +284,8 @@ export const ModelWindow = (props: {
               />
             </VStack>
           ))}
-        </VStack>
-      </VStack>
+        </LazyVStack>
+      </LazyVStack>
     </ScrollView>
   );
 
