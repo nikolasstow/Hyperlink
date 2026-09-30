@@ -159,7 +159,8 @@ const MAX_BRIGHTEN_ALPHA = 0.2;
  * a white tint as strong as its slider; off, the standard glass, untinted. */
 export const useCardTint = (): string | undefined => {
   const { theme } = useTheme();
-  const { contrast } = theme;
+  const mode = useColorScheme() === "dark" ? "dark" : "light";
+  const contrast = theme.contrast?.[mode];
   return contrast === undefined || contrast <= 0 ? undefined : `rgba(255,255,255,${(MAX_BRIGHTEN_ALPHA * contrast).toFixed(3)})`;
 };
 

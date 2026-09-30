@@ -12,7 +12,7 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { Alert, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { Alert, LayoutAnimation, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Slider, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
@@ -155,7 +155,7 @@ const withThemeBackground = (theme: Theme, background: string | undefined, dark:
 const CONTRAST_SLIDER_HEIGHT = 34;
 
 /** The theme with Increase Contrast set, or off (the key dropped). */
-const withContrast = (theme: Theme, value: number | undefined): Theme => {
+const withContrast = (theme: Theme, value: Theme["contrast"]): Theme => {
   const { contrast: _previous, ...rest } = theme;
   return value === undefined
     ? rest
@@ -165,27 +165,51 @@ const withContrast = (theme: Theme, value: number | undefined): Theme => {
       };
 };
 
-/** Increase Contrast: a switch, and when on, a slider for how much the glass
- * cards are brightened (starting in the middle). */
+/** Increase Contrast: one switch, and when on, a slider per mode for how much
+ * the glass cards are brightened (each starting in the middle). */
 const IncreaseContrast = (props: {
   readonly width: number;
-  readonly value: number | undefined;
-  readonly onChange: (value: number | undefined) => void;
+  readonly value: Theme["contrast"];
+  readonly onChange: (value: Theme["contrast"]) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
+  const { value } = props;
   return (
-  <>
-    <View style={styles.backgroundRow}>
-      <Text style={styles.backgroundLabel}>Increase Contrast</Text>
-      <Switch value={props.value !== undefined} onValueChange={(on) => props.onChange(on ? CONTRAST_START : undefined)} />
-    </View>
-    {props.value === undefined ? null : (
-      <Host style={{ width: props.width, height: CONTRAST_SLIDER_HEIGHT }}>
-        <Slider value={props.value} min={0} max={1} step={0.05} onValueChange={props.onChange} />
-      </Host>
-    )}
-  </>
-);
+    <>
+      <View style={styles.backgroundRow}>
+        <Text style={styles.backgroundLabel}>Increase Contrast</Text>
+        <Switch
+          value={value !== undefined}
+          onValueChange={(on) => {
+            // The sliders come and go with the card growing and shrinking
+            // around them (a native layout animation: sizes, not transforms,
+            // so the glass keeps rendering), not snapping.
+            LayoutAnimation.configureNext(LayoutAnimation.create(250, "easeInEaseOut", "opacity"));
+            props.onChange(
+              on
+                ? {
+                    light: CONTRAST_START,
+                    dark: CONTRAST_START,
+                  }
+                : undefined,
+            );
+          }}
+        />
+      </View>
+      {value === undefined ? null : (
+        <>
+          <Text style={[styles.backgroundLabel, styles.contrastLabel]}>Light</Text>
+          <Host style={{ width: props.width, height: CONTRAST_SLIDER_HEIGHT }}>
+            <Slider value={value.light} min={0} max={1} step={0.05} onValueChange={(light) => props.onChange({ ...value, light })} />
+          </Host>
+          <Text style={[styles.backgroundLabel, styles.contrastLabel]}>Dark</Text>
+          <Host style={{ width: props.width, height: CONTRAST_SLIDER_HEIGHT }}>
+            <Slider value={value.dark} min={0} max={1} step={0.05} onValueChange={(dark) => props.onChange({ ...value, dark })} />
+          </Host>
+        </>
+      )}
+    </>
+  );
 };
 
 /** What "System" is for each mode: the grouped background iOS gives screens. */

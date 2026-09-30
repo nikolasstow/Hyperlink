@@ -306,9 +306,12 @@ export type Theme = {
   readonly backgroundLight?: string;
   /** The screens' background in dark mode, when not the system's. */
   readonly backgroundDark?: string;
-  /** Increase Contrast: how much the glass cards are brightened, 0 to 1;
-   * unset, off. */
-  readonly contrast?: number;
+  /** Increase Contrast: how much the glass cards are brightened in each mode,
+   * 0 to 1; unset, off. */
+  readonly contrast?: {
+    readonly light: number;
+    readonly dark: number;
+  };
 };
 
 /** Default code font — a guaranteed-present iOS monospace. */
@@ -333,7 +336,19 @@ export const parseTheme = (parsed: unknown): Theme | undefined => {
   const code = "code" in parsed ? parseCodeTheme(parsed.code) : undefined;
   const backgroundLight = "backgroundLight" in parsed && typeof parsed.backgroundLight === "string" ? parsed.backgroundLight : undefined;
   const backgroundDark = "backgroundDark" in parsed && typeof parsed.backgroundDark === "string" ? parsed.backgroundDark : undefined;
-  const contrast = "contrast" in parsed && typeof parsed.contrast === "number" ? parsed.contrast : undefined;
+  const contrast =
+    "contrast" in parsed &&
+    typeof parsed.contrast === "object" &&
+    parsed.contrast !== null &&
+    "light" in parsed.contrast &&
+    "dark" in parsed.contrast &&
+    typeof parsed.contrast.light === "number" &&
+    typeof parsed.contrast.dark === "number"
+      ? {
+          light: parsed.contrast.light,
+          dark: parsed.contrast.dark,
+        }
+      : undefined;
   return {
     primary,
     secondary,
