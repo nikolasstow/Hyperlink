@@ -112,7 +112,8 @@ export interface BarWindowProps {
   /** Tints the window's glass material. */
   readonly tintColor?: string;
   readonly detent: DetentMemory;
-  /** Nothing is drawn collapsed (it is not the bar itself). */
+  /** Out of sight collapsed (it is not the bar itself): parked off-screen,
+   * still mounted, so opening never builds its contents. */
   readonly hiddenCollapsed?: boolean;
   /** The tap-outside catcher's label. */
   readonly closeLabel: string;
@@ -157,7 +158,7 @@ export const barWindowRenders = (): number => {
   return count;
 };
 
-export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
+export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   renders += 1;
   const { open, instant, onClose, inputRef, detent, stop } = props;
   const insets = useSafeAreaInsets();
@@ -166,7 +167,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
   const glassScheme = scheme === "dark" ? "dark" : "light";
   // The app's one keyboard tracker (keyboardHeight.tsx).
   const kbHeight = useKeyboardHeightValue();
-  const { height: screenH } = useWindowDimensions();
+  const { height: screenH, width: screenW } = useWindowDimensions();
   const resting = composerRestingBottom(insets.bottom);
   const windowTop = Math.max(headerHeight, insets.top) + TOP_GAP;
 
@@ -178,8 +179,8 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
   const [lowered, setLowered] = React.useState(() => detent.frac() > 0.02);
   const [pillMode, setPillMode] = React.useState(() => atPillFrac(detent.frac()));
   const [abovePill, setAbovePill] = React.useState(() => !atPillFrac(detent.frac()));
-  // Drawn at all: always, unless hidden collapsed (then from opening until
-  // the collapse has finished).
+  // In sight: always, unless hidden collapsed (then from opening until the
+  // collapse has finished; parked off-screen otherwise).
   const [drawn, setDrawn] = React.useState(open || props.hiddenCollapsed !== true);
   const abovePillNow = useSharedValue(!atPillFrac(detent.frac()));
   // 0 collapsed → 1 open, by layout (height), never a transform.
@@ -409,8 +410,6 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
     opacity: grow.value,
   }));
 
-  if (!drawn) return null;
-
   const content = (
     <View style={styles.fill}>
       <GlassContainer style={styles.fill}>
@@ -448,7 +447,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
   );
 
   return (
-    <View style={styles.page} pointerEvents="box-none">
+    <View style={drawn ? styles.page : [styles.parked, { width: screenW }]} pointerEvents={drawn ? "box-none" : "none"}>
       {/* Tap outside to collapse (at full height; lowered, touches pass through
        * to what's behind). Reaches up over the screen from the bar. */}
       {open && !lowered ? (
@@ -513,6 +512,14 @@ const styles = StyleSheet.create({
   // no touch to a view outside its parent, so the grab bar was unreachable).
   page: {
     flex: 1,
+  },
+  // Collapsed out of sight: the page's size, off the screen's left (moved by
+  // layout; a transform on glass stops it rendering).
+  parked: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: "200%",
   },
   // The wrapper carries ONLY position and size — no borderRadius / overflow /
   // shadow, which would clip or composite the glass.

@@ -81,6 +81,14 @@ const load = async (client: OpencodeClient, directory: string | undefined): Prom
   return { options, defaultModel };
 };
 
+const sameModel = (a: ModelOption | undefined, b: ModelOption | undefined): boolean =>
+  a === undefined || b === undefined
+    ? a === b
+    : a.providerID === b.providerID && a.modelID === b.modelID && a.name === b.name && a.providerName === b.providerName;
+
+const sameCache = (a: Cache, b: Cache): boolean =>
+  a.options.length === b.options.length && a.options.every((option, index) => sameModel(option, b.options[index])) && sameModel(a.defaultModel, b.defaultModel);
+
 /**
  * Loads a directory's models afresh (one load at a time per directory),
  * keeping the last list if the load fails. Resolves to the list now known.
@@ -93,6 +101,10 @@ export const refreshModels = (client: OpencodeClient, directory: string | undefi
     .then(
       (cache): Cache | undefined => {
         const byDirectory = caches.get(client) ?? new Map<string | undefined, Cache>();
+        // The same list as before: keep it (and its identity), so nothing
+        // showing it re-renders.
+        const previous = byDirectory.get(directory);
+        if (previous !== undefined && sameCache(previous, cache)) return previous;
         byDirectory.set(directory, cache);
         caches.set(client, byDirectory);
         for (const listener of listeners) listener();

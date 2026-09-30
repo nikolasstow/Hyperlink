@@ -39,7 +39,7 @@ import {
   truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { InteractionManager, StyleSheet, TextInput, View } from "react-native";
 import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { CapsuleTabs } from "../modules/capsule-tabs";
 import { BarWindow, barWindowRenders, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
@@ -189,7 +189,7 @@ export const ModelWindow = (props: {
   readonly onClose: (reason: CloseReason) => void;
   /** Pulled to refresh: the server fetches the catalog now, then the list reloads. */
   readonly onRefresh: () => Promise<void>;
-}): React.ReactElement | null => {
+}): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { colors: themeColors } = useTheme();
@@ -204,6 +204,14 @@ export const ModelWindow = (props: {
   const selectedKey = props.selected !== undefined ? modelKey(props.selected) : undefined;
   const results = React.useMemo(() => matching(props.models, query), [props.models, query]);
   const searching = query.trim().length > 0;
+
+  // Built once the screen has settled (not as it mounts, and not as the
+  // window opens): the window stays mounted, parked, between openings.
+  const [built, setBuilt] = React.useState(false);
+  React.useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setBuilt(true));
+    return () => task.cancel();
+  }, []);
 
   // Each opening starts from an empty search.
   React.useEffect(() => {
@@ -282,9 +290,7 @@ export const ModelWindow = (props: {
           alignment="leading"
           modifiers={[
             padding({ all: pickFirst ? PICK_INSET : 0 }),
-            // DIAG(model-perf): glass card swapped for a plain fill, to test
-            // glass-on-glass as the frame drops' cause.
-            background("rgba(255,255,255,0.08)", shapes.roundedRectangle({ cornerRadius: CARD_RADIUS })),
+            glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
           ]}
         >
           {models.map((model, index) => (
@@ -318,43 +324,45 @@ export const ModelWindow = (props: {
       closeLabel="Close models"
       pillLowered={barsDrop}
       body={
-        <View style={styles.body}>
-          <Host style={styles.list} ignoreSafeArea="all">
-            <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
-              {searching ? (
-                results.length > 0 ? (
-                  rows(results, true, true)
+        built || props.open ? (
+          <View style={styles.body}>
+            <Host style={styles.list} ignoreSafeArea="all">
+              <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
+                {searching ? (
+                  results.length > 0 ? (
+                    rows(results, true, true)
+                  ) : (
+                    <Empty text="No models match" />
+                  )
                 ) : (
-                  <Empty text="No models match" />
-                )
-              ) : (
-                <TabView selection={current} onSelectionChange={setTab} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
-                  {tabs.map((t) => (
-                    <TabView.Tab key={t.id} value={t.id}>
-                      {t.models.length > 0 ? rows(t.models, t.showProvider, false) : <Empty text="Models you send with show here" />}
-                    </TabView.Tab>
-                  ))}
-                </TabView>
-              )}
-            </VStack>
-          </Host>
-          {/* The tabs, floating over the list just above the search. */}
-          <Reanimated.View style={[styles.tabsFloat, tabsStyle]} pointerEvents="box-none">
-            <Host style={styles.tabsHost} ignoreSafeArea="all">
-              {CapsuleTabs !== undefined ? (
-                <CapsuleTabs
-                  tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
-                  selection={current}
-                  tint={themeColors.bubbleGlassTint}
-                  sideMargin={SIDE}
-                  onSelect={setTab}
-                />
-              ) : (
-                <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
-              )}
+                  <TabView selection={current} onSelectionChange={setTab} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
+                    {tabs.map((t) => (
+                      <TabView.Tab key={t.id} value={t.id}>
+                        {t.models.length > 0 ? rows(t.models, t.showProvider, false) : <Empty text="Models you send with show here" />}
+                      </TabView.Tab>
+                    ))}
+                  </TabView>
+                )}
+              </VStack>
             </Host>
-          </Reanimated.View>
-        </View>
+            {/* The tabs, floating over the list just above the search. */}
+            <Reanimated.View style={[styles.tabsFloat, tabsStyle]} pointerEvents="box-none">
+              <Host style={styles.tabsHost} ignoreSafeArea="all">
+                {CapsuleTabs !== undefined ? (
+                  <CapsuleTabs
+                    tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
+                    selection={current}
+                    tint={themeColors.bubbleGlassTint}
+                    sideMargin={SIDE}
+                    onSelect={setTab}
+                  />
+                ) : (
+                  <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
+                )}
+              </Host>
+            </Reanimated.View>
+          </View>
+        ) : null
       }
       pill={
         <>
