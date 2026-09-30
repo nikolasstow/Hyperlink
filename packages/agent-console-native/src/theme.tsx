@@ -186,49 +186,60 @@ const SYSTEM_TEXT: TextColors = {
   placeholderText: colors.placeholderText,
 };
 
-/** The secondary text of each palette (iOS's): a colour at 60%, so what is
- * read is it blended over the background. */
-const SECONDARY_ALPHA = 0.6;
-const SECONDARY_DARK: readonly [number, number, number] = [60, 60, 67];
-const SECONDARY_LIGHT: readonly [number, number, number] = [235, 235, 245];
+type Rgb = readonly [number, number, number];
 
-/** Text for a light background, in either mode: iOS's light-mode values. */
-const TEXT_ON_LIGHT: TextColors = {
+/** Each side's text colours: the label, and the colour the dimmer roles
+ * (secondary, tertiary, placeholder) show at partial opacity (iOS's). */
+const DARK_TEXT = {
   label: "#000000",
-  secondaryLabel: "rgba(60,60,67,0.6)",
-  tertiaryLabel: "rgba(60,60,67,0.3)",
-  placeholderText: "rgba(60,60,67,0.3)",
-};
-
-/** Text for a dark background, in either mode: iOS's dark-mode values. */
-const TEXT_ON_DARK: TextColors = {
+  dim: [60, 60, 67],
+} satisfies { readonly label: string; readonly dim: Rgb };
+const LIGHT_TEXT = {
   label: "#FFFFFF",
-  secondaryLabel: "rgba(235,235,245,0.6)",
-  tertiaryLabel: "rgba(235,235,245,0.3)",
-  placeholderText: "rgba(235,235,245,0.3)",
-};
+  dim: [235, 235, 245],
+} satisfies { readonly label: string; readonly dim: Rgb };
+
+/** iOS's opacity for each dimmer role, the least it is ever shown at. */
+const SECONDARY_ALPHA = 0.6;
+const TERTIARY_ALPHA = 0.3;
+/** The contrast each must reach against the background (WCAG): body text for
+ * the secondary, large text for the tertiary and placeholders. */
+const SECONDARY_RATIO = 4.5;
+const TERTIARY_RATIO = 3;
 
 /** A translucent colour over an opaque one, as seen. */
-const blend = (
-  over: readonly [number, number, number],
-  alpha: number,
-  under: readonly [number, number, number],
-): readonly [number, number, number] => {
+const blend = (over: Rgb, alpha: number, under: Rgb): Rgb => {
   const mix = (a: number, b: number): number => a * alpha + b * (1 - alpha);
   return [mix(over[0], under[0]), mix(over[1], under[1]), mix(over[2], under[2])];
 };
 
-/** The text for a background: whichever palette's secondary text contrasts
- * more with it (WCAG ratio), judged on the secondary because it is the
- * hardest to read (60% of its colour, blended into the background); where it
- * reads, the full-strength label does too. A bright saturated colour gets dark
- * text, a deep one light text. */
+/** The least opacity, from iOS's up to full, at which `color` over the
+ * background reaches `ratio`; full when nothing short of it does. */
+const opacityFor = (color: Rgb, under: Rgb, from: number, ratio: number): number => {
+  const background = luminanceOf(under);
+  for (let alpha = from; alpha < 1; alpha += 0.05) {
+    if (contrastRatio(luminanceOf(blend(color, alpha, under)), background) >= ratio) return Math.round(alpha * 100) / 100;
+  }
+  return 1;
+};
+
+const rgba = ([r, g, b]: Rgb, alpha: number): string => `rgba(${r},${g},${b},${alpha})`;
+
+/** The text for a background, in either mode: dark or light, whichever label
+ * contrasts more with it (WCAG ratio), so a bright saturated colour gets dark
+ * text and a deep one light text; and the dimmer roles made more opaque, only
+ * as far as they need, to stay readable on it. */
 export const textFor = (background: string): TextColors => {
   const under = toRgb(background);
   const l = luminanceOf(under);
-  const darkSecondary = contrastRatio(luminanceOf(blend(SECONDARY_DARK, SECONDARY_ALPHA, under)), l);
-  const lightSecondary = contrastRatio(luminanceOf(blend(SECONDARY_LIGHT, SECONDARY_ALPHA, under)), l);
-  return darkSecondary >= lightSecondary ? TEXT_ON_LIGHT : TEXT_ON_DARK;
+  const side = contrastRatio(l, 0) >= contrastRatio(l, 1) ? DARK_TEXT : LIGHT_TEXT;
+  const tertiary = rgba(side.dim, opacityFor(side.dim, under, TERTIARY_ALPHA, TERTIARY_RATIO));
+  return {
+    label: side.label,
+    secondaryLabel: rgba(side.dim, opacityFor(side.dim, under, SECONDARY_ALPHA, SECONDARY_RATIO)),
+    tertiaryLabel: tertiary,
+    placeholderText: tertiary,
+  };
 };
 
 /** The text colours for the background: light text on a darkish colour, dark
@@ -238,8 +249,9 @@ export const textFor = (background: string): TextColors => {
 export const useTextColors = (): TextColors => {
   const { theme } = useTheme();
   const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
-  if (custom === undefined) return SYSTEM_TEXT;
-  return textFor(custom);
+  // One object per background, so styles built from it are rebuilt only when
+  // it changes.
+  return React.useMemo(() => (custom === undefined ? SYSTEM_TEXT : textFor(custom)), [custom]);
 };
 
 /** A component's styles built with the text colours for the background:
