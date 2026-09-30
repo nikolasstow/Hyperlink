@@ -57,9 +57,12 @@ const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
 /** The search's one line, sized so the pill is the bar's height. */
 const SEARCH_LINE_HEIGHT = 21;
 
-/** Where the model window opens (half, unless a drag left it elsewhere), for
- * the app's run. */
-const modelDetent = detentMemory(0.5);
+/** The model window's one stop below full: its height, in points (about a
+ * third of the screen). */
+const MODEL_STOP = 300;
+/** Where the model window opens (the stop, unless a drag left it at full),
+ * for the app's run. */
+const modelDetent = detentMemory(1);
 
 /** One page of the list. */
 interface ModelTab {
@@ -230,6 +233,7 @@ export const ModelWindow = (props: {
       tintColor={cardTint}
       detent={modelDetent}
       hiddenCollapsed
+      stop={MODEL_STOP}
       closeLabel="Close models"
       body={
         <Host style={styles.list} ignoreSafeArea="all">

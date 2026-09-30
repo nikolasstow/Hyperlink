@@ -108,6 +108,10 @@ export interface BarWindowProps {
   readonly pill: React.ReactNode;
   /** Covers the window's body (never the grab bar): Dubz's page swipe. */
   readonly bodyGesture?: GestureType;
+  /** One stop below full, as a window height (pt), in place of half and the
+   * pill: the window then rests at full or at this height, whatever the
+   * keyboard does. */
+  readonly stop?: number;
 }
 
 const atPillFrac = (frac: number): boolean => frac >= 0.98;
@@ -128,7 +132,7 @@ const pillProgress = (drag: number, maxDrag: number): number => {
 };
 
 export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
-  const { open, instant, onClose, inputRef, detent } = props;
+  const { open, instant, onClose, inputRef, detent, stop } = props;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const scheme = useColorScheme();
@@ -175,6 +179,18 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
     [screenH, windowTop, resting],
   );
 
+  /** With a stop: how far the top is lowered from full to rest there. */
+  const stopDragFor = React.useCallback(
+    (maxDrag: number): number => {
+      "worklet";
+      return stop === undefined ? maxDrag : Math.max(maxDrag + MIN_HEIGHT - stop, 0);
+    },
+    [stop],
+  );
+  // Resting at the stop: kept there, in points, as the keyboard's height moves
+  // the drag range.
+  const atStop = useSharedValue(false);
+
   const dismiss = React.useCallback(() => onClose("dismiss"), [onClose]);
 
   // The keyboard going down at the smallest detent closes it: it is the bar
@@ -191,7 +207,10 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
   useAnimatedReaction(
     () => kbHeight.value,
     (h, previous) => {
-      if (h > kbFull.value) kbFull.value = h;
+      if (h > kbFull.value) {
+        kbFull.value = h;
+        if (atStop.value) dragY.value = stopDragFor(maxDragFor(h));
+      }
       if (h === 0 && previous !== null && previous > 0) runOnJS(keyboardDown)();
     },
   );
@@ -218,9 +237,12 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
     // Land at the detent last left, sized from the keyboard height then (the
     // keyboard may not be up yet).
     const frac = detent.frac();
-    const pill = atPillFrac(frac);
-    dragY.value = frac * maxDragFor(detent.kbFull());
+    // With a stop, never the pill: full, or the stop.
+    const pill = stop === undefined && atPillFrac(frac);
     kbFull.value = Math.max(kbFull.value, detent.kbFull());
+    const resting = stop !== undefined && frac > 0.02;
+    atStop.value = resting;
+    dragY.value = stop === undefined ? frac * maxDragFor(detent.kbFull()) : resting ? stopDragFor(maxDragFor(kbFull.value)) : 0;
     handleT.value = pill ? 1 : 0;
     abovePillNow.value = !pill;
     setLowered(frac > 0.02);
@@ -236,7 +258,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
       inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, instant, inputRef, grow, dragY, kbFull, handleT, abovePillNow, maxDragFor, detent, hide]);
+  }, [open, instant, inputRef, grow, dragY, kbFull, handleT, abovePillNow, maxDragFor, stopDragFor, stop, atStop, detent, hide]);
 
   // Slide the handle to its new spot only after a drag settles.
   React.useEffect(() => {
@@ -260,7 +282,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
           const limit = maxDrag + DISMISS_ZONE;
           const next = dragStart.value + e.translationY;
           dragY.value = next < 0 ? 0 : next > limit ? limit : next;
-          const above = dragY.value < maxDrag - 4;
+          const above = stop !== undefined || dragY.value < maxDrag - 4;
           if (above !== abovePillNow.value) {
             abovePillNow.value = above;
             runOnJS(setAbovePill)(above);
@@ -273,7 +295,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
             runOnJS(dismiss)();
             return;
           }
-          const detents = [0, maxDrag * 0.5, maxDrag];
+          const detents = stop === undefined ? [0, maxDrag * 0.5, maxDrag] : [0, stopDragFor(maxDrag)];
           const projected = dragY.value + e.velocityY * 0.08;
           let target = 0;
           let best = 1e9;
@@ -286,7 +308,8 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
             }
           }
           dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-          const atPill = maxDrag > 0 && target >= maxDrag - 4;
+          atStop.value = stop !== undefined && target > 0;
+          const atPill = stop === undefined && maxDrag > 0 && target >= maxDrag - 4;
           abovePillNow.value = !atPill;
           runOnJS(setAbovePill)(!atPill);
           runOnJS(setLowered)(target > 4);
@@ -296,7 +319,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
         .onFinalize(() => {
           resizing.value = false;
         }),
-    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, dismiss, remember],
+    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, stopDragFor, stop, atStop, dismiss, remember],
   );
 
   // Swipe DOWN on the pill to dismiss the keyboard. Only a clear downward drag
