@@ -19,7 +19,7 @@ import { background, cornerRadius, font, foregroundStyle, frame, glassEffect, li
 import * as React from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, { Easing, FadeIn, LinearTransition, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { Easing, FadeIn, LinearTransition, runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
@@ -75,26 +75,57 @@ const ACTIONS_WIDTH = CIRCLE * 2 + CIRCLE_GAP * 3;
  * a tap), as in Messages' Mute and Delete: Mute (indigo), and in the red
  * circle, Archive (Unarchive on the Archived page). Delete is in the menu.
  */
+/** How far into the reveal each circle grows in: Archive (the nearer) over
+ * the first part, Mute over the last, overlapping a little. */
+const ARCHIVE_SPAN: readonly [number, number] = [0, 0.55];
+const MUTE_SPAN: readonly [number, number] = [0.45, 1];
+/** A circle's size before it grows in. */
+const CIRCLE_START_SCALE = 0.1;
+
+/** A circle's growth through its span of the reveal (0 to 1), from the swipe's
+ * travel: it sits at its final place throughout, and only grows and fades in
+ * there, from a tenth of its size and nothing. */
+const useRevealStyle = (travel: SharedValue<number>, [from, to]: readonly [number, number]) =>
+  useAnimatedStyle(() => {
+    const revealed = -travel.value / ACTIONS_WIDTH;
+    const raw = (revealed - from) / (to - from);
+    const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
+    return {
+      opacity: p,
+      transform: [{ scale: CIRCLE_START_SCALE + (1 - CIRCLE_START_SCALE) * p }],
+    };
+  });
+
 const SwipeActions = (props: {
+  /** How far the card has been swiped (negative, to the left). */
+  readonly travel: SharedValue<number>;
   readonly archived: boolean;
   readonly muted: boolean;
   readonly onMute: () => void;
   readonly onArchive: () => void;
-}): React.ReactElement => (
-  <View style={styles.actions}>
-    <Pressable style={[styles.circle, styles.muteCircle]} onPress={props.onMute} accessibilityRole="button" accessibilityLabel={props.muted ? "Unmute" : "Mute"}>
-      <SystemIcon name={props.muted ? "bell.fill" : "bell.slash.fill"} size={22} color="#FFFFFF" />
-    </Pressable>
-    <Pressable
-      style={[styles.circle, styles.archiveCircle]}
-      onPress={props.onArchive}
-      accessibilityRole="button"
-      accessibilityLabel={props.archived ? "Unarchive" : "Archive"}
-    >
-      <SystemIcon name={props.archived ? "tray.and.arrow.up.fill" : "archivebox.fill"} size={22} color="#FFFFFF" />
-    </Pressable>
-  </View>
-);
+}): React.ReactElement => {
+  const muteStyle = useRevealStyle(props.travel, MUTE_SPAN);
+  const archiveStyle = useRevealStyle(props.travel, ARCHIVE_SPAN);
+  return (
+    <View style={styles.actions}>
+      <Animated.View style={muteStyle}>
+        <Pressable style={[styles.circle, styles.muteCircle]} onPress={props.onMute} accessibilityRole="button" accessibilityLabel={props.muted ? "Unmute" : "Mute"}>
+          <SystemIcon name={props.muted ? "bell.fill" : "bell.slash.fill"} size={22} color="#FFFFFF" />
+        </Pressable>
+      </Animated.View>
+      <Animated.View style={archiveStyle}>
+        <Pressable
+          style={[styles.circle, styles.archiveCircle]}
+          onPress={props.onArchive}
+          accessibilityRole="button"
+          accessibilityLabel={props.archived ? "Unarchive" : "Archive"}
+        >
+          <SystemIcon name={props.archived ? "tray.and.arrow.up.fill" : "archivebox.fill"} size={22} color="#FFFFFF" />
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+};
 
 const summaryLabel = (role: "user" | "assistant", text: string): string => (role === "user" ? `You: ${text}` : text);
 
@@ -188,8 +219,9 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
       friction={1.4}
       overshootRight={false}
       rightThreshold={ACTIONS_WIDTH / 3}
-      renderRightActions={() => (
+      renderRightActions={(_progress, travel) => (
         <SwipeActions
+          travel={travel}
           archived={props.archived === true}
           muted={props.muted}
           onMute={() => {
