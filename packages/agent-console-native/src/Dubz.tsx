@@ -199,9 +199,6 @@ export interface DubzPageProps {
   readonly pageBack?: PageBack;
 }
 
-/** EXPERIMENT switch while narrowing the drag stutter. */
-const SUGGESTIONS_ON = false;
-
 /** Clamp to [0, 1]. */
 const unit = (value: number): number => {
   "worklet";
@@ -422,14 +419,16 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     [open, pageBack, pageX, begin, turn, stay, screenW],
   );
 
-  /** The window's height: the bar's collapsed, growing to the detent open. */
-  const windowHeight = (): number => {
-    "worklet";
+  // The window's height: the bar's collapsed, growing to the detent open.
+  // Computed right here, from shared values and the memoized maxDragFor only:
+  // a helper function made fresh each render, called from this style, made
+  // Reanimated rebuild the style on every re-render (the screens behind
+  // re-render all the time), and every rebuild hitched the drag.
+  const windowStyle = useAnimatedStyle(() => {
     const maxDrag = maxDragFor(kbFull.value);
     const detent = Math.max(maxDrag + MIN_HEIGHT - dragY.value, MIN_HEIGHT);
-    return MIN_HEIGHT + (detent - MIN_HEIGHT) * grow.value;
-  };
-  const windowStyle = useAnimatedStyle(() => ({ height: windowHeight() }));
+    return { height: MIN_HEIGHT + (detent - MIN_HEIGHT) * grow.value };
+  });
 
 
   // How open the window reads: 0 collapsed or at the smallest detent (the
@@ -487,16 +486,17 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
                 tintColor="rgba(0,0,0,0.18)"
                 colorScheme={glassScheme}
               >
-                {/* EXPERIMENT (narrowing the drag stutter): suggestions off. */}
-              {SUGGESTIONS_ON ? (
-                <View style={styles.suggestionsArea} pointerEvents={open ? "box-none" : "none"}>
-                  <View style={styles.suggestions}>
-                    {suggestions.map((suggestion) => (
-                      <Suggestion key={suggestion.kind} suggestion={suggestion} />
-                    ))}
-                  </View>
+                {/* What Dubz suggests: the space above the pill, which alone is
+               * cropped (no glass in it; nothing above the pill's glass ever
+               * clips it). Its contents sit at its bottom, on the pill's top,
+               * and never move; the window's top only reveals or hides them. */}
+              <View style={styles.suggestionsArea} pointerEvents={open ? "box-none" : "none"}>
+                <View style={styles.suggestions}>
+                  {suggestions.map((suggestion) => (
+                    <Suggestion key={suggestion.kind} suggestion={suggestion} />
+                  ))}
                 </View>
-              ) : null}
+              </View>
               {/* The pill sits at the window's bottom, a direct child of the
                  * window's glass: the bar collapsed, the window's composer open. */}
                 <Reanimated.View style={pillWrapStyle}>
