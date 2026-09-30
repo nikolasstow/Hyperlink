@@ -65,6 +65,10 @@ const timeAgo = (ms: number): string => {
   return `${days}d ago`;
 };
 
+/** The Delay stop nearest a point on the slider's track of seconds. */
+const nearestStop = (value: number): number =>
+  RUN_DELAY_STOPS.reduce((best, stop) => (Math.abs(stop - value) < Math.abs(best - value) ? stop : best), RUN_DELAY_STOPS[0] ?? value);
+
 /** The countdown slider's box: a set height; the card's inner width. */
 const SLIDER_HEIGHT = 34;
 
@@ -389,17 +393,13 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           </View>
           {runDelayOn ? (
             <Host style={{ width: windowWidth - 32 - 28, height: SLIDER_HEIGHT }}>
-              {/* The slider moves between the stops by their place, not their
-               * seconds: 1, 2, 3, 5, 10, 15, 30, evenly spaced. */}
+              {/* A track of seconds (1 to 30), the thumb snapping to the
+               * nearest stop: 1, 2, 3, 5, 10, 15, 30. */}
               <Slider
-                value={Math.max(0, RUN_DELAY_STOPS.indexOf(runCountdown))}
-                min={0}
-                max={RUN_DELAY_STOPS.length - 1}
-                step={1}
-                onValueChange={(stop) => {
-                  const seconds = RUN_DELAY_STOPS[Math.round(stop)];
-                  if (seconds !== undefined) setRunCountdownSeconds(seconds);
-                }}
+                value={runCountdown}
+                min={RUN_DELAY_STOPS[0]}
+                max={RUN_DELAY_STOPS[RUN_DELAY_STOPS.length - 1]}
+                onValueChange={(value) => setRunCountdownSeconds(nearestStop(value))}
               />
             </Host>
           ) : null}
