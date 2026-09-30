@@ -79,7 +79,6 @@ export const PluginsScreen = (props: Props): React.ReactElement => {
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={styles.hint}>Plugins add pages to your repos’ menus and tools to Dubz. Installing new ones from the store is coming next.</Text>
         </>
       )}
     </ScrollView>

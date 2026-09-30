@@ -204,9 +204,6 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
               </TouchableOpacity>
             ))}
           </View>
-          <Text style={styles.hint}>
-            A key this theme does not set inherits VS Code’s default for a {theme.type} theme.
-          </Text>
         </>
       )}
     </ScrollView>

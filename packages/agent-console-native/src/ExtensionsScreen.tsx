@@ -106,7 +106,6 @@ export const ExtensionsScreen = (): React.ReactElement => {
         <Text style={styles.sectionLabel}>Install from Marketplace</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>A publisher.extension id (e.g. dracula-theme.theme-dracula) or a marketplace URL.</Text>
           <View style={styles.installRow}>
             <TextInput
               style={styles.input}

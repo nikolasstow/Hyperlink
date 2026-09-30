@@ -363,7 +363,6 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                 />
               </View>
             </View>
-            <Text style={styles.hint}>Which appearance this theme is written for. Type decides where it is offered.</Text>
 
             <Text style={styles.sectionLabel}>Colors · {colorCount} set</Text>
             <View style={styles.card}>

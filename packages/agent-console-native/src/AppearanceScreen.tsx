@@ -519,26 +519,22 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
           onUninstall={uninstallExtension}
           onCreate={() => props.navigation.navigate("ThemeEditor", {})}
         />
-        <Text style={styles.hint}>Touch and hold a theme to edit, duplicate, export, or remove it.</Text>
 
         <Text style={styles.sectionLabel}>Primary color</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>The send button, and the shade of your chat bubbles.</Text>
           <ColorSwatches value={theme.primary} themeColor={anchor.primary} onChange={(color) => setTheme({ ...theme, primary: color })} />
         </View>
 
         <Text style={styles.sectionLabel}>Secondary color</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>Accents like the unread indicator.</Text>
           <ColorSwatches value={theme.secondary} themeColor={anchor.secondary} onChange={(color) => setTheme({ ...theme, secondary: color })} />
         </View>
 
         <Text style={styles.sectionLabel}>Background</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>Behind every screen, in each mode. System follows iOS.</Text>
           <BackgroundRow
             label="Light"
             value={theme.backgroundLight}
@@ -589,7 +585,6 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>Preview</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>How code looks with the enabled theme and font.</Text>
           <CodeBlock code={PREVIEW_CODE} lang="typescript" theme={previewTheme} fontFamily={theme.codeFont} />
         </View>
     </ScrollView>

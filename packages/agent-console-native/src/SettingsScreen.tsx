@@ -195,7 +195,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Appearance</Text>
-              <Text style={styles.hint}>Theme and accent colors.</Text>
             </View>
             <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
@@ -205,7 +204,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Extensions</Text>
-              <Text style={styles.hint}>Install VS Code themes and icons.</Text>
             </View>
             <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
@@ -215,7 +213,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Plugins</Text>
-              <Text style={styles.hint}>Installed plugins, the pages they add, and what they can do.</Text>
             </View>
             <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
@@ -227,7 +224,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <View style={styles.linkRow}>
             <View style={styles.linkText}>
               <Text style={styles.fieldLabel}>Assistant Button</Text>
-              <Text style={styles.hint}>Show the assistant button, and where it appears.</Text>
             </View>
             <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
@@ -237,7 +233,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <View style={styles.card}>
           <CardGlass />
           <Text style={styles.fieldLabel}>Root folder</Text>
-          <Text style={styles.hint}>Base path for discovery, new clones, and new worktrees.</Text>
           <TextInput
             style={styles.input}
             value={rootDirDraft}
@@ -281,10 +276,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <View style={styles.card}>
           <CardGlass />
           <Text style={styles.fieldLabel}>Path template</Text>
-          <Text style={styles.hint}>
-            Where clone / create puts the main checkout. Default keeps it beside linked worktrees
-            ({"{root}/{repo}/main"}), not as the parent of them. Placeholders: {"{root}"}, {"{repo}"}.
-          </Text>
           <TextInput
             style={styles.input}
             value={repoTemplateDraft}
@@ -307,10 +298,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <View style={styles.card}>
           <CardGlass />
           <Text style={styles.fieldLabel}>Path template</Text>
-          <Text style={styles.hint}>
-            Where “Create new…” puts extra checkouts. Default is a sibling of main
-            ({"{root}/{repo}/worktrees/{name}"}). Placeholders: {"{root}"}, {"{repo}"}, {"{name}"}.
-          </Text>
           <TextInput
             style={styles.input}
             value={worktreeTemplateDraft}
@@ -332,7 +319,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>When opening a repo</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>Which worktree the composer selects after you pick a repo.</Text>
           {(
             [
               { value: "main", title: "Main checkout", detail: "Always the primary worktree" },
@@ -347,7 +333,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             >
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>{option.title}</Text>
-                <Text style={styles.hint}>{option.detail}</Text>
               </View>
               {worktreePref === option.value ? (
                 <SystemIcon name="checkmark" size={15} color={colors.tint} />
@@ -377,15 +362,11 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
               ) : null}
             </TouchableOpacity>
           ))}
-          <Text style={[styles.hint, styles.optionFooter]}>
-            Each session can still be switched from its own menu; that choice lasts until the app restarts.
-          </Text>
         </View>
 
         <Text style={styles.sectionLabel}>Scripts</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>Tapping a script counts down before it runs, so a stray tap starts nothing. Tap the ring to stop it.</Text>
           {runCountdownChoices.map((choice, index) => (
             <TouchableOpacity key={choice} style={[styles.optionRow, index > 0 && styles.optionRowBorder]} activeOpacity={0.6} onPress={() => setRunCountdownSeconds(choice)}>
               <Text style={styles.rowTitle}>{choice === 1 ? "1 second" : `${choice} seconds`}</Text>
@@ -408,10 +389,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>Notifications</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.hint}>
-            Alerts when a run finishes or needs approval while the app is closed. iOS only shows its permission
-            prompt once per install, so if it was dismissed, this is the way back to it.
-          </Text>
           <TouchableOpacity
             disabled={pushBusy}
             activeOpacity={0.6}

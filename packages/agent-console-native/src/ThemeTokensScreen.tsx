@@ -101,11 +101,6 @@ export const ThemeTokensScreen = (props: Props): React.ReactElement => {
           </TouchableOpacity>
         )}
       </View>
-      {readonly ? null : (
-        <Text style={styles.hint}>
-          Rules apply in order and later ones win, so a rule added here overrides the ones above it.
-        </Text>
-      )}
     </ScrollView>
   );
 };

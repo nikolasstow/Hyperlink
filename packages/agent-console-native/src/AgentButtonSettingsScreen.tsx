@@ -43,10 +43,6 @@ export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => 
           <Switch value={settings.enabled} onValueChange={setAgentButtonEnabled} />
         </View>
       </View>
-      <Text style={styles.hint}>
-        {AGENT_NAME} is the app-wide assistant, a page of the bottom bar. Turn this off to leave it out
-        everywhere; turn it on to choose where it appears below.
-      </Text>
 
       <Text style={styles.sectionLabel}>Show in</Text>
       <View style={styles.card}>
@@ -62,7 +58,6 @@ export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => 
           </View>
         ))}
       </View>
-      <Text style={styles.hint}>Each place {AGENT_NAME} can be a page of the bottom bar. Applies only while {AGENT_NAME} is on.</Text>
     </ScrollView>
   );
 };

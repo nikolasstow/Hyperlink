@@ -195,10 +195,6 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
           </View>
         ))}
       </View>
-      <Text style={styles.hint}>
-        A VS Code token rule carries a foreground and a font style. There is no background, and the code
-        typeface is an app setting rather than part of a theme.
-      </Text>
 
       {readonly ? null : (
         <TouchableOpacity style={styles.deleteButton} activeOpacity={0.6} onPress={removeRule}>
