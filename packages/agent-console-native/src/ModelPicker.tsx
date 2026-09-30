@@ -51,9 +51,6 @@ const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
 /** The list's side margin, for the tabs and the list alike. */
 const SIDE = 16;
-/** The list's top inset: the grab bar's gap above it, kept as it was when the
- * bar moved up. */
-const LIST_TOP = 5;
 const TAB_HEIGHT = 34;
 const TAB_TITLE_MAX_WIDTH = 200;
 const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
@@ -213,7 +210,7 @@ export const ModelWindow = (props: {
         alignment="leading"
         modifiers={[
           glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
-          padding({ horizontal: SIDE, top: LIST_TOP }),
+          padding({ horizontal: SIDE, top: SIDE }),
         ]}
       >
         {models.map((model, index) => (
