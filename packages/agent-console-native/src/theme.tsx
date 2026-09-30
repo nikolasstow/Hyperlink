@@ -142,14 +142,12 @@ export const useScreenBackground = (kind: "grouped" | "plain" = "grouped"): Colo
 export const luminance = (hex: string): number => {
   const channel = (value: number): number => {
     const c = value / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
   const [r, g, b] = toRgb(hex);
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 };
 
-/** Above this luminance a background counts as light. */
-const LIGHT_BACKGROUND = 0.4;
 /** Where Increase Contrast's slider starts when turned on: the middle. */
 export const CONTRAST_START = 0.5;
 /** The glass's brightening at full contrast. */
@@ -163,6 +161,11 @@ export const useCardTint = (): string | undefined => {
   const contrast = theme.contrast?.[mode];
   return contrast === undefined || contrast <= 0 ? undefined : `rgba(255,255,255,${(MAX_BRIGHTEN_ALPHA * contrast).toFixed(3)})`;
 };
+
+/** WCAG contrast ratio between two colours' luminances, 1 (none) to 21. The
+ * 0.05 is the display's flare, which keeps near-black from reading as
+ * infinitely far from everything. */
+export const contrastRatio = (a: number, b: number): number => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 
 /** The text colours, the four iOS text colours' roles. */
 export interface TextColors {
@@ -197,6 +200,19 @@ const TEXT_ON_DARK: TextColors = {
   placeholderText: "rgba(235,235,245,0.3)",
 };
 
+/** Black and white, the two text colours' luminances. */
+const BLACK = 0;
+const WHITE = 1;
+
+/** The text for a background: whichever of dark and light text contrasts
+ * more with it (WCAG ratio), so a bright saturated colour still gets dark text
+ * and a deep one light text. They tie at a luminance of about 0.18, well
+ * below middle grey: people see mid tones as lighter than they measure. */
+export const textFor = (background: string): TextColors => {
+  const l = luminance(background);
+  return contrastRatio(l, BLACK) >= contrastRatio(l, WHITE) ? TEXT_ON_LIGHT : TEXT_ON_DARK;
+};
+
 /** The text colours for the background: light text on a darkish colour, dark
  * text on a light one, whatever the mode (a dark background in light mode
  * still wants light text; the mode is untouched). With the system's
@@ -205,7 +221,7 @@ export const useTextColors = (): TextColors => {
   const { theme } = useTheme();
   const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
   if (custom === undefined) return SYSTEM_TEXT;
-  return luminance(custom) > LIGHT_BACKGROUND ? TEXT_ON_LIGHT : TEXT_ON_DARK;
+  return textFor(custom);
 };
 
 /** A component's styles built with the text colours for the background:
