@@ -51,6 +51,8 @@ const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
 /** The list's side margin, for the tabs and the list alike. */
 const SIDE = 16;
+/** The list's bottom margin, above the tabs. */
+const LIST_BOTTOM = 18;
 const TAB_HEIGHT = 34;
 const TAB_TITLE_MAX_WIDTH = 200;
 const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
@@ -210,7 +212,7 @@ export const ModelWindow = (props: {
         alignment="leading"
         modifiers={[
           glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
-          padding({ horizontal: SIDE, top: SIDE, bottom: SIDE }),
+          padding({ horizontal: SIDE, top: SIDE, bottom: LIST_BOTTOM }),
         ]}
       >
         {models.map((model, index) => (
