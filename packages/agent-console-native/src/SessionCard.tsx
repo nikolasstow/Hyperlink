@@ -64,9 +64,11 @@ export type SessionCardProps = {
   readonly onMute: () => void;
 };
 
-/** The swipe actions, as Messages draws them: circles beside the card. */
-const CIRCLE = 58;
-const CIRCLE_GAP = 12;
+/** The swipe actions, as Messages draws them: circles beside the card, its
+ * sizes (measured from Messages). */
+const CIRCLE = 46;
+const CIRCLE_GAP = 10;
+const ICON = 18;
 /** Room the revealed actions take: both circles, the gaps around them. */
 const ACTIONS_WIDTH = CIRCLE * 2 + CIRCLE_GAP * 3;
 
@@ -121,7 +123,7 @@ const SwipeActions = (props: {
     <Animated.View style={[styles.actions, actionsStretch]}>
       <Animated.View style={muteStyle}>
         <Pressable style={[styles.circle, styles.muteCircle]} onPress={props.onMute} accessibilityRole="button" accessibilityLabel={props.muted ? "Unmute" : "Mute"}>
-          <SystemIcon name={props.muted ? "bell.fill" : "bell.slash.fill"} size={22} color="#FFFFFF" />
+          <SystemIcon name={props.muted ? "bell.fill" : "bell.slash.fill"} size={ICON} color="#FFFFFF" />
         </Pressable>
       </Animated.View>
       <Animated.View style={archiveStyle}>
@@ -131,7 +133,7 @@ const SwipeActions = (props: {
           accessibilityRole="button"
           accessibilityLabel={props.archived ? "Unarchive" : "Archive"}
         >
-          <SystemIcon name={props.archived ? "tray.and.arrow.up.fill" : "archivebox.fill"} size={22} color="#FFFFFF" />
+          <SystemIcon name={props.archived ? "tray.and.arrow.up.fill" : "archivebox.fill"} size={ICON} color="#FFFFFF" />
         </AnimatedPressable>
       </Animated.View>
     </Animated.View>
@@ -335,6 +337,6 @@ const styles = StyleSheet.create({
   // capsule's leading side.
   archiveStretchable: {
     alignItems: "flex-start",
-    paddingLeft: (CIRCLE - 22) / 2,
+    paddingLeft: (CIRCLE - ICON) / 2,
   },
 });
