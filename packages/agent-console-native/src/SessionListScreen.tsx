@@ -17,7 +17,6 @@ import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { getApiAddress } from "./settings";
 import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
-import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
@@ -29,10 +28,13 @@ import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessi
 import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { relativeTime } from "./time";
 import { useSessionActivity } from "./useSessionActivity";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SessionList">;
 
 export const SessionListScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { repo, worktree } = props.route.params;
   const { client, address } = useAppContext();
   const headerHeight = useHeaderHeight();
@@ -99,7 +101,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
         itemLayoutAnimation={LinearTransition.duration(LAYOUT_MS)}
         data={listed}
         keyExtractor={(session) => session.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={textColors.secondaryLabel} />}
         contentContainerStyle={{ paddingTop: headerHeight + 8, paddingBottom: 40 }}
         ListEmptyComponent={<Text style={styles.empty}>No sessions.</Text>}
         renderItem={({ item }) => (
@@ -129,7 +131,8 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -137,7 +140,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     paddingHorizontal: 16,
   },
 });

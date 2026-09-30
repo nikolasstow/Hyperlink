@@ -63,6 +63,7 @@ import { changeCollection, loadCollection, useCollection, type CollectionData } 
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { ensureWorkspace } from "./extensionViewsStore";
+import { type TextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Collection">;
 
@@ -340,7 +341,9 @@ const Chips = (props: {
   readonly categories: ReadonlyArray<Category>;
   readonly selected: string | undefined;
   readonly onSelect: (category: string | undefined) => void;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
     {[undefined, ...props.categories].map((category) => {
       const id = category?.id;
@@ -353,6 +356,7 @@ const Chips = (props: {
     })}
   </ScrollView>
 );
+};
 
 /** Where the plugin's search beyond the collection stands. */
 type Search =
@@ -380,6 +384,7 @@ type Sheet =
   | { readonly kind: "categories"; readonly items: ReadonlyArray<CollectionItem> };
 
 export const CollectionScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const { page, title, view } = props.route.params;
   // A worktree page: it shows the repo's primary worktree (primaryWorktree.ts).
   const { dir } = usePrimaryWorktree(props.route.params.repo, props.route.params.dir);
@@ -1144,7 +1149,8 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   // Grouped gray, so white rows and grid tiles stand out from it (white
   // tiles on a white page were invisible).
   root: {
@@ -1176,7 +1182,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.tint,
   },
   chipLabel: {
-    color: colors.label,
+    color: text.label,
     fontSize: 14,
   },
   chipLabelOn: {
@@ -1184,7 +1190,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     textAlign: "center",
     marginTop: 32,
@@ -1196,11 +1202,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   message: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   detail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontFamily: "Menlo",
     textAlign: "center",
@@ -1226,7 +1232,7 @@ const styles = StyleSheet.create({
   },
   selectionCount: {
     flex: 1,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   selectionAction: {

@@ -21,10 +21,12 @@ import {
 import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
+import { type TextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AgentButtonSettings">;
 
 export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const settings = useAgentButtonSettings();
 
@@ -65,7 +67,8 @@ export const AgentButtonSettingsScreen = (_props: Props): React.ReactElement => 
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -73,7 +76,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginTop: 24,
@@ -99,14 +102,14 @@ const styles = StyleSheet.create({
     borderTopColor: colors.separator,
   },
   rowTitle: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   rowTitleDim: {
-    color: colors.tertiaryLabel,
+    color: text.tertiaryLabel,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 7,

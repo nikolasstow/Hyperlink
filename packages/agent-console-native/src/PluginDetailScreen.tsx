@@ -18,10 +18,13 @@ import { refreshPlugins, usePlugins } from "./pluginsStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PluginDetail">;
 
 export const PluginDetailScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { id, name } = props.route.params;
   const { navigation } = props;
   const insets = useSafeAreaInsets();
@@ -53,7 +56,7 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
     return (
       <View style={[styles.root, styles.center]}>
         {load.kind === "loading" ? (
-          <ActivityIndicator color={colors.secondaryLabel} />
+          <ActivityIndicator color={textColors.secondaryLabel} />
         ) : (
           <>
             <Text style={styles.hint}>Couldn’t load this plugin.</Text>
@@ -128,7 +131,8 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -142,7 +146,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginTop: 24,
@@ -175,31 +179,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowTitle: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   rowMeta: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     marginTop: 2,
   },
   rowValue: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 16,
   },
   rowValueMono: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontFamily: "Menlo",
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     marginTop: 8,
     marginHorizontal: 4,
   },
   detail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontFamily: "Menlo",
     textAlign: "center",

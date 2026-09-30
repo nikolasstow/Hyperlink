@@ -22,6 +22,7 @@ import { colors } from "./colors";
 import { asHtmlPayload, HtmlToolBlock } from "./HtmlToolBlock";
 import { useCollapsible } from "./CollapsibleParts";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
 /** Same timings as ReasoningBlock, so the two read as one system. */
@@ -37,6 +38,8 @@ const filePathOf = (input: Record<string, unknown>): string | undefined => {
 };
 
 export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { part } = props;
   const path = filePathOf(part.state.input);
   const isEditFamily = EDIT_FAMILY.has(part.tool);
@@ -87,7 +90,7 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
           </Text>
         ) : null}
         {part.state.status === "completed" && !isEditFamily ? <Text style={styles.meta}>{lineCount} lines</Text> : null}
-        <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={colors.secondaryLabel} />
+        <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={textColors.secondaryLabel} />
       </TouchableOpacity>
       {open ? (
         <Animated.View entering={FadeIn.duration(COLLAPSE_MS)} exiting={FadeOut.duration(EXIT_MS)}>
@@ -98,7 +101,8 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     marginTop: 8,
   },
@@ -113,27 +117,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   toolName: {
-    color: colors.label,
+    color: text.label,
     fontSize: 13,
     fontWeight: "600",
   },
   path: {
     flex: 1,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
   },
   meta: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
   },
   status: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     paddingHorizontal: 10,
     paddingBottom: 10,
   },
   output: {
-    color: colors.label,
+    color: text.label,
     fontSize: 12,
     fontFamily: "Menlo",
     paddingHorizontal: 10,

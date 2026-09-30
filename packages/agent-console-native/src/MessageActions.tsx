@@ -18,6 +18,7 @@ import { Clipboard, Share, StyleSheet, TouchableOpacity, View } from "react-nati
 import { colors } from "./colors";
 import { SystemIcon } from "./SystemIcon";
 import type { TranscriptMessage } from "./useSessionStream";
+import { useTextColors } from "./theme";
 
 /** How long the button stays confirming after a copy. */
 const COPIED_FEEDBACK_MS = 1400;
@@ -30,6 +31,7 @@ export const textOf = (message: TranscriptMessage): string =>
     .trim();
 
 export const MessageActions = (props: { readonly message: TranscriptMessage }): React.ReactElement | null => {
+  const textColors = useTextColors();
   const [copied, setCopied] = React.useState(false);
   const text = textOf(props.message);
 
@@ -58,7 +60,7 @@ export const MessageActions = (props: { readonly message: TranscriptMessage }): 
         <SystemIcon
           name={copied ? "checkmark" : "doc.on.doc"}
           size={15}
-          color={copied ? colors.brand : colors.secondaryLabel}
+          color={copied ? colors.brand : textColors.secondaryLabel}
         />
       </TouchableOpacity>
 
@@ -70,7 +72,7 @@ export const MessageActions = (props: { readonly message: TranscriptMessage }): 
           void Share.share({ message: text });
         }}
       >
-        <SystemIcon name="square.and.arrow.up" size={15} color={colors.secondaryLabel} />
+        <SystemIcon name="square.and.arrow.up" size={15} color={textColors.secondaryLabel} />
       </TouchableOpacity>
     </View>
   );

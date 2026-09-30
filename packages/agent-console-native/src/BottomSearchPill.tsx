@@ -29,10 +29,10 @@ import Reanimated, {
 } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors } from "./colors";
 import { useKeyboardHeightValue } from "./keyboardHeight";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { composerRestingBottom } from "./useKeyboardSlide";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 /** Height of the pill. Callers add it to their list's bottom inset.
  * Matched to the main composer pill's collapsed height (shared constant). */
@@ -105,6 +105,8 @@ export const BottomSearchPill = (props: {
   readonly placeholder: string;
   readonly hidden: SharedValue<number>;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const keyboardHeight = useKeyboardHeightValue();
@@ -133,13 +135,13 @@ export const BottomSearchPill = (props: {
              * glyph off-centre on first mount here, fixing only on
              * background/foreground. A vector icon flex-centres reliably and
              * still takes the adaptive PlatformColor. */}
-            <Feather name="search" size={21} color={colors.label} />
+            <Feather name="search" size={21} color={textColors.label} />
             <TextInput
               style={styles.input}
               value={props.value}
               onChangeText={props.onChangeText}
               placeholder={props.placeholder}
-              placeholderTextColor={colors.placeholderText}
+              placeholderTextColor={textColors.placeholderText}
               returnKeyType="search"
               autoCorrect={false}
               autoCapitalize="none"
@@ -152,7 +154,8 @@ export const BottomSearchPill = (props: {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   wrap: {
     position: "absolute",
     left: 0,
@@ -181,7 +184,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     padding: 0,
   },

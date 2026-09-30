@@ -16,6 +16,7 @@ import * as React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors } from "./colors";
 import { PILL_DOT_GAP, PILL_DOT_SIZE, PILL_FONT_SIZE, PILL_FONT_WEIGHT, PILL_HEIGHT, PILL_PAD_H, PILL_RADIUS } from "./titlePillStyle";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 export const TitlePill = (props: {
   readonly title: string;
@@ -25,6 +26,8 @@ export const TitlePill = (props: {
   /** Trailing status dot: omit for no dot. */
   readonly dot?: "connected" | "disconnected";
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const glass = props.glass ?? true;
   return (
     <View style={styles.wrap}>
@@ -39,13 +42,14 @@ export const TitlePill = (props: {
         {props.title}
       </Text>
       {props.dot !== undefined ? (
-        <View style={[styles.dot, { backgroundColor: props.dot === "connected" ? colors.brand : colors.secondaryLabel }]} />
+        <View style={[styles.dot, { backgroundColor: props.dot === "connected" ? colors.brand : textColors.secondaryLabel }]} />
       ) : null}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   wrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -65,7 +69,7 @@ const styles = StyleSheet.create({
     borderRadius: PILL_RADIUS,
   },
   text: {
-    color: colors.label,
+    color: text.label,
     fontSize: PILL_FONT_SIZE,
     fontWeight: PILL_FONT_WEIGHT,
   },

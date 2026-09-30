@@ -46,6 +46,7 @@ import {
 } from "./settings";
 import { runCountdownChoices, setRunCountdownSeconds, useRunCountdownSeconds } from "./runCountdown";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
@@ -61,6 +62,8 @@ const timeAgo = (ms: number): string => {
 };
 
 export const SettingsScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const runCountdown = useRunCountdownSeconds();
   const insets = useSafeAreaInsets();
   const { address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
@@ -194,7 +197,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
               <Text style={styles.fieldLabel}>Appearance</Text>
               <Text style={styles.hint}>Theme and accent colors.</Text>
             </View>
-            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Extensions")} activeOpacity={0.6}>
@@ -204,7 +207,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
               <Text style={styles.fieldLabel}>Extensions</Text>
               <Text style={styles.hint}>Install VS Code themes and icons.</Text>
             </View>
-            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Plugins")} activeOpacity={0.6}>
@@ -214,7 +217,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
               <Text style={styles.fieldLabel}>Plugins</Text>
               <Text style={styles.hint}>Installed plugins, the pages they add, and what they can do.</Text>
             </View>
-            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
         </TouchableOpacity>
 
@@ -226,7 +229,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
               <Text style={styles.fieldLabel}>Assistant Button</Text>
               <Text style={styles.hint}>Show the assistant button, and where it appears.</Text>
             </View>
-            <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
           </View>
         </TouchableOpacity>
 
@@ -242,7 +245,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             onBlur={saveRootDir}
             onSubmitEditing={saveRootDir}
             placeholder="/Users/you/Coding"
-            placeholderTextColor={colors.placeholderText}
+            placeholderTextColor={textColors.placeholderText}
             autoCapitalize="none"
             autoCorrect={false}
             spellCheck={false}
@@ -289,7 +292,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             onBlur={saveRepoTemplate}
             onSubmitEditing={saveRepoTemplate}
             placeholder={DEFAULT_REPO_TEMPLATE}
-            placeholderTextColor={colors.placeholderText}
+            placeholderTextColor={textColors.placeholderText}
             autoCapitalize="none"
             autoCorrect={false}
             spellCheck={false}
@@ -315,7 +318,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             onBlur={saveWorktreeTemplate}
             onSubmitEditing={saveWorktreeTemplate}
             placeholder={DEFAULT_WORKTREE_TEMPLATE}
-            placeholderTextColor={colors.placeholderText}
+            placeholderTextColor={textColors.placeholderText}
             autoCapitalize="none"
             autoCorrect={false}
             spellCheck={false}
@@ -426,7 +429,8 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -438,7 +442,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "600",
     textTransform: "uppercase",
@@ -460,7 +464,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   fieldLabel: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "600",
   },
@@ -475,13 +479,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     lineHeight: 18,
   },
   input: {
     marginTop: 2,
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -489,13 +493,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.fillBackground,
   },
   previewLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontWeight: "600",
     marginTop: 4,
   },
   previewPath: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontFamily: "Menlo",
   },
@@ -509,7 +513,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowTitle: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "500",
   },
@@ -544,7 +548,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   serverAddress: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
   },
   destructiveRow: {

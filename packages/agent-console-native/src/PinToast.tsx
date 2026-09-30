@@ -28,6 +28,7 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-na
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { colors } from "./colors";
 import type { PinScope } from "./pagesClient";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 /** How long the collapsed toast stays before it goes. */
 const SHOW_MS = 4000;
@@ -77,6 +78,8 @@ export const PinToast = (props: {
   readonly onChoose: (scope: PinScope) => void;
   readonly onDone: () => void;
 }): React.ReactElement | null => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { subject } = props;
   const { width: screenWidth } = useWindowDimensions();
   const width = Math.min(screenWidth - 32, WIDTH_MAX);
@@ -188,13 +191,13 @@ export const PinToast = (props: {
         <Animated.View style={[styles.collapsed, collapsedLayer]} pointerEvents={expanded ? "none" : "auto"}>
           <Pressable style={styles.row} onPress={expand}>
             <View style={styles.iconBox}>
-              <Ionicons name="pin" size={16} color={colors.label} />
+              <Ionicons name="pin" size={16} color={textColors.label} />
             </View>
             <Text style={styles.label} numberOfLines={1}>
               Pin to {scopeLabel(scope, subject.labels)}
             </Text>
             <View style={styles.iconBox}>
-              <Ionicons name="chevron-down" size={15} color={colors.secondaryLabel} />
+              <Ionicons name="chevron-down" size={15} color={textColors.secondaryLabel} />
             </View>
           </Pressable>
         </Animated.View>
@@ -203,7 +206,8 @@ export const PinToast = (props: {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   toast: {
     position: "absolute",
   },
@@ -241,7 +245,7 @@ const styles = StyleSheet.create({
     height: HEADING,
     lineHeight: HEADING,
     paddingHorizontal: 18,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontWeight: "600",
     textTransform: "uppercase",
@@ -262,7 +266,7 @@ const styles = StyleSheet.create({
   },
   label: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     lineHeight: ICON_BOX,
     fontWeight: "500",

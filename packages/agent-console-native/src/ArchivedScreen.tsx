@@ -33,6 +33,7 @@ import { getApiAddress } from "./settings";
 import { SkeletonList } from "./Skeleton";
 import { relativeTime } from "./time";
 import { useSessionActivity } from "./useSessionActivity";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Archived">;
 
@@ -49,6 +50,8 @@ type Load =
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 export const ArchivedScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { repo } = props.route.params;
   const { client, address } = useAppContext();
   const apiBase = getApiAddress(address);
@@ -132,7 +135,7 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
                 setRefreshing(true);
                 void fetchAll().finally(() => setRefreshing(false));
               }}
-              tintColor={colors.secondaryLabel}
+              tintColor={textColors.secondaryLabel}
             />
           }
           ListHeaderComponent={listed.length === 0 ? null : <Text style={styles.sectionLabel}>Sessions</Text>}
@@ -169,7 +172,8 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -182,22 +186,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginBottom: 8,
     marginHorizontal: 16,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     paddingHorizontal: 16,
   },
   message: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   detail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontFamily: "Menlo",
     textAlign: "center",

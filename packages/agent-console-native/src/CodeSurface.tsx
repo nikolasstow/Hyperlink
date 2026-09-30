@@ -36,9 +36,8 @@ import {
   type SurfaceTheme,
 } from "./codeSurfaceProtocol";
 import { codeSurfaceUri } from "./codeSurfaceAsset";
-import { colors } from "./colors";
 import { useCodeTheme } from "./useCodeTheme";
-import { useTheme } from "./theme";
+import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 
 /**
  * Phase 1 is this constant becoming `false`. It is sent to the surface as a
@@ -95,6 +94,8 @@ const toSurfaceTheme = (theme: string | ThemeRegistrationRaw): string | SurfaceT
   typeof theme === "string" ? theme : { ...theme, name: theme.name ?? "custom" };
 
 export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const webView = React.useRef<WebView>(null);
   /**
    * The native host, when this build has it. It keeps the surface warm across
@@ -293,7 +294,7 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   if (uri === undefined) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.secondaryLabel} />
+        <ActivityIndicator color={textColors.secondaryLabel} />
       </View>
     );
   }
@@ -353,7 +354,8 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -367,7 +369,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   message: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
 });

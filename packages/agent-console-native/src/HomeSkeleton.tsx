@@ -14,10 +14,13 @@ import * as React from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import type { DimensionValue } from "react-native";
 import { colors } from "./colors";
+import { type TextColors, useThemedStyles } from "./theme";
 
 /** A single placeholder card matching `HomeScreen`'s `styles.card`. Widths vary
  * per card so the column doesn't look like a printed table. */
-const SkeletonCard = (props: { readonly titleWidth: DimensionValue; readonly secondLine: boolean }): React.ReactElement => (
+const SkeletonCard = (props: { readonly titleWidth: DimensionValue; readonly secondLine: boolean }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={styles.card}>
     <View style={[styles.bar, styles.title, { width: props.titleWidth }]} />
     {props.secondLine ? <View style={[styles.bar, styles.title, styles.titleSecond]} /> : null}
@@ -28,6 +31,7 @@ const SkeletonCard = (props: { readonly titleWidth: DimensionValue; readonly sec
     <View style={[styles.bar, styles.meta]} />
   </View>
 );
+};
 
 const CARDS: ReadonlyArray<{ readonly titleWidth: DimensionValue; readonly secondLine: boolean }> = [
   { titleWidth: "72%", secondLine: true },
@@ -38,6 +42,7 @@ const CARDS: ReadonlyArray<{ readonly titleWidth: DimensionValue; readonly secon
 ];
 
 export const HomeSkeleton = (): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const pulse = React.useRef(new Animated.Value(0.5)).current;
 
   React.useEffect(() => {
@@ -63,7 +68,8 @@ export const HomeSkeleton = (): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   bar: {
     backgroundColor: colors.fillBackground,
     borderRadius: 6,
@@ -72,7 +78,7 @@ const styles = StyleSheet.create({
   // Matches HomeScreen's `heading` + `headingFirst` exactly, so the real
   // "Recent" heading lands in the same spot when data replaces the skeleton.
   heading: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     fontWeight: "400",
     marginTop: 4,

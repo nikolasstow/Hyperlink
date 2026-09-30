@@ -19,10 +19,12 @@ import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
 import { updateDraft, useThemeDraft } from "./themeDraft";
 import { EMPTY_THEME, parseFontStyle, type VsCodeTheme } from "./vscodeTheme";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ThemeTokens">;
 
 const StyleChips = (props: { readonly fontStyle: string | undefined }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const flags = parseFontStyle(props.fontStyle);
   const shown: ReadonlyArray<readonly [string, boolean]> = [
     ["B", flags.bold],
@@ -44,6 +46,8 @@ const StyleChips = (props: { readonly fontStyle: string | undefined }): React.Re
 };
 
 export const ThemeTokensScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   const draft = useThemeDraft();
   const theme: VsCodeTheme = draft.kind === "open" ? draft.theme : EMPTY_THEME;
@@ -84,7 +88,7 @@ export const ThemeTokensScreen = (props: Props): React.ReactElement => {
               {rule.scope.length > 1 ? <Text style={styles.more}>{`  +${rule.scope.length - 1}`}</Text> : null}
             </Text>
             <StyleChips fontStyle={rule.fontStyle} />
-            <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
+            <SystemIcon name="chevron.right" size={13} color={textColors.tertiaryLabel} />
           </TouchableOpacity>
         ))}
         {readonly ? null : (
@@ -106,7 +110,8 @@ export const ThemeTokensScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -143,12 +148,12 @@ const styles = StyleSheet.create({
   },
   scope: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 14,
     fontFamily: "Menlo",
   },
   more: {
-    color: colors.tertiaryLabel,
+    color: text.tertiaryLabel,
   },
   chips: {
     flexDirection: "row",
@@ -170,13 +175,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 8,

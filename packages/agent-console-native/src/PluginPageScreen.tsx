@@ -42,6 +42,7 @@ import { usePrimaryWorktree } from "./primaryWorktree";
 import { WorktreePicker } from "./WorktreePicker";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
 type Navigation = Props["navigation"];
@@ -93,10 +94,13 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
 
 /** Label and value rows. With `chevron`, the last row carries it: the card
  * opens a page. */
-const Rows = (props: { readonly rows: ReadonlyArray<SectionRow>; readonly chevron?: boolean }): React.ReactElement => (
+const Rows = (props: { readonly rows: ReadonlyArray<SectionRow>; readonly chevron?: boolean }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
+  return (
   <>
     {props.rows.map((row, index) => {
-      const chevron = props.chevron === true && index === props.rows.length - 1 ? <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} /> : null;
+      const chevron = props.chevron === true && index === props.rows.length - 1 ? <SystemIcon name="chevron.forward" size={13} color={textColors.secondaryLabel} /> : null;
       // A stacked row's chevron is centered on the row as a whole, beside
       // both its label and its value.
       return row.stacked ? (
@@ -121,6 +125,7 @@ const Rows = (props: { readonly rows: ReadonlyArray<SectionRow>; readonly chevro
     })}
   </>
 );
+};
 
 /** A button row: an icon, a title, secondary text beside it, a chevron. */
 const LinkRow = (props: {
@@ -129,14 +134,18 @@ const LinkRow = (props: {
   readonly detail?: string;
   readonly onPress: () => void;
   readonly border?: boolean;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
+  return (
   <Pressable style={[styles.row, props.border === true && styles.rowBorder]} onPress={props.onPress}>
     <SystemIcon name={symbolForIcon(props.icon)} size={18} color={colors.tint} />
     <Text style={styles.linkTitle}>{props.title}</Text>
     {props.detail === undefined ? null : <Text style={styles.linkDetail}>{props.detail}</Text>}
-    <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} />
+    <SystemIcon name="chevron.forward" size={13} color={textColors.secondaryLabel} />
   </Pressable>
 );
+};
 
 /** One pinned (or suggested) script or filter, as a grid tile. */
 const PinTile = (props: {
@@ -149,7 +158,10 @@ const PinTile = (props: {
   readonly countdownMs?: number;
   readonly onPress: () => void;
   readonly onLongPress?: () => void;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
+  return (
   <Pressable style={styles.tile} onPress={props.onPress} {...(props.onLongPress === undefined ? {} : { onLongPress: props.onLongPress })}>
     <CardGlass />
     <View style={styles.tileTop}>
@@ -160,7 +172,7 @@ const PinTile = (props: {
       {props.countdownMs !== undefined ? (
         <RunCountdownRing size={22} durationMs={props.countdownMs} />
       ) : props.busy ? (
-        <ActivityIndicator color={colors.secondaryLabel} />
+        <ActivityIndicator color={textColors.secondaryLabel} />
       ) : props.playable ? (
         <SystemIcon name="play.fill" size={14} color={colors.tint} />
       ) : null}
@@ -170,6 +182,7 @@ const PinTile = (props: {
     </Text>
   </Pressable>
 );
+};
 
 /** The user's pins on a collection: pinned scripts run on a tap, pinned
  * filters open; a long press unpins. */
@@ -180,6 +193,7 @@ const PinnedCard = (props: {
   readonly apiBase: string;
   readonly navigation: Navigation;
 }): React.ReactElement | null => {
+  const styles = useThemedStyles(makeStyles);
   const { block, dir, apiBase, navigation } = props;
   const page = block.collection.page;
   const load = useCollection(dir, page);
@@ -312,6 +326,8 @@ const PinnedCard = (props: {
 };
 
 export const PluginPageScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { repo, page, title } = props.route.params;
   const params = props.route.params.params ?? noParams;
   // A worktree page: it shows the repo's primary worktree, following the
@@ -422,14 +438,14 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
               <Pressable style={styles.cardHeader} disabled={opens === undefined} onPress={() => (opens === undefined ? undefined : openLink(navigation, repo, dir, opens))}>
                 <SystemIcon name={symbolForIcon(block.icon)} size={22} color={colors.tint} />
                 <Text style={styles.cardTitle}>{block.title}</Text>
-                {opens === undefined ? null : <SystemIcon name="chevron.forward" size={13} color={colors.secondaryLabel} />}
+                {opens === undefined ? null : <SystemIcon name="chevron.forward" size={13} color={textColors.secondaryLabel} />}
               </Pressable>
               <View style={styles.rowBorder} />
               <Rows rows={block.rows} />
               {block.actions.map((action) => (
                 <Pressable key={action.command} style={[styles.row, styles.rowBorder]} onPress={() => confirmFirst(action, () => runCardAction(block.key, action.command, action.title))}>
                   {busy === `${block.key} ${action.command}` ? (
-                    <ActivityIndicator color={colors.secondaryLabel} />
+                    <ActivityIndicator color={textColors.secondaryLabel} />
                   ) : (
                     <SystemIcon name={symbolForIcon(action.icon)} size={17} color={colors.tint} />
                   )}
@@ -453,7 +469,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
                   onPress={() => confirmFirst(action, () => runCardAction(block.key, action.command, action.title))}
                 >
                   {busy === `${block.key} ${action.command}` ? (
-                    <ActivityIndicator color={colors.secondaryLabel} />
+                    <ActivityIndicator color={textColors.secondaryLabel} />
                   ) : (
                     <SystemIcon name={symbolForIcon(action.icon)} size={17} color={action.destructive === true ? colors.destructive : colors.tint} />
                   )}
@@ -495,7 +511,8 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -517,7 +534,7 @@ const styles = StyleSheet.create({
     height: 20,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginTop: 24,
@@ -562,17 +579,17 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 18,
     fontWeight: "600",
   },
   linkTitle: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   linkDetail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 16,
   },
   destructive: {
@@ -601,26 +618,26 @@ const styles = StyleSheet.create({
   },
   tileTitle: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "500",
   },
   pinDetail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
   },
   factLabel: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   factValue: {
     flex: 1,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 16,
     textAlign: "right",
   },
   stackedValue: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     textAlign: "left",
   },
@@ -629,15 +646,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
   },
   message: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   detail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontFamily: "Menlo",
     textAlign: "center",

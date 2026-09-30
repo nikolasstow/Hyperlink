@@ -35,17 +35,23 @@ import {
   type ImportGroup,
   type VsCodeTheme,
 } from "./vscodeTheme";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ThemeImportValues">;
 
-const Box = (props: { readonly state: "all" | "some" | "none" }): React.ReactElement => (
+const Box = (props: { readonly state: "all" | "some" | "none" }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={[styles.box, props.state !== "none" && styles.boxOn]}>
     {props.state === "all" ? <Text style={styles.boxMark}>✓</Text> : null}
     {props.state === "some" ? <Text style={styles.boxMark}>–</Text> : null}
   </View>
 );
+};
 
 export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { file, label } = props.route.params;
   const insets = useSafeAreaInsets();
   const { address } = useAppContext();
@@ -108,7 +114,7 @@ export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
         </TouchableOpacity>
       ),
     });
-  }, [props.navigation, label, allPaths, selected]);
+  }, [props.navigation, label, allPaths, selected, styles]);
 
   if (error !== undefined) {
     return (
@@ -121,7 +127,7 @@ export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
   if (source === undefined) {
     return (
       <View style={styles.root}>
-        <ActivityIndicator style={styles.loading} size="small" color={colors.secondaryLabel} />
+        <ActivityIndicator style={styles.loading} size="small" color={textColors.secondaryLabel} />
       </View>
     );
   }
@@ -162,7 +168,7 @@ export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
                     <SystemIcon
                       name={open ? "chevron.down" : "chevron.right"}
                       size={11}
-                      color={colors.tertiaryLabel}
+                      color={textColors.tertiaryLabel}
                     />
                     <Text style={styles.groupTitle} numberOfLines={1}>
                       {group.title}
@@ -213,7 +219,8 @@ export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -257,17 +264,17 @@ const styles = StyleSheet.create({
   },
   groupTitle: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   childLabel: {
     flex: 1,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontFamily: "Menlo",
   },
   count: {
-    color: colors.tertiaryLabel,
+    color: text.tertiaryLabel,
     fontSize: 14,
   },
   box: {

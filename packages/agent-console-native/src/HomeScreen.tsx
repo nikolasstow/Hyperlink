@@ -54,6 +54,7 @@ import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -69,6 +70,8 @@ type Row =
   | { readonly kind: "repo"; readonly group: RepoGroup };
 
 export const HomeScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { client, backend, rootDir, address } = useAppContext();
   const groupSize = useGroupSize();
   // Only stream / lazily load previews while Home is on screen — the chat holds
@@ -290,7 +293,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.secondaryLabel}
+            tintColor={textColors.secondaryLabel}
             progressViewOffset={navBarHeight}
           />
         }
@@ -393,7 +396,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -411,7 +415,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     paddingHorizontal: 16,
   },
   error: {
@@ -419,7 +423,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   heading: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     fontWeight: "400",
     marginTop: 22,

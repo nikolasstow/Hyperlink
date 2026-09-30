@@ -19,12 +19,12 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
 import { CodeSurface } from "./CodeSurface";
-import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { runFs } from "./effect/runtime";
 import { fsReadText } from "./fsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { langFromFilename } from "./shikiHighlighter";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileViewer">;
 
@@ -41,6 +41,8 @@ const openLink = (url: string): void => {
 };
 
 export const FileViewerScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { path, name, line } = props.route.params;
   const { backend } = useAppContext();
   const headerHeight = useHeaderHeight();
@@ -85,7 +87,7 @@ export const FileViewerScreen = (props: Props): React.ReactElement => {
           </View>
           {state.kind === "loading" ? (
             <View style={[styles.center, styles.overlay, { paddingTop: headerHeight + 40 }]} pointerEvents="none">
-              <ActivityIndicator color={colors.secondaryLabel} />
+              <ActivityIndicator color={textColors.secondaryLabel} />
             </View>
           ) : null}
         </>
@@ -95,7 +97,8 @@ export const FileViewerScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -113,7 +116,7 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   message: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
 });

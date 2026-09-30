@@ -16,6 +16,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { followProcess, stopProcess } from "./extensionViewsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProcessOutput">;
 
@@ -33,6 +34,8 @@ interface Line {
 }
 
 export const ProcessOutputScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { id, title, commandLine } = props.route.params;
   const { navigation } = props;
   const { address } = useAppContext();
@@ -74,7 +77,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
             )
           : undefined,
     });
-  }, [navigation, title, status.kind, apiBase, id]);
+  }, [navigation, title, status.kind, apiBase, id, styles]);
 
   return (
     <View style={styles.root}>
@@ -91,7 +94,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
         ))}
         <View style={styles.status}>
           {status.kind === "running" ? (
-            <ActivityIndicator size="small" color={colors.secondaryLabel} />
+            <ActivityIndicator size="small" color={textColors.secondaryLabel} />
           ) : status.kind === "exited" ? (
             <Text style={status.exitCode === 0 ? styles.ok : styles.failed}>
               {status.exitCode === 0 ? "Finished" : `Exited with code ${status.exitCode === undefined ? "unknown" : String(status.exitCode)}`}
@@ -106,7 +109,8 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -115,13 +119,13 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   command: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontFamily: "Menlo",
     fontSize: 12,
     marginBottom: 8,
   },
   stdout: {
-    color: colors.label,
+    color: text.label,
     fontFamily: "Menlo",
     fontSize: 12,
   },
@@ -135,7 +139,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   ok: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "600",
   },

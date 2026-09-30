@@ -16,7 +16,7 @@ import { background, font, foregroundStyle, frame, glassEffect, lineLimit, onTap
 import { DynamicColorIOS, Pressable, StyleSheet, Text, View } from "react-native";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { colors } from "./colors";
-import { useCardTint } from "./theme";
+import { type TextColors, useCardTint, useTextColors, useThemedStyles } from "./theme";
 import { RunCountdownRing } from "./RunCountdownRing";
 
 export const INDENT = 20;
@@ -46,7 +46,10 @@ const withMenu = (menu: ReadonlyArray<MenuAction>, trigger: React.ReactElement):
     </ContextMenu>
   );
 
-const Separator = (props: { readonly inset: number }): React.ReactElement => <View style={[styles.separator, { marginLeft: props.inset }]} />;
+const Separator = (props: { readonly inset: number }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return <View style={[styles.separator, { marginLeft: props.inset }]} />;
+};
 
 /** Size of the countdown ring where the play button was. */
 const RING = 26;
@@ -86,6 +89,7 @@ export const ItemRow = (props: {
   readonly onSelect: () => void;
   readonly menu: ReadonlyArray<MenuAction>;
 }): React.ReactElement => {
+  const textColors = useTextColors();
   const counting = props.countdownMs !== undefined;
   const cancel = props.onCancel ?? props.onRun;
   const trigger = (
@@ -100,23 +104,23 @@ export const ItemRow = (props: {
       ]}
     >
       {props.selecting ? (
-        <Image systemName={props.selected ? "checkmark.circle.fill" : "circle"} size={20} color={props.selected ? colors.tint : colors.secondaryLabel} modifiers={[frame({ width: CHEVRON_COL })]} />
+        <Image systemName={props.selected ? "checkmark.circle.fill" : "circle"} size={20} color={props.selected ? colors.tint : textColors.secondaryLabel} modifiers={[frame({ width: CHEVRON_COL })]} />
       ) : (
         <UIText modifiers={[frame({ width: CHEVRON_COL })]}>{""}</UIText>
       )}
       <VStack alignment="leading" spacing={2}>
         {/* The icon sits on the title's line, not centered on the block. */}
         <HStack spacing={8} alignment="center">
-          {props.icon === undefined ? null : <Image systemName={props.icon} size={15} color={colors.secondaryLabel} />}
-          <UIText modifiers={[font({ size: 15 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title}</UIText>
+          {props.icon === undefined ? null : <Image systemName={props.icon} size={15} color={textColors.secondaryLabel} />}
+          <UIText modifiers={[font({ size: 15 }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
         </HStack>
-        <UIText modifiers={[font({ size: 12, family: "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.name}</UIText>
+        <UIText modifiers={[font({ size: 12, family: "Menlo" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{props.name}</UIText>
         {props.detail === undefined ? null : (
-          <UIText modifiers={[font({ size: 12 }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.detail}</UIText>
+          <UIText modifiers={[font({ size: 12 }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{props.detail}</UIText>
         )}
       </VStack>
       <Spacer />
-      {props.pinned ? <Image systemName="pin.fill" size={11} color={colors.secondaryLabel} /> : null}
+      {props.pinned ? <Image systemName="pin.fill" size={11} color={textColors.secondaryLabel} /> : null}
       {props.selecting || !props.canRun ? null : props.countdownMs !== undefined ? (
         <CountdownSlot durationMs={props.countdownMs} onCancel={cancel} />
       ) : props.busy ? (
@@ -152,6 +156,7 @@ export const NodeRow = (props: {
   readonly onOpen: () => void;
   readonly menu: ReadonlyArray<MenuAction>;
 }): React.ReactElement => {
+  const textColors = useTextColors();
   const trigger = (
     <HStack
       spacing={10}
@@ -166,14 +171,14 @@ export const NodeRow = (props: {
       <Button systemImage={props.expanded ? "chevron.down" : "chevron.right"} onPress={props.onToggle} modifiers={[frame({ width: CHEVRON_COL })]} />
       <Image systemName={props.icon} size={17} color={colors.tint} modifiers={[frame({ width: ICON_COL })]} />
       <VStack alignment="leading" spacing={2}>
-        <UIText modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle(colors.label), lineLimit(1)]}>{props.title}</UIText>
+        <UIText modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
         {props.subtitle === undefined ? null : (
-          <UIText modifiers={[font({ size: 12 }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.subtitle}</UIText>
+          <UIText modifiers={[font({ size: 12 }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{props.subtitle}</UIText>
         )}
       </VStack>
       <Spacer />
-      <UIText modifiers={[font({ size: 14 }), foregroundStyle(colors.secondaryLabel)]}>{String(props.count)}</UIText>
-      <Image systemName="chevron.forward" size={12} color={colors.secondaryLabel} />
+      <UIText modifiers={[font({ size: 14 }), foregroundStyle(textColors.secondaryLabel)]}>{String(props.count)}</UIText>
+      <Image systemName="chevron.forward" size={12} color={textColors.secondaryLabel} />
     </HStack>
   );
   return (
@@ -206,6 +211,7 @@ export const Tile = (props: {
   readonly onRun?: () => void;
   readonly menu: ReadonlyArray<MenuAction>;
 }): React.ReactElement => {
+  const textColors = useTextColors();
   // Slightly darker on a light background, lighter on a dark one.
   const tint = useCardTint();
   const trigger = (
@@ -222,13 +228,13 @@ export const Tile = (props: {
       {/* The icon sits on the title's line. */}
       <HStack spacing={8} alignment="center">
         {props.selecting === true ? (
-          <Image systemName={props.selected === true ? "checkmark.circle.fill" : "circle"} size={16} color={props.selected === true ? colors.tint : colors.secondaryLabel} />
+          <Image systemName={props.selected === true ? "checkmark.circle.fill" : "circle"} size={16} color={props.selected === true ? colors.tint : textColors.secondaryLabel} />
         ) : props.icon === undefined ? null : (
           <Image systemName={props.icon} size={16} color={colors.tint} />
         )}
-        <UIText modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
+        <UIText modifiers={[font({ size: 15, weight: "medium" }), foregroundStyle(textColors.label), lineLimit(2)]}>{props.title}</UIText>
         <Spacer />
-        {props.count === undefined ? null : <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel)]}>{String(props.count)}</UIText>}
+        {props.count === undefined ? null : <UIText modifiers={[font({ size: 13 }), foregroundStyle(textColors.secondaryLabel)]}>{String(props.count)}</UIText>}
         {props.onRun === undefined || props.selecting === true ? null : props.countdownMs !== undefined ? (
           <CountdownSlot durationMs={props.countdownMs} onCancel={props.onCancel ?? props.onPress} />
         ) : props.busy === true ? (
@@ -238,7 +244,7 @@ export const Tile = (props: {
         )}
       </HStack>
       <Spacer />
-      <UIText modifiers={[font({ size: 12, family: props.onRun === undefined ? undefined : "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.subtitle}</UIText>
+      <UIText modifiers={[font({ size: 12, family: props.onRun === undefined ? undefined : "Menlo" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{props.subtitle}</UIText>
     </VStack>
   );
   return (
@@ -248,21 +254,28 @@ export const Tile = (props: {
   );
 };
 
-export const SectionHeader = (props: { readonly title: string }): React.ReactElement => <Text style={styles.sectionHeader}>{props.title}</Text>;
+export const SectionHeader = (props: { readonly title: string }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return <Text style={styles.sectionHeader}>{props.title}</Text>;
+};
 
-export const SeeAllRow = (props: { readonly label: string; readonly onPress: () => void }): React.ReactElement => (
+export const SeeAllRow = (props: { readonly label: string; readonly onPress: () => void }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <Pressable style={styles.seeAll} onPress={props.onPress}>
     <Text style={styles.seeAllLabel}>{props.label}</Text>
   </Pressable>
 );
+};
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: DIVIDER,
   },
   sectionHeader: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginTop: 22,

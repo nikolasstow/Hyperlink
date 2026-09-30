@@ -26,7 +26,6 @@ import { promptRenameSession } from "./sessionActions";
 import { BusyRow } from "./BusyRow";
 import { startLiveActivity } from "../modules/live-activity";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
-import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
@@ -45,6 +44,7 @@ import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { runStartedAt, useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
+import { type TextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -59,6 +59,7 @@ const SESSION_DUBZ: DubzContext = {
 const PERMISSION_ROW_ID = "__permission__";
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const { client, address } = useAppContext();
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
@@ -419,7 +420,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -444,7 +446,7 @@ const styles = StyleSheet.create({
   empty: {
     flex: 1,
     paddingHorizontal: ROW_GUTTER,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     textAlign: "center",
     marginTop: 40,

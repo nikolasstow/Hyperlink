@@ -41,13 +41,13 @@ import Reanimated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
-import { colors } from "./colors";
 import { useKeyboardHeightValue } from "./keyboardHeight";
 import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 /** The bar's side inset (BottomBar's), and so the window's. */
 const MARGIN = 12;
@@ -233,6 +233,8 @@ const pillProgress = (drag: number, maxDrag: number): number => {
 };
 
 export const DubzPage = (props: DubzPageProps): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
   const insets = useSafeAreaInsets();
@@ -535,7 +537,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
                         value={text}
                         onChangeText={setDraft}
                         placeholder={`Ask ${AGENT_NAME}…`}
-                        placeholderTextColor={colors.placeholderText}
+                        placeholderTextColor={textColors.placeholderText}
                         editable={open}
                         multiline
                       />
@@ -576,6 +578,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
 
 /** One suggestion, by its kind. */
 const Suggestion = (props: { readonly suggestion: DubzSuggestion }): React.ReactElement | null => {
+  const styles = useThemedStyles(makeStyles);
   switch (props.suggestion.kind) {
     case "tasks":
       // A plain fixed rectangle stands in for the tasks block for now.
@@ -589,6 +592,7 @@ const Suggestion = (props: { readonly suggestion: DubzSuggestion }): React.React
  * Dubz is off for the surface.
  */
 export const DubzBar = (props: { readonly context: DubzContext }): React.ReactElement | null => {
+  const styles = useThemedStyles(makeStyles);
   const visible = useAgentButtonVisible(props.context.surface);
   const [open, setOpen] = React.useState(false);
   const inputRef = React.useRef<TextInput>(null);
@@ -611,7 +615,8 @@ const INPUT_PAD_TOP = Math.ceil((COMPOSER_SEND_CHIP_SIZE - LINE_HEIGHT) / 2);
 const INPUT_PAD_BOTTOM = COMPOSER_SEND_CHIP_SIZE - LINE_HEIGHT - INPUT_PAD_TOP;
 const INPUT_PAD_V = INPUT_PAD_TOP + INPUT_PAD_BOTTOM;
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   // Fills its container, from the screen's top down to the keyboard: the
   // window grows up inside it, never past its parents' bounds (iOS delivers
   // no touch to a view outside its parent, so the grab bar was unreachable).
@@ -715,7 +720,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     lineHeight: LINE_HEIGHT,
     paddingTop: INPUT_PAD_TOP,

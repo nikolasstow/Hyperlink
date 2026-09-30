@@ -18,7 +18,7 @@ import { membership, type Category } from "./collectionModel";
 import { symbolForIcon } from "./codicons";
 import { CardGlass } from "./CardGlass";
 import { colors } from "./colors";
-import { useScreenBackground } from "./theme";
+import { type TextColors, useScreenBackground, useTextColors, useThemedStyles } from "./theme";
 import type { CollectionItem, CollectionState, FormField, FormSpec } from "./pagesClient";
 import { SystemIcon } from "./SystemIcon";
 
@@ -31,7 +31,10 @@ const SheetBar = (props: {
   readonly busy: boolean;
   readonly onCancel: () => void;
   readonly onAction: () => void;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
+  return (
   <View style={styles.bar}>
     <Pressable onPress={props.onCancel} hitSlop={8}>
       <Text style={styles.barButton}>Cancel</Text>
@@ -40,7 +43,7 @@ const SheetBar = (props: {
       {props.title}
     </Text>
     {props.busy ? (
-      <ActivityIndicator color={colors.secondaryLabel} />
+      <ActivityIndicator color={textColors.secondaryLabel} />
     ) : (
       <Pressable onPress={props.onAction} hitSlop={8}>
         <Text style={[styles.barButton, styles.barAction]}>{props.action}</Text>
@@ -48,13 +51,16 @@ const SheetBar = (props: {
     )}
   </View>
 );
+};
 
 /** A choice among options: a card of rows, the chosen one checked. */
 const ChoiceList = (props: {
   readonly options: ReadonlyArray<{ readonly value: string; readonly label: string }>;
   readonly value: string;
   readonly onChange: (value: string) => void;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={styles.card}>
     <CardGlass />
     {props.options.map((option, index) => (
@@ -67,6 +73,7 @@ const ChoiceList = (props: {
     ))}
   </View>
 );
+};
 
 /** The groups a `group` field chooses among. */
 export interface GroupOption {
@@ -83,6 +90,8 @@ const Field = (props: {
   readonly groups: ReadonlyArray<GroupOption>;
   readonly onChange: (value: string) => void;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { field } = props;
   const options = field.kind === "group" ? props.groups : field.options;
   return (
@@ -96,7 +105,7 @@ const Field = (props: {
           value={props.value}
           onChangeText={props.onChange}
           placeholder={field.placeholder}
-          placeholderTextColor={colors.placeholderText}
+          placeholderTextColor={textColors.placeholderText}
           autoCapitalize={field.kind === "code" ? "none" : "sentences"}
           autoCorrect={field.kind !== "code"}
           spellCheck={field.kind !== "code"}
@@ -118,6 +127,7 @@ export const FormSheet = (props: {
   readonly onCancel: () => void;
   readonly onSubmit: (values: Readonly<Record<string, string>>) => Promise<void>;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   // The theme's background (Appearance → Background): a sheet is its own
   // window, outside the navigator that paints the screens.
@@ -195,6 +205,8 @@ export const CategoriesSheet = (props: {
   readonly onCreate: (name: string) => Promise<string | undefined>;
   readonly onSave: (choices: ReadonlyMap<string, boolean>) => Promise<void>;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   const background = useScreenBackground();
   const { items } = props;
@@ -254,7 +266,7 @@ export const CategoriesSheet = (props: {
                     {shown === "all" ? (
                       <SystemIcon name="checkmark" size={15} color={colors.tint} />
                     ) : shown === "some" ? (
-                      <SystemIcon name="minus" size={15} color={colors.secondaryLabel} />
+                      <SystemIcon name="minus" size={15} color={textColors.secondaryLabel} />
                     ) : null}
                   </Pressable>
                 );
@@ -271,7 +283,8 @@ export const CategoriesSheet = (props: {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   sheet: {
     flex: 1,
   },
@@ -287,7 +300,7 @@ const styles = StyleSheet.create({
   barTitle: {
     flex: 1,
     textAlign: "center",
-    color: colors.label,
+    color: text.label,
     fontSize: 17,
     fontWeight: "600",
   },
@@ -310,7 +323,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   fieldLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginLeft: 4,
@@ -320,7 +333,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   code: {
@@ -339,7 +352,7 @@ const styles = StyleSheet.create({
   },
   choiceLabel: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   tinted: {

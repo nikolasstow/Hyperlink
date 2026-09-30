@@ -44,6 +44,7 @@ import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { SystemIcon } from "./SystemIcon";
 import { usePrimaryWorktree } from "./primaryWorktree";
 import { WorktreePicker } from "./WorktreePicker";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FileExplorer">;
 
@@ -65,6 +66,7 @@ const Row = (props: {
   readonly onToggle: (row: FileRow) => void;
   readonly onOpen: (row: FileRow) => void;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const { row } = props;
   const isDir = row.type === "directory";
   const fileSpec = isDir ? undefined : iconForFile(row.name);
@@ -117,6 +119,8 @@ const Row = (props: {
 const WARM_SURFACES = 2;
 
 export const FileExplorerScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { repo, root } = props.route.params;
   // Files as opened from a repo shows its primary worktree, following the
   // picker; a folder drilled into stays that folder.
@@ -220,7 +224,7 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
     <View style={styles.root}>
       {tree.rootLoading ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
-          <ActivityIndicator color={colors.secondaryLabel} />
+          <ActivityIndicator color={textColors.secondaryLabel} />
         </View>
       ) : tree.rootFailed ? (
         <View style={[styles.center, { paddingTop: headerHeight + 40 }]}>
@@ -250,7 +254,8 @@ export const FileExplorerScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -290,7 +295,7 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "400",
     paddingRight: 4,
@@ -300,15 +305,15 @@ const styles = StyleSheet.create({
     backgroundColor: DIVIDER,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     textAlign: "center",
   },
   error: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   errorDetail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontFamily: "Menlo",
   },

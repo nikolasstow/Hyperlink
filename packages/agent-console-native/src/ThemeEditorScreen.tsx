@@ -29,7 +29,7 @@ import { getApiAddress } from "./settings";
 import { getThemeJson } from "./extensionsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
-import { useTheme } from "./theme";
+import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 import {
   adoptSavedId,
   closeDraft,
@@ -61,11 +61,16 @@ const THEME_TYPES: ReadonlyArray<ThemeType> = ["light", "dark"];
  */
 const ADDABLE_LIMIT = 20;
 
-const Swatch = (props: { readonly color: string | undefined }): React.ReactElement => (
+const Swatch = (props: { readonly color: string | undefined }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={[styles.swatch, props.color === undefined ? styles.swatchEmpty : { backgroundColor: props.color }]} />
 );
+};
 
 export const ThemeEditorScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { themeId, viewFile, viewLabel } = props.route.params;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -310,7 +315,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                     <Text style={styles.rowMono} numberOfLines={1}>
                       {hit.scope}
                     </Text>
-                    <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
+                    <SystemIcon name="chevron.right" size={13} color={textColors.tertiaryLabel} />
                   </TouchableOpacity>
                 ))
               )}
@@ -328,7 +333,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                   editable={!readonly}
                   onChangeText={(name) => updateDraft((current) => ({ ...current, name }))}
                   placeholder="My Theme"
-                  placeholderTextColor={colors.placeholderText}
+                  placeholderTextColor={textColors.placeholderText}
                   autoCapitalize="words"
                   autoCorrect={false}
                 />
@@ -375,7 +380,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
                     {summary.group.title}
                   </Text>
                   <Text style={styles.rowValue}>{summary.count}</Text>
-                  <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
+                  <SystemIcon name="chevron.right" size={13} color={textColors.tertiaryLabel} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -390,7 +395,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
               >
                 <Text style={styles.rowTitle}>Token colors</Text>
                 <Text style={styles.rowValue}>{theme.tokenColors.length}</Text>
-                <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
+                <SystemIcon name="chevron.right" size={13} color={textColors.tertiaryLabel} />
               </TouchableOpacity>
               <View style={[styles.row, styles.rowBorder]}>
                 <Text style={styles.rowTitle}>Semantic tokens</Text>
@@ -420,7 +425,8 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -440,7 +446,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "600",
     textTransform: "uppercase",
@@ -471,12 +477,12 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   rowTitleDim: {
     flex: 1,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 16,
   },
   rowAction: {
@@ -489,18 +495,18 @@ const styles = StyleSheet.create({
   },
   rowMono: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 14,
     fontFamily: "Menlo",
   },
   rowValue: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     fontFamily: "Menlo",
   },
   input: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     textAlign: "right",
     padding: 0,
@@ -515,7 +521,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentTint,
   },
   segmentText: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     fontWeight: "500",
   },
@@ -534,21 +540,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.fillBackground,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 7,
     marginHorizontal: 5,
   },
   addableHint: {
-    color: colors.tertiaryLabel,
+    color: text.tertiaryLabel,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 7,
     marginHorizontal: 5,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     paddingHorizontal: 14,
     paddingVertical: 14,

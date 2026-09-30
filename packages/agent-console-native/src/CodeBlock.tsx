@@ -14,6 +14,7 @@ import * as React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors } from "./colors";
 import { tokenizeCode, type HighlightResult } from "./shikiHighlighter";
+import { useTextColors } from "./theme";
 
 export const CodeBlock = (props: {
   readonly code: string;
@@ -23,6 +24,7 @@ export const CodeBlock = (props: {
   /** Monospace family for the code (defaults to Menlo). */
   readonly fontFamily?: string;
 }): React.ReactElement => {
+  const textColors = useTextColors();
   const [result, setResult] = React.useState<HighlightResult | undefined>(undefined);
 
   // Re-tokenize only when the inputs actually change; a stable themeName keeps
@@ -43,7 +45,7 @@ export const CodeBlock = (props: {
   }, [props.code, props.lang, themeName]); // eslint-disable-line react-hooks/exhaustive-deps -- theme keyed by name
 
   const background = result?.background ?? colors.fillBackground;
-  const foreground = result?.foreground ?? colors.label;
+  const foreground = result?.foreground ?? textColors.label;
   const fontFamily = props.fontFamily ?? "Menlo";
 
   return (

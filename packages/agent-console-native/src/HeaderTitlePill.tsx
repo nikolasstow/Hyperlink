@@ -19,6 +19,7 @@ import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
 import { PILL_DOT_GAP, PILL_DOT_SIZE, PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H, titlePillWidth } from "./titlePillStyle";
+import { useTextColors } from "./theme";
 
 const MIN_WIDTH = 56;
 const MAX_WIDTH_RATIO = 0.6;
@@ -28,6 +29,7 @@ export const HeaderTitlePill = (props: {
   /** Trailing status dot: omit for no dot. */
   readonly dot?: "connected" | "disconnected";
 }): React.ReactElement => {
+  const textColors = useTextColors();
   const { width: screenWidth } = useWindowDimensions();
   const hasDot = props.dot !== undefined;
   const maxWidth = Math.round(screenWidth * MAX_WIDTH_RATIO);
@@ -44,14 +46,14 @@ export const HeaderTitlePill = (props: {
           glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
         ]}
       >
-        <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>
+        <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>
           {props.title}
         </UIText>
         {hasDot ? (
           <Image
             systemName="circle.fill"
             size={PILL_DOT_SIZE}
-            color={props.dot === "connected" ? colors.brand : colors.secondaryLabel}
+            color={props.dot === "connected" ? colors.brand : textColors.secondaryLabel}
           />
         ) : null}
       </HStack>

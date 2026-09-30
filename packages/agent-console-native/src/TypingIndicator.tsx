@@ -8,12 +8,13 @@
  */
 import * as React from "react";
 import { Animated, StyleSheet, View } from "react-native";
-import { colors } from "./colors";
+import { type TextColors, useThemedStyles } from "./theme";
 
 const CYCLE_MS = 550;
 const STAGGER_MS = 150;
 
 const Dot = (props: { readonly delay: number }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const value = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -36,15 +37,19 @@ const Dot = (props: { readonly delay: number }): React.ReactElement => {
   return <Animated.View style={[styles.dot, { transform: [{ translateY }], opacity }]} />;
 };
 
-export const TypingIndicator = (): React.ReactElement => (
+export const TypingIndicator = (): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={styles.root}>
     <Dot delay={0} />
     <Dot delay={STAGGER_MS} />
     <Dot delay={STAGGER_MS * 2} />
   </View>
 );
+};
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flexDirection: "row",
     gap: 4,
@@ -54,6 +59,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.secondaryLabel,
+    backgroundColor: text.secondaryLabel,
   },
 });

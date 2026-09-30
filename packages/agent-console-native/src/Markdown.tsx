@@ -15,6 +15,7 @@ import {
   useColorScheme,
   useWindowDimensions,
   View,
+  type ColorValue,
   type TextStyle,
 } from "react-native";
 import {
@@ -25,6 +26,7 @@ import {
 } from "react-native-marked";
 import RenderHTML from "react-native-render-html";
 import { colors } from "./colors";
+import { useTextColors, type TextColors } from "./theme";
 
 const HTML_TAG_RE = /<\/?[a-z][\s\S]*>/i;
 
@@ -34,9 +36,10 @@ function isMostlyHtml(value: string): boolean {
   return HTML_TAG_RE.test(trimmed);
 }
 
-const MARKDOWN_STYLES: MarkedStyles = {
+/** The markdown styles, their text in the colours for the background. */
+const makeMarkdownStyles = (text: TextColors): MarkedStyles => ({
   text: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     lineHeight: 22,
   },
@@ -45,57 +48,57 @@ const MARKDOWN_STYLES: MarkedStyles = {
     marginBottom: 8,
   },
   strong: {
-    color: colors.label,
+    color: text.label,
     fontWeight: "600",
   },
   em: {
-    color: colors.label,
+    color: text.label,
     fontStyle: "italic",
   },
   link: {
     color: colors.tint,
   },
   h1: {
-    color: colors.label,
+    color: text.label,
     fontSize: 22,
     fontWeight: "700",
     marginBottom: 8,
     marginTop: 4,
   },
   h2: {
-    color: colors.label,
+    color: text.label,
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 6,
     marginTop: 4,
   },
   h3: {
-    color: colors.label,
+    color: text.label,
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 4,
     marginTop: 2,
   },
   h4: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 4,
   },
   h5: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "600",
     marginBottom: 2,
   },
   h6: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 2,
   },
   codespan: {
-    color: colors.label,
+    color: text.label,
     fontFamily: "Menlo",
     fontSize: 14,
     backgroundColor: colors.fillBackground,
@@ -116,7 +119,7 @@ const MARKDOWN_STYLES: MarkedStyles = {
     marginBottom: 8,
   },
   li: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     lineHeight: 22,
   },
@@ -135,7 +138,7 @@ const MARKDOWN_STYLES: MarkedStyles = {
   tableCell: {
     borderColor: colors.separator,
   },
-};
+});
 
 const htmlTagsStyles = {
   a: { color: colors.tint },
@@ -151,10 +154,12 @@ const htmlTagsStyles = {
 
 class HtmlAwareRenderer extends Renderer implements RendererInterface {
   #contentWidth: number;
+  #textColor: ColorValue;
 
-  constructor(contentWidth: number) {
+  constructor(contentWidth: number, textColor: ColorValue) {
     super();
     this.#contentWidth = contentWidth;
+    this.#textColor = textColor;
   }
 
   override html(text: string | ReactNode[], styles?: TextStyle): ReactNode {
@@ -175,7 +180,7 @@ class HtmlAwareRenderer extends Renderer implements RendererInterface {
         contentWidth={this.#contentWidth}
         source={{ html }}
         baseStyle={{
-          color: colors.label,
+          color: this.#textColor,
           fontSize: 16,
           lineHeight: 22,
         }}
@@ -189,15 +194,18 @@ export const Markdown = (props: { readonly text: string }): React.ReactElement =
   const colorScheme = useColorScheme();
   const { width: windowWidth } = useWindowDimensions();
   const contentWidth = Math.max(120, Math.min(windowWidth - 80, 560));
+  // Text in the colours for the background (light on a darkish one).
+  const textColors = useTextColors();
+  const markdownStyles = React.useMemo(() => makeMarkdownStyles(textColors), [textColors]);
 
   const renderer = React.useMemo(
-    () => new HtmlAwareRenderer(contentWidth),
-    [contentWidth],
+    () => new HtmlAwareRenderer(contentWidth, textColors.label),
+    [contentWidth, textColors.label],
   );
 
   const elements = useMarkdown(props.text, {
     colorScheme: colorScheme ?? "light",
-    styles: MARKDOWN_STYLES,
+    styles: markdownStyles,
     renderer,
   });
 
@@ -212,7 +220,7 @@ export const Markdown = (props: { readonly text: string }): React.ReactElement =
           contentWidth={contentWidth}
           source={{ html: props.text.trim() }}
           baseStyle={{
-            color: colors.label,
+            color: textColors.label,
             fontSize: 16,
             lineHeight: 22,
           }}

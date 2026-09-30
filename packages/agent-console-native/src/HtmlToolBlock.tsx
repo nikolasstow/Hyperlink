@@ -24,6 +24,7 @@ import { WebView } from "react-native-webview";
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 declare const require: (moduleName: string) => unknown;
 
@@ -90,6 +91,8 @@ export const asHtmlPayload = (metadata: unknown): HtmlPayload | undefined => {
 };
 
 export const HtmlToolBlock = (props: { readonly payload: HtmlPayload }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { payload } = props;
   const { backend } = useAppContext();
   const [expanded, setExpanded] = React.useState(false);
@@ -132,12 +135,12 @@ export const HtmlToolBlock = (props: { readonly payload: HtmlPayload }): React.R
     <View style={styles.root}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerMain} activeOpacity={0.6} onPress={() => setExpanded((open) => !open)}>
-          <SystemIcon name="safari" size={13} color={colors.secondaryLabel} />
+          <SystemIcon name="safari" size={13} color={textColors.secondaryLabel} />
           <Text style={styles.title} numberOfLines={1}>
             {payload.title ?? payload.path ?? "Rendered HTML"}
           </Text>
           {payload.allowScripts ? <Text style={styles.badge}>JS</Text> : null}
-          <SystemIcon name={expanded ? "chevron.up" : "chevron.down"} size={12} color={colors.secondaryLabel} />
+          <SystemIcon name={expanded ? "chevron.up" : "chevron.down"} size={12} color={textColors.secondaryLabel} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.openButton} activeOpacity={0.6} disabled={opening} onPress={() => void openInSafari()}>
           <SystemIcon name="safari" size={13} color={colors.tint} />
@@ -182,7 +185,8 @@ export const HtmlToolBlock = (props: { readonly payload: HtmlPayload }): React.R
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     marginTop: 8,
     borderRadius: 12,
@@ -214,19 +218,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   errorText: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     paddingHorizontal: 10,
     paddingBottom: 8,
   },
   title: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 13,
     fontWeight: "600",
   },
   badge: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 10,
     fontWeight: "700",
   },

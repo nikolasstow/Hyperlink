@@ -17,6 +17,7 @@ import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
 import { SystemIcon } from "./SystemIcon";
 import { TypingIndicator } from "./TypingIndicator";
+import { type TextColors, useThemedStyles } from "./theme";
 
 const TICK_MS = 1000;
 
@@ -34,6 +35,7 @@ export const BusyRow = (props: {
    * restarted the clock every time the chat was reopened. */
   readonly startedAt?: number;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const mountedAt = React.useRef(Date.now()).current;
   const startedAt = props.startedAt ?? mountedAt;
   const [, forceTick] = React.useReducer((n: number) => n + 1, 0);
@@ -56,7 +58,8 @@ export const BusyRow = (props: {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flexDirection: "row",
     alignItems: "center",
@@ -65,7 +68,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: ROW_GUTTER,
   },
   elapsed: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontVariant: ["tabular-nums"],
   },

@@ -18,6 +18,7 @@ import { refreshPlugins, usePlugins } from "./pluginsStore";
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Plugins">;
 
@@ -28,6 +29,8 @@ const pluginIcon = (plugin: InstalledPlugin) => {
 };
 
 export const PluginsScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
@@ -41,7 +44,7 @@ export const PluginsScreen = (props: Props): React.ReactElement => {
   return (
     <ScrollView style={styles.root} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}>
       {load.kind === "loading" ? (
-        <ActivityIndicator style={styles.spinner} color={colors.secondaryLabel} />
+        <ActivityIndicator style={styles.spinner} color={textColors.secondaryLabel} />
       ) : load.kind === "failed" ? (
         <View style={styles.center}>
           <Text style={styles.hint}>Couldn’t load plugins.</Text>
@@ -72,7 +75,7 @@ export const PluginsScreen = (props: Props): React.ReactElement => {
                     {plugin.version} · {plugin.source === "built-in" ? "Built in" : plugin.source}
                   </Text>
                 </View>
-                <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+                <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
               </TouchableOpacity>
             ))}
           </View>
@@ -83,7 +86,8 @@ export const PluginsScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -105,7 +109,7 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginTop: 24,
@@ -137,22 +141,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowTitle: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   rowMeta: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     marginTop: 2,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     marginTop: 8,
     marginHorizontal: 4,
   },
   detail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontFamily: "Menlo",
     textAlign: "center",

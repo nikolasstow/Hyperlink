@@ -37,7 +37,7 @@ import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import type { DubzContext } from "./dubzSuggestions";
-import { useTheme } from "./theme";
+import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 import { symbolForIcon } from "./codicons";
 import type { ViewInfo } from "./extensionViewsClient";
 import { ensureWorkspace, reloadWorkspace, useWorkspaceViews } from "./extensionViewsStore";
@@ -136,6 +136,8 @@ const SQUIRCLE_FADE_BY_TRANSLATE = false;
 const EMPTY_ACTIVITY: ReadonlyMap<string, number> = new Map();
 
 export const RepoScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { name, dir, isRepo } = props.route.params;
   const { client, backend, rootDir, address } = useAppContext();
   const insets = useSafeAreaInsets();
@@ -321,7 +323,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       <SystemIcon
         name="chevron.forward"
         size={13}
-        color={colors.secondaryLabel}
+        color={textColors.secondaryLabel}
       />
     </TouchableOpacity>
   );
@@ -531,7 +533,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         onScroll={onScroll}
         scrollEventThrottle={16}
         ref={scrollRef}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondaryLabel} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={textColors.secondaryLabel} />}
         contentContainerStyle={{
           // Tall enough to reach the closed detent even with few sessions;
           // otherwise the header could stop half-collapsed.
@@ -654,7 +656,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               <SystemIcon
                 name="chevron.forward"
                 size={13}
-                color={colors.secondaryLabel}
+                color={textColors.secondaryLabel}
               />
             </Pressable>
           ))}
@@ -675,7 +677,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               <SystemIcon
                 name="chevron.backward"
                 size={BUTTON_ICON}
-                color={colors.label}
+                color={textColors.label}
               />
             </GlassView>
           </Pressable>
@@ -713,7 +715,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
                     <SystemIcon
                       name="ellipsis"
                       size={BUTTON_ICON}
-                      color={colors.label}
+                      color={textColors.label}
                     />
                   </GlassView>
                 </RNHostView>
@@ -766,7 +768,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -804,7 +807,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   infoMeta: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textAlign: "center",
   },
@@ -830,7 +833,7 @@ const styles = StyleSheet.create({
   },
   menuLabel: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 17,
   },
   innerHeader: {
@@ -866,13 +869,13 @@ const styles = StyleSheet.create({
     borderRadius: BAR_CONTENT_HEIGHT / 2,
   },
   nameText: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "600",
   },
   namePath: {
     maxWidth: "100%",
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 11,
   },
   sectionHeader: {
@@ -884,7 +887,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionHeading: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "700",
     letterSpacing: 0.2,
@@ -914,12 +917,12 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   seeAllText: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     fontWeight: "600",
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     paddingHorizontal: 16,
   },
 });

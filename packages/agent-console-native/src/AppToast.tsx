@@ -17,6 +17,7 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-na
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "./colors";
+import { type TextColors, useThemedStyles } from "./theme";
 
 /** How long a toast stays before it goes. */
 const SHOW_MS = 4000;
@@ -66,6 +67,7 @@ const subscribe = (listener: () => void): (() => void) => {
 
 /** Mounted once, at the app's root. */
 export const AppToastHost = (): React.ReactElement | null => {
+  const styles = useThemedStyles(makeStyles);
   const toast = React.useSyncExternalStore(subscribe, () => current);
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
@@ -120,7 +122,8 @@ export const AppToastHost = (): React.ReactElement | null => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   toast: {
     position: "absolute",
     height: HEIGHT,
@@ -137,7 +140,7 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     fontWeight: "500",
   },

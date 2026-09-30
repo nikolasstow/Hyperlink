@@ -40,11 +40,11 @@ import { useAgentButtonVisible } from "./agentButtonSettings";
 import { BottomBar } from "./BottomBar";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
-import { colors } from "./colors";
 import type { DubzContext } from "./dubzSuggestions";
 import { findModel, getDefaultModel, listModels, type ModelOption } from "./models";
 import { ModelPicker } from "./ModelPicker";
 import { getLastModel, setLastModel } from "./settings";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 // A fontSize:16 line needs roughly INPUT_LINE_HEIGHT of vertical room. iOS
 // multiline TextInput can't render shorter than its content needs, so this is
@@ -80,6 +80,8 @@ export const Composer = (props: {
    * settings, by surface), and what Dubz suggests there. */
   readonly dubzContext: DubzContext;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { client } = useAppContext();
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
@@ -298,7 +300,7 @@ export const Composer = (props: {
                 onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
                 editable={!props.disabled}
                 placeholder={props.placeholder}
-                placeholderTextColor={colors.placeholderText}
+                placeholderTextColor={textColors.placeholderText}
                 multiline
                 submitBehavior="blurAndSubmit"
                 onSubmitEditing={() => void send()}
@@ -344,10 +346,11 @@ export const Composer = (props: {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   input: {
     // No explicit width — the shell's inputSection stretches it to full width.
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     // Explicit, computed against MIN_INPUT_HEIGHT so the two can't drift.
     lineHeight: INPUT_LINE_HEIGHT,
@@ -371,10 +374,10 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   mirrorText: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   mirrorPlaceholder: {
-    color: colors.placeholderText,
+    color: text.placeholderText,
   },
 });

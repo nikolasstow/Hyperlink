@@ -26,6 +26,7 @@ import { getApiAddress } from "./settings";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
 import { useThemeDraft } from "./themeDraft";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ThemeImportSource">;
 
@@ -37,6 +38,8 @@ interface InstalledSource {
 }
 
 export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
@@ -90,7 +93,7 @@ export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
       <View style={styles.card}>
         <CardGlass />
         {loading && installed.length === 0 ? (
-          <ActivityIndicator style={styles.loading} size="small" color={colors.secondaryLabel} />
+          <ActivityIndicator style={styles.loading} size="small" color={textColors.secondaryLabel} />
         ) : installed.length === 0 ? (
           <Text style={styles.empty}>No colour themes installed. Add one from Extensions.</Text>
         ) : (
@@ -110,7 +113,7 @@ export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
               <Text style={styles.rowTitle} numberOfLines={1}>
                 {source.label}
               </Text>
-              <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
+              <SystemIcon name="chevron.right" size={13} color={textColors.tertiaryLabel} />
             </TouchableOpacity>
           ))
         )}
@@ -140,7 +143,7 @@ export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
                     {mine.theme.name}
                   </Text>
                   <Text style={styles.rowValue}>{Object.keys(mine.theme.colors).length}</Text>
-                  <SystemIcon name="chevron.right" size={13} color={colors.tertiaryLabel} />
+                  <SystemIcon name="chevron.right" size={13} color={textColors.tertiaryLabel} />
                 </TouchableOpacity>
               ))}
           </View>
@@ -158,7 +161,8 @@ const toSource = (extensionId: string, contribution: ThemeContribution): Install
   swatch: contribution.colors?.primary,
 });
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -167,7 +171,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "600",
     textTransform: "uppercase",
@@ -195,11 +199,11 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   rowValue: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     fontFamily: "Menlo",
   },
@@ -217,7 +221,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     paddingHorizontal: 14,
     paddingVertical: 14,

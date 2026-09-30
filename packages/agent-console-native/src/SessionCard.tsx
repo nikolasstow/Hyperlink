@@ -26,7 +26,7 @@ import { colors } from "./colors";
 import { lastMessageSummary, useSessionPreview } from "./sessionPreview";
 import { takeReturning } from "./sessionArchive";
 import { SystemIcon } from "./SystemIcon";
-import { useCardTint, useTheme } from "./theme";
+import { useCardTint, useTextColors, useTheme } from "./theme";
 
 /** Horizontal margin outside the card (matches the list gutter). */
 const CARD_GUTTER = 12;
@@ -112,6 +112,7 @@ const CardBody = (props: {
   readonly muted: boolean;
   readonly summary?: string;
 }): React.ReactElement => {
+  const textColors = useTextColors();
   // Slightly darker on a light background, lighter on a dark one.
   const tint = useCardTint();
   return (
@@ -122,14 +123,14 @@ const CardBody = (props: {
   >
     <HStack spacing={7} alignment="center">
       {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(props.unreadColor)]} /> : null}
-      <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(2)]}>{props.title}</UIText>
+      <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(2)]}>{props.title}</UIText>
       {/* Muted: the bell Messages shows beside a muted conversation. */}
-      {props.muted ? <Image systemName="bell.slash.fill" size={12} color={colors.secondaryLabel} /> : null}
+      {props.muted ? <Image systemName="bell.slash.fill" size={12} color={textColors.secondaryLabel} /> : null}
     </HStack>
     {props.repo !== undefined || props.worktree !== undefined ? (
       <HStack spacing={6} alignment="center">
         {props.repo !== undefined ? (
-          <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.secondaryLabel), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.repo}</UIText>
+          <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.repo}</UIText>
         ) : null}
         {props.worktree !== undefined ? (
           <UIText modifiers={[font({ size: 11, weight: "semibold" }), foregroundStyle(colors.tint), padding({ horizontal: 8, vertical: 2 }), background(colors.fillBackground), cornerRadius(999)]}>{props.worktree}</UIText>
@@ -137,9 +138,9 @@ const CardBody = (props: {
       </HStack>
     ) : null}
     {props.summary !== undefined ? (
-      <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel), lineLimit(2)]}>{props.summary}</UIText>
+      <UIText modifiers={[font({ size: 13 }), foregroundStyle(textColors.secondaryLabel), lineLimit(2)]}>{props.summary}</UIText>
     ) : null}
-    <UIText modifiers={[font({ size: 11 }), foregroundStyle(colors.secondaryLabel)]}>{props.meta}</UIText>
+    <UIText modifiers={[font({ size: 11 }), foregroundStyle(textColors.secondaryLabel)]}>{props.meta}</UIText>
   </VStack>
   );
 };

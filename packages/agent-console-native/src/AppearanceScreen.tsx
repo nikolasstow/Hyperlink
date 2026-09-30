@@ -26,7 +26,7 @@ import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
-import { CONTRAST_START, useTheme } from "./theme";
+import { CONTRAST_START, type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 import { useCodeTheme } from "./useCodeTheme";
 import {
   deleteCreatedTheme,
@@ -91,6 +91,7 @@ const ColorSwatches = (props: {
   readonly themeColor: string;
   readonly onChange: (color: string) => void;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const { width } = useWindowDimensions();
   // How many swatches fit in one row; reserve the theme swatch + the picker,
   // and show only that many presets so the row never scrolls.
@@ -170,7 +171,9 @@ const IncreaseContrast = (props: {
   readonly width: number;
   readonly value: number | undefined;
   readonly onChange: (value: number | undefined) => void;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <>
     <View style={styles.backgroundRow}>
       <Text style={styles.backgroundLabel}>Increase Contrast</Text>
@@ -183,6 +186,7 @@ const IncreaseContrast = (props: {
     )}
   </>
 );
+};
 
 /** What "System" is for each mode: the grouped background iOS gives screens. */
 const SYSTEM_BACKGROUND = {
@@ -199,7 +203,9 @@ const BackgroundRow = (props: {
   /** The enabled colour theme's background, when it is made for this mode. */
   readonly themeColor: string | undefined;
   readonly onChange: (color: string | undefined) => void;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={styles.backgroundRow}>
     <Text style={styles.backgroundLabel}>{props.label}</Text>
     {props.themeColor === undefined ? null : (
@@ -228,8 +234,11 @@ const BackgroundRow = (props: {
     </Host>
   </View>
 );
+};
 
 export const AppearanceScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { theme, setTheme } = useTheme();
   const { address } = useAppContext();
   const insets = useSafeAreaInsets();
@@ -548,7 +557,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
               <Text style={[styles.themeLabel, styles.addFontLabel]} numberOfLines={1}>
                 Add font…
               </Text>
-              <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+              <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
             </View>
           </TouchableOpacity>
         </View>
@@ -592,14 +601,17 @@ const ThemeRow = (props: {
   readonly dot: string;
   readonly label: string;
   readonly active: boolean;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
   <HStack spacing={12} modifiers={[frame({ width: props.width, alignment: "leading" }), padding({ vertical: 10 })]}>
     <Circle modifiers={[frame({ width: 22, height: 22 }), foregroundStyle(props.dot), frame({ width: 30, alignment: "leading" })]} />
-    <UIText modifiers={[font({ size: 16 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.label}</UIText>
+    <UIText modifiers={[font({ size: 16 }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.label}</UIText>
     <Spacer />
     {props.active ? <Image systemName="checkmark" size={15} color={colors.tint} /> : null}
   </HStack>
 );
+};
 
 /** The enlarged card shown above the menu while a row is long-pressed. */
 const ThemeRowPreview = (props: {
@@ -607,7 +619,9 @@ const ThemeRowPreview = (props: {
   readonly dot: string;
   readonly label: string;
   readonly subtitle: string;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
   <VStack
     alignment="leading"
     spacing={10}
@@ -615,11 +629,12 @@ const ThemeRowPreview = (props: {
   >
     <HStack spacing={10} alignment="center">
       <Circle modifiers={[frame({ width: 24, height: 24 }), foregroundStyle(props.dot)]} />
-      <UIText modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{props.label}</UIText>
+      <UIText modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.label}</UIText>
     </HStack>
-    <UIText modifiers={[font({ size: 14 }), foregroundStyle(colors.secondaryLabel)]}>{props.subtitle}</UIText>
+    <UIText modifiers={[font({ size: 14 }), foregroundStyle(textColors.secondaryLabel)]}>{props.subtitle}</UIText>
   </VStack>
 );
+};
 
 /**
  * The one combined theme list: Default, every installed and device-created
@@ -633,6 +648,8 @@ const ThemeRowPreview = (props: {
  * context menu lifts a whole `Host`, not a row inside a shared one.
  */
 const ThemeList = (props: ThemeListProps): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { contentWidth, themes, created, enabled } = props;
   const dotOf = (color: string | undefined): string => toOpaqueHex(color) ?? DEFAULT_THEME.primary;
   // The rows span the card inside its padding (14 each side).
@@ -712,14 +729,15 @@ const ThemeList = (props: ThemeListProps): React.ReactElement => {
           <Text style={[styles.themeLabel, styles.addFontLabel]} numberOfLines={1}>
             Create theme…
           </Text>
-          <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+          <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
         </View>
       </TouchableOpacity>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -730,7 +748,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginTop: 16,
@@ -746,7 +764,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
   },
   themeRow: {
@@ -757,13 +775,13 @@ const styles = StyleSheet.create({
   },
   themeLabel: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   fontSample: {
     width: 30,
     fontSize: 17,
-    color: colors.label,
+    color: text.label,
   },
   addFontLabel: {
     color: colors.tint,
@@ -790,7 +808,7 @@ const styles = StyleSheet.create({
   },
   swatchSelected: {
     borderWidth: 3,
-    borderColor: colors.label,
+    borderColor: text.label,
   },
   pickerSwatch: {
     width: 32,
@@ -804,7 +822,7 @@ const styles = StyleSheet.create({
   },
   backgroundLabel: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   contrastLabel: {

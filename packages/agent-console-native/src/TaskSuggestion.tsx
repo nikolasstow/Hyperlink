@@ -22,6 +22,7 @@ import { colors } from "./colors";
 import type { GitHubRepo } from "./repoScan";
 import { useWorkspaceRepos } from "./repoScanCache";
 import { KINDS, useTaskCounts } from "./taskCounts";
+import { useTextColors } from "./theme";
 
 const PILL_HEIGHT = 30;
 const PILL_SPACING = 8;
@@ -47,6 +48,7 @@ export const TaskSuggestion = (props: {
   /** The backend that proxies GitHub. */
   readonly backend: string;
 }): React.ReactElement | null => {
+  const textColors = useTextColors();
   const workspace = useWorkspaceRepos();
   const repos = React.useMemo(() => (workspace ?? []).filter((repo) => repo.github !== undefined), [workspace]);
   const [picked, setPicked] = React.useState(pickedRepo);
@@ -74,7 +76,7 @@ export const TaskSuggestion = (props: {
     <Host style={styles.host} ignoreSafeArea="all">
       {unavailable !== undefined || repoName === undefined ? (
         <HStack alignment="top">
-          <Text modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel)]}>{unavailable ?? ""}</Text>
+          <Text modifiers={[font({ size: 13 }), foregroundStyle(textColors.secondaryLabel)]}>{unavailable ?? ""}</Text>
           <Spacer />
         </HStack>
       ) : (
@@ -92,8 +94,8 @@ export const TaskSuggestion = (props: {
                     glassEffect({ glass: { variant: "regular", tint: KIND_TINT[kind] ?? OTHER_TINT }, shape: "capsule" }),
                   ]}
                 >
-                  <Text modifiers={[font({ size: 14, weight: "medium" }), foregroundStyle(colors.label)]}>{plural(kind, count ?? 0)}</Text>
-                  <Text modifiers={[font({ size: 14, weight: "bold" }), monospacedDigit(), foregroundStyle(colors.label)]}>
+                  <Text modifiers={[font({ size: 14, weight: "medium" }), foregroundStyle(textColors.label)]}>{plural(kind, count ?? 0)}</Text>
+                  <Text modifiers={[font({ size: 14, weight: "bold" }), monospacedDigit(), foregroundStyle(textColors.label)]}>
                     {count === undefined ? "–" : String(count)}
                   </Text>
                 </HStack>
@@ -103,13 +105,13 @@ export const TaskSuggestion = (props: {
           <Spacer />
           <VStack alignment="trailing" spacing={10}>
             {props.repo !== undefined ? (
-              <Text modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{repoName}</Text>
+              <Text modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{repoName}</Text>
             ) : (
               <Menu
                 label={
                   <HStack spacing={6}>
-                    <Text modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{repoName}</Text>
-                    <Image systemName="chevron.down" size={12} color={colors.secondaryLabel} />
+                    <Text modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{repoName}</Text>
+                    <Image systemName="chevron.down" size={12} color={textColors.secondaryLabel} />
                   </HStack>
                 }
               >
@@ -132,7 +134,7 @@ export const TaskSuggestion = (props: {
               modifiers={[buttonStyle("plain"), font({ size: 16, weight: "semibold" }), foregroundStyle(colors.tint)]}
             />
             {counts.error !== undefined ? (
-              <Text modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel), lineLimit(2)]}>{`Couldn’t load tasks: ${counts.error}`}</Text>
+              <Text modifiers={[font({ size: 13 }), foregroundStyle(textColors.secondaryLabel), lineLimit(2)]}>{`Couldn’t load tasks: ${counts.error}`}</Text>
             ) : null}
           </VStack>
         </HStack>

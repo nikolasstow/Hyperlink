@@ -24,8 +24,11 @@ import {
   type LocalExtension,
 } from "./extensionsClient";
 import { getApiAddress } from "./settings";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 export const ExtensionsScreen = (): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { address } = useAppContext();
   const insets = useSafeAreaInsets();
   const apiBase = getApiAddress(address);
@@ -110,7 +113,7 @@ export const ExtensionsScreen = (): React.ReactElement => {
               value={ref}
               onChangeText={setRef}
               placeholder="publisher.extension"
-              placeholderTextColor={colors.placeholderText}
+              placeholderTextColor={textColors.placeholderText}
               autoCapitalize="none"
               autoCorrect={false}
               onSubmitEditing={onInstall}
@@ -160,7 +163,7 @@ export const ExtensionsScreen = (): React.ReactElement => {
 
         <Text style={styles.sectionLabel}>Installed</Text>
         {loading ? (
-          <ActivityIndicator style={styles.loading} color={colors.secondaryLabel} />
+          <ActivityIndicator style={styles.loading} color={textColors.secondaryLabel} />
         ) : items.length === 0 ? (
           <Text style={styles.empty}>No extensions installed.</Text>
         ) : (
@@ -195,7 +198,8 @@ const contributes = (ext: ExtensionManifest): string => {
   return parts.length === 0 ? "No supported contributions" : parts.join(" · ");
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -206,7 +210,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     textTransform: "uppercase",
     marginTop: 16,
@@ -223,7 +227,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
   },
   installRow: {
@@ -233,7 +237,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     paddingVertical: 8,
     paddingHorizontal: 10,
@@ -264,7 +268,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     textAlign: "center",
     marginTop: 16,
@@ -279,12 +283,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   extName: {
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     fontWeight: "600",
   },
   extMeta: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     marginTop: 2,
   },
@@ -298,11 +302,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   importedText: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   extContributes: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
   },
 });

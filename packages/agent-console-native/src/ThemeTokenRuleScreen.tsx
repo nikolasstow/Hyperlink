@@ -28,6 +28,7 @@ import {
   type TokenRule,
   type VsCodeTheme,
 } from "./vscodeTheme";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ThemeTokenRule">;
 
@@ -41,6 +42,8 @@ const STYLE_FIELDS: ReadonlyArray<readonly [keyof FontStyleFlags, string]> = [
 ];
 
 export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { index } = props.route.params;
   const insets = useSafeAreaInsets();
   const draft = useThemeDraft();
@@ -124,7 +127,7 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
               onChangeText={setNewScope}
               onSubmitEditing={addScope}
               placeholder="Add scope, e.g. entity.name.function"
-              placeholderTextColor={colors.placeholderText}
+              placeholderTextColor={textColors.placeholderText}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="done"
@@ -206,7 +209,8 @@ export const ThemeTokenRuleScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -215,7 +219,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "600",
     textTransform: "uppercase",
@@ -243,23 +247,23 @@ const styles = StyleSheet.create({
   },
   rowTitle: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
   },
   rowValue: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontFamily: "Menlo",
   },
   scope: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 14,
     fontFamily: "Menlo",
   },
   scopeInput: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 14,
     fontFamily: "Menlo",
     padding: 0,
@@ -288,7 +292,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 8,
@@ -307,7 +311,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
     padding: 24,
   },

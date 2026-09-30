@@ -23,6 +23,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanim
 import { colors } from "./colors";
 import { useCollapsible } from "./CollapsibleParts";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 /** Matches the composer's expand timing — fast enough not to feel like
  * waiting, slow enough to read as motion. */
@@ -38,6 +39,8 @@ const durationLabel = (time: ReasoningPart["time"]): string | undefined => {
 };
 
 export const ReasoningBlock = (props: { readonly part: ReasoningPart }): React.ReactElement | null => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { part } = props;
   const { open, toggle } = useCollapsible(part.id);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -54,9 +57,9 @@ export const ReasoningBlock = (props: { readonly part: ReasoningPart }): React.R
        * content; nothing clips it. */}
       <GlassView style={[StyleSheet.absoluteFill, styles.glass]} glassEffectStyle="regular" colorScheme={scheme} />
       <TouchableOpacity style={styles.header} activeOpacity={0.6} onPress={toggle}>
-        <SystemIcon name="brain" size={13} color={colors.secondaryLabel} />
+        <SystemIcon name="brain" size={13} color={textColors.secondaryLabel} />
         <Text style={styles.label}>{label}</Text>
-        <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={colors.secondaryLabel} />
+        <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={textColors.secondaryLabel} />
       </TouchableOpacity>
       {open ? (
         <Animated.View
@@ -73,7 +76,8 @@ export const ReasoningBlock = (props: { readonly part: ReasoningPart }): React.R
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     marginTop: 8,
   },
@@ -90,7 +94,7 @@ const styles = StyleSheet.create({
   },
   label: {
     flex: 1,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "500",
   },
@@ -103,7 +107,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   text: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     lineHeight: 20,
   },

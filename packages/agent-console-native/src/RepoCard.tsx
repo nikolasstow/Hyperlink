@@ -14,7 +14,7 @@ import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, pad
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
-import { useCardTint } from "./theme";
+import { useCardTint, useTextColors } from "./theme";
 import { repoMenuFor } from "./repoMenu";
 
 const CARD_GUTTER = 12;
@@ -37,6 +37,7 @@ export type RepoCardProps = {
 const plural = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 const Face = (props: { readonly width: number } & RepoCardProps): React.ReactElement => {
+  const textColors = useTextColors();
   const icon = props.isKnownRepo ? "shippingbox" : "folder";
   // Slightly darker on a light background, lighter on a dark one.
   const tint = useCardTint();
@@ -47,20 +48,21 @@ const Face = (props: { readonly width: number } & RepoCardProps): React.ReactEle
       modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 })]}
     >
       <HStack spacing={7} alignment="center">
-        <Image systemName={icon} size={15} color={colors.secondaryLabel} />
-        <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{props.repo}</UIText>
+        <Image systemName={icon} size={15} color={textColors.secondaryLabel} />
+        <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.repo}</UIText>
         <Spacer />
-        <Image systemName="chevron.right" size={13} color={colors.secondaryLabel} />
+        <Image systemName="chevron.right" size={13} color={textColors.secondaryLabel} />
       </HStack>
       {props.mostRecentTitle !== undefined ? (
-        <UIText modifiers={[font({ size: 13 }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{props.mostRecentTitle}</UIText>
+        <UIText modifiers={[font({ size: 13 }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{props.mostRecentTitle}</UIText>
       ) : null}
-      <UIText modifiers={[font({ size: 11 }), foregroundStyle(colors.secondaryLabel)]}>{props.meta}</UIText>
+      <UIText modifiers={[font({ size: 11 }), foregroundStyle(textColors.secondaryLabel)]}>{props.meta}</UIText>
     </VStack>
   );
 };
 
 const Preview = (props: { readonly width: number } & RepoCardProps): React.ReactElement => {
+  const textColors = useTextColors();
   const icon = props.isKnownRepo ? "shippingbox" : "folder";
   const tint = useCardTint();
   return (
@@ -71,16 +73,16 @@ const Preview = (props: { readonly width: number } & RepoCardProps): React.React
     >
       <HStack spacing={9} alignment="center">
         <Image systemName={icon} size={20} color={colors.tint} />
-        <UIText modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(colors.label), lineLimit(1)]}>{props.repo}</UIText>
+        <UIText modifiers={[font({ size: 20, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.repo}</UIText>
       </HStack>
       <VStack alignment="leading" spacing={5}>
-        <UIText modifiers={[font({ size: 14 }), foregroundStyle(colors.secondaryLabel)]}>{plural(props.sessionCount, "session")}</UIText>
+        <UIText modifiers={[font({ size: 14 }), foregroundStyle(textColors.secondaryLabel)]}>{plural(props.sessionCount, "session")}</UIText>
         {props.worktreeCount > 1 ? (
-          <UIText modifiers={[font({ size: 14 }), foregroundStyle(colors.secondaryLabel)]}>{plural(props.worktreeCount, "worktree")}</UIText>
+          <UIText modifiers={[font({ size: 14 }), foregroundStyle(textColors.secondaryLabel)]}>{plural(props.worktreeCount, "worktree")}</UIText>
         ) : null}
-        <UIText modifiers={[font({ size: 14 }), foregroundStyle(colors.secondaryLabel)]}>{`Last active ${props.lastActive}`}</UIText>
+        <UIText modifiers={[font({ size: 14 }), foregroundStyle(textColors.secondaryLabel)]}>{`Last active ${props.lastActive}`}</UIText>
         {props.mostRecentTitle !== undefined ? (
-          <UIText modifiers={[font({ size: 14 }), foregroundStyle(colors.label), lineLimit(3)]}>{`Latest: ${props.mostRecentTitle}`}</UIText>
+          <UIText modifiers={[font({ size: 14 }), foregroundStyle(textColors.label), lineLimit(3)]}>{`Latest: ${props.mostRecentTitle}`}</UIText>
         ) : null}
       </VStack>
     </VStack>

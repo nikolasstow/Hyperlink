@@ -11,9 +11,9 @@ import { Host, Menu, RNHostView, Section, Toggle } from "@expo/ui/swift-ui";
 import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 const MENU_MODIFIERS = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")] as const;
 
@@ -30,6 +30,8 @@ type ProviderGroup = {
 };
 
 export const ModelPicker = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
 
   const groups = React.useMemo((): ReadonlyArray<ProviderGroup> => {
@@ -58,7 +60,7 @@ export const ModelPicker = (props: Props): React.ReactElement => {
               <Text style={styles.labelText} numberOfLines={1} ellipsizeMode="middle">
                 {label}
               </Text>
-              <Feather name="chevron-down" size={13} color={colors.secondaryLabel} />
+              <Feather name="chevron-down" size={13} color={textColors.secondaryLabel} />
             </View>
           </RNHostView>
         }
@@ -87,7 +89,8 @@ export const ModelPicker = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   host: {
     height: COMPOSER_CHIP_SIZE,
     maxWidth: "100%",
@@ -103,7 +106,7 @@ const styles = StyleSheet.create({
   },
   labelText: {
     flexShrink: 1,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "500",
   },

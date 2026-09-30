@@ -18,6 +18,7 @@ import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
 import { MessageBubble } from "./MessageBubble";
 import type { Transcript } from "./useSessionStream";
+import { type TextColors, useThemedStyles } from "./theme";
 
 /** Trailing messages to mount — bounded so a long history stays cheap; the
  * container clips whatever doesn't fit. */
@@ -28,6 +29,7 @@ export const ChatPreview = (props: {
   readonly width: number;
   readonly height: number;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const order = props.transcript?.order ?? [];
   const tail = order.slice(-TAIL);
 
@@ -47,7 +49,8 @@ export const ChatPreview = (props: {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   card: {
     // Newest message flush to the bottom; older content overflows and clips at
     // the top — the "scrolled to bottom" view you'd land on opening the session.
@@ -59,7 +62,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     paddingHorizontal: ROW_GUTTER,
     paddingBottom: 14,

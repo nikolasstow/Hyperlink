@@ -39,6 +39,7 @@ import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonList } from "./Skeleton";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
 import { getApiAddress } from "./settings";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ExtensionView">;
 
@@ -109,6 +110,8 @@ const Row = (props: {
   readonly onOpen: () => void;
   readonly onAction: (action: ViewAction) => void;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { node, depth } = props.row;
   const play = playActionOf(node);
   const menu = menuActionsOf(node);
@@ -130,7 +133,7 @@ const Row = (props: {
         <UIText modifiers={[frame({ width: CHEVRON_COL })]}>{""}</UIText>
       )}
       {glyph === undefined ? (
-        <Image systemName={symbolForIcon(node.icon)} size={17} color={colors.secondaryLabel} modifiers={[frame({ width: ICON_COL })]} />
+        <Image systemName={symbolForIcon(node.icon)} size={17} color={textColors.secondaryLabel} modifiers={[frame({ width: ICON_COL })]} />
       ) : (
         <RNHostView matchContents>
           <View style={styles.fileIcon}>
@@ -139,9 +142,9 @@ const Row = (props: {
         </RNHostView>
       )}
       <VStack alignment="leading" spacing={2}>
-        <UIText modifiers={[font({ size: 15 }), foregroundStyle(colors.label), lineLimit(1)]}>{node.label}</UIText>
+        <UIText modifiers={[font({ size: 15 }), foregroundStyle(textColors.label), lineLimit(1)]}>{node.label}</UIText>
         {node.description === undefined ? null : (
-          <UIText modifiers={[font({ size: 12, family: "Menlo" }), foregroundStyle(colors.secondaryLabel), lineLimit(1)]}>{node.description}</UIText>
+          <UIText modifiers={[font({ size: 12, family: "Menlo" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{node.description}</UIText>
         )}
       </VStack>
       <Spacer />
@@ -174,6 +177,7 @@ const Row = (props: {
 };
 
 export const ExtensionViewScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const { view, title } = props.route.params;
   // A worktree page: it shows the repo's primary worktree (primaryWorktree.ts).
   const { dir } = usePrimaryWorktree(props.route.params.repo, props.route.params.dir);
@@ -276,7 +280,8 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -304,11 +309,11 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   message: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   detail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontFamily: "Menlo",
     textAlign: "center",

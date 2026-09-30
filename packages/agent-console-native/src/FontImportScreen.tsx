@@ -22,10 +22,13 @@ import { addCustomFont, importFontFile, inspectFont, type FontDetails } from "./
 import type { RootStackParamList } from "./RootNavigator";
 import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
+import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FontImport">;
 
-const DetailRow = (props: { readonly label: string; readonly value: string }): React.ReactElement => (
+const DetailRow = (props: { readonly label: string; readonly value: string }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={styles.detailRow}>
     <Text style={styles.detailKey}>{props.label}</Text>
     <Text style={styles.detailVal} numberOfLines={2}>
@@ -33,8 +36,11 @@ const DetailRow = (props: { readonly label: string; readonly value: string }): R
     </Text>
   </View>
 );
+};
 
 export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
 
@@ -94,7 +100,7 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
       <View style={styles.topBar}>
         {step === "choose" ? (
           <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={10} accessibilityLabel="Close">
-            <SystemIcon name="xmark" size={17} color={colors.secondaryLabel} />
+            <SystemIcon name="xmark" size={17} color={textColors.secondaryLabel} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={backToChoose} hitSlop={10} accessibilityLabel="Back">
@@ -129,7 +135,7 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
             value={urlInput}
             onChangeText={setUrlInput}
             placeholder="https://example.com/FiraCode-Regular.ttf"
-            placeholderTextColor={colors.placeholderText}
+            placeholderTextColor={textColors.placeholderText}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
@@ -156,7 +162,7 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
           </TouchableOpacity>
 
           <View style={styles.supported}>
-            <SystemIcon name="info.circle" size={13} color={colors.secondaryLabel} />
+            <SystemIcon name="info.circle" size={13} color={textColors.secondaryLabel} />
             <Text style={styles.supportedText}>Supports .ttf, .otf, and .woff2 (converted automatically).</Text>
           </View>
 
@@ -181,7 +187,8 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -229,20 +236,20 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   title: {
-    color: colors.label,
+    color: text.label,
     fontSize: 22,
     fontWeight: "700",
     textAlign: "center",
   },
   subtitle: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     textAlign: "center",
     marginTop: -6,
     marginBottom: 4,
   },
   heading: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.6,
@@ -251,7 +258,7 @@ const styles = StyleSheet.create({
   },
   input: {
     width: "100%",
-    color: colors.label,
+    color: text.label,
     fontSize: 16,
     textAlign: "center",
     paddingVertical: 12,
@@ -273,7 +280,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.separator,
   },
   or: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
   },
   fileButton: {
@@ -298,7 +305,7 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   supportedText: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
   },
   error: {
@@ -307,13 +314,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   family: {
-    color: colors.label,
+    color: text.label,
     fontSize: 26,
     fontWeight: "700",
     textAlign: "center",
   },
   sample: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 17,
     textAlign: "center",
   },
@@ -328,12 +335,12 @@ const styles = StyleSheet.create({
   },
   detailKey: {
     width: 96,
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
   },
   detailVal: {
     flex: 1,
-    color: colors.label,
+    color: text.label,
     fontSize: 14,
   },
 });

@@ -19,13 +19,14 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
 import { SystemIcon } from "./SystemIcon";
-import { useTheme } from "./theme";
+import { type TextColors, useTheme, useThemedStyles } from "./theme";
 import type { PendingPermission, PermissionReply } from "./sessionPermissions";
 
 export const PermissionPrompt = (props: {
   readonly pending: PendingPermission;
   readonly onReply: (reply: PermissionReply) => void;
 }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const { pending } = props;
   const { colors: themeColors } = useTheme();
   const detail = pending.resources.length > 0 ? pending.resources.join("\n") : undefined;
@@ -61,7 +62,8 @@ export const PermissionPrompt = (props: {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   row: {
     flexDirection: "row",
     marginBottom: 14,
@@ -81,19 +83,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 12,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   action: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
     fontWeight: "600",
   },
   detail: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontFamily: "Menlo",
     lineHeight: 18,

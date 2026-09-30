@@ -36,6 +36,7 @@ import {
   normalizePickedColor,
   type VsCodeTheme,
 } from "./vscodeTheme";
+import { type TextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ThemeColorGroup">;
 
@@ -61,7 +62,9 @@ const ColorRow = (props: {
   readonly first: boolean;
   /** View-only: show the colour as a static swatch, with no picker or Unset. */
   readonly readonly: boolean;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
   <View style={[styles.row, !props.first && styles.rowBorder]}>
     <View style={styles.rowText}>
       <Text style={styles.rowTitle} numberOfLines={1}>
@@ -106,8 +109,10 @@ const ColorRow = (props: {
     )}
   </View>
 );
+};
 
 export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const { groupId, focusKey } = props.route.params;
   const insets = useSafeAreaInsets();
   const draft = useThemeDraft();
@@ -208,7 +213,8 @@ export const ThemeColorGroupScreen = (props: Props): React.ReactElement => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -217,7 +223,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   sectionLabel: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontWeight: "600",
     textTransform: "uppercase",
@@ -248,21 +254,21 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowTitle: {
-    color: colors.label,
+    color: text.label,
     fontSize: 15,
   },
   rowTitleDim: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 15,
   },
   rowKey: {
-    color: colors.tertiaryLabel,
+    color: text.tertiaryLabel,
     fontSize: 11,
     fontFamily: "Menlo",
     marginTop: 1,
   },
   rowValue: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     fontFamily: "Menlo",
   },
@@ -281,7 +287,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   clearText: {
-    color: colors.tertiaryLabel,
+    color: text.tertiaryLabel,
     fontSize: 12,
   },
   addText: {
@@ -289,13 +295,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   empty: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 14,
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
   hint: {
-    color: colors.secondaryLabel,
+    color: text.secondaryLabel,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 7,
