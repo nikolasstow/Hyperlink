@@ -61,6 +61,9 @@ const timeAgo = (ms: number): string => {
   return `${days}d ago`;
 };
 
+/** The Customize card's pages, a row each. */
+const CUSTOMIZE_PAGES: ReadonlyArray<"Appearance" | "Extensions" | "Plugins"> = ["Appearance", "Extensions", "Plugins"];
+
 export const SettingsScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -190,33 +193,21 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
       keyboardDismissMode="on-drag"
     >
         <Text style={[styles.sectionLabel, styles.sectionLabelFirst]}>Customize</Text>
-        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Appearance")} activeOpacity={0.6}>
+        {/* One card, a row per page. */}
+        <View style={[styles.card, styles.listCard]}>
           <CardGlass />
-          <View style={styles.linkRow}>
-            <View style={styles.linkText}>
-              <Text style={styles.fieldLabel}>Appearance</Text>
-            </View>
-            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Extensions")} activeOpacity={0.6}>
-          <CardGlass />
-          <View style={styles.linkRow}>
-            <View style={styles.linkText}>
-              <Text style={styles.fieldLabel}>Extensions</Text>
-            </View>
-            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("Plugins")} activeOpacity={0.6}>
-          <CardGlass />
-          <View style={styles.linkRow}>
-            <View style={styles.linkText}>
-              <Text style={styles.fieldLabel}>Plugins</Text>
-            </View>
-            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
-          </View>
-        </TouchableOpacity>
+          {CUSTOMIZE_PAGES.map((page, index) => (
+            <TouchableOpacity
+              key={page}
+              style={[styles.optionRow, index > 0 && styles.optionRowBorder]}
+              onPress={() => props.navigation.navigate(page)}
+              activeOpacity={0.6}
+            >
+              <Text style={styles.fieldLabel}>{page}</Text>
+              <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <Text style={styles.sectionLabel}>Dubz</Text>
         <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("AgentButtonSettings")} activeOpacity={0.6}>
@@ -245,10 +236,8 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             autoCorrect={false}
             spellCheck={false}
           />
-        </View>
-
-        <View style={styles.card}>
-          <CardGlass />
+          {/* The same card: where repos are found, and finding them. */}
+          <View style={styles.cardSeparator} />
           <View style={styles.rowBetween}>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Repo scan</Text>
@@ -516,6 +505,15 @@ const makeStyles = (text: TextColors) =>
     justifyContent: "space-between",
     gap: 12,
     paddingVertical: 10,
+  },
+  // A card of rows: the rows carry their own vertical padding.
+  listCard: {
+    paddingVertical: 2,
+    gap: 0,
+  },
+  cardSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.separator,
   },
   optionRowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
