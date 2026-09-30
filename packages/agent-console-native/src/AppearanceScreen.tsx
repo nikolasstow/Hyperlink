@@ -153,20 +153,19 @@ const withThemeBackground = (theme: Theme, background: string | undefined, dark:
 /** The contrast slider's box: its own (set) height, the card's inner width. */
 const CONTRAST_SLIDER_HEIGHT = 34;
 
-/** The theme with one mode's Increase Contrast set, or off (the key
- * dropped). */
-const withContrast = (theme: Theme, key: "contrastLight" | "contrastDark", value: number | undefined): Theme => {
-  const { [key]: _previous, ...rest } = theme;
+/** The theme with Increase Contrast set, or off (the key dropped). */
+const withContrast = (theme: Theme, value: number | undefined): Theme => {
+  const { contrast: _previous, ...rest } = theme;
   return value === undefined
     ? rest
     : {
         ...rest,
-        [key]: value,
+        contrast: value,
       };
 };
 
-/** One mode's Increase Contrast: a switch, and when on, a slider for how much
- * the glass cards are brightened (starting in the middle). */
+/** Increase Contrast: a switch, and when on, a slider for how much the glass
+ * cards are brightened (starting in the middle). */
 const IncreaseContrast = (props: {
   readonly width: number;
   readonly value: number | undefined;
@@ -513,15 +512,18 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             systemColor={SYSTEM_BACKGROUND.light}
             themeColor={theme.code?.dark === false ? theme.code.background : undefined}
             onChange={(color) => setTheme(withBackground(theme, "backgroundLight", color))} />
-          <IncreaseContrast width={contentWidth - 28} value={theme.contrastLight} onChange={(value) => setTheme(withContrast(theme, "contrastLight", value))} />
-          <View style={styles.rowSeparator} />
           <BackgroundRow
             label="Dark"
             value={theme.backgroundDark}
             systemColor={SYSTEM_BACKGROUND.dark}
             themeColor={theme.code?.dark === true ? theme.code.background : undefined}
             onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
-          <IncreaseContrast width={contentWidth - 28} value={theme.contrastDark} onChange={(value) => setTheme(withContrast(theme, "contrastDark", value))} />
+        </View>
+
+        <Text style={styles.sectionLabel}>Contrast</Text>
+        <View style={styles.card}>
+          <CardGlass />
+          <IncreaseContrast width={contentWidth - 28} value={theme.contrast} onChange={(value) => setTheme(withContrast(theme, value))} />
         </View>
 
         <Text style={styles.sectionLabel}>Code font</Text>

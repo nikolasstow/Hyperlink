@@ -155,12 +155,11 @@ export const CONTRAST_START = 0.5;
 /** The glass's brightening at full contrast. */
 const MAX_BRIGHTEN_ALPHA = 0.2;
 
-/** The glass cards' tint: Increase Contrast (per mode, Appearance →
- * Background) only brightens them, a white tint as strong as its slider; off,
- * the standard glass, untinted. */
+/** The glass cards' tint: Increase Contrast (Appearance) only brightens them,
+ * a white tint as strong as its slider; off, the standard glass, untinted. */
 export const useCardTint = (): string | undefined => {
   const { theme } = useTheme();
-  const contrast = useColorScheme() === "dark" ? theme.contrastDark : theme.contrastLight;
+  const { contrast } = theme;
   return contrast === undefined || contrast <= 0 ? undefined : `rgba(255,255,255,${(MAX_BRIGHTEN_ALPHA * contrast).toFixed(3)})`;
 };
 
