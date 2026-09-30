@@ -266,19 +266,21 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>New repos (main checkout)</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.fieldLabel}>Path template</Text>
-          <TextInput
-            style={styles.input}
-            value={repoTemplateDraft}
-            onChangeText={setRepoTemplateDraft}
-            onBlur={saveRepoTemplate}
-            onSubmitEditing={saveRepoTemplate}
-            placeholder={DEFAULT_REPO_TEMPLATE}
-            placeholderTextColor={textColors.placeholderText}
-            autoCapitalize="none"
-            autoCorrect={false}
-            spellCheck={false}
-          />
+          <View style={styles.formRow}>
+            <Text style={styles.formLabel}>Path Template</Text>
+            <TextInput
+              style={styles.formInput}
+              value={repoTemplateDraft}
+              onChangeText={setRepoTemplateDraft}
+              onBlur={saveRepoTemplate}
+              onSubmitEditing={saveRepoTemplate}
+              placeholder={DEFAULT_REPO_TEMPLATE}
+              placeholderTextColor={textColors.placeholderText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+            />
+          </View>
           <Text style={styles.previewLabel}>Preview</Text>
           <Text style={styles.previewPath} numberOfLines={2} ellipsizeMode="head">
             {repoPreview}
@@ -288,19 +290,21 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>Linked worktrees</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.fieldLabel}>Path template</Text>
-          <TextInput
-            style={styles.input}
-            value={worktreeTemplateDraft}
-            onChangeText={setWorktreeTemplateDraft}
-            onBlur={saveWorktreeTemplate}
-            onSubmitEditing={saveWorktreeTemplate}
-            placeholder={DEFAULT_WORKTREE_TEMPLATE}
-            placeholderTextColor={textColors.placeholderText}
-            autoCapitalize="none"
-            autoCorrect={false}
-            spellCheck={false}
-          />
+          <View style={styles.formRow}>
+            <Text style={styles.formLabel}>Path Template</Text>
+            <TextInput
+              style={styles.formInput}
+              value={worktreeTemplateDraft}
+              onChangeText={setWorktreeTemplateDraft}
+              onBlur={saveWorktreeTemplate}
+              onSubmitEditing={saveWorktreeTemplate}
+              placeholder={DEFAULT_WORKTREE_TEMPLATE}
+              placeholderTextColor={textColors.placeholderText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+            />
+          </View>
           <Text style={styles.previewLabel}>Preview</Text>
           <Text style={styles.previewPath} numberOfLines={2} ellipsizeMode="head">
             {worktreePreview}
