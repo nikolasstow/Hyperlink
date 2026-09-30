@@ -44,11 +44,16 @@ export const ModelPicker = (props: Props): React.ReactElement => {
         existing.models.push(model);
       }
     }
-    return Array.from(map.entries()).map(([providerID, group]) => ({
-      providerID,
-      title: group.title,
-      models: group.models,
-    }));
+    // Alphabetical: providers by name, and their models by name (numbers by
+    // value, so a version 10 follows 9).
+    const byName = (a: string, b: string): number => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+    return Array.from(map.entries())
+      .map(([providerID, group]) => ({
+        providerID,
+        title: group.title,
+        models: [...group.models].sort((a, b) => byName(a.name, b.name)),
+      }))
+      .sort((a, b) => byName(a.title, b.title));
   }, [props.models]);
 
   return (
