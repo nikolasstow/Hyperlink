@@ -33,7 +33,7 @@ const DEFAULT_PERMISSION_MODE_KEY = "agent-console-native:defaultPermissionMode"
 const SESSION_PERMISSION_MODES_KEY = "agent-console-native:sessionPermissionModes";
 const BACKEND_ADDRESS_KEY = "agent-console-native:backendAddress";
 const DUBZ_DETENT_KEY = "agent-console-native:dubzDetent";
-const BAR_PAGE_KEY = "agent-console-native:barPage";
+const BAR_PAGES_KEY = "agent-console-native:barPages";
 /** The vite dev server's port. Same host as opencode in every setup so far,
  * so the backend address is derived rather than asked for — one address to
  * type stays one address to type. */
@@ -148,13 +148,20 @@ export const setDubzDetent = (value: { readonly frac: number; readonly kbFull: n
 /** The bottom bar's pages: the screen's composer, or Dubz. */
 export type BarPage = "compose" | "dubz";
 
-/** The page the bottom bar last opened to; it opens to it again. */
-export const getBarPage = async (): Promise<BarPage | undefined> => {
-  const value = await AsyncStorage.getItem(BAR_PAGE_KEY);
-  return value === "compose" || value === "dubz" ? value : undefined;
+/** The page chosen on each page type (Home, a repo, a session), by type. */
+export const getBarPages = async (): Promise<Readonly<Record<string, BarPage>>> => {
+  const raw = await AsyncStorage.getItem(BAR_PAGES_KEY);
+  if (raw === null) return {};
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== "object" || parsed === null) return {};
+  const pages: Record<string, BarPage> = {};
+  for (const [pageType, page] of Object.entries(parsed)) {
+    if (page === "compose" || page === "dubz") pages[pageType] = page;
+  }
+  return pages;
 };
 
-export const setBarPage = (value: BarPage): Promise<void> => AsyncStorage.setItem(BAR_PAGE_KEY, value);
+export const setBarPages = (value: Readonly<Record<string, BarPage>>): Promise<void> => AsyncStorage.setItem(BAR_PAGES_KEY, JSON.stringify(value));
 
 export const getDefaultWorktreePreference = async (): Promise<DefaultWorktreePreference> => {
   const value = await AsyncStorage.getItem(DEFAULT_WORKTREE_PREF_KEY);

@@ -64,6 +64,8 @@ const EXPAND_ANIMATION = {
   delete: { type: "keyboard", property: "opacity" },
 } as const;
 
+const noop = (): void => undefined;
+
 export const Composer = (props: {
   readonly onSend: (text: string, model: ModelOption | undefined) => Promise<void>;
   readonly disabled: boolean;
@@ -89,8 +91,9 @@ export const Composer = (props: {
   // input is not the focused one.
   const [held, setHeld] = React.useState(false);
   const expanded = focused || held || text.length > 0;
-  const withDubz = useAgentButtonVisible(props.dubzContext.surface);
-  const lastPage = useBarPage();
+  const pageType = props.dubzContext.surface;
+  const withDubz = useAgentButtonVisible(pageType);
+  const lastPage = useBarPage(pageType);
   const [dubzOpen, setDubzOpen] = React.useState(false);
   // Open or collapse Dubz without its grow: it slid in, or away.
   const [dubzInstant, setDubzInstant] = React.useState(false);
@@ -146,12 +149,12 @@ export const Composer = (props: {
     if (!held) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(true);
     setHeld(false);
-    if (withDubz) rememberPage("compose");
+    if (withDubz) rememberPage(pageType, "compose");
   };
 
   const expand = React.useCallback(() => inputRef.current?.focus(), []);
 
-  // Collapsed, the bar shows the page opened last (on any screen).
+  // Collapsed, the bar shows this page type's page.
   React.useEffect(() => {
     if (expanded || dubzOpen) return;
     pageX.value = withDubz && lastPage === "dubz" ? 1 : 0;
@@ -166,66 +169,77 @@ export const Composer = (props: {
   }, []);
   // The slide has finished on Dubz: it takes the keyboard.
   const turnToDubz = React.useCallback(() => {
-    rememberPage("dubz");
+    rememberPage(pageType, "dubz");
     dubzInputRef.current?.focus();
-  }, []);
+  }, [pageType]);
   // The slide has fallen back: Dubz goes, unseen.
   const stayOnCompose = React.useCallback(() => {
     setDubzOpen(false);
     setHeld(false);
   }, []);
 
-  // ── Back from Dubz ──
+  // Collapsed, a swipe just slides between the bars; turned, the page is
+  // this page type's from now on.
+  const turnCollapsedToDubz = React.useCallback(() => rememberPage(pageType, "dubz"), [pageType]);
+
+  // ── Back from Dubz ── (open: to the composer, expanded; collapsed: to its bar)
   const pageBack = React.useMemo<PageBack>(
     () => ({
       pageX,
-      begin: () => setHeld(true),
-      turn: () => {
-        rememberPage("compose");
+      begin: (open) => {
+        if (open) setHeld(true);
+      },
+      turn: (open) => {
+        rememberPage(pageType, "compose");
+        if (!open) return;
         inputRef.current?.focus();
         setDubzInstant(true);
         setDubzOpen(false);
       },
-      stay: () => setHeld(false),
+      stay: (open) => {
+        if (open) setHeld(false);
+      },
     }),
-    [pageX],
+    [pageX, pageType],
   );
 
   // Dubz, collapsed on the bar, tapped; and Dubz collapsing into the bar.
   const openDubz = React.useCallback(() => {
-    rememberPage("dubz");
+    rememberPage(pageType, "dubz");
     setDubzInstant(false);
     setDubzOpen(true);
-  }, []);
+  }, [pageType]);
   const closeDubz = React.useCallback(() => {
     setDubzInstant(false);
     setDubzOpen(false);
     setHeld(false);
   }, []);
 
-  // Swipe left, while expanded, to slide Dubz in. Only a clear sideways drag
-  // pages, so typing, selecting and the controls are left alone.
-  const toDubz = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(expanded && withDubz)
-        .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
-        .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
-        .onStart(() => {
-          runOnJS(beginToDubz)();
-        })
-        .onUpdate((e) => {
-          const moved = -e.translationX / screenW;
-          pageX.value = moved < 0 ? 0 : moved > 1 ? 1 : moved;
-        })
-        .onEnd((e) => {
-          const turned = pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING;
-          pageX.value = withTiming(turned ? 1 : 0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
-            if (finished === true) runOnJS(turned ? turnToDubz : stayOnCompose)();
-          });
-        }),
-    [expanded, withDubz, pageX, screenW, beginToDubz, turnToDubz, stayOnCompose],
-  );
+  // Swipe left to slide Dubz in: expanded, Dubz arrives open; collapsed, its
+  // bar slides in. Only a clear sideways drag pages, so typing, selecting and
+  // the controls are left alone.
+  const toDubz = React.useMemo(() => {
+    const begin = expanded ? beginToDubz : noop;
+    const turn = expanded ? turnToDubz : turnCollapsedToDubz;
+    const stay = expanded ? stayOnCompose : noop;
+    return Gesture.Pan()
+      .enabled(withDubz)
+      .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
+      .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
+      .onStart(() => {
+        runOnJS(begin)();
+      })
+      .onUpdate((e) => {
+        const moved = -e.translationX / screenW;
+        pageX.value = moved < 0 ? 0 : moved > 1 ? 1 : moved;
+      })
+      .onEnd((e) => {
+        const turned = pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING;
+        pageX.value = withTiming(turned ? 1 : 0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+          if (finished === true) runOnJS(turned ? turn : stay)();
+        });
+      });
+  }, [expanded, withDubz, pageX, screenW, beginToDubz, turnToDubz, turnCollapsedToDubz, stayOnCompose]);
 
   // Each page off to its side by how far the pages stand from it.
   const composeSlide = useAnimatedStyle(() => ({

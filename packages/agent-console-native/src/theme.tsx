@@ -39,6 +39,9 @@ export interface ThemeColors {
    * as the send button's fill, so the two read as a matched pair (primary send,
    * secondary assistant) with white glyphs. */
   readonly secondaryFill: string;
+  /** Dubz's send button, unarmed: `secondary` muted the way `sendMutedFill`
+   * mutes `primary`, same translucency. */
+  readonly secondaryMutedFill: string;
 }
 
 interface ThemeContextValue {
@@ -70,6 +73,7 @@ export const deriveColors = (theme: Theme): ThemeColors => {
   const [sr, sg, sb] = toRgb(theme.secondary);
   const mute = (c: number): number => Math.round(c + (255 - c) * MUTE_FACTOR);
   const [mr, mg, mb] = [mute(pr), mute(pg), mute(pb)];
+  const [msr, msg, msb] = [mute(sr), mute(sg), mute(sb)];
   return {
     primary: theme.primary,
     secondary: theme.secondary,
@@ -79,6 +83,7 @@ export const deriveColors = (theme: Theme): ThemeColors => {
     sendActiveFill: `rgba(${pr}, ${pg}, ${pb}, ${SEND_FILL_ALPHA})`,
     sendMutedFill: `rgba(${mr}, ${mg}, ${mb}, ${SEND_FILL_ALPHA})`,
     secondaryFill: `rgba(${sr}, ${sg}, ${sb}, ${SEND_FILL_ALPHA})`,
+    secondaryMutedFill: `rgba(${msr}, ${msg}, ${msb}, ${SEND_FILL_ALPHA})`,
   };
 };
 

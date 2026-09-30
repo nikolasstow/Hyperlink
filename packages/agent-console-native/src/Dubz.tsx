@@ -40,13 +40,13 @@ import Reanimated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AGENT_NAME, useAgentButtonVisible } from "./agentButtonSettings";
+import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { colors } from "./colors";
 import { useKeyboardHeightValue } from "./keyboardHeight";
 import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
-import { getBarPage, getDubzDetent, setBarPage, setDubzDetent, type BarPage } from "./settings";
+import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 
 /** The bar's side inset (BottomBar's), and so the window's. */
@@ -105,34 +105,51 @@ export const PAGE_SLOP_X = 16;
 export const PAGE_SLOP_Y = 12;
 export const pageEasing = Easing.out(Easing.cubic);
 
-// ── The page the bar opens to ───────────────────────────────────────────────
+// ── The page the bar opens to, per page type ────────────────────────────────
 
-let lastPage: BarPage = "compose";
+/** Each page type's page before one is chosen there: Dubz, unless the type
+ * has its own (a session: its message composer, the conversation being the
+ * point). Choosing a page on a page type makes it that type's default. */
+const DEFAULT_PAGE: Readonly<Record<AgentSurface, BarPage>> = {
+  home: "dubz",
+  repo: "dubz",
+  session: "compose",
+  editor: "dubz",
+};
+
+let chosenPages: Readonly<Record<string, BarPage>> = {};
 const pageListeners = new Set<() => void>();
 const subscribePage = (listener: () => void): (() => void) => {
   pageListeners.add(listener);
   return () => pageListeners.delete(listener);
 };
-const setLastPage = (page: BarPage): void => {
-  if (lastPage === page) return;
-  lastPage = page;
-  pageListeners.forEach((listener) => listener());
-};
-getBarPage().then(
-  (page) => {
-    if (page !== undefined) setLastPage(page);
+getBarPages().then(
+  (pages) => {
+    // Anything chosen meanwhile is newer; keep it.
+    chosenPages = {
+      ...pages,
+      ...chosenPages,
+    };
+    pageListeners.forEach((listener) => listener());
   },
-  (error: unknown) => console.error("[dubz] reading the bar's last page failed", error),
+  (error: unknown) => console.error("[dubz] reading the bar's pages failed", error),
 );
 
-/** Remember the page opened, so the bar opens to it next time, anywhere. */
-export const rememberPage = (page: BarPage): void => {
-  setLastPage(page);
-  setBarPage(page).catch((error: unknown) => console.error("[dubz] saving the bar's page failed", error));
+/** Remember the page chosen on a page type: it is that type's page from now
+ * on, on every page of the type. */
+export const rememberPage = (pageType: AgentSurface, page: BarPage): void => {
+  if (chosenPages[pageType] === page) return;
+  chosenPages = {
+    ...chosenPages,
+    [pageType]: page,
+  };
+  pageListeners.forEach((listener) => listener());
+  setBarPages(chosenPages).catch((error: unknown) => console.error("[dubz] saving the bar's pages failed", error));
 };
 
-/** The page the bar opens to (and shows collapsed): the one opened last. */
-export const useBarPage = (): BarPage => React.useSyncExternalStore(subscribePage, () => lastPage);
+/** The page a page type's bar opens to (and shows collapsed). */
+export const useBarPage = (pageType: AgentSurface): BarPage =>
+  React.useSyncExternalStore(subscribePage, () => chosenPages[pageType] ?? DEFAULT_PAGE[pageType]);
 
 // ── What is typed to Dubz, the same on every screen ─────────────────────────
 
@@ -175,12 +192,13 @@ const noop = (): void => undefined;
 export interface PageBack {
   /** Where the pages stand: 1 this page, 0 the composer. */
   readonly pageX: SharedValue<number>;
-  /** A swipe back begins (the composer readies itself, off to the left). */
-  readonly begin: () => void;
+  /** A swipe back begins. `open`: Dubz is open (so the composer readies
+   * itself, expanded, off to the left); collapsed, the bars just slide. */
+  readonly begin: (open: boolean) => void;
   /** The swipe turned the page, and the slide has finished. */
-  readonly turn: () => void;
+  readonly turn: (open: boolean) => void;
   /** The swipe fell back, and the slide has finished. */
-  readonly stay: () => void;
+  readonly stay: (open: boolean) => void;
 }
 
 export interface DubzPageProps {
@@ -398,14 +416,15 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const begin = pageBack?.begin ?? noop;
   const turn = pageBack?.turn ?? noop;
   const stay = pageBack?.stay ?? noop;
+  // Open or collapsed: collapsed, it slides between the two bars.
   const paging = React.useMemo(
     () =>
       Gesture.Pan()
-        .enabled(open && pageBack !== undefined)
+        .enabled(pageBack !== undefined)
         .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
         .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
         .onStart(() => {
-          runOnJS(begin)();
+          runOnJS(begin)(open);
         })
         .onUpdate((e) => {
           pageX.value = 1 - unit(e.translationX / screenW);
@@ -413,7 +432,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         .onEnd((e) => {
           const turned = 1 - pageX.value > PAGE_TURN || e.velocityX > PAGE_FLING;
           pageX.value = withTiming(turned ? 0 : 1, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
-            if (finished === true) runOnJS(turned ? turn : stay)();
+            if (finished === true) runOnJS(turned ? turn : stay)(open);
           });
         }),
     [open, pageBack, pageX, begin, turn, stay, screenW],
@@ -520,7 +539,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
                         editable={open}
                         multiline
                       />
-                      <SendChip active={text.trim().length > 0} onPress={open ? () => setDraft("") : onOpen} />
+                      <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? () => setDraft("") : onOpen} />
                       {/* Collapsed: any tap on the bar opens it. */}
                       {open ? null : (
                         <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
@@ -575,10 +594,8 @@ export const DubzBar = (props: { readonly context: DubzContext }): React.ReactEl
   const inputRef = React.useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
   const slide = useKeyboardSlide(composerRestingBottom(insets.bottom));
-  const onOpen = React.useCallback(() => {
-    rememberPage("dubz");
-    setOpen(true);
-  }, []);
+  // Dubz is the only page here: nothing to remember.
+  const onOpen = React.useCallback(() => setOpen(true), []);
   const onClose = React.useCallback(() => setOpen(false), []);
   if (!visible) return null;
   return (

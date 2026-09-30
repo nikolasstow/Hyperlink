@@ -63,16 +63,27 @@ export const PlusChip = (props: { readonly onPress: () => void }): React.ReactEl
   </Host>
 );
 
-/** The send button: solid while there is something to send, muted when not. */
-export const SendChip = (props: { readonly active: boolean; readonly onPress: () => void }): React.ReactElement => {
+/** The send button: solid while there is something to send, muted when not.
+ * In the theme's primary (the composer's) or secondary (Dubz's), so the two
+ * bars tell apart even collapsed. */
+export const SendChip = (props: {
+  readonly active: boolean;
+  readonly onPress: () => void;
+  readonly accent?: "primary" | "secondary";
+}): React.ReactElement => {
   const { colors: themeColors } = useTheme();
+  const secondary = props.accent === "secondary";
   return (
     <Host style={styles.sendChipHost}>
       <Button
         label="Send"
         systemImage="arrow.up"
         onPress={props.onPress}
-        modifiers={sendButtonModifiers(props.active, themeColors.sendActiveFill, themeColors.sendMutedFill)}
+        modifiers={sendButtonModifiers(
+          props.active,
+          secondary ? themeColors.secondaryFill : themeColors.sendActiveFill,
+          secondary ? themeColors.secondaryMutedFill : themeColors.sendMutedFill,
+        )}
       />
     </Host>
   );
