@@ -14,7 +14,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { File, Paths } from "expo-file-system";
-import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Slider, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
@@ -26,7 +26,7 @@ import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
-import { useTheme } from "./theme";
+import { DEFAULT_CARD_CONTRAST, useTheme } from "./theme";
 import { useCodeTheme } from "./useCodeTheme";
 import {
   deleteCreatedTheme,
@@ -149,6 +149,9 @@ const withBackground = (theme: Theme, key: "backgroundLight" | "backgroundDark",
  * mode that theme is made for; unchanged when the theme has none. */
 const withThemeBackground = (theme: Theme, background: string | undefined, dark: boolean): Theme =>
   background === undefined ? theme : withBackground(theme, dark ? "backgroundDark" : "backgroundLight", background);
+
+/** The contrast slider's box: its own (set) height, the card's inner width. */
+const CONTRAST_SLIDER_HEIGHT = 34;
 
 /** What "System" is for each mode: the grouped background iOS gives screens. */
 const SYSTEM_BACKGROUND = {
@@ -484,6 +487,18 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             systemColor={SYSTEM_BACKGROUND.dark}
             themeColor={theme.code?.dark === true ? theme.code.background : undefined}
             onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
+          {/* How much the glass cards darken (on a light background) or
+           * lighten (on a dark one). */}
+          <Text style={[styles.backgroundLabel, styles.contrastLabel]}>Card contrast</Text>
+          <Host style={{ width: contentWidth - 28, height: CONTRAST_SLIDER_HEIGHT }}>
+            <Slider
+              value={theme.cardContrast ?? DEFAULT_CARD_CONTRAST}
+              min={0}
+              max={1}
+              step={0.05}
+              onValueChange={(value) => setTheme({ ...theme, cardContrast: value })}
+            />
+          </Host>
         </View>
 
         <Text style={styles.sectionLabel}>Code font</Text>
@@ -545,20 +560,19 @@ interface ThemeListProps {
 /** The compact card face of one theme row: a colour dot, the name, and a
  * checkmark when it is the enabled theme. This is the `ContextMenu.Trigger`, so
  * it is what iOS lifts on a long-press. */
-const ThemeRowCard = (props: {
+/** A theme's row in the theme card, laid out as the code font rows are: its
+ * dot where a font shows its sample, the name, a checkmark when in use. */
+const ThemeRow = (props: {
   readonly width: number;
   readonly dot: string;
   readonly label: string;
   readonly active: boolean;
 }): React.ReactElement => (
-  <HStack
-    spacing={12}
-    modifiers={[frame({ width: props.width, alignment: "leading" }), padding({ horizontal: 16, vertical: 14 }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
-  >
-    <Circle modifiers={[frame({ width: 22, height: 22 }), foregroundStyle(props.dot)]} />
+  <HStack spacing={12} modifiers={[frame({ width: props.width, alignment: "leading" }), padding({ vertical: 10 })]}>
+    <Circle modifiers={[frame({ width: 22, height: 22 }), foregroundStyle(props.dot), frame({ width: 30, alignment: "leading" })]} />
     <UIText modifiers={[font({ size: 16 }), foregroundStyle(colors.label), lineLimit(1)]}>{props.label}</UIText>
     <Spacer />
-    {props.active ? <Image systemName="checkmark" size={16} color={colors.tint} /> : null}
+    {props.active ? <Image systemName="checkmark" size={15} color={colors.tint} /> : null}
   </HStack>
 );
 
@@ -596,83 +610,86 @@ const ThemeRowPreview = (props: {
 const ThemeList = (props: ThemeListProps): React.ReactElement => {
   const { contentWidth, themes, created, enabled } = props;
   const dotOf = (color: string | undefined): string => toOpaqueHex(color) ?? DEFAULT_THEME.primary;
+  // The rows span the card inside its padding (14 each side).
+  const rowWidth = contentWidth - 28;
 
+  // One card, as the code font list is: a row per theme, a separator under
+  // each, "Create theme…" last. Each row is its own native Host, so its
+  // context menu (long-press) can lift it.
   return (
-    <View style={styles.themeStack}>
-      <Host style={styles.themeCardHost} matchContents={{ vertical: true, horizontal: false }}>
-        <VStack modifiers={[onTapGesture(props.onSelectDefault)]}>
-          <ThemeRowCard width={contentWidth} dot={DEFAULT_THEME.primary} label="Default" active={enabled === undefined} />
-        </VStack>
-      </Host>
+    <View style={styles.card}>
+      <CardGlass />
+      <View>
+        <Host style={{ width: rowWidth }} matchContents={{ vertical: true, horizontal: false }}>
+          <VStack modifiers={[onTapGesture(props.onSelectDefault)]}>
+            <ThemeRow width={rowWidth} dot={DEFAULT_THEME.primary} label="Default" active={enabled === undefined} />
+          </VStack>
+        </Host>
+        <View style={styles.rowSeparator} />
+      </View>
 
       {themes.map((t) => (
-        <Host key={t.key} style={styles.themeCardHost} matchContents={{ vertical: true, horizontal: false }}>
-          <ContextMenu>
-            <ContextMenu.Items>
-              <Button label="View Properties" systemImage="eye" onPress={() => props.onView(t)} />
-              <Button label="Duplicate Theme" systemImage="doc.on.doc" onPress={() => props.onDuplicateExtension(t)} />
-              <Button label="Export Theme as JSON" systemImage="square.and.arrow.up" onPress={() => props.onExportExtension(t)} />
-              <Section>
-                <Button label={`Uninstall Extension ${t.extName}`} role="destructive" systemImage="trash" onPress={() => props.onUninstall(t)} />
-              </Section>
-            </ContextMenu.Items>
-            <ContextMenu.Preview>
-              <ThemeRowPreview width={contentWidth} dot={dotOf(t.primary)} label={t.label} subtitle={t.extName} />
-            </ContextMenu.Preview>
-            <ContextMenu.Trigger>
-              <VStack modifiers={[onTapGesture(() => props.onSelectExtension(t))]}>
-                <ThemeRowCard
-                  width={contentWidth}
-                  dot={dotOf(t.primary)}
-                  label={t.label}
-                  active={enabled?.createdId === undefined && enabled?.file === t.file}
-                />
-              </VStack>
-            </ContextMenu.Trigger>
-          </ContextMenu>
-        </Host>
+        <View key={t.key}>
+          <Host style={{ width: rowWidth }} matchContents={{ vertical: true, horizontal: false }}>
+            <ContextMenu>
+              <ContextMenu.Items>
+                <Button label="View Properties" systemImage="eye" onPress={() => props.onView(t)} />
+                <Button label="Duplicate Theme" systemImage="doc.on.doc" onPress={() => props.onDuplicateExtension(t)} />
+                <Button label="Export Theme as JSON" systemImage="square.and.arrow.up" onPress={() => props.onExportExtension(t)} />
+                <Section>
+                  <Button label={`Uninstall Extension ${t.extName}`} role="destructive" systemImage="trash" onPress={() => props.onUninstall(t)} />
+                </Section>
+              </ContextMenu.Items>
+              <ContextMenu.Preview>
+                <ThemeRowPreview width={contentWidth} dot={dotOf(t.primary)} label={t.label} subtitle={t.extName} />
+              </ContextMenu.Preview>
+              <ContextMenu.Trigger>
+                <VStack modifiers={[onTapGesture(() => props.onSelectExtension(t))]}>
+                  <ThemeRow width={rowWidth} dot={dotOf(t.primary)} label={t.label} active={enabled?.createdId === undefined && enabled?.file === t.file} />
+                </VStack>
+              </ContextMenu.Trigger>
+            </ContextMenu>
+          </Host>
+          <View style={styles.rowSeparator} />
+        </View>
       ))}
 
       {created.map((mine) => (
-        <Host key={mine.id} style={styles.themeCardHost} matchContents={{ vertical: true, horizontal: false }}>
-          <ContextMenu>
-            <ContextMenu.Items>
-              <Button label="Edit Properties" systemImage="slider.horizontal.3" onPress={() => props.onEdit(mine)} />
-              <Button label="Duplicate Theme" systemImage="doc.on.doc" onPress={() => props.onDuplicateCreated(mine)} />
-              <Button label="Export Theme as JSON" systemImage="square.and.arrow.up" onPress={() => props.onExportCreated(mine)} />
-              <Section>
-                <Button label="Delete Theme" role="destructive" systemImage="trash" onPress={() => props.onDelete(mine)} />
-              </Section>
-            </ContextMenu.Items>
-            <ContextMenu.Preview>
-              <ThemeRowPreview width={contentWidth} dot={dotOf(mine.theme.colors["editor.background"])} label={mine.theme.name} subtitle="Created on this device" />
-            </ContextMenu.Preview>
-            <ContextMenu.Trigger>
-              <VStack modifiers={[onTapGesture(() => props.onSelectCreated(mine))]}>
-                <ThemeRowCard
-                  width={contentWidth}
-                  dot={dotOf(mine.theme.colors["editor.background"])}
-                  label={mine.theme.name}
-                  active={enabled?.createdId === mine.id}
-                />
-              </VStack>
-            </ContextMenu.Trigger>
-          </ContextMenu>
-        </Host>
+        <View key={mine.id}>
+          <Host style={{ width: rowWidth }} matchContents={{ vertical: true, horizontal: false }}>
+            <ContextMenu>
+              <ContextMenu.Items>
+                <Button label="Edit Properties" systemImage="slider.horizontal.3" onPress={() => props.onEdit(mine)} />
+                <Button label="Duplicate Theme" systemImage="doc.on.doc" onPress={() => props.onDuplicateCreated(mine)} />
+                <Button label="Export Theme as JSON" systemImage="square.and.arrow.up" onPress={() => props.onExportCreated(mine)} />
+                <Section>
+                  <Button label="Delete Theme" role="destructive" systemImage="trash" onPress={() => props.onDelete(mine)} />
+                </Section>
+              </ContextMenu.Items>
+              <ContextMenu.Preview>
+                <ThemeRowPreview width={contentWidth} dot={dotOf(mine.theme.colors["editor.background"])} label={mine.theme.name} subtitle="Created on this device" />
+              </ContextMenu.Preview>
+              <ContextMenu.Trigger>
+                <VStack modifiers={[onTapGesture(() => props.onSelectCreated(mine))]}>
+                  <ThemeRow width={rowWidth} dot={dotOf(mine.theme.colors["editor.background"])} label={mine.theme.name} active={enabled?.createdId === mine.id} />
+                </VStack>
+              </ContextMenu.Trigger>
+            </ContextMenu>
+          </Host>
+          <View style={styles.rowSeparator} />
+        </View>
       ))}
 
-      <Host style={styles.themeCardHost} matchContents={{ vertical: true, horizontal: false }}>
-        <VStack modifiers={[onTapGesture(props.onCreate)]}>
-          <HStack
-            spacing={12}
-            modifiers={[frame({ width: contentWidth, alignment: "leading" }), padding({ horizontal: 16, vertical: 14 }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
-          >
-            <Image systemName="plus" size={18} color={colors.tint} />
-            <UIText modifiers={[font({ size: 16 }), foregroundStyle(colors.tint), lineLimit(1)]}>Create theme…</UIText>
-            <Spacer />
-          </HStack>
-        </VStack>
-      </Host>
+      {/* Create entry at the bottom of the list, as "Add font…" is. */}
+      <TouchableOpacity onPress={props.onCreate} activeOpacity={0.6}>
+        <View style={styles.themeRow}>
+          <SystemIcon name="plus" size={16} color={colors.tint} />
+          <Text style={[styles.themeLabel, styles.addFontLabel]} numberOfLines={1}>
+            Create theme…
+          </Text>
+          <SystemIcon name="chevron.right" size={15} color={colors.secondaryLabel} />
+        </View>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -706,23 +723,6 @@ const styles = StyleSheet.create({
   hint: {
     color: colors.secondaryLabel,
     fontSize: 13,
-  },
-  themeStack: {
-    // Cancel the screen's 16pt content padding so the row Hosts can carry their
-    // own horizontal margin instead. A native Host does not inherit RN parent
-    // padding the way the section labels do (matchContents.horizontal is off,
-    // so its width is not derived from the SwiftUI content), so relying on the
-    // content padding let the cards bleed to the screen edges — the same reason
-    // the Home session/repo cards set their margin on the Host itself.
-    marginHorizontal: -16,
-    marginTop: 2,
-  },
-  themeCardHost: {
-    // Each row is its own Host (so its context menu can lift the whole card);
-    // the horizontal margin insets it to match the labels, and a small bottom
-    // gap stacks them like the Home session cards.
-    marginHorizontal: 16,
-    marginBottom: 8,
   },
   themeRow: {
     flexDirection: "row",
@@ -781,5 +781,8 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.label,
     fontSize: 16,
+  },
+  contrastLabel: {
+    paddingTop: 8,
   },
 });

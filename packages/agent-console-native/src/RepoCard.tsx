@@ -14,6 +14,7 @@ import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, pad
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
+import { useCardTint } from "./theme";
 import { repoMenuFor } from "./repoMenu";
 
 const CARD_GUTTER = 12;
@@ -37,11 +38,13 @@ const plural = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? "" 
 
 const Face = (props: { readonly width: number } & RepoCardProps): React.ReactElement => {
   const icon = props.isKnownRepo ? "shippingbox" : "folder";
+  // Slightly darker on a light background, lighter on a dark one.
+  const tint = useCardTint();
   return (
     <VStack
       alignment="leading"
       spacing={6}
-      modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
+      modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 })]}
     >
       <HStack spacing={7} alignment="center">
         <Image systemName={icon} size={15} color={colors.secondaryLabel} />
@@ -59,11 +62,12 @@ const Face = (props: { readonly width: number } & RepoCardProps): React.ReactEle
 
 const Preview = (props: { readonly width: number } & RepoCardProps): React.ReactElement => {
   const icon = props.isKnownRepo ? "shippingbox" : "folder";
+  const tint = useCardTint();
   return (
     <VStack
       alignment="leading"
       spacing={12}
-      modifiers={[padding({ all: 18 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 16 })]}
+      modifiers={[padding({ all: 18 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 16 })]}
     >
       <HStack spacing={9} alignment="center">
         <Image systemName={icon} size={20} color={colors.tint} />

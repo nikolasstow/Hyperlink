@@ -16,6 +16,7 @@ import { background, font, foregroundStyle, frame, glassEffect, lineLimit, onTap
 import { DynamicColorIOS, Pressable, StyleSheet, Text, View } from "react-native";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { colors } from "./colors";
+import { useCardTint } from "./theme";
 import { RunCountdownRing } from "./RunCountdownRing";
 
 export const INDENT = 20;
@@ -205,6 +206,8 @@ export const Tile = (props: {
   readonly onRun?: () => void;
   readonly menu: ReadonlyArray<MenuAction>;
 }): React.ReactElement => {
+  // Slightly darker on a light background, lighter on a dark one.
+  const tint = useCardTint();
   const trigger = (
     <VStack
       alignment="leading"
@@ -212,7 +215,7 @@ export const Tile = (props: {
       modifiers={[
         padding({ all: 12 }),
         frame({ width: props.width, height: 80, alignment: "topLeading" }),
-        glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 }),
+        glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 }),
         onTapGesture(props.countdownMs !== undefined && props.onCancel !== undefined ? props.onCancel : props.onPress),
       ]}
     >

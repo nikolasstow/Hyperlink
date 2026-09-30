@@ -26,7 +26,7 @@ import { colors } from "./colors";
 import { lastMessageSummary, useSessionPreview } from "./sessionPreview";
 import { takeReturning } from "./sessionArchive";
 import { SystemIcon } from "./SystemIcon";
-import { useTheme } from "./theme";
+import { useCardTint, useTheme } from "./theme";
 
 /** Horizontal margin outside the card (matches the list gutter). */
 const CARD_GUTTER = 12;
@@ -111,11 +111,14 @@ const CardBody = (props: {
   readonly unreadColor: string;
   readonly muted: boolean;
   readonly summary?: string;
-}): React.ReactElement => (
+}): React.ReactElement => {
+  // Slightly darker on a light background, lighter on a dark one.
+  const tint = useCardTint();
+  return (
   <VStack
     alignment="leading"
     spacing={8}
-    modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 14 })]}
+    modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 })]}
   >
     <HStack spacing={7} alignment="center">
       {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(props.unreadColor)]} /> : null}
@@ -138,7 +141,8 @@ const CardBody = (props: {
     ) : null}
     <UIText modifiers={[font({ size: 11 }), foregroundStyle(colors.secondaryLabel)]}>{props.meta}</UIText>
   </VStack>
-);
+  );
+};
 
 export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const { colors: themeColors } = useTheme();

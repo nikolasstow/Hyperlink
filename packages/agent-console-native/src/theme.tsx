@@ -137,3 +137,43 @@ export const useScreenBackground = (kind: "grouped" | "plain" = "grouped"): Colo
   const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
   return custom ?? (kind === "plain" ? colors.systemBackground : colors.background);
 };
+
+/** The system's screen background in each mode (systemGroupedBackground), for
+ * judging how light the background is when the theme sets none. */
+const SYSTEM_BACKGROUND_HEX = {
+  light: "#F2F2F7",
+  dark: "#000000",
+};
+
+/** Relative luminance (WCAG) of a hex colour, 0 (black) to 1 (white). */
+export const luminance = (hex: string): number => {
+  const channel = (value: number): number => {
+    const c = value / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = toRgb(hex);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+};
+
+/** Above this luminance a background counts as light. */
+const LIGHT_BACKGROUND = 0.4;
+/** The card contrast when none is chosen (Appearance → Background). */
+export const DEFAULT_CARD_CONTRAST = 0.4;
+/** The tint's strongest, at full contrast: black over a light background,
+ * white over a dark one (white reads weaker, so it goes further). */
+const MAX_DARKEN_ALPHA = 0.15;
+const MAX_LIGHTEN_ALPHA = 0.2;
+
+/** The glass cards' tint, from how light the actual background is (the
+ * theme's colour for this mode, else the system's), not from the mode: a
+ * bright colour in dark mode still wants the darker tint. How much is the
+ * theme's card contrast. */
+export const useCardTint = (): string => {
+  const { theme } = useTheme();
+  const dark = useColorScheme() === "dark";
+  const background = (dark ? theme.backgroundDark : theme.backgroundLight) ?? (dark ? SYSTEM_BACKGROUND_HEX.dark : SYSTEM_BACKGROUND_HEX.light);
+  const contrast = theme.cardContrast ?? DEFAULT_CARD_CONTRAST;
+  return luminance(background) > LIGHT_BACKGROUND
+    ? `rgba(0,0,0,${(MAX_DARKEN_ALPHA * contrast).toFixed(3)})`
+    : `rgba(255,255,255,${(MAX_LIGHTEN_ALPHA * contrast).toFixed(3)})`;
+};
