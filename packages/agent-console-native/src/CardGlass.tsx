@@ -12,8 +12,8 @@ import * as React from "react";
 import { StyleSheet, useColorScheme } from "react-native";
 import { useCardTint } from "./theme";
 
-/** The cards' corner radius, the app's standard. */
-export const CARD_RADIUS = 14;
+/** The cards' corner radius. */
+export const CARD_RADIUS = 22;
 
 export const CardGlass = (props: { readonly radius?: number }): React.ReactElement => {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";

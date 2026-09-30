@@ -18,7 +18,7 @@ import {
   setAgentSurfaceEnabled,
   useAgentButtonSettings,
 } from "./agentButtonSettings";
-import { CardGlass } from "./CardGlass";
+import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
 import { type TextColors, useThemedStyles } from "./theme";
@@ -79,7 +79,7 @@ const makeStyles = (text: TextColors) =>
     marginLeft: 4,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
     marginTop: 16,

@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { symbolForIcon } from "./codicons";
 import { filterTitle, pinsShownOn, pinTitle } from "./collectionModel";
-import { CardGlass } from "./CardGlass";
+import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { ensureWorkspace } from "./extensionViewsStore";
 import { followResult } from "./followResult";
@@ -163,7 +163,7 @@ const PinTile = (props: {
   const textColors = useTextColors();
   return (
   <Pressable style={styles.tile} onPress={props.onPress} {...(props.onLongPress === undefined ? {} : { onLongPress: props.onLongPress })}>
-    <CardGlass />
+    <CardGlass radius={14} />
     <View style={styles.tileTop}>
       <SystemIcon name={props.icon} size={16} color={colors.tint} />
       <Text style={styles.tileTitle} numberOfLines={2}>
@@ -542,7 +542,7 @@ const makeStyles = (text: TextColors) =>
     marginLeft: 4,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
   },
   linkCard: {
     marginTop: 12,

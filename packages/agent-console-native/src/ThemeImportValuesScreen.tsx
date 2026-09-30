@@ -17,7 +17,7 @@ import * as React from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
-import { CardGlass } from "./CardGlass";
+import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getCreatedTheme } from "./createdThemes";
 import { getThemeJson } from "./extensionsClient";
@@ -236,7 +236,7 @@ const makeStyles = (text: TextColors) =>
     fontSize: 17,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
   },

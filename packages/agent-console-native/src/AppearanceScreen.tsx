@@ -19,7 +19,7 @@ import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, pad
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { CodeBlock } from "./CodeBlock";
-import { CardGlass } from "./CardGlass";
+import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getThemeJson, listExtensions, removeExtension } from "./extensionsClient";
 import { getCustomFonts, type CustomFont } from "./fontsClient";
@@ -775,7 +775,7 @@ const makeStyles = (text: TextColors) =>
     marginLeft: 4,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
     paddingHorizontal: 14,

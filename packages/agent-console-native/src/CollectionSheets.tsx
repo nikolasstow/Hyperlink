@@ -16,7 +16,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Tex
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { membership, type Category } from "./collectionModel";
 import { symbolForIcon } from "./codicons";
-import { CardGlass } from "./CardGlass";
+import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { type TextColors, useScreenBackground, useTextColors, useThemedStyles } from "./theme";
 import type { CollectionItem, CollectionState, FormField, FormSpec } from "./pagesClient";
@@ -341,7 +341,7 @@ const makeStyles = (text: TextColors) =>
     fontSize: 14,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
   },
   choice: {
     flexDirection: "row",

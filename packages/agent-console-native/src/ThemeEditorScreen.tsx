@@ -22,7 +22,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { BottomSearchPill, useSearchPill } from "./BottomSearchPill";
-import { CardGlass } from "./CardGlass";
+import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getCreatedTheme, newThemeId, saveCreatedTheme } from "./createdThemes";
 import { getApiAddress } from "./settings";
@@ -455,7 +455,7 @@ const makeStyles = (text: TextColors) =>
     marginHorizontal: 4,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
   },

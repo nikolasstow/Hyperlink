@@ -22,7 +22,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
-import { CardGlass } from "./CardGlass";
+import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getLastScanAt, rescan } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
@@ -462,7 +462,7 @@ const makeStyles = (text: TextColors) =>
     marginTop: 16,
   },
   card: {
-    borderRadius: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
     paddingHorizontal: 14,
