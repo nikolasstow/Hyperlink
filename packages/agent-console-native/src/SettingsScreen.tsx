@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { CARD_RADIUS, CardGlass } from "./CardGlass";
+import { DetentSlider } from "../modules/detent-slider";
 import { colors } from "./colors";
 import { getLastScanAt, rescan } from "./repoScanCache";
 import type { RootStackParamList } from "./RootNavigator";
@@ -222,17 +223,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           ))}
         </View>
 
-        <Text style={styles.sectionLabel}>Dubz</Text>
-        <TouchableOpacity style={styles.card} onPress={() => props.navigation.navigate("AgentButtonSettings")} activeOpacity={0.6}>
-          <CardGlass />
-          <View style={styles.linkRow}>
-            <View style={styles.linkText}>
-              <Text style={styles.fieldLabel}>Assistant Button</Text>
-            </View>
-            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
-          </View>
-        </TouchableOpacity>
-
         <Text style={styles.sectionLabel}>Workspace</Text>
         <View style={styles.card}>
           <CardGlass />
@@ -392,9 +382,19 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             />
           </View>
           {runDelayOn ? (
+            DetentSlider !== undefined ? (
+              // Native detents: a track of seconds (1 to 30), the thumb resting
+              // only on the stops, with iOS's haptic on each.
+              <DetentSlider
+                style={{ width: windowWidth - 32 - 28, height: SLIDER_HEIGHT }}
+                stops={RUN_DELAY_STOPS}
+                value={runCountdown}
+                onValueChange={setRunCountdownSeconds}
+              />
+            ) : (
             <Host style={{ width: windowWidth - 32 - 28, height: SLIDER_HEIGHT }}>
-              {/* A track of seconds (1 to 30), the thumb snapping to the
-               * nearest stop: 1, 2, 3, 5, 10, 15, 30. */}
+              {/* A build without the native slider: a track of seconds (1 to
+               * 30), the thumb snapping to the nearest stop. */}
               <Slider
                 value={runCountdown}
                 min={RUN_DELAY_STOPS[0]}
@@ -402,6 +402,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
                 onValueChange={(value) => setRunCountdownSeconds(nearestStop(value))}
               />
             </Host>
+            )
           ) : null}
         </View>
 
@@ -503,7 +504,7 @@ const makeStyles = (text: TextColors) =>
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingVertical: 15,
+    paddingVertical: 17,
   },
   formLabel: {
     color: text.label,
