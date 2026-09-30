@@ -24,6 +24,7 @@ import {
   lineLimit,
   onTapGesture,
   padding,
+  type PresentationDetent,
   presentationDetents,
   presentationDragIndicator,
   scrollDismissesKeyboard,
@@ -48,6 +49,10 @@ const LABEL_MAX_WIDTH = 220;
 /** The sheet's side margin, for the search, the tabs and the list alike. */
 const SIDE = 20;
 const SEARCH_HEIGHT = 44;
+/** The sheet's opening height, a share of the screen. iOS stacks a sheet on
+ * the keyboard at its own height, so this is kept short enough to leave room
+ * above it with the keyboard up. */
+const SHORT: PresentationDetent = { fraction: 0.35 };
 
 type Props = {
   readonly models: ReadonlyArray<ModelOption>;
@@ -67,7 +72,7 @@ interface ModelTab {
 // Numbers by value, so a version 10 follows 9.
 const byName = (a: string, b: string): number => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
-/** Recents, when any, then each provider, the most sent with first (ties A to Z). */
+/** Recents, then each provider, the most sent with first (ties A to Z). */
 const tabsOf = (models: ReadonlyArray<ModelOption>, usage: ModelUsage): ReadonlyArray<ModelTab> => {
   const providers = new Map<string, { title: string; models: Array<ModelOption>; uses: number }>();
   for (const model of models) {
@@ -100,7 +105,6 @@ const tabsOf = (models: ReadonlyArray<ModelOption>, usage: ModelUsage): Readonly
     .sort((a, b) => b.lastUsed - a.lastUsed)
     .slice(0, RECENTS_LIMIT)
     .map((recent) => recent.model);
-  if (recents.length === 0) return providerTabs;
   return [
     {
       id: RECENTS,
@@ -134,9 +138,8 @@ export const ModelPicker = (props: Props): React.ReactElement => {
   // Each opening mounts a fresh sheet: an empty, focused search.
   const [opening, setOpening] = React.useState(0);
   // The sheet's height, and whether the search holds the keyboard: while it
-  // does, the sheet keeps only its current height, since iOS otherwise answers
-  // the keyboard by growing a half-height sheet to full.
-  const [detent, setDetent] = React.useState<"medium" | "large">("medium");
+  // does, the sheet keeps only its current height.
+  const [detent, setDetent] = React.useState<PresentationDetent>(SHORT);
   const [searchFocused, setSearchFocused] = React.useState(true);
   const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
   const tabs = React.useMemo(() => tabsOf(props.models, usage), [props.models, usage]);
@@ -147,7 +150,7 @@ export const ModelPicker = (props: Props): React.ReactElement => {
 
   const show = (): void => {
     setQuery("");
-    setDetent("medium");
+    setDetent(SHORT);
     setSearchFocused(true);
     setOpening((n) => n + 1);
     setOpen(true);
@@ -210,11 +213,9 @@ export const ModelPicker = (props: Props): React.ReactElement => {
         <Group
           key={opening}
           modifiers={[
-            presentationDetents(searchFocused ? [detent] : ["medium", "large"], {
+            presentationDetents(searchFocused ? [detent] : [SHORT, "large"], {
               selection: detent,
-              onSelectionChange: (next) => {
-                if (next === "medium" || next === "large") setDetent(next);
-              },
+              onSelectionChange: (next) => setDetent(next === "large" ? "large" : SHORT),
             }),
             presentationDragIndicator("visible"),
           ]}
@@ -243,9 +244,7 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                 {results.length > 0 ? (
                   rows(results, true)
                 ) : (
-                  <Text modifiers={[font({ size: 15 }), foregroundStyle({ type: "hierarchical", style: "secondary" }), padding({ top: 32 })]}>
-                    No models match
-                  </Text>
+                  <Empty text="No models match" />
                 )}
               </VStack>
             ) : (
@@ -278,7 +277,7 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                 <TabView selection={current} onSelectionChange={setTab} modifiers={[tabViewStyle({ type: "page", indexDisplayMode: "never" })]}>
                   {tabs.map((t) => (
                     <TabView.Tab key={t.id} value={t.id}>
-                      {rows(t.models, t.showProvider)}
+                      {t.models.length > 0 ? rows(t.models, t.showProvider) : <Empty text="Models you send with show here" />}
                     </TabView.Tab>
                   ))}
                 </TabView>
@@ -290,6 +289,12 @@ export const ModelPicker = (props: Props): React.ReactElement => {
     </Host>
   );
 };
+
+const Empty = (props: { readonly text: string }): React.ReactElement => (
+  <VStack modifiers={[padding({ top: 32 }), frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
+    <Text modifiers={[font({ size: 15 }), foregroundStyle({ type: "hierarchical", style: "secondary" })]}>{props.text}</Text>
+  </VStack>
+);
 
 const ModelRow = (props: {
   readonly model: ModelOption;
