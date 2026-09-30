@@ -225,21 +225,34 @@ const opacityFor = (color: Rgb, under: Rgb, from: number, ratio: number): number
 
 const rgba = ([r, g, b]: Rgb, alpha: number): string => `rgba(${r},${g},${b},${alpha})`;
 
+/** Increase Contrast's pull on an opacity: from where it is (0) toward full
+ * (1). */
+const boosted = (alpha: number, contrast: number): number => Math.round((alpha + (1 - alpha) * contrast) * 100) / 100;
+
 /** The text for a background, in either mode: dark or light, whichever label
  * contrasts more with it (WCAG ratio), so a bright saturated colour gets dark
- * text and a deep one light text; and the dimmer roles made more opaque, only
- * as far as they need, to stay readable on it. */
-export const textFor = (background: string): TextColors => {
+ * text and a deep one light text; the dimmer roles made more opaque, only as
+ * far as they need, to stay readable on it; and then, with Increase Contrast,
+ * more opaque again, toward full as its slider rises. */
+export const textFor = (background: string, contrast = 0): TextColors => {
   const under = toRgb(background);
   const l = luminanceOf(under);
   const side = contrastRatio(l, 0) >= contrastRatio(l, 1) ? DARK_TEXT : LIGHT_TEXT;
-  const tertiary = rgba(side.dim, opacityFor(side.dim, under, TERTIARY_ALPHA, TERTIARY_RATIO));
+  const tertiary = rgba(side.dim, boosted(opacityFor(side.dim, under, TERTIARY_ALPHA, TERTIARY_RATIO), contrast));
   return {
     label: side.label,
-    secondaryLabel: rgba(side.dim, opacityFor(side.dim, under, SECONDARY_ALPHA, SECONDARY_RATIO)),
+    secondaryLabel: rgba(side.dim, boosted(opacityFor(side.dim, under, SECONDARY_ALPHA, SECONDARY_RATIO), contrast)),
     tertiaryLabel: tertiary,
     placeholderText: tertiary,
   };
+};
+
+/** The system's screen background in each mode (systemGroupedBackground), to
+ * work the text out against when Increase Contrast is on without a custom
+ * background. */
+const SYSTEM_BACKGROUND_HEX = {
+  light: "#F2F2F7",
+  dark: "#000000",
 };
 
 /** The text colours for the background: light text on a darkish colour, dark
@@ -248,10 +261,15 @@ export const textFor = (background: string): TextColors => {
  * background, iOS's own colours. */
 export const useTextColors = (): TextColors => {
   const { theme } = useTheme();
-  const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
-  // One object per background, so styles built from it are rebuilt only when
-  // it changes.
-  return React.useMemo(() => (custom === undefined ? SYSTEM_TEXT : textFor(custom)), [custom]);
+  const mode = useColorScheme() === "dark" ? "dark" : "light";
+  const custom = mode === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  const contrast = theme.contrast?.[mode] ?? 0;
+  // One object per background and contrast, so styles built from it are
+  // rebuilt only when those change. iOS's own colours while neither is set.
+  return React.useMemo(
+    () => (custom === undefined && contrast === 0 ? SYSTEM_TEXT : textFor(custom ?? SYSTEM_BACKGROUND_HEX[mode], contrast)),
+    [custom, contrast, mode],
+  );
 };
 
 /** A component's styles built with the text colours for the background:
