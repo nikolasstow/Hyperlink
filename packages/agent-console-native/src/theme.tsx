@@ -138,13 +138,6 @@ export const useScreenBackground = (kind: "grouped" | "plain" = "grouped"): Colo
   return custom ?? (kind === "plain" ? colors.systemBackground : colors.background);
 };
 
-/** The system's screen background in each mode (systemGroupedBackground), for
- * judging how light the background is when the theme sets none. */
-const SYSTEM_BACKGROUND_HEX = {
-  light: "#F2F2F7",
-  dark: "#000000",
-};
-
 /** Relative luminance (WCAG) of a hex colour, 0 (black) to 1 (white). */
 export const luminance = (hex: string): number => {
   const channel = (value: number): number => {
@@ -157,26 +150,67 @@ export const luminance = (hex: string): number => {
 
 /** Above this luminance a background counts as light. */
 const LIGHT_BACKGROUND = 0.4;
-/** The contrast when none is chosen (Appearance → Background): none, the
- * standard look, no tint. */
-export const DEFAULT_CARD_CONTRAST = 0;
-/** The tint's strongest, at full contrast: black over a light background,
- * white over a dark one (white reads weaker, so it goes further). */
-const MAX_DARKEN_ALPHA = 0.15;
-const MAX_LIGHTEN_ALPHA = 0.2;
+/** Where Increase Contrast's slider starts when turned on: the middle. */
+export const CONTRAST_START = 0.5;
+/** The glass's brightening at full contrast. */
+const MAX_BRIGHTEN_ALPHA = 0.2;
 
-/** The glass cards' tint, from how light the actual background is (the
- * theme's colour for this mode, else the system's), not from the mode: a
- * bright colour in dark mode still wants the darker tint. How much is the
- * theme's card contrast. */
+/** The glass cards' tint: Increase Contrast (per mode, Appearance →
+ * Background) only brightens them, a white tint as strong as its slider; off,
+ * the standard glass, untinted. */
 export const useCardTint = (): string | undefined => {
   const { theme } = useTheme();
-  const dark = useColorScheme() === "dark";
-  const background = (dark ? theme.backgroundDark : theme.backgroundLight) ?? (dark ? SYSTEM_BACKGROUND_HEX.dark : SYSTEM_BACKGROUND_HEX.light);
-  const contrast = theme.cardContrast ?? DEFAULT_CARD_CONTRAST;
-  // No contrast is the standard glass, untinted.
-  if (contrast <= 0) return undefined;
-  return luminance(background) > LIGHT_BACKGROUND
-    ? `rgba(0,0,0,${(MAX_DARKEN_ALPHA * contrast).toFixed(3)})`
-    : `rgba(255,255,255,${(MAX_LIGHTEN_ALPHA * contrast).toFixed(3)})`;
+  const contrast = useColorScheme() === "dark" ? theme.contrastDark : theme.contrastLight;
+  return contrast === undefined || contrast <= 0 ? undefined : `rgba(255,255,255,${(MAX_BRIGHTEN_ALPHA * contrast).toFixed(3)})`;
+};
+
+/** The text colours, the four iOS text colours' roles. */
+export interface TextColors {
+  readonly label: ColorValue;
+  readonly secondaryLabel: ColorValue;
+  readonly tertiaryLabel: ColorValue;
+  readonly placeholderText: ColorValue;
+}
+
+/** iOS's own text colours, which follow the mode: used while the background
+ * is the system's. */
+const SYSTEM_TEXT: TextColors = {
+  label: colors.label,
+  secondaryLabel: colors.secondaryLabel,
+  tertiaryLabel: colors.tertiaryLabel,
+  placeholderText: colors.placeholderText,
+};
+
+/** Text for a light background, in either mode: iOS's light-mode values. */
+const TEXT_ON_LIGHT: TextColors = {
+  label: "#000000",
+  secondaryLabel: "rgba(60,60,67,0.6)",
+  tertiaryLabel: "rgba(60,60,67,0.3)",
+  placeholderText: "rgba(60,60,67,0.3)",
+};
+
+/** Text for a dark background, in either mode: iOS's dark-mode values. */
+const TEXT_ON_DARK: TextColors = {
+  label: "#FFFFFF",
+  secondaryLabel: "rgba(235,235,245,0.6)",
+  tertiaryLabel: "rgba(235,235,245,0.3)",
+  placeholderText: "rgba(235,235,245,0.3)",
+};
+
+/** The text colours for the background: light text on a darkish colour, dark
+ * text on a light one, whatever the mode (a dark background in light mode
+ * still wants light text; the mode is untouched). With the system's
+ * background, iOS's own colours. */
+export const useTextColors = (): TextColors => {
+  const { theme } = useTheme();
+  const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  if (custom === undefined) return SYSTEM_TEXT;
+  return luminance(custom) > LIGHT_BACKGROUND ? TEXT_ON_LIGHT : TEXT_ON_DARK;
+};
+
+/** A component's styles built with the text colours for the background:
+ * `makeStyles` runs again only when those change. */
+export const useThemedStyles = <T,>(makeStyles: (text: TextColors) => T): T => {
+  const text = useTextColors();
+  return React.useMemo(() => makeStyles(text), [makeStyles, text]);
 };

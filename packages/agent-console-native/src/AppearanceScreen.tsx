@@ -12,7 +12,7 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { Alert, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Slider, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
@@ -26,7 +26,7 @@ import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
-import { DEFAULT_CARD_CONTRAST, useTheme } from "./theme";
+import { CONTRAST_START, useTheme } from "./theme";
 import { useCodeTheme } from "./useCodeTheme";
 import {
   deleteCreatedTheme,
@@ -152,6 +152,38 @@ const withThemeBackground = (theme: Theme, background: string | undefined, dark:
 
 /** The contrast slider's box: its own (set) height, the card's inner width. */
 const CONTRAST_SLIDER_HEIGHT = 34;
+
+/** The theme with one mode's Increase Contrast set, or off (the key
+ * dropped). */
+const withContrast = (theme: Theme, key: "contrastLight" | "contrastDark", value: number | undefined): Theme => {
+  const { [key]: _previous, ...rest } = theme;
+  return value === undefined
+    ? rest
+    : {
+        ...rest,
+        [key]: value,
+      };
+};
+
+/** One mode's Increase Contrast: a switch, and when on, a slider for how much
+ * the glass cards are brightened (starting in the middle). */
+const IncreaseContrast = (props: {
+  readonly width: number;
+  readonly value: number | undefined;
+  readonly onChange: (value: number | undefined) => void;
+}): React.ReactElement => (
+  <>
+    <View style={styles.backgroundRow}>
+      <Text style={styles.backgroundLabel}>Increase Contrast</Text>
+      <Switch value={props.value !== undefined} onValueChange={(on) => props.onChange(on ? CONTRAST_START : undefined)} />
+    </View>
+    {props.value === undefined ? null : (
+      <Host style={{ width: props.width, height: CONTRAST_SLIDER_HEIGHT }}>
+        <Slider value={props.value} min={0} max={1} step={0.05} onValueChange={props.onChange} />
+      </Host>
+    )}
+  </>
+);
 
 /** What "System" is for each mode: the grouped background iOS gives screens. */
 const SYSTEM_BACKGROUND = {
@@ -481,24 +513,15 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             systemColor={SYSTEM_BACKGROUND.light}
             themeColor={theme.code?.dark === false ? theme.code.background : undefined}
             onChange={(color) => setTheme(withBackground(theme, "backgroundLight", color))} />
+          <IncreaseContrast width={contentWidth - 28} value={theme.contrastLight} onChange={(value) => setTheme(withContrast(theme, "contrastLight", value))} />
+          <View style={styles.rowSeparator} />
           <BackgroundRow
             label="Dark"
             value={theme.backgroundDark}
             systemColor={SYSTEM_BACKGROUND.dark}
             themeColor={theme.code?.dark === true ? theme.code.background : undefined}
             onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
-          {/* How much the glass cards darken (on a light background) or
-           * lighten (on a dark one). */}
-          <Text style={[styles.backgroundLabel, styles.contrastLabel]}>Contrast</Text>
-          <Host style={{ width: contentWidth - 28, height: CONTRAST_SLIDER_HEIGHT }}>
-            <Slider
-              value={theme.cardContrast ?? DEFAULT_CARD_CONTRAST}
-              min={0}
-              max={1}
-              step={0.05}
-              onValueChange={(value) => setTheme({ ...theme, cardContrast: value })}
-            />
-          </Host>
+          <IncreaseContrast width={contentWidth - 28} value={theme.contrastDark} onChange={(value) => setTheme(withContrast(theme, "contrastDark", value))} />
         </View>
 
         <Text style={styles.sectionLabel}>Code font</Text>
