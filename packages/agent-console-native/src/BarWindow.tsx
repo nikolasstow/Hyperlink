@@ -131,6 +131,8 @@ export interface BarWindowProps {
    * this much (pt; 0 in place) — the model window slides it away as its list
    * scrolls. */
   readonly pillLowered?: SharedValue<number>;
+  /** Hidden collapsed: the collapse has finished and it is out of sight. */
+  readonly onHidden?: () => void;
 }
 
 const atPillFrac = (frac: number): boolean => frac >= 0.98;
@@ -150,16 +152,7 @@ const pillProgress = (drag: number, maxDrag: number): number => {
   return span <= 0 ? 0 : unit((drag - start) / span);
 };
 
-// DIAG(model-perf): renders since last read; remove once found.
-let renders = 0;
-export const barWindowRenders = (): number => {
-  const count = renders;
-  renders = 0;
-  return count;
-};
-
 export const BarWindow = (props: BarWindowProps): React.ReactElement => {
-  renders += 1;
   const { open, instant, onClose, inputRef, detent, stop } = props;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -244,7 +237,11 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   );
 
   // Open and collapse, acting only on a change of `open`.
-  const hide = React.useCallback(() => setDrawn(props.hiddenCollapsed !== true), [props.hiddenCollapsed]);
+  const onHidden = props.onHidden;
+  const hide = React.useCallback(() => {
+    setDrawn(props.hiddenCollapsed !== true);
+    onHidden?.();
+  }, [props.hiddenCollapsed, onHidden]);
   const wasOpen = React.useRef(open);
   React.useEffect(() => {
     if (wasOpen.current === open) return undefined;

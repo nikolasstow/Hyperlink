@@ -153,7 +153,7 @@ export const Composer = (props: {
     void refreshModels(client, props.directory);
     setModelsOpen(true);
   };
-  const closeModels = (reason: CloseReason): void => {
+  const closeModels = React.useCallback((reason: CloseReason): void => {
     // Focus moves straight from the search to the message, so the keyboard
     // stays up; unless it went down (that closed the window).
     if (refocusAfterModels.current && reason !== "keyboard") {
@@ -163,12 +163,22 @@ export const Composer = (props: {
       setFocused(true);
     }
     setModelsOpen(false);
-  };
+  }, []);
 
-  const pickModel = (model: ModelOption): void => {
+  const pickModel = React.useCallback((model: ModelOption): void => {
     setSelectedModel(model);
     void setLastModel({ providerID: model.providerID, modelID: model.modelID });
-  };
+  }, []);
+  // Stable, so the (memoized) model window never re-renders with the bar.
+  const chooseModel = React.useCallback(
+    (model: ModelOption): void => {
+      pickModel(model);
+      closeModels("dismiss");
+    },
+    [pickModel, closeModels],
+  );
+  const directory = props.directory;
+  const refreshCatalog = React.useCallback(() => reloadModels(client, address, directory), [client, address, directory]);
 
   // onContentSizeChange fires once on mount with an unreliable measurement,
   // before any typing; ignoring it entirely while empty is the invariant that
@@ -382,12 +392,9 @@ export const Composer = (props: {
           open={modelsOpen}
           models={models}
           selected={selectedModel}
-          onChoose={(model) => {
-            pickModel(model);
-            closeModels("dismiss");
-          }}
+          onChoose={chooseModel}
           onClose={closeModels}
-          onRefresh={() => reloadModels(client, address, props.directory)}
+          onRefresh={refreshCatalog}
         />
       </View>
       {withDubz ? (

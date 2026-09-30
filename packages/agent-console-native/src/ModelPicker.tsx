@@ -39,10 +39,10 @@ import {
   truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { InteractionManager, StyleSheet, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { CapsuleTabs } from "../modules/capsule-tabs";
-import { BarWindow, barWindowRenders, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
+import { BarWindow, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
@@ -180,8 +180,10 @@ export const ModelPicker = (props: {
   );
 };
 
-/** The model window: search in its pill, the pages above. */
-export const ModelWindow = (props: {
+/** The model window: search in its pill, the pages above. Memoized: its
+ * composer re-renders on every keystroke and streamed update, and none of that
+ * concerns it. */
+export const ModelWindow = React.memo(function ModelWindow(props: {
   readonly open: boolean;
   readonly models: ReadonlyArray<ModelOption>;
   readonly selected: ModelOption | undefined;
@@ -189,7 +191,7 @@ export const ModelWindow = (props: {
   readonly onClose: (reason: CloseReason) => void;
   /** Pulled to refresh: the server fetches the catalog now, then the list reloads. */
   readonly onRefresh: () => Promise<void>;
-}): React.ReactElement => {
+}): React.ReactElement {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { colors: themeColors } = useTheme();
@@ -205,13 +207,14 @@ export const ModelWindow = (props: {
   const results = React.useMemo(() => matching(props.models, query), [props.models, query]);
   const searching = query.trim().length > 0;
 
-  // Built once the screen has settled (not as it mounts, and not as the
-  // window opens): the window stays mounted, parked, between openings.
-  const [built, setBuilt] = React.useState(false);
+  // The list exists only while the window is in sight: from opening until its
+  // collapse has finished. Built on every screen's composer ahead of time, and
+  // re-rendered with it, its hundred-odd native rows slowed the whole app.
+  const [live, setLive] = React.useState(false);
   React.useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => setBuilt(true));
-    return () => task.cancel();
-  }, []);
+    if (props.open) setLive(true);
+  }, [props.open]);
+  const onHidden = React.useCallback(() => setLive(false), []);
 
   // Each opening starts from an empty search.
   React.useEffect(() => {
@@ -236,24 +239,11 @@ export const ModelWindow = (props: {
   // The search and the tabs float over the lists and slide down out of the way
   // as a list scrolls down, back as it scrolls up (or reaches its top). Read on
   // the UI thread, from the list's scroll geometry.
-  // DIAG(model-perf): counts, logged each second; remove once found.
-  const diagGeometry = useSharedValue(0);
-  const diagRenders = React.useRef(0);
-  diagRenders.current += 1;
-  React.useEffect(() => {
-    const timer = setInterval(() => {
-      console.log("[model-perf]", JSON.stringify({ open: props.open, windowRenders: diagRenders.current, geometry: diagGeometry.value, barWindowRenders: barWindowRenders() }));
-      diagRenders.current = 0;
-      diagGeometry.value = 0;
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [props.open, diagGeometry]);
   const barsDrop = useSharedValue(0);
   const barsHidden = useSharedValue(false);
   const lastOffset = useSharedValue(0);
   const scrollGeometry = useScrollGeometryChange((g) => {
     "worklet";
-    diagGeometry.value += 1; // DIAG(model-perf)
     const dy = g.contentOffsetY - lastOffset.value;
     lastOffset.value = g.contentOffsetY;
     // A jump is another page's list, not a scroll.
@@ -320,11 +310,12 @@ export const ModelWindow = (props: {
       tintColor={cardTint}
       detent={modelDetent}
       hiddenCollapsed
+      onHidden={onHidden}
       stop={MODEL_STOP}
       closeLabel="Close models"
       pillLowered={barsDrop}
       body={
-        built || props.open ? (
+        live || props.open ? (
           <View style={styles.body}>
             <Host style={styles.list} ignoreSafeArea="all">
               <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
@@ -389,7 +380,7 @@ export const ModelWindow = (props: {
       }
     />
   );
-};
+});
 
 /** The tab strip in @expo/ui, for a build without the native CapsuleTabs. */
 const FallbackTabs = (props: {
