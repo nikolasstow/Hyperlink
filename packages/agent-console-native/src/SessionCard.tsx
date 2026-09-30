@@ -19,7 +19,7 @@ import { background, cornerRadius, font, foregroundStyle, frame, glassEffect, li
 import * as React from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
-import Animated, { Easing, FadeIn, LinearTransition, runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
+import Animated, { Easing, FadeIn, LinearTransition, runOnJS, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
@@ -75,6 +75,8 @@ const ACTIONS_WIDTH = CIRCLE * 2 + CIRCLE_GAP * 3;
  * a tap), as in Messages' Mute and Delete: Mute (indigo), and in the red
  * circle, Archive (Unarchive on the Archived page). Delete is in the menu.
  */
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /** How far into the reveal each circle grows in: Archive (the nearer) over
  * the first part, Mute over the last, overlapping a little. */
 const ARCHIVE_SPAN: readonly [number, number] = [0, 0.55];
@@ -82,13 +84,16 @@ const MUTE_SPAN: readonly [number, number] = [0.45, 1];
 /** A circle's size before it grows in. */
 const CIRCLE_START_SCALE = 0.1;
 
-/** A circle's growth through its span of the reveal (0 to 1), from the swipe's
- * travel: it sits at its final place throughout, and only grows and fades in
- * there, from a tenth of its size and nothing. */
-const useRevealStyle = (travel: SharedValue<number>, [from, to]: readonly [number, number]) =>
+/** How far the row opens: the actions' width less the card gutter they sit
+ * under. The swipe's progress is 1 there. */
+const OPEN_WIDTH = ACTIONS_WIDTH - CARD_GUTTER;
+
+/** A circle's growth through its span of the reveal, from the swipe's progress
+ * (1 fully open): it sits at its final place throughout, and only grows and
+ * fades in there, from a tenth of its size and nothing. */
+const useRevealStyle = (progress: SharedValue<number>, [from, to]: readonly [number, number]) =>
   useAnimatedStyle(() => {
-    const revealed = -travel.value / ACTIONS_WIDTH;
-    const raw = (revealed - from) / (to - from);
+    const raw = (progress.value - from) / (to - from);
     const p = raw < 0 ? 0 : raw > 1 ? 1 : raw;
     return {
       opacity: p,
@@ -97,33 +102,39 @@ const useRevealStyle = (travel: SharedValue<number>, [from, to]: readonly [numbe
   });
 
 const SwipeActions = (props: {
-  /** How far the card has been swiped (negative, to the left). */
-  readonly travel: SharedValue<number>;
+  /** How far the row is open: 0 closed, 1 fully open, beyond when pulled past. */
+  readonly progress: SharedValue<number>;
   readonly archived: boolean;
   readonly muted: boolean;
   readonly onMute: () => void;
   readonly onArchive: () => void;
 }): React.ReactElement => {
-  const muteStyle = useRevealStyle(props.travel, MUTE_SPAN);
-  const archiveStyle = useRevealStyle(props.travel, ARCHIVE_SPAN);
+  const muteStyle = useRevealStyle(props.progress, MUTE_SPAN);
+  const archiveStyle = useRevealStyle(props.progress, ARCHIVE_SPAN);
+  // Pulled past fully open: Archive stretches toward the card into a capsule,
+  // filling the extra room, and the actions widen with it (they sit at the
+  // right, so they grow leftward and Mute stays by the card's edge).
+  const extra = useDerivedValue(() => Math.max(0, props.progress.value - 1) * OPEN_WIDTH);
+  const actionsStretch = useAnimatedStyle(() => ({ width: ACTIONS_WIDTH + extra.value }));
+  const archiveStretch = useAnimatedStyle(() => ({ width: CIRCLE + extra.value }));
   return (
-    <View style={styles.actions}>
+    <Animated.View style={[styles.actions, actionsStretch]}>
       <Animated.View style={muteStyle}>
         <Pressable style={[styles.circle, styles.muteCircle]} onPress={props.onMute} accessibilityRole="button" accessibilityLabel={props.muted ? "Unmute" : "Mute"}>
           <SystemIcon name={props.muted ? "bell.fill" : "bell.slash.fill"} size={22} color="#FFFFFF" />
         </Pressable>
       </Animated.View>
       <Animated.View style={archiveStyle}>
-        <Pressable
-          style={[styles.circle, styles.archiveCircle]}
+        <AnimatedPressable
+          style={[styles.circle, styles.archiveCircle, styles.archiveStretchable, archiveStretch]}
           onPress={props.onArchive}
           accessibilityRole="button"
           accessibilityLabel={props.archived ? "Unarchive" : "Archive"}
         >
           <SystemIcon name={props.archived ? "tray.and.arrow.up.fill" : "archivebox.fill"} size={22} color="#FFFFFF" />
-        </Pressable>
+        </AnimatedPressable>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -217,11 +228,13 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
       // actions keep their own clip.
       containerStyle={styles.swipeable}
       friction={1.4}
-      overshootRight={false}
+      // Pulling past open stretches Archive (SwipeActions); release springs
+      // back to open.
+      overshootRight
       rightThreshold={ACTIONS_WIDTH / 3}
-      renderRightActions={(_progress, travel) => (
+      renderRightActions={(progress) => (
         <SwipeActions
-          travel={travel}
+          progress={progress}
           archived={props.archived === true}
           muted={props.muted}
           onMute={() => {
@@ -317,5 +330,11 @@ const styles = StyleSheet.create({
   },
   archiveCircle: {
     backgroundColor: colors.destructive,
+  },
+  // Its icon keeps its place (a circle's centre) as it stretches, on the
+  // capsule's leading side.
+  archiveStretchable: {
+    alignItems: "flex-start",
+    paddingLeft: (CIRCLE - 22) / 2,
   },
 });
