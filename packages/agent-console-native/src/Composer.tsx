@@ -156,7 +156,12 @@ export const Composer = (props: {
   const closeModels = (reason: CloseReason): void => {
     // Focus moves straight from the search to the message, so the keyboard
     // stays up; unless it went down (that closed the window).
-    if (refocusAfterModels.current && reason !== "keyboard") inputRef.current?.focus();
+    if (refocusAfterModels.current && reason !== "keyboard") {
+      inputRef.current?.focus();
+      // Focused already as far as the bar goes, so it stays expanded until the
+      // input says so, never collapsing between.
+      setFocused(true);
+    }
     setModelsOpen(false);
   };
 
@@ -175,8 +180,11 @@ export const Composer = (props: {
   };
 
   const onFocus = (): void => {
-    // Held (sliding in from Dubz), it is expanded already.
-    if (!held) LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    // Only when it expands: held (sliding in from Dubz), with text, or back
+    // from the model window, it is expanded already. (LayoutAnimation animates
+    // every layout change in the next commit, app-wide; configured needlessly
+    // it fought the model window's own grow and dropped frames.)
+    if (!expanded) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(true);
     setHeld(false);
     if (withDubz) rememberPage(pageType, "compose");
@@ -286,7 +294,8 @@ export const Composer = (props: {
     // Only animate the collapse when it will actually happen — typed text, or
     // being held as a page, keeps `expanded` true across a blur, so there's no
     // layout change to animate then.
-    if (text.length === 0 && !held) LayoutAnimation.configureNext(EXPAND_ANIMATION);
+    // Nor when the model window takes the focus (it keeps the bar expanded).
+    if (text.length === 0 && !held && !modelsOpen) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(false);
   };
 
