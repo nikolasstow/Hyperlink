@@ -223,19 +223,22 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>Workspace</Text>
         <View style={styles.card}>
           <CardGlass />
-          <Text style={styles.fieldLabel}>Root folder</Text>
-          <TextInput
-            style={styles.input}
-            value={rootDirDraft}
-            onChangeText={setRootDirDraft}
-            onBlur={saveRootDir}
-            onSubmitEditing={saveRootDir}
-            placeholder="/Users/you/Coding"
-            placeholderTextColor={textColors.placeholderText}
-            autoCapitalize="none"
-            autoCorrect={false}
-            spellCheck={false}
-          />
+          {/* A standard form row: the label, and the value beside it. */}
+          <View style={styles.formRow}>
+            <Text style={styles.formLabel}>Root Folder</Text>
+            <TextInput
+              style={styles.formInput}
+              value={rootDirDraft}
+              onChangeText={setRootDirDraft}
+              onBlur={saveRootDir}
+              onSubmitEditing={saveRootDir}
+              placeholder="/Users/you/Coding"
+              placeholderTextColor={textColors.placeholderText}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+            />
+          </View>
           {/* The same card: where repos are found, and finding them. */}
           <View style={styles.cardSeparator} />
           <View style={styles.rowBetween}>
@@ -456,6 +459,23 @@ const makeStyles = (text: TextColors) =>
     paddingHorizontal: 12,
     borderRadius: 10,
     backgroundColor: colors.fillBackground,
+  },
+  formRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 15,
+  },
+  formLabel: {
+    color: text.label,
+    fontSize: 16,
+  },
+  formInput: {
+    flex: 1,
+    color: text.label,
+    fontSize: 16,
+    textAlign: "right",
+    padding: 0,
   },
   previewLabel: {
     color: text.secondaryLabel,
