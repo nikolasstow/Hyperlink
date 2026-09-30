@@ -1,93 +1,30 @@
 /**
  * Dubz — the app-wide assistant, as a page of the bottom bar.
  *
- * One component with two states, animated between, never swapped:
- * - **collapsed**: the bottom bar. The same pill as the composer's collapsed
- *   bar (regular glass, `+`, a line of text, a muted send), in the same spot;
- * - **expanded**: the Dubz window. It grows up out of that bar to its detent;
- *   the bar's pill stays at its bottom, inset, as the window's composer. The
- *   window's own glass is clear; at the smallest detent it has none, and the
- *   pill fills it, so there it is the bar again (with a grab handle while the
- *   keyboard is up; the keyboard going down there collapses it).
+ * Its window is a BarWindow (collapsed the bar, expanded the window grown up
+ * out of it, clear glass): Dubz adds the pill's row (+, what is typed, send),
+ * its suggestions above the pill, and the swipe back to the composer.
  *
  * Where the bar is a composer (Home, a repo, a session), Composer puts this
  * page beside its own and slides between them (`pageBack` here). Where there is
  * nothing to compose (Files), `DubzBar` is the bar, with this its only page.
  *
- * Glass invariants (learned the hard way):
- * - Round the GlassView via `borderRadius` on the GlassView itself (native
- *   UIGlassEffect corner config); never clip it with an `overflow: hidden`
- *   parent — that crops the material.
- * - Never animate opacity or a transform on a GlassView or its parents (it
- *   stops rendering glass). Motion here is layout (`height`, padding, the
- *   pager's `left`); glass comes and goes by the native `glassEffectStyle`
- *   fade (none ↔ clear), never by opacity.
- *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
-import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Keyboard, Pressable, StyleSheet, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, {
-  Easing,
-  runOnJS,
-  useAnimatedReaction,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  type SharedValue,
-} from "react-native-reanimated";
+import { Pressable, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { Gesture } from "react-native-gesture-handler";
+import Reanimated, { Easing, runOnJS, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
-import { useKeyboardHeightValue } from "./keyboardHeight";
-import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { BarWindow, detentMemory } from "./BarWindow";
+import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
-/** The bar's side inset (BottomBar's), and so the window's. */
-const MARGIN = 12;
-/** The bottom bar's gap under its pill (BottomBar's bottom padding). */
-const BAR_GAP = 8;
-/** The collapsed height: the bar's pill, and the smallest detent. */
-const MIN_HEIGHT = COMPOSER_PILL_HEIGHT;
-/** Gap between the window's top and the header at full height. */
-const TOP_GAP = 8;
-/** Corner radius of the window, and of the pill (the bar's). */
-const WINDOW_RADIUS = 30;
-/** Grow/shrink duration (ms) for opening and collapsing. */
-const ANIM_MS = 320;
-/** The window's clear glass fades in (none → clear) over the first ~55% of the
- * grow: native glassEffectStyle `animate` (seconds), the only opacity-free way
- * to fade glass. */
-const FADE_S = (ANIM_MS * 0.55) / 1000;
-/** The pill's inset inside the expanded window; none collapsed. */
-const COMPOSER_INSET = 12;
-/** Drag distance (px before the smallest detent) over which the pill's inset
- * closes, so it eases into the bar instead of snapping. */
-const COMPOSER_INSET_RANGE = 110;
-/** The pill's padding: the bar's collapsed; a little tighter expanded (the
- * window's composer). */
-const PILL_PAD_V_EXPANDED = 7;
-const PILL_PAD_H_EXPANDED = 8;
-/** The handle's top inset at larger detents (a line inside the window top). */
-const GRABBER_TOP_EXPANDED = 8;
-/** The handle lifts to this (above the pill) at the smallest detent, over the
- * glass tab. */
-const TAB_TOP = -24;
-/** Snap-to-detent duration on drag release. */
-const SNAP_MS = 240;
-/** Fling-down velocity (px/s) that collapses the window. */
-const FLING_VELOCITY = 1400;
-/** How far past the last detent you can keep pulling, and the release point
- * past which (last detent + margin) the window collapses instead of snapping
- * back. */
-const DISMISS_ZONE = 120;
-const DISMISS_MARGIN = 48;
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
 const INPUT_MAX_LINES = 8;
@@ -166,25 +103,16 @@ const setDraft = (text: string): void => {
 
 // ── The detent last left ────────────────────────────────────────────────────
 
-// A fraction of the drag range (0 = full, 0.5 = mid, 1 = the smallest) plus the
-// keyboard height then, so an open sizes the detent before the keyboard
-// settles. Shared by every screen's page; persisted across launches.
-let savedDetentFrac = 0;
-let savedKbFull = 0;
+// Shared by every screen's page; persisted across launches.
+const dubzDetent = detentMemory(0, (frac, kbFull) =>
+  setDubzDetent({ frac, kbFull }).catch((error: unknown) => console.error("[dubz] saving the detent failed", error)),
+);
 getDubzDetent().then(
   (value) => {
-    if (value === undefined) return;
-    savedDetentFrac = value.frac;
-    savedKbFull = value.kbFull;
+    if (value !== undefined) dubzDetent.restore(value.frac, value.kbFull);
   },
   (error: unknown) => console.error("[dubz] reading the detent failed", error),
 );
-const rememberDetent = (frac: number, kb: number): void => {
-  savedDetentFrac = frac;
-  savedKbFull = kb;
-  setDubzDetent({ frac, kbFull: kb }).catch((error: unknown) => console.error("[dubz] saving the detent failed", error));
-};
-const atPillFrac = (frac: number): boolean => frac >= 0.98;
 
 const noop = (): void => undefined;
 
@@ -223,192 +151,13 @@ const unit = (value: number): number => {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 };
 
-/** How near the smallest detent a drag is: 0 above the pill's inset range, 1
- * at it. */
-const pillProgress = (drag: number, maxDrag: number): number => {
-  "worklet";
-  const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
-  const span = maxDrag - start;
-  return span <= 0 ? 0 : unit((drag - start) / span);
-};
-
 export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
-  const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
-  const scheme = useColorScheme();
-  const glassScheme = scheme === "dark" ? "dark" : "light";
-  // The app's one keyboard tracker (keyboardHeight.tsx): every screen has a
-  // Dubz page, and a tracker each ran them all at once, all the time.
-  const kbHeight = useKeyboardHeightValue();
-  const { height: screenH, width: screenW } = useWindowDimensions();
+  const { width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
-  const resting = composerRestingBottom(insets.bottom);
-  const windowTop = Math.max(headerHeight, insets.top) + TOP_GAP;
-
-  // `lowered` = below full; the tap-catcher then passes touches through.
-  // `pillMode` = settled at the smallest detent (the handle's place follows it,
-  // on release). `abovePill` = off the smallest detent right now, live during
-  // a drag, so the window's clear glass comes in as it leaves the pill rather
-  // than when the drag is let go.
-  const [lowered, setLowered] = React.useState(savedDetentFrac > 0.02);
-  const [pillMode, setPillMode] = React.useState(atPillFrac(savedDetentFrac));
-  const [abovePill, setAbovePill] = React.useState(!atPillFrac(savedDetentFrac));
-  const abovePillNow = useSharedValue(!atPillFrac(savedDetentFrac));
-  // 0 collapsed → 1 open, by layout (height), never a transform.
-  const grow = useSharedValue(0);
-  // How far the top is lowered from full height.
-  const dragY = useSharedValue(0);
-  const dragStart = useSharedValue(0);
-  // The full keyboard height, the running max of the live height: the window's
-  // height is computed from it, so the detents are the same with the keyboard
-  // up or down (the window just rides down with the bar when it goes).
-  const kbFull = useSharedValue(savedKbFull);
-  // The handle: 0 = a line inside the window top, 1 = lifted over the glass tab.
-  const handleT = useSharedValue(atPillFrac(savedDetentFrac) ? 1 : 0);
-  // True while a resize drag is down, so the pill's swipe-down (keyboard
-  // dismiss) never doubles as one.
-  const resizing = useSharedValue(false);
-
-  /** The drag range for a keyboard height: full height down to the pill. */
-  const maxDragFor = React.useCallback(
-    (kb: number): number => {
-      "worklet";
-      return Math.max(screenH - windowTop - (Math.max(kb, resting) + BAR_GAP) - MIN_HEIGHT, 0);
-    },
-    [screenH, windowTop, resting],
-  );
-
-  // The keyboard going down at the smallest detent collapses it: it is the bar
-  // with a handle, and without the keyboard just the bar.
-  const openNow = React.useRef(open);
-  const pillNow = React.useRef(pillMode);
-  React.useEffect(() => {
-    openNow.current = open;
-    pillNow.current = pillMode;
-  }, [open, pillMode]);
-  const keyboardDown = React.useCallback(() => {
-    if (openNow.current && pillNow.current) onClose();
-  }, [onClose]);
-  useAnimatedReaction(
-    () => kbHeight.value,
-    (h, previous) => {
-      if (h > kbFull.value) kbFull.value = h;
-      if (h === 0 && previous !== null && previous > 0) runOnJS(keyboardDown)();
-    },
-  );
-
-  // Open and collapse, acting only on a change of `open`.
-  const wasOpen = React.useRef(open);
-  React.useEffect(() => {
-    if (wasOpen.current === open) return undefined;
-    wasOpen.current = open;
-    if (!open) {
-      if (inputRef.current?.isFocused() === true) inputRef.current.blur();
-      grow.value = instant ? 0 : withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.cubic) });
-      return undefined;
-    }
-    // Land at the detent last left, sized from the keyboard height then (the
-    // keyboard is not up yet).
-    const pill = atPillFrac(savedDetentFrac);
-    dragY.value = savedDetentFrac * maxDragFor(savedKbFull);
-    kbFull.value = Math.max(kbFull.value, savedKbFull);
-    handleT.value = pill ? 1 : 0;
-    abovePillNow.value = !pill;
-    setLowered(savedDetentFrac > 0.02);
-    setPillMode(pill);
-    setAbovePill(!pill);
-    if (instant) {
-      grow.value = 1;
-      return undefined;
-    }
-    // On the next frame: starting mid-mount dropped the first frames.
-    const frame = requestAnimationFrame(() => {
-      grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
-      inputRef.current?.focus();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [open, instant, inputRef, grow, dragY, kbFull, handleT, abovePillNow, maxDragFor]);
-
-  // Slide the handle to its new spot only after a drag settles.
-  React.useEffect(() => {
-    handleT.value = withTiming(pillMode ? 1 : 0, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-  }, [pillMode, handleT]);
-
-  // Drag the handle to resize, snapping to detents like an iOS sheet, anchored
-  // on the bar.
-  const drag = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .onBegin(() => {
-          resizing.value = true;
-        })
-        .onStart(() => {
-          dragStart.value = dragY.value;
-        })
-        .onUpdate((e) => {
-          const maxDrag = maxDragFor(kbFull.value);
-          const limit = maxDrag + DISMISS_ZONE;
-          const next = dragStart.value + e.translationY;
-          dragY.value = next < 0 ? 0 : next > limit ? limit : next;
-          const above = dragY.value < maxDrag - 4;
-          if (above !== abovePillNow.value) {
-            abovePillNow.value = above;
-            runOnJS(setAbovePill)(above);
-          }
-        })
-        .onEnd((e) => {
-          const maxDrag = maxDragFor(kbFull.value);
-          // Flung down hard, or released past the last detent → collapse.
-          if (e.velocityY > FLING_VELOCITY || dragY.value > maxDrag + DISMISS_MARGIN) {
-            runOnJS(onClose)();
-            return;
-          }
-          const detents = [0, maxDrag * 0.5, maxDrag];
-          const projected = dragY.value + e.velocityY * 0.08;
-          let target = 0;
-          let best = 1e9;
-          for (const detent of detents) {
-            const diff = projected - detent;
-            const dist = diff < 0 ? -diff : diff;
-            if (dist < best) {
-              best = dist;
-              target = detent;
-            }
-          }
-          dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-          const atPill = maxDrag > 0 && target >= maxDrag - 4;
-          abovePillNow.value = !atPill;
-          runOnJS(setAbovePill)(!atPill);
-          runOnJS(setLowered)(target > 4);
-          runOnJS(setPillMode)(atPill);
-          runOnJS(rememberDetent)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
-        })
-        .onFinalize(() => {
-          resizing.value = false;
-        }),
-    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, onClose],
-  );
-
-  // Swipe DOWN on the pill to dismiss the keyboard. Only a clear downward drag
-  // activates it, so taps and typing are unaffected. (A plain JS callback via
-  // runOnJS: `Keyboard` itself can't be captured by a worklet.)
-  const dismissKeyboard = React.useCallback(() => Keyboard.dismiss(), []);
-  const dismissKb = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(open)
-        .activeOffsetY(14)
-        .failOffsetY(-14)
-        .onEnd((e) => {
-          if (resizing.value) return;
-          if (e.translationY > 24 || e.velocityY > 600) runOnJS(dismissKeyboard)();
-        }),
-    [open, dismissKeyboard, resizing],
-  );
 
   // Swipe right, where the composer is beside it, to slide back to it. Only a
   // clear sideways drag pages. The page's own work (focus, state) waits until
@@ -440,139 +189,53 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     [open, pageBack, pageX, begin, turn, stay, screenW],
   );
 
-  // The window's height: the bar's collapsed, growing to the detent open.
-  // Computed right here, from shared values and the memoized maxDragFor only:
-  // a helper function made fresh each render, called from this style, made
-  // Reanimated rebuild the style on every re-render (the screens behind
-  // re-render all the time), and every rebuild hitched the drag.
-  const windowStyle = useAnimatedStyle(() => {
-    const maxDrag = maxDragFor(kbFull.value);
-    const detent = Math.max(maxDrag + MIN_HEIGHT - dragY.value, MIN_HEIGHT);
-    return { height: MIN_HEIGHT + (detent - MIN_HEIGHT) * grow.value };
-  });
-
-
-  // How open the window reads: 0 collapsed or at the smallest detent (the
-  // bar), 1 open above the pill's inset range. The pill's inset and padding
-  // follow it, so it is the bar at 0 and the window's composer at 1.
-  const pillWrapStyle = useAnimatedStyle(() => {
-    const openness = grow.value * (1 - pillProgress(dragY.value, maxDragFor(kbFull.value)));
-    return {
-      paddingHorizontal: COMPOSER_INSET * openness,
-      paddingBottom: COMPOSER_INSET * openness,
-    };
-  });
-  const pillStyle = useAnimatedStyle(() => {
-    const openness = grow.value * (1 - pillProgress(dragY.value, maxDragFor(kbFull.value)));
-    return {
-      paddingVertical: COMPOSER_FIELD_PADDING + (PILL_PAD_V_EXPANDED - COMPOSER_FIELD_PADDING) * openness,
-      paddingHorizontal: COMPOSER_FIELD_PADDING + (PILL_PAD_H_EXPANDED - COMPOSER_FIELD_PADDING) * openness,
-    };
-  });
-
-  // The handle: a plain line (not glass), so it may fade with the grow.
-  const handleStyle = useAnimatedStyle(() => ({
-    top: GRABBER_TOP_EXPANDED + (TAB_TOP - GRABBER_TOP_EXPANDED) * handleT.value,
-    opacity: grow.value,
-  }));
-
   return (
-    <View style={styles.page} pointerEvents="box-none">
-      {/* Tap outside to collapse (at full height; lowered, touches pass through
-       * to what's behind). Reaches up over the screen from the bar. */}
-      {open && !lowered ? (
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel={`Close ${AGENT_NAME}`}
-        />
-      ) : null}
-
-      <Reanimated.View style={[styles.window, windowStyle]}>
-        {/* The page swipe covers the window's body only, never the grab bar:
-         * over the bar it competed with the resize drag and slid the window
-         * sideways, snapping it back on release. */}
-        <GestureDetector gesture={paging}>
-          <View style={styles.fill}>
-            <GlassContainer style={styles.fill}>
-              <GlassView
-                style={styles.glass}
-                // Clear while open above the smallest detent; none collapsed and
-                // at the pill, where the pill fills it and is the bar. Faded by
-                // the native animate, never opacity.
-                glassEffectStyle={{ style: open && abovePill ? "clear" : "none", animate: true, animationDuration: FADE_S }}
-                // A slight dark tint (tints the glass material, not a solid fill)
-                // to give the clear glass some body over bright content.
-                tintColor="rgba(0,0,0,0.18)"
-                colorScheme={glassScheme}
-              >
-                {/* What Dubz suggests: the space above the pill, which alone is
-               * cropped (no glass in it; nothing above the pill's glass ever
-               * clips it). Its contents sit at its bottom, on the pill's top,
-               * and never move; the window's top only reveals or hides them. */}
-              <View style={styles.suggestionsArea} pointerEvents={open ? "box-none" : "none"}>
-                <View style={styles.suggestions}>
-                  {suggestions.map((suggestion) => (
-                    <Suggestion key={suggestion.kind} suggestion={suggestion} />
-                  ))}
-                </View>
-              </View>
-              {/* The pill sits at the window's bottom, a direct child of the
-                 * window's glass: the bar collapsed, the window's composer open. */}
-                <Reanimated.View style={pillWrapStyle}>
-                  <GestureDetector gesture={dismissKb}>
-                    <Reanimated.View style={[styles.pill, pillStyle]}>
-                      {/* The bar's regular glass, never faded (opacity on glass
-                       * or its parents stops it rendering). */}
-                      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                        <GlassView style={styles.pillGlass} glassEffectStyle="regular" colorScheme={glassScheme} />
-                      </View>
-                      <View style={styles.plusSlot}>
-                        <PlusChip onPress={open ? noop : onOpen} />
-                      </View>
-                      <TextInput
-                        ref={inputRef}
-                        style={[styles.input, { maxHeight: open ? LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V : COMPOSER_SEND_CHIP_SIZE }]}
-                        value={text}
-                        onChangeText={setDraft}
-                        placeholder={`Ask ${AGENT_NAME}…`}
-                        placeholderTextColor={textColors.placeholderText}
-                        editable={open}
-                        multiline
-                      />
-                      <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? () => setDraft("") : onOpen} />
-                      {/* Collapsed: any tap on the bar opens it. */}
-                      {open ? null : (
-                        <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
-                      )}
-                    </Reanimated.View>
-                  </GestureDetector>
-                </Reanimated.View>
-              </GlassView>
-            </GlassContainer>
+    <BarWindow
+      open={open}
+      instant={instant}
+      onClose={onClose}
+      inputRef={inputRef}
+      glass="clear"
+      // A slight dark tint (tints the glass material, not a solid fill) to give
+      // the clear glass some body over bright content.
+      tintColor="rgba(0,0,0,0.18)"
+      detent={dubzDetent}
+      closeLabel={`Close ${AGENT_NAME}`}
+      bodyGesture={paging}
+      body={
+        // What Dubz suggests: its contents sit at the bottom, on the pill's
+        // top, and never move; the window's top only reveals or hides them.
+        <View style={styles.suggestionsArea} pointerEvents="box-none">
+          <View style={styles.suggestions}>
+            {suggestions.map((suggestion) => (
+              <Suggestion key={suggestion.kind} suggestion={suggestion} />
+            ))}
           </View>
-        </GestureDetector>
-
-        {/* Glass tab above the pill at the smallest detent, open only: it
-         * comes and goes by the native animate (none ↔ regular). */}
-        <View style={styles.tabGlassWrap} pointerEvents="none">
-          <GlassView
-            style={styles.tabGlass}
-            glassEffectStyle={{ style: open && pillMode ? "regular" : "none", animate: true, animationDuration: FADE_S }}
-            colorScheme={glassScheme}
-          />
         </View>
-
-        {/* The one grabber: a line inside the window top at larger detents,
-         * floating over the tab at the smallest; gone collapsed. */}
-        <GestureDetector gesture={drag}>
-          <Reanimated.View style={[styles.grabHandle, handleStyle]} pointerEvents={open ? "auto" : "none"}>
-            <View style={styles.grabber} />
-          </Reanimated.View>
-        </GestureDetector>
-      </Reanimated.View>
-    </View>
+      }
+      pill={
+        <>
+          <View style={styles.plusSlot}>
+            <PlusChip onPress={open ? noop : onOpen} />
+          </View>
+          <TextInput
+            ref={inputRef}
+            style={[styles.input, { maxHeight: open ? LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V : COMPOSER_SEND_CHIP_SIZE }]}
+            value={text}
+            onChangeText={setDraft}
+            placeholder={`Ask ${AGENT_NAME}…`}
+            placeholderTextColor={textColors.placeholderText}
+            editable={open}
+            multiline
+          />
+          <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? () => setDraft("") : onOpen} />
+          {/* Collapsed: any tap on the bar opens it. */}
+          {open ? null : (
+            <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
+          )}
+        </>
+      }
+    />
   );
 };
 
@@ -617,24 +280,15 @@ const INPUT_PAD_V = INPUT_PAD_TOP + INPUT_PAD_BOTTOM;
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-  // Fills its container, from the screen's top down to the keyboard: the
-  // window grows up inside it, never past its parents' bounds (iOS delivers
-  // no touch to a view outside its parent, so the grab bar was unreachable).
-  page: {
-    flex: 1,
-  },
   standalone: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
   },
-  // The window's content, cropped to it; the pill at its bottom.
-  // The space above the pill, cropped to the window; its contents at its
-  // bottom, on the pill's top. No glass above the pill is ever clipped.
+  // The suggestions' space, above the pill: its contents at its bottom.
   suggestionsArea: {
     flex: 1,
-    overflow: "hidden",
     justifyContent: "flex-end",
   },
   // The suggestions themselves: no padding on the area, so it shrinks to
@@ -647,72 +301,6 @@ const makeStyles = (text: TextColors) =>
   placeholder: {
     height: 106,
     backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  // The wrapper carries ONLY position and size — no borderRadius / overflow /
-  // shadow, which would clip or composite the glass.
-  window: {
-    position: "absolute",
-    left: MARGIN,
-    right: MARGIN,
-    bottom: BAR_GAP,
-  },
-  fill: {
-    flex: 1,
-    width: "100%",
-    height: "100%",
-  },
-  // Explicit 100% size (not just flex): the native clear backdrop can't resolve
-  // its bounds from flex alone. Rounding lives here, on the glass. The pill
-  // sits at its bottom.
-  glass: {
-    width: "100%",
-    height: "100%",
-    borderRadius: WINDOW_RADIUS,
-    justifyContent: "flex-end",
-  },
-  tabGlassWrap: {
-    position: "absolute",
-    alignSelf: "center",
-    top: TAB_TOP,
-    zIndex: 2,
-  },
-  tabGlass: {
-    width: 82,
-    height: -TAB_TOP,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  grabHandle: {
-    position: "absolute",
-    alignSelf: "center",
-    width: 82,
-    paddingTop: 10,
-    paddingBottom: 8,
-    alignItems: "center",
-    zIndex: 3,
-  },
-  grabber: {
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: "rgba(120,120,128,0.55)",
-  },
-  // The bar's pill: +, the text, send, bottom-aligned so they hold their place
-  // as the text grows upward. The small drop shadow is the bar's (it does not
-  // clip; the glass rounds itself).
-  pill: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
-    borderRadius: WINDOW_RADIUS,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-  },
-  pillGlass: {
-    flex: 1,
-    borderRadius: WINDOW_RADIUS,
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {

@@ -39,12 +39,3 @@ export const useKeyboardHeight = (): number => {
   return height;
 };
 
-// The keyboard's height when last shown: kept for sizing things to the
-// keyboard while it is down (0 until it has shown once).
-let lastShownHeight = 0;
-Keyboard.addListener("keyboardWillShow", (e) => {
-  lastShownHeight = e.endCoordinates.height;
-});
-
-/** The keyboard's height when it was last up, or 0 if it hasn't been yet. */
-export const lastKeyboardHeight = (): number => lastShownHeight;

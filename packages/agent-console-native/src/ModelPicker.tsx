@@ -1,11 +1,12 @@
 /**
- * Composer model selector: the model's name, and on a tap a native sheet of
- * the connected models: a search field (focused as it opens) over the models
- * in pages, a tab strip over them. Recents first (the models last sent with),
- * then a page per provider, the most used providers first. Swipe between pages
- * or tap a tab; typing swaps the pages for every model matching. The sheet
- * reads the models store live, so a refresh landing while it is open shows at
- * once.
+ * The composer's model: its name in the bar, and on a tap the model window, a
+ * BarWindow (grown up out of the bar, riding the keyboard as the bar does,
+ * regular glass). Its pill is the search, focused as it opens; above it the
+ * pages' tabs (Recents, then each provider, the most used first); above those
+ * the page's models. Swipe between pages or tap a tab; typing swaps the pages
+ * for every model matching. Pull a list down to have the server fetch the
+ * models.dev catalog now. The window reads the models store live, so a
+ * refresh landing while it is open shows at once.
  *
  * Label is the model name (or “Model” while loading); not “Auto” (Cursor’s
  * routing feature, which we don’t replicate). Provider titles are the server’s
@@ -13,11 +14,11 @@
  *
  * @internal
  */
-import { BottomSheet, Divider, Group, Host, HStack, Image, ScrollView, Spacer, TabView, Text, TextField, VStack } from "@expo/ui/swift-ui";
+import { Feather } from "@expo/vector-icons";
+import { Divider, Host, HStack, Image, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   Animation,
   animation,
-  autocorrectionDisabled,
   clipped,
   contentShape,
   fixedSize,
@@ -26,63 +27,41 @@ import {
   frame,
   glassEffect,
   lineLimit,
-  onGeometryChange,
   onTapGesture,
   padding,
-  type PresentationDetent,
-  presentationDetents,
-  presentationDragIndicator,
   refreshable,
   scrollDismissesKeyboard,
   scrollIndicators,
   shapes,
   tabViewStyle,
-  textFieldStyle,
-  textInputAutocapitalization,
   truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { Dimensions, Keyboard, StyleSheet } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 import { CapsuleTabs } from "../modules/capsule-tabs";
+import { BarWindow, type CloseReason, detentMemory } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
-import { COMPOSER_CHIP_SIZE } from "./composerBarSpec";
+import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
 import { type ModelUsage, useModelUsage } from "./modelUsage";
-import { useCardTint, useTextColors, useTheme } from "./theme";
-import { lastKeyboardHeight } from "./useKeyboardHeight";
+import { type TextColors, useCardTint, useTextColors, useTheme, useThemedStyles } from "./theme";
 
 const RECENTS = "recents";
 const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
-/** The sheet's side margin, for the search, the tabs and the list alike. */
-const SIDE = 20;
-const SEARCH_HEIGHT = 44;
+/** The list's side margin, for the tabs and the list alike. */
+const SIDE = 16;
 const TAB_HEIGHT = 34;
 const TAB_TITLE_MAX_WIDTH = 200;
 const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
-/** Above the keyboard's top edge, the sheet's top edge. */
-const KEYBOARD_MARGIN = 16;
-/** The sheet's opening height before the keyboard has ever shown. */
-const FALLBACK: PresentationDetent = { fraction: 0.4 };
+/** The search's one line, sized so the pill is the bar's height. */
+const SEARCH_LINE_HEIGHT = 21;
 
-/** The sheet's opening height: its top a margin above where the keyboard's top
- * edge is (or was, last it was up). */
-const shortDetent = (): PresentationDetent => {
-  const keyboard = lastKeyboardHeight();
-  return keyboard > 0 ? { height: keyboard + KEYBOARD_MARGIN } : FALLBACK;
-};
+/** Where the model window opens (half, unless a drag left it elsewhere), for
+ * the app's run. */
+const modelDetent = detentMemory(0.5);
 
-type Props = {
-  readonly models: ReadonlyArray<ModelOption>;
-  readonly selected: ModelOption | undefined;
-  readonly onChange: (model: ModelOption) => void;
-  /** The sheet opened: load the directory's list afresh. */
-  readonly onOpen: () => void;
-  /** Pulled to refresh: the server fetches the catalog now, then the list reloads. */
-  readonly onRefresh: () => Promise<void>;
-};
-
-/** One page of the sheet. */
+/** One page of the list. */
 interface ModelTab {
   readonly id: string;
   readonly title: string;
@@ -152,57 +131,65 @@ const matching = (models: ReadonlyArray<ModelOption>, query: string): ReadonlyAr
     .sort((a, b) => byName(a.name, b.name) || byName(a.providerName, b.providerName));
 };
 
-export const ModelPicker = (props: Props): React.ReactElement => {
+/** The model's name in the bar; a tap opens the model window. */
+export const ModelPicker = (props: {
+  readonly models: ReadonlyArray<ModelOption>;
+  readonly selected: ModelOption | undefined;
+  readonly onPress: () => void;
+}): React.ReactElement => {
+  const textColors = useTextColors();
+  const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
+  return (
+    <Host style={styles.host} matchContents={{ horizontal: true }} ignoreSafeArea="all">
+      <HStack
+        spacing={4}
+        modifiers={[
+          frame({ maxWidth: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE }),
+          padding({ trailing: 4 }),
+          contentShape(shapes.rectangle()),
+          onTapGesture(props.onPress),
+        ]}
+      >
+        <Text modifiers={[font({ size: 13, weight: "medium" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1), truncationMode("middle")]}>
+          {label}
+        </Text>
+        <Image systemName="chevron.down" size={11} color={textColors.secondaryLabel} />
+      </HStack>
+    </Host>
+  );
+};
+
+/** The model window: search in its pill, the pages above. */
+export const ModelWindow = (props: {
+  readonly open: boolean;
+  readonly models: ReadonlyArray<ModelOption>;
+  readonly selected: ModelOption | undefined;
+  readonly onChoose: (model: ModelOption) => void;
+  readonly onClose: (reason: CloseReason) => void;
+  /** Pulled to refresh: the server fetches the catalog now, then the list reloads. */
+  readonly onRefresh: () => Promise<void>;
+}): React.ReactElement | null => {
+  const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { colors: themeColors } = useTheme();
   const cardTint = useCardTint();
   const usage = useModelUsage();
-  const [open, setOpen] = React.useState(false);
+  const inputRef = React.useRef<TextInput>(null);
   const [tab, setTab] = React.useState(RECENTS);
   const [query, setQuery] = React.useState("");
   const [refreshError, setRefreshError] = React.useState<string | undefined>(undefined);
-  // Each opening mounts a fresh sheet: an empty, focused search.
-  const [opening, setOpening] = React.useState(0);
-  // The sheet's height, and whether the search holds the keyboard: while it
-  // does, the sheet keeps only its current height.
-  // Set as the sheet opens, from the keyboard then.
-  const [short, setShort] = React.useState<PresentationDetent>(FALLBACK);
-  const [detent, setDetent] = React.useState<PresentationDetent>(FALLBACK);
-  const [searchFocused, setSearchFocused] = React.useState(true);
-  const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
   const tabs = React.useMemo(() => tabsOf(props.models, usage), [props.models, usage]);
   const current = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id ?? RECENTS;
   const selectedKey = props.selected !== undefined ? modelKey(props.selected) : undefined;
   const results = React.useMemo(() => matching(props.models, query), [props.models, query]);
   const searching = query.trim().length > 0;
 
-  const show = (): void => {
-    setQuery("");
-    const height = shortDetent();
-    console.log("[sheet-diag] open: lastKeyboard", lastKeyboardHeight(), "detent", JSON.stringify(height));
-    setShort(height);
-    setDetent(height);
-    setSearchFocused(true);
-    setRefreshError(undefined);
-    setOpening((n) => n + 1);
-    setOpen(true);
-    props.onOpen();
-  };
-
-  // DIAG(sheet-keyboard): remove once aligned.
+  // Each opening starts from an empty search.
   React.useEffect(() => {
-    if (!open) return;
-    const names: ReadonlyArray<"keyboardWillShow" | "keyboardDidShow" | "keyboardDidChangeFrame"> = ["keyboardWillShow", "keyboardDidShow", "keyboardDidChangeFrame"];
-    const subs = names.map((name) =>
-      Keyboard.addListener(name, (e) => console.log("[sheet-diag]", name, JSON.stringify(e.endCoordinates))),
-    );
-    return () => subs.forEach((sub) => sub.remove());
-  }, [open]);
-
-  const choose = (model: ModelOption): void => {
-    props.onChange(model);
-    setOpen(false);
-  };
+    if (!props.open) return;
+    setQuery("");
+    setRefreshError(undefined);
+  }, [props.open]);
 
   const pull = (): Promise<void> =>
     props.onRefresh().then(
@@ -220,13 +207,13 @@ export const ModelPicker = (props: Props): React.ReactElement => {
         alignment="leading"
         modifiers={[
           glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
-          padding({ horizontal: SIDE, bottom: SIDE }),
+          padding({ horizontal: SIDE, top: SIDE }),
         ]}
       >
         {models.map((model, index) => (
           <VStack key={modelKey(model)} spacing={0} alignment="leading">
             {index > 0 ? <Divider modifiers={[padding({ leading: 16 })]} /> : null}
-            <ModelRow model={model} showProvider={showProvider} active={modelKey(model) === selectedKey} onPress={choose} />
+            <ModelRow model={model} showProvider={showProvider} active={modelKey(model) === selectedKey} onPress={props.onChoose} />
           </VStack>
         ))}
       </VStack>
@@ -234,99 +221,20 @@ export const ModelPicker = (props: Props): React.ReactElement => {
   );
 
   return (
-    <Host style={styles.host} matchContents={{ horizontal: true }} ignoreSafeArea="all">
-      <BottomSheet
-        isPresented={open}
-        onIsPresentedChange={setOpen}
-        anchor={
-          <HStack
-            spacing={4}
-            modifiers={[
-              frame({ maxWidth: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE }),
-              padding({ trailing: 4 }),
-              contentShape(shapes.rectangle()),
-              onTapGesture(show),
-            ]}
-          >
-            <Text
-              modifiers={[
-                font({ size: 13, weight: "medium" }),
-                foregroundStyle(textColors.secondaryLabel),
-                lineLimit(1),
-                truncationMode("middle"),
-              ]}
-            >
-              {label}
-            </Text>
-            <Image systemName="chevron.down" size={11} color={textColors.secondaryLabel} />
-          </HStack>
-        }
-      >
-        <Group
-          key={opening}
-          modifiers={[
-            presentationDetents(searchFocused ? [detent] : [short, "large"], {
-              selection: detent,
-              onSelectionChange: (next) => {
-                console.log("[sheet-diag] detent change", JSON.stringify(next));
-                setDetent(next === "large" ? "large" : short);
-              },
-            }),
-            presentationDragIndicator("visible"),
-          ]}
-        >
-          <VStack
-            spacing={0}
-            modifiers={[
-              padding({ top: 10 }),
-              frame({ maxHeight: Infinity, alignment: "top" }),
-              // DIAG(sheet-keyboard): remove once aligned.
-              onGeometryChange((f) => console.log("[sheet-diag] sheet", JSON.stringify(f), "screen", Dimensions.get("window").height)),
-            ]}
-          >
-            {CapsuleTabs !== undefined ? (
-              <CapsuleTabs
-                tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
-                selection={current}
-                tint={themeColors.bubbleGlassTint}
-                sideMargin={SIDE}
-                onSelect={setTab}
-              />
-            ) : (
-              <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
-            )}
-            <HStack
-              spacing={10}
-              modifiers={[
-                padding({ horizontal: 16 }),
-                frame({ height: SEARCH_HEIGHT }),
-                glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "capsule" }),
-                padding({ horizontal: SIDE }),
-              ]}
-            >
-              <Image systemName="magnifyingglass" size={15} color="secondary" />
-              <TextField
-                autoFocus
-                placeholder="Search models"
-                onTextChange={setQuery}
-                onFocusChange={setSearchFocused}
-                modifiers={[textFieldStyle("plain"), autocorrectionDisabled(), textInputAutocapitalization("never")]}
-              />
-            </HStack>
-            {refreshError !== undefined ? (
-              <Text
-                modifiers={[
-                  font({ size: 13 }),
-                  foregroundStyle("red"),
-                  lineLimit(2),
-                  padding({ horizontal: SIDE, top: 10 }),
-                  frame({ maxWidth: Infinity, alignment: "leading" }),
-                ]}
-              >
-                {refreshError}
-              </Text>
-            ) : null}
-            <VStack spacing={0} modifiers={[padding({ top: 14 }), frame({ maxHeight: Infinity, alignment: "top" })]}>
+    <BarWindow
+      open={props.open}
+      instant={false}
+      onClose={props.onClose}
+      inputRef={inputRef}
+      glass="regular"
+      tintColor={cardTint}
+      detent={modelDetent}
+      hiddenCollapsed
+      closeLabel="Close models"
+      body={
+        <Host style={styles.list} ignoreSafeArea="all">
+          <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "bottom" })]}>
+            <VStack spacing={0} modifiers={[frame({ maxHeight: Infinity, alignment: "top" })]}>
               {searching ? (
                 results.length > 0 ? (
                   rows(results, true)
@@ -343,10 +251,52 @@ export const ModelPicker = (props: Props): React.ReactElement => {
                 </TabView>
               )}
             </VStack>
+            {refreshError !== undefined ? (
+              <Text
+                modifiers={[
+                  font({ size: 13 }),
+                  foregroundStyle("red"),
+                  lineLimit(2),
+                  padding({ horizontal: SIDE, top: 8 }),
+                  frame({ maxWidth: Infinity, alignment: "leading" }),
+                ]}
+              >
+                {refreshError}
+              </Text>
+            ) : null}
+            {CapsuleTabs !== undefined ? (
+              <CapsuleTabs
+                tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
+                selection={current}
+                tint={themeColors.bubbleGlassTint}
+                sideMargin={SIDE}
+                onSelect={setTab}
+              />
+            ) : (
+              <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
+            )}
           </VStack>
-        </Group>
-      </BottomSheet>
-    </Host>
+        </Host>
+      }
+      pill={
+        <>
+          <View style={styles.searchIcon}>
+            <Feather name="search" size={17} color={textColors.secondaryLabel} />
+          </View>
+          <TextInput
+            ref={inputRef}
+            style={styles.search}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search models"
+            placeholderTextColor={textColors.placeholderText}
+            autoCorrect={false}
+            autoCapitalize="none"
+            editable={props.open}
+          />
+        </>
+      }
+    />
   );
 };
 
@@ -449,3 +399,28 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
 });
+
+const makeStyles = (text: TextColors) =>
+  StyleSheet.create({
+    // The pages and their tabs fill the space above the pill.
+    list: {
+      flex: 1,
+    },
+    // The search icon, centred on the pill's one line.
+    searchIcon: {
+      width: COMPOSER_SEND_CHIP_SIZE,
+      height: COMPOSER_SEND_CHIP_SIZE,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // One line, as tall as send, so the pill is the bar's height.
+    search: {
+      flex: 1,
+      height: COMPOSER_SEND_CHIP_SIZE,
+      color: text.label,
+      fontSize: 16,
+      lineHeight: SEARCH_LINE_HEIGHT,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+    },
+  });

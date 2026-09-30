@@ -42,7 +42,8 @@ import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import type { DubzContext } from "./dubzSuggestions";
 import { findModel, getDefaultModel, type ModelOption, refreshModels, reloadModels, useModels } from "./models";
-import { ModelPicker } from "./ModelPicker";
+import { ModelPicker, ModelWindow } from "./ModelPicker";
+import type { CloseReason } from "./BarWindow";
 import { recordModelUse } from "./modelUsage";
 import { getLastModel, setLastModel } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -99,7 +100,9 @@ export const Composer = (props: {
   // Held expanded while it is a page sliding (away to Dubz, or back), when its
   // input is not the focused one.
   const [held, setHeld] = React.useState(false);
-  const expanded = focused || held || text.length > 0;
+  // The model window open over the bar (the bar stays expanded under it).
+  const [modelsOpen, setModelsOpen] = React.useState(false);
+  const expanded = focused || held || modelsOpen || text.length > 0;
   const pageType = props.dubzContext.surface;
   const withDubz = useAgentButtonVisible(pageType);
   const lastPage = useBarPage(pageType);
@@ -141,6 +144,16 @@ export const Composer = (props: {
     const match = findModel(models, props.seedModel.providerID, props.seedModel.modelID);
     setSelectedModel(match ?? props.seedModel);
   }, [props.seedModel?.providerID, props.seedModel?.modelID, models]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openModels = (): void => {
+    void refreshModels(client, props.directory);
+    setModelsOpen(true);
+  };
+  // Back to the message, unless the keyboard went down (that closed it).
+  const closeModels = (reason: CloseReason): void => {
+    setModelsOpen(false);
+    if (reason !== "keyboard") inputRef.current?.focus();
+  };
 
   const pickModel = (model: ModelOption): void => {
     setSelectedModel(model);
@@ -329,13 +342,7 @@ export const Composer = (props: {
                 }}
               />
             }
-            expandedCenter={<ModelPicker
-                models={models}
-                selected={selectedModel}
-                onChange={pickModel}
-                onOpen={() => void refreshModels(client, props.directory)}
-                onRefresh={() => reloadModels(client, address, props.directory)}
-              />}
+            expandedCenter={<ModelPicker models={models} selected={selectedModel} onPress={openModels} />}
             collapsedCenter={
               <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
                 {text.length > 0 ? text : props.placeholder}
@@ -356,6 +363,19 @@ export const Composer = (props: {
           />
         </Reanimated.View>
       </GestureDetector>
+      <View style={styles.modelLayer} pointerEvents="box-none">
+        <ModelWindow
+          open={modelsOpen}
+          models={models}
+          selected={selectedModel}
+          onChoose={(model) => {
+            pickModel(model);
+            closeModels("dismiss");
+          }}
+          onClose={closeModels}
+          onRefresh={() => reloadModels(client, address, props.directory)}
+        />
+      </View>
       {withDubz ? (
         <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
           <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} />
@@ -391,6 +411,15 @@ const makeStyles = (text: TextColors) =>
     position: "absolute",
     top: 0,
     bottom: 0,
+  },
+  // The model window's layer: over the composer's page, filling the bar's
+  // container, so the window grows up inside its parents' bounds.
+  modelLayer: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   mirrorText: {
     color: text.label,
