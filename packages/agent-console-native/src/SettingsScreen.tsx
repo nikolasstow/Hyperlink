@@ -240,7 +240,6 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <View style={styles.cardSeparator} />
           <View style={styles.rowBetween}>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Repo scan</Text>
               <Text style={styles.hint}>
                 {lastScanAt === undefined ? "Never scanned." : `Last scanned ${timeAgo(lastScanAt)}.`}
               </Text>
