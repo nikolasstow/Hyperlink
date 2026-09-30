@@ -10,9 +10,11 @@ import * as React from "react";
 import { Host, Slider } from "@expo/ui/swift-ui";
 import {
   ActivityIndicator,
+  LayoutAnimation,
   ScrollView,
   StyleSheet,
   Text,
+  Switch,
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
@@ -46,7 +48,7 @@ import {
   setWorktreeTemplate,
   type DefaultWorktreePreference,
 } from "./settings";
-import { RUN_COUNTDOWN_MAX, RUN_COUNTDOWN_MIN, setRunCountdownSeconds, useRunCountdownSeconds } from "./runCountdown";
+import { RUN_COUNTDOWN_MAX, RUN_COUNTDOWN_MIN, setRunCountdownEnabled, setRunCountdownSeconds, useRunCountdownEnabled, useRunCountdownSeconds } from "./runCountdown";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -73,6 +75,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const runCountdown = useRunCountdownSeconds();
+  const runDelayOn = useRunCountdownEnabled();
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
@@ -368,14 +371,27 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
         <Text style={styles.sectionLabel}>Scripts</Text>
         <View style={styles.card}>
           <CardGlass />
-          {/* How long a script counts down before it runs. */}
+          {/* A delay before a script runs, so a stray tap starts nothing: on,
+           * its length on a slider; off, a tap runs it at once. */}
           <View style={styles.formRow}>
-            <Text style={styles.formLabel}>Countdown</Text>
-            <Text style={styles.formValue}>{runCountdown === 1 ? "1 second" : `${runCountdown} seconds`}</Text>
+            <Text style={styles.formLabel}>Delay</Text>
+            {runDelayOn ? <Text style={styles.formValue}>{runCountdown === 1 ? "1 second" : `${runCountdown} seconds`}</Text> : null}
+            <Switch
+              style={runDelayOn ? undefined : styles.switchAlone}
+              value={runDelayOn}
+              onValueChange={(on) => {
+                // The slider comes and goes with the card resizing, not
+                // snapping.
+                LayoutAnimation.configureNext(LayoutAnimation.create(250, "easeInEaseOut", "opacity"));
+                setRunCountdownEnabled(on);
+              }}
+            />
           </View>
-          <Host style={{ width: windowWidth - 32 - 28, height: SLIDER_HEIGHT }}>
-            <Slider value={runCountdown} min={RUN_COUNTDOWN_MIN} max={RUN_COUNTDOWN_MAX} step={1} onValueChange={setRunCountdownSeconds} />
-          </Host>
+          {runDelayOn ? (
+            <Host style={{ width: windowWidth - 32 - 28, height: SLIDER_HEIGHT }}>
+              <Slider value={runCountdown} min={RUN_COUNTDOWN_MIN} max={RUN_COUNTDOWN_MAX} step={1} onValueChange={setRunCountdownSeconds} />
+            </Host>
+          ) : null}
         </View>
 
         <Text style={styles.sectionLabel}>Server</Text>
@@ -485,6 +501,10 @@ const makeStyles = (text: TextColors) =>
   formValue: {
     color: text.secondaryLabel,
     fontSize: 16,
+    marginLeft: "auto",
+  },
+  // With no value beside it, the switch still sits at the row's end.
+  switchAlone: {
     marginLeft: "auto",
   },
   formInput: {

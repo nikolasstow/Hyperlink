@@ -19,8 +19,12 @@ const defaultSeconds = 3;
 
 const isLength = (value: number): boolean => Number.isInteger(value) && value >= RUN_COUNTDOWN_MIN && value <= RUN_COUNTDOWN_MAX;
 const storageKey = "runCountdownSeconds";
+/** Whether scripts count down at all (on by default); off, a tap runs one at
+ * once. */
+const enabledKey = "runCountdownOn";
 
 let seconds = defaultSeconds;
+let enabled = true;
 const listeners = new Set<() => void>();
 const emit = (): void => listeners.forEach((listener) => listener());
 
@@ -36,17 +40,36 @@ AsyncStorage.getItem(storageKey).then(
   (error: unknown) => console.error("[run countdown] reading the saved length failed", error),
 );
 
+const subscribe = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
+AsyncStorage.getItem(enabledKey).then(
+  (saved) => {
+    if (saved === "false") {
+      enabled = false;
+      emit();
+    }
+  },
+  (error: unknown) => console.error("[run countdown] reading whether it is on failed", error),
+);
+
+export const setRunCountdownEnabled = (next: boolean): void => {
+  if (next === enabled) return;
+  enabled = next;
+  emit();
+  AsyncStorage.setItem(enabledKey, String(next)).catch((error: unknown) => console.error("[run countdown] saving whether it is on failed", error));
+};
+
+export const useRunCountdownEnabled = (): boolean => React.useSyncExternalStore(subscribe, () => enabled);
+
 export const setRunCountdownSeconds = (value: number): void => {
   const next = Math.min(RUN_COUNTDOWN_MAX, Math.max(RUN_COUNTDOWN_MIN, Math.round(value)));
   if (next === seconds) return;
   seconds = next;
   emit();
   AsyncStorage.setItem(storageKey, String(next)).catch((error: unknown) => console.error("[run countdown] saving the length failed", error));
-};
-
-const subscribe = (listener: () => void): (() => void) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
 };
 
 export const useRunCountdownSeconds = (): number => React.useSyncExternalStore(subscribe, () => seconds);
@@ -68,6 +91,7 @@ export const useRunCountdown = (): {
   readonly cancel: () => void;
 } => {
   const durationMs = useRunCountdownSeconds() * 1000;
+  const on = useRunCountdownEnabled();
   const [counting, setCounting] = React.useState<Countdown | undefined>(undefined);
   const timer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -80,6 +104,13 @@ export const useRunCountdown = (): {
   const start = React.useCallback(
     (key: string, run: () => void) => {
       if (timer.current !== undefined) clearTimeout(timer.current);
+      // The countdown is off: run at once.
+      if (!on) {
+        timer.current = undefined;
+        setCounting(undefined);
+        run();
+        return;
+      }
       setCounting({
         key,
         durationMs,
@@ -90,7 +121,7 @@ export const useRunCountdown = (): {
         run();
       }, durationMs);
     },
-    [durationMs],
+    [durationMs, on],
   );
 
   React.useEffect(
