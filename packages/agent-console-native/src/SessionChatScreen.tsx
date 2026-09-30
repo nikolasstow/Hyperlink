@@ -37,6 +37,7 @@ import { markSessionRead } from "./sessionReads";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
+import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
@@ -122,12 +123,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     return undefined;
   }, [transcript]);
   // The composer floats over the list (see its absolute wrapper below) so
-  // the glass actually has content passing behind it — which means the
-  // list has to reserve that space itself instead of getting it from flex
-  // layout. Measured rather than hardcoded because the composer grows
-  // with multi-line input; onLayout re-fires on every one of those height
-  // changes, so the reserved space tracks it.
-  const [composerHeight, setComposerHeight] = React.useState(0);
+  // the glass actually has content passing behind it, which means the list
+  // reserves that space itself: the bar's height, a constant
+  // (COMPOSER_BAR_HEIGHT), never a measurement.
 
   React.useEffect(() => {
     if (reversedOrder.length > 0) listRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -390,7 +388,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // after the last item" — renders as reserved space at the screen's
         // visual TOP (under the header), and `paddingTop`
         // renders at the visual BOTTOM (under the floating composer).
-        contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: composerHeight + keyboardHeight }]}
+        contentContainerStyle={[styles.content, { paddingBottom: topBarHeight + 16, paddingTop: COMPOSER_BAR_HEIGHT + keyboardHeight }]}
       />
       </ScrollViewMarker>
       <EdgeBlurBars bottomInset={keyboardHeight} busy={transcript.busy} />
@@ -402,7 +400,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
        * it, which defeats the glass. `bottom` tracks the keyboard
        * explicitly: absolute children here are NOT offset by the parent's
        * padding (relying on that put the composer behind the keyboard). */}
-      <Animated.View style={[styles.composerFloat, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      {/* From the screen's top down to the keyboard (or the bar's resting
+       * spot), letting touches through where empty: the bar sits at its bottom,
+       * and Dubz's window grows up inside it, so its grab bar stays within its
+       * parents' bounds, where iOS delivers touches. */}
+      <Animated.View style={[styles.composerFloat, composerSlide]} pointerEvents="box-none">
         <Composer
           onSend={onSend}
           disabled={transcript.busy}
@@ -427,6 +429,7 @@ const styles = StyleSheet.create({
   },
   composerFloat: {
     position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
     // `bottom` is set inline from keyboardHeight — see the element itself.

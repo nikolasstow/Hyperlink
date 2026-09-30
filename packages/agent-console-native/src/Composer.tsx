@@ -260,7 +260,7 @@ export const Composer = (props: {
   };
 
   return (
-    <View pointerEvents="box-none">
+    <View style={styles.pages} pointerEvents="box-none">
       <GestureDetector gesture={toDubz}>
         <Reanimated.View style={composeSlide}>
           <BottomBar
@@ -342,8 +342,18 @@ const styles = StyleSheet.create({
   },
   // The Dubz page lies over the composer's bar, bottom to bottom, beside it
   // (`left` from dubzSlide).
+  // Fills the screen's bar container (its top down to the keyboard); the
+  // composer's bar sits at its bottom.
+  pages: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  // The Dubz page fills it too, so its window grows inside its parents'
+  // bounds (touches outside a parent never reach a view); beside the composer
+  // (`left` from dubzSlide).
   dubzPage: {
     position: "absolute",
+    top: 0,
     bottom: 0,
   },
   mirrorText: {

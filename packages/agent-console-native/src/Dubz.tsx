@@ -55,8 +55,6 @@ const MARGIN = 12;
 const BAR_GAP = 8;
 /** The collapsed height: the bar's pill, and the smallest detent. */
 const MIN_HEIGHT = COMPOSER_PILL_HEIGHT;
-/** The page's own height: the bar's pill and the gap under it. */
-const PAGE_HEIGHT = MIN_HEIGHT + BAR_GAP;
 /** Gap between the window's top and the header at full height. */
 const TOP_GAP = 8;
 /** Corner radius of the window, and of the pill (the bar's). */
@@ -466,7 +464,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
        * to what's behind). Reaches up over the screen from the bar. */}
       {open && !lowered ? (
         <Pressable
-          style={[styles.catcher, { height: screenH }]}
+          style={StyleSheet.absoluteFill}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel={`Close ${AGENT_NAME}`}
@@ -600,12 +598,15 @@ const INPUT_PAD_BOTTOM = COMPOSER_SEND_CHIP_SIZE - LINE_HEIGHT - INPUT_PAD_TOP;
 const INPUT_PAD_V = INPUT_PAD_TOP + INPUT_PAD_BOTTOM;
 
 const styles = StyleSheet.create({
-  // The bar's footprint; the window rises from it, past its top.
+  // Fills its container, from the screen's top down to the keyboard: the
+  // window grows up inside it, never past its parents' bounds (iOS delivers
+  // no touch to a view outside its parent, so the grab bar was unreachable).
   page: {
-    height: PAGE_HEIGHT,
+    flex: 1,
   },
   standalone: {
     position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
   },
@@ -627,12 +628,6 @@ const styles = StyleSheet.create({
   placeholder: {
     height: 106,
     backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  catcher: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   // The wrapper carries ONLY position and size — no borderRadius / overflow /
   // shadow, which would clip or composite the glass.

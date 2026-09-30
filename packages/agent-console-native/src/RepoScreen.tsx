@@ -29,6 +29,7 @@ import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
+import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { clearForward } from "./fileNavHistory";
 import { HomeTargetPickers, sessionDirectory, type SessionTarget } from "./HomeTargetPickers";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
@@ -191,7 +192,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   // page, so its dropdown shows as static text (see HomeTargetPickers lockedRepo).
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
   const [sending, setSending] = React.useState(false);
-  const [composerHeight, setComposerHeight] = React.useState(0);
   const keyboardHeight = useKeyboardHeight();
   const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
   // Dubz here is about this repo; a workspace (not a repo) has no tasks.
@@ -539,7 +539,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           paddingTop: expandedH + 12,
           // Reserve room for the floating composer (measured) so the last session
           // clears it, plus the keyboard when it's up.
-          paddingBottom: composerHeight + keyboardHeight + 24,
+          paddingBottom: COMPOSER_BAR_HEIGHT + keyboardHeight + 24,
         }}
       >
         <Animated.View style={overshootStyle}>
@@ -736,8 +736,12 @@ export const RepoScreen = (props: Props): React.ReactElement => {
        * above, and a second top feather would sit over the header. */}
       <EdgeBlurBars bottomInset={keyboardHeight} variant="bottom" />
       <Animated.View
+        // From the screen's top down to the keyboard (or the bar's resting
+        // spot), letting touches through where empty: the bar sits at its
+        // bottom, and Dubz's window grows up inside it, so its grab bar stays
+        // within its parents' bounds, where iOS delivers touches.
         style={[styles.composerFloat, composerSlide]}
-        onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}
+        pointerEvents="box-none"
       >
         <Composer
           onSend={onSend}
@@ -769,6 +773,7 @@ const styles = StyleSheet.create({
   },
   composerFloat: {
     position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
     // `bottom` is animated inline via composerSlide (rides the keyboard).

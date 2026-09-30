@@ -27,3 +27,7 @@ export const COMPOSER_FIELD_PADDING = 10;
  * the real collapsed height at runtime, which lands here too).
  */
 export const COMPOSER_PILL_HEIGHT = COMPOSER_SEND_CHIP_SIZE + COMPOSER_FIELD_PADDING * 2;
+
+/** The collapsed bar's full height: its pill and the bar's padding above (8)
+ * and below (8) it. Lists pad by this, a constant, never a measurement. */
+export const COMPOSER_BAR_HEIGHT = COMPOSER_PILL_HEIGHT + 16;

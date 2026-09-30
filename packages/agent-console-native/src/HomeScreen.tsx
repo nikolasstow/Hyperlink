@@ -28,6 +28,7 @@ import { AGENT } from "./client";
 import { colors } from "./colors";
 import { clearForward } from "./fileNavHistory";
 import { Composer } from "./Composer";
+import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import {
@@ -262,11 +263,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // Reanimated keyboard tracking so the floating composer rides the keyboard
   // exactly; the list padding / blur keep the plain number (behind the keyboard).
   const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
-  // Measured, not a fixed height — the composer grows with multi-line
-  // input, and it floats over the list (absolute) so the glass has
-  // content behind it, meaning the list has to reserve the space itself.
-  // Same approach as SessionChatScreen's own composer.
-  const [composerHeight, setComposerHeight] = React.useState(0);
+  // The bar floats over the list (so its glass has content behind it), so
+  // the list reserves the bar's height itself: a constant
+  // (COMPOSER_BAR_HEIGHT), never a measurement.
 
   return (
     <View style={styles.root}>
@@ -360,14 +359,18 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             />
           );
         }}
-        contentContainerStyle={[styles.content, { paddingTop: navBarHeight + HOME_CONTENT_TOP_GAP, paddingBottom: composerHeight + keyboardHeight + 16 }]}
+        contentContainerStyle={[styles.content, { paddingTop: navBarHeight + HOME_CONTENT_TOP_GAP, paddingBottom: COMPOSER_BAR_HEIGHT + keyboardHeight + 16 }]}
       />
       </ScrollViewMarker>
       <EdgeBlurBars bottomInset={keyboardHeight} />
       {/* One tap outside the composer collapses it (consumed) instead of hitting
        * a card behind it while the keyboard is up. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} dim />
-      <Animated.View style={[styles.composerFloat, composerSlide]} onLayout={(e) => setComposerHeight(e.nativeEvent.layout.height)}>
+      {/* From the screen's top down to the keyboard (or the bar's resting
+       * spot), letting touches through where empty: the bar sits at its bottom,
+       * and Dubz's window grows up inside it, so its grab bar stays within its
+       * parents' bounds, where iOS delivers touches. */}
+      <Animated.View style={[styles.composerFloat, composerSlide]} pointerEvents="box-none">
         <Composer
           onSend={onSend}
           disabled={sending || target === undefined}
@@ -400,6 +403,7 @@ const styles = StyleSheet.create({
   },
   composerFloat: {
     position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
     // `bottom` is set inline from keyboardHeight — see the element itself.
