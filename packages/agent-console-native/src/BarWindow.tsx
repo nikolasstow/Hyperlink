@@ -27,7 +27,15 @@ import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Keyboard, Pressable, StyleSheet, type TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector, type GestureType } from "react-native-gesture-handler";
-import Reanimated, { Easing, runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Reanimated, {
+  Easing,
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { useKeyboardHeightValue } from "./keyboardHeight";
@@ -116,6 +124,10 @@ export interface BarWindowProps {
    * pill: the window then rests at full or at this height, whatever the
    * keyboard does. */
   readonly stop?: number;
+  /** The pill floats over the body (which then fills the window), lowered by
+   * this much (pt; 0 in place) — the model window slides it away as its list
+   * scrolls. */
+  readonly pillLowered?: SharedValue<number>;
 }
 
 const atPillFrac = (frac: number): boolean => frac >= 0.98;
@@ -357,11 +369,15 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
   // How open the window reads: 0 collapsed or at the smallest detent (the
   // bar), 1 open above the pill's inset range. The pill's inset and padding
   // follow it, so it is the bar at 0 and the window's input at 1.
+  const inPlace = useSharedValue(0);
+  const pillDrop = props.pillLowered ?? inPlace;
   const pillWrapStyle = useAnimatedStyle(() => {
     const openness = grow.value * (1 - pillProgress(dragY.value, maxDragFor(kbFull.value)));
     return {
       paddingHorizontal: COMPOSER_INSET * openness,
       paddingBottom: COMPOSER_INSET * openness,
+      // Floating, lowered by layout (a transform on glass stops it rendering).
+      bottom: -pillDrop.value,
     };
   });
   const pillStyle = useAnimatedStyle(() => {
@@ -394,12 +410,12 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement | null => {
         >
           {/* The space above the pill, which alone is cropped (no glass in it;
            * nothing above the pill's glass ever clips it). */}
-          <View style={styles.body} pointerEvents={open ? "box-none" : "none"}>
+          <View style={props.pillLowered !== undefined ? styles.bodyUnder : styles.body} pointerEvents={open ? "box-none" : "none"}>
             {props.body}
           </View>
           {/* The pill sits at the window's bottom, a direct child of the
            * window's glass: the bar collapsed, the window's input open. */}
-          <Reanimated.View style={pillWrapStyle}>
+          <Reanimated.View style={[props.pillLowered !== undefined ? styles.pillFloat : undefined, pillWrapStyle]}>
             <GestureDetector gesture={dismissKb}>
               <Reanimated.View style={[styles.pill, pillStyle]}>
                 {/* The bar's regular glass, never faded (opacity on glass or
@@ -509,6 +525,26 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
     overflow: "hidden",
+    // Cropped to the window's rounded top, not just its box.
+    borderTopLeftRadius: WINDOW_RADIUS,
+    borderTopRightRadius: WINDOW_RADIUS,
+  },
+  // The body under a floating pill: the whole window, still cropped to it.
+  bodyUnder: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    overflow: "hidden",
+    // Cropped to the window's rounded shape, not just its box.
+    borderRadius: WINDOW_RADIUS,
+  },
+  // A floating pill: over the body, at the window's bottom.
+  pillFloat: {
+    position: "absolute",
+    left: 0,
+    right: 0,
   },
   tabGlassWrap: {
     position: "absolute",

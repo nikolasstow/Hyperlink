@@ -145,14 +145,19 @@ export const Composer = (props: {
     setSelectedModel(match ?? props.seedModel);
   }, [props.seedModel?.providerID, props.seedModel?.modelID, models]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Whether the message had the keyboard when the model window opened: leaving
+  // the window puts it back as it was.
+  const refocusAfterModels = React.useRef(false);
   const openModels = (): void => {
+    refocusAfterModels.current = inputRef.current?.isFocused() === true;
     void refreshModels(client, props.directory);
     setModelsOpen(true);
   };
-  // Back to the message, unless the keyboard went down (that closed it).
   const closeModels = (reason: CloseReason): void => {
+    // Focus moves straight from the search to the message, so the keyboard
+    // stays up; unless it went down (that closed the window).
+    if (refocusAfterModels.current && reason !== "keyboard") inputRef.current?.focus();
     setModelsOpen(false);
-    if (reason !== "keyboard") inputRef.current?.focus();
   };
 
   const pickModel = (model: ModelOption): void => {

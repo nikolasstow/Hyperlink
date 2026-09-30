@@ -31,6 +31,7 @@ import {
   onTapGesture,
   padding,
   refreshable,
+  useScrollGeometryChange,
   scrollDismissesKeyboard,
   scrollIndicators,
   shapes,
@@ -39,6 +40,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, TextInput, View } from "react-native";
+import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { CapsuleTabs } from "../modules/capsule-tabs";
 import { BarWindow, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
@@ -52,6 +54,19 @@ const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
 /** The list's side margin, for the tabs and the list alike. */
 const SIDE = 16;
+/** The tabs' row: a tab and its 10pt above and below. */
+const TABS_ROW = 28 + 20;
+/** The floating search pill's space at the window's bottom: the pill (its row
+ * and 7pt above and below) and its 12pt inset. */
+const PILL_AREA = COMPOSER_SEND_CHIP_SIZE + 7 * 2 + 12;
+/** Space under a list's last row, so it scrolls clear of the tabs and search. */
+const UNDER_BARS = PILL_AREA + TABS_ROW + 8;
+/** How far the tabs and search slide down to hide: past the window's bottom
+ * (and the screen's, with the keyboard down). */
+const BARS_HIDE = 150;
+const BARS_MS = 220;
+/** A scroll step larger than this is a different list (another page). */
+const SCROLL_JUMP = 120;
 /** The search list's inset inside its card, so a highlight rounds inside it. */
 const PICK_INSET = 4;
 const TAB_HEIGHT = 28;
@@ -208,29 +223,64 @@ export const ModelWindow = (props: {
 
   // Searching, the first match is the one Return picks: highlighted, the list
   // inset a little so its highlight rounds inside the card.
+  // The search and the tabs float over the lists and slide down out of the way
+  // as a list scrolls down, back as it scrolls up (or reaches its top). Read on
+  // the UI thread, from the list's scroll geometry.
+  const barsDrop = useSharedValue(0);
+  const barsHidden = useSharedValue(false);
+  const lastOffset = useSharedValue(0);
+  const scrollGeometry = useScrollGeometryChange((g) => {
+    "worklet";
+    const dy = g.contentOffsetY - lastOffset.value;
+    lastOffset.value = g.contentOffsetY;
+    // A jump is another page's list, not a scroll.
+    if (dy > SCROLL_JUMP || dy < -SCROLL_JUMP) return;
+    const atTop = g.contentOffsetY <= 0;
+    const atEnd = g.contentOffsetY + g.containerHeight >= g.contentHeight;
+    if (!barsHidden.value && dy > 0 && !atTop) {
+      barsHidden.value = true;
+      barsDrop.value = withTiming(BARS_HIDE, { duration: BARS_MS, easing: Easing.out(Easing.cubic) });
+    } else if (barsHidden.value && (atTop || (dy < 0 && !atEnd))) {
+      barsHidden.value = false;
+      barsDrop.value = withTiming(0, { duration: BARS_MS, easing: Easing.out(Easing.cubic) });
+    }
+  });
+  React.useEffect(() => {
+    if (!props.open) return;
+    barsHidden.value = false;
+    barsDrop.value = 0;
+  }, [props.open, barsHidden, barsDrop]);
+  const tabsStyle = useAnimatedStyle(() => ({ bottom: PILL_AREA - barsDrop.value }));
+
+  // Searching, the first match is the one Return picks: highlighted, the list
+  // inset a little so its highlight rounds inside the card.
   const rows = (models: ReadonlyArray<ModelOption>, showProvider: boolean, pickFirst: boolean): React.ReactElement => (
-    <ScrollView modifiers={[scrollDismissesKeyboard("immediately"), refreshable(pull)]}>
-      <VStack
-        spacing={0}
-        alignment="leading"
-        modifiers={[
-          padding({ all: pickFirst ? PICK_INSET : 0 }),
-          glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
-          padding({ horizontal: SIDE, top: HANDLE_CLEARANCE }),
-        ]}
-      >
-        {models.map((model, index) => (
-          <VStack key={modelKey(model)} spacing={0} alignment="leading">
-            {index > 0 ? <Divider modifiers={[padding({ leading: 16 })]} /> : null}
-            <ModelRow
-              model={model}
-              showProvider={showProvider}
-              active={modelKey(model) === selectedKey}
-              picked={pickFirst && index === 0 ? themeColors.bubbleGlassTint : undefined}
-              onPress={props.onChoose}
-            />
-          </VStack>
-        ))}
+    <ScrollView modifiers={[scrollDismissesKeyboard("immediately"), refreshable(pull), ...(scrollGeometry !== null ? [scrollGeometry] : [])]}>
+      <VStack spacing={8} alignment="leading" modifiers={[padding({ horizontal: SIDE, top: HANDLE_CLEARANCE, bottom: UNDER_BARS })]}>
+        {refreshError !== undefined ? (
+          <Text modifiers={[font({ size: 13 }), foregroundStyle("red"), lineLimit(2)]}>{refreshError}</Text>
+        ) : null}
+        <VStack
+          spacing={0}
+          alignment="leading"
+          modifiers={[
+            padding({ all: pickFirst ? PICK_INSET : 0 }),
+            glassEffect({ glass: { variant: "regular", tint: cardTint }, shape: "roundedRectangle", cornerRadius: CARD_RADIUS }),
+          ]}
+        >
+          {models.map((model, index) => (
+            <VStack key={modelKey(model)} spacing={0} alignment="leading">
+              {index > 0 ? <Divider modifiers={[padding({ leading: 16 })]} /> : null}
+              <ModelRow
+                model={model}
+                showProvider={showProvider}
+                active={modelKey(model) === selectedKey}
+                picked={pickFirst && index === 0 ? themeColors.bubbleGlassTint : undefined}
+                onPress={props.onChoose}
+              />
+            </VStack>
+          ))}
+        </VStack>
       </VStack>
     </ScrollView>
   );
@@ -247,10 +297,11 @@ export const ModelWindow = (props: {
       hiddenCollapsed
       stop={MODEL_STOP}
       closeLabel="Close models"
+      pillLowered={barsDrop}
       body={
-        <Host style={styles.list} ignoreSafeArea="all">
-          <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "bottom" })]}>
-            <VStack spacing={0} modifiers={[frame({ maxHeight: Infinity, alignment: "top" })]}>
+        <View style={styles.body}>
+          <Host style={styles.list} ignoreSafeArea="all">
+            <VStack spacing={0} modifiers={[frame({ maxWidth: Infinity, maxHeight: Infinity, alignment: "top" })]}>
               {searching ? (
                 results.length > 0 ? (
                   rows(results, true, true)
@@ -267,32 +318,24 @@ export const ModelWindow = (props: {
                 </TabView>
               )}
             </VStack>
-            {refreshError !== undefined ? (
-              <Text
-                modifiers={[
-                  font({ size: 13 }),
-                  foregroundStyle("red"),
-                  lineLimit(2),
-                  padding({ horizontal: SIDE, top: 8 }),
-                  frame({ maxWidth: Infinity, alignment: "leading" }),
-                ]}
-              >
-                {refreshError}
-              </Text>
-            ) : null}
-            {CapsuleTabs !== undefined ? (
-              <CapsuleTabs
-                tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
-                selection={current}
-                tint={themeColors.bubbleGlassTint}
-                sideMargin={SIDE}
-                onSelect={setTab}
-              />
-            ) : (
-              <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
-            )}
-          </VStack>
-        </Host>
+          </Host>
+          {/* The tabs, floating over the list just above the search. */}
+          <Reanimated.View style={[styles.tabsFloat, tabsStyle]} pointerEvents="box-none">
+            <Host style={styles.tabsHost} ignoreSafeArea="all">
+              {CapsuleTabs !== undefined ? (
+                <CapsuleTabs
+                  tabs={tabs.map((t) => ({ id: t.id, title: t.title, systemImage: t.icon }))}
+                  selection={current}
+                  tint={themeColors.bubbleGlassTint}
+                  sideMargin={SIDE}
+                  onSelect={setTab}
+                />
+              ) : (
+                <FallbackTabs tabs={tabs} current={current} tint={themeColors.bubbleGlassTint} onSelect={setTab} />
+              )}
+            </Host>
+          </Reanimated.View>
+        </View>
       }
       pill={
         <>
@@ -308,7 +351,6 @@ export const ModelWindow = (props: {
             placeholderTextColor={textColors.placeholderText}
             autoCorrect={false}
             autoCapitalize="none"
-            editable={props.open}
             returnKeyType="go"
             submitBehavior="submit"
             onSubmitEditing={() => {
@@ -431,8 +473,20 @@ const styles = StyleSheet.create({
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-    // The pages and their tabs fill the space above the pill.
+    // The lists fill the window; the tabs and search float over them.
+    body: {
+      flex: 1,
+    },
     list: {
+      flex: 1,
+    },
+    tabsFloat: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      height: TABS_ROW,
+    },
+    tabsHost: {
       flex: 1,
     },
     // The search icon, centred on the pill's one line.
