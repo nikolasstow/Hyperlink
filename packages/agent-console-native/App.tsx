@@ -4,6 +4,7 @@ import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider } from "./src/AppContext";
+import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
@@ -188,6 +189,8 @@ const AppInner = (): React.ReactElement => {
           }}
         >
           <ThemeSync />
+          {/* Answers permission asks for allow-all sessions, app-wide. */}
+          <PermissionAutoApprover />
           {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}
           <KeyboardHeightProvider>
             <RootNavigator />

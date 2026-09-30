@@ -343,21 +343,13 @@ export const useSessionStream = (
             // v1 SDK's Event union, so it cannot be narrowed off `event.type`.
             // See partDelta.ts.
             const raw: unknown = event;
-            // Permission asks pause the run until answered. In `full` mode
-            // that reply is automatic, so an agent never stalls waiting on a
-            // UI this app did not used to have. A failed auto-reply falls
-            // through to the prompt rather than leaving the run wedged.
+            // Permission asks pause the run until answered. Allow-all sessions
+            // are answered app-wide (PermissionAutoApprover), so this screen
+            // only prompts for sessions set to ask.
             const asked = asPendingPermission(raw, directory);
             const status = readSessionStatus(raw);
             if (asked !== undefined && asked.sessionID === sessionID) {
-              if (getPermissionMode(sessionID) === "full") {
-                void replyToPermission(address, asked, "once").catch((error: unknown) => {
-                  console.error("[permissions] auto-approving failed; asking instead", error);
-                  setPendingPermission(asked);
-                });
-              } else {
-                setPendingPermission(asked);
-              }
+              if (getPermissionMode(sessionID) === "ask") setPendingPermission(asked);
             } else if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
               // opencode's true "run done" signal for a run this screen did NOT
               // itself start (e.g. returning to an in-flight session). For a
