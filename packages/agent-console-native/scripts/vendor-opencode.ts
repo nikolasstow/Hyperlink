@@ -2,10 +2,12 @@
  * Copies the part of opencode's v2 API the app uses into `src/opencode`, from
  * an opencode checkout at the server's version: the `HttpApi` groups it calls
  * (`@opencode-ai/protocol`: health, sessions, messages, events) into
- * `src/opencode/protocol`, and every `@opencode-ai/schema` module they reach
- * into `src/opencode/schema`. Neither package is published, so this is how
- * the app gets the server's exact API (an `HttpApiClient` is derived from it)
- * and wire shapes.
+ * `src/opencode/protocol`; the projection of session events into messages
+ * (`@opencode-ai/core`'s message updater, so the app folds events exactly as
+ * the server does) into `src/opencode/core`; and every `@opencode-ai/schema`
+ * module these reach into `src/opencode/schema`. None of these packages is
+ * published, so this is how the app gets the server's exact API (an
+ * `HttpApiClient` is derived from it), wire shapes and projection.
  *
  *   pnpm vendor:opencode                       # ~/Coding/opencode at v1.18.33
  *   pnpm vendor:opencode --repo <dir> --ref <tag>
@@ -25,6 +27,14 @@ const PROTOCOL = [
   "groups/session.ts",
   "groups/message.ts",
   "groups/event.ts",
+];
+
+/** The core modules the app uses (paths under core's `src`), with how their
+ * imports of core's re-exports of schema are pointed at the vendored schema. */
+const CORE = ["session/message-updater.ts"];
+const CORE_IMPORTS: ReadonlyArray<readonly [string, string]> = [
+  ['from "./event"', 'from "../schema/session-event"'],
+  ['from "./message"', 'from "../schema/session-message"'],
 ];
 
 /** The schema modules a module imports, as paths under schema's `src`:
@@ -61,11 +71,19 @@ const vendor = Command.make("vendor-opencode", {
 
       const protocol = new Map<string, string>();
       for (const file of PROTOCOL) protocol.set(file, yield* show(`protocol/src/${file}`));
+      const core = new Map<string, string>();
+      for (const file of CORE) {
+        const source = yield* show(`core/src/${file}`);
+        core.set(path.basename(file), CORE_IMPORTS.reduce((text, [from, to]) => text.replaceAll(from, to), source));
+      }
 
       // Walk the schema imports from the protocol modules: every schema module
       // reached is copied.
       const schema = new Map<string, string>();
-      const pending = Array.from(protocol, ([file, source]) => schemaImportsOf(path, file, source, true)).flat();
+      const pending = [
+        ...Array.from(protocol, ([file, source]) => schemaImportsOf(path, file, source, true)).flat(),
+        ...Array.from(core.values(), (source) => Array.from(source.matchAll(/from "\.\.\/schema\/([^"]+)"/g), (match) => `${match[1]}.ts`)).flat(),
+      ];
       for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
         if (schema.has(file)) continue;
         const source = yield* show(`schema/src/${file}`);
@@ -95,7 +113,8 @@ const vendor = Command.make("vendor-opencode", {
         });
       yield* write(path.join(root, "schema"), schema, (_, source) => source);
       yield* write(path.join(root, "protocol"), protocol, (file, source) => rewriteSchemaImports(source, file.split("/").length - 1));
-      yield* Effect.log(`Vendored ${protocol.size} protocol and ${schema.size} schema modules from opencode ${ref} into src/opencode.`);
+      yield* write(path.join(root, "core"), core, (_, source) => source);
+      yield* Effect.log(`Vendored ${protocol.size} protocol, ${core.size} core and ${schema.size} schema modules from opencode ${ref} into src/opencode.`);
     }),
   ),
 );

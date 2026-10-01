@@ -1,28 +1,56 @@
 /**
  * The app's Effect runtime — the boundary between the Effect data layer and the
- * React screens.
+ * React screens. One runtime for the process, holding every service the data
+ * layer needs; React reaches it through `runFs` / `runApp` (a Promise back) or
+ * subscribes to its streams (outbox/useOutbox.ts).
  *
- * This is the first real increment of the move onto Effect/Last.ts: the data
- * modules (fsClient, repoScan, branchScan) are written as Effects that require
- * an `HttpClient`; the React screens stay React and consume them through
- * `runFs`, which provides that client (over the platform `fetch`) and hands the
- * result back as a Promise. Widening Effect up into the UI itself (View /
- * AtomReact / Last) is a later, larger step — see the Last.ts plan.
+ * Services:
+ * - `HttpClient` (the platform `fetch`, which index.ts makes expo's, so
+ *   server-sent events stream);
+ * - the device's signals (network, foreground);
+ * - opencode v2 clients per server, their reachability;
+ * - the outbox (its lanes persisted in AsyncStorage under their own prefix),
+ *   and how it makes new folders.
  *
- * One runtime for the process. It has no per-server state (the backend address
- * is passed to each call), so it never needs rebuilding on reconnect.
+ * No per-server state lives in the layers' construction (servers are passed
+ * to each call), so the runtime never needs rebuilding on reconnect.
  *
  * @internal
  */
-import { Effect, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { Opencode } from "../opencode/Opencode";
+import { layer as foldersLayer } from "../outbox/foldersNative";
+import { Outbox } from "../outbox/Outbox";
+import { Reachability } from "../outbox/Reachability";
+import { layer as asyncStorageLayer } from "./asyncStorage";
+import { layer as deviceSignalsLayer } from "./deviceSignalsNative";
 
-const runtime = ManagedRuntime.make(FetchHttpClient.layer);
+const OUTBOX_STORAGE_PREFIX = "agent-console-native:outbox:";
+
+const platform = Layer.mergeAll(FetchHttpClient.layer, deviceSignalsLayer, foldersLayer);
+
+const AppLayer = Outbox.layer.pipe(
+  Layer.provideMerge(Reachability.layer),
+  Layer.provideMerge(Opencode.layer),
+  Layer.provide(asyncStorageLayer(OUTBOX_STORAGE_PREFIX)),
+  Layer.provideMerge(platform),
+);
+
+export type AppServices = Layer.Success<typeof AppLayer>;
+
+const runtime = ManagedRuntime.make(AppLayer);
 
 /**
  * Run a data-layer Effect and get its result as a Promise for React. A typed
  * failure rejects the promise with that error value (so a caller can still
  * read its `_tag`); callers that treat failures as "absent" should catch.
  */
-export const runFs = <A, E>(effect: Effect.Effect<A, E, HttpClient.HttpClient>): Promise<A> =>
-  runtime.runPromise(effect);
+export const runFs = <A, E>(effect: Effect.Effect<A, E, HttpClient.HttpClient>): Promise<A> => runtime.runPromise(effect);
+
+/** Run an Effect that needs any of the app's services; a Promise back. */
+export const runApp = <A, E>(effect: Effect.Effect<A, E, AppServices>): Promise<A> => runtime.runPromise(effect);
+
+/** Start an Effect that needs the app's services and keeps running (a
+ * subscription); interrupting the returned fiber stops it. */
+export const forkApp = <A, E>(effect: Effect.Effect<A, E, AppServices>) => runtime.runFork(effect);
