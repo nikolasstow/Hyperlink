@@ -36,7 +36,7 @@ import { ReasoningBlock } from "./ReasoningBlock";
 import { useTextColors, useTheme } from "./theme";
 import { colors } from "./colors";
 import { dateHeaderLabel } from "./chat/dateHeaders";
-import { type Receipt, readTimeLabel } from "./chat/receipt";
+import { type Receipt, receiptTimeLabel } from "./chat/receipt";
 import { ToolCallBubble } from "./ToolCallBubble";
 import { type ChatMessage, textOf } from "./chat/model";
 
@@ -156,11 +156,16 @@ const ReceiptLine = (props: { readonly receipt: Receipt }): React.ReactElement =
     case "notDelivered":
       return <Text style={[styles.receipt, styles.receiptState, color]}>Not Delivered</Text>;
     case "delivered":
-      return <Text style={[styles.receipt, styles.receiptState, color]}>Delivered</Text>;
+      return (
+        <Text style={[styles.receipt, color]} numberOfLines={1}>
+          <Text style={styles.receiptState}>Delivered</Text>
+          {props.receipt.at === undefined ? null : ` ${receiptTimeLabel(props.receipt.at, Date.now())}`}
+        </Text>
+      );
     case "read":
       return (
         <Text style={[styles.receipt, color]} numberOfLines={1}>
-          <Text style={styles.receiptState}>Read</Text> {readTimeLabel(props.receipt.at, Date.now())}
+          <Text style={styles.receiptState}>Read</Text> {receiptTimeLabel(props.receipt.at, Date.now())}
         </Text>
       );
   }

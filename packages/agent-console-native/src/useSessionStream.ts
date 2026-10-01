@@ -254,7 +254,7 @@ export const useSessionStream = (
             info.role === "assistant"
               ? { providerID: info.providerID, modelID: info.modelID }
               : undefined,
-            info.role === "assistant" ? info.time : undefined,
+            info.time,
           );
           for (const part of parts) {
             if (isRenderablePart(part)) next = withPart(next, part);
@@ -316,7 +316,7 @@ export const useSessionStream = (
                   info.role === "assistant"
                     ? { providerID: info.providerID, modelID: info.modelID }
                     : undefined,
-                  info.role === "assistant" ? info.time : undefined,
+                  info.time,
                 ),
               );
             } else if (event.type === "message.part.updated" && isRenderablePart(event.properties.part) && event.properties.part.sessionID === sessionID) {
