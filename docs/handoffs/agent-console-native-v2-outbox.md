@@ -29,8 +29,10 @@ the server being down, and the agent being busy.
    holds it on the server until the agent is idle, phone asleep or not.
 5. **No status text on queued messages.** The app already has a status
    indicator at the top. Bubbles are tinted whether queued or sent (2026-10-01:
-   the untinted queued look was dropped); sending state will be shown by
-   iOS-style read indicators instead.
+   the untinted queued look was dropped); how far a message got shows as an
+   iOS Messages read receipt under your latest one: Sending… (in the
+   outbox), Not Delivered (its lane held on it), Delivered (on the server),
+   Read and the time (the agent's answer began).
 6. **A new workspace folder is created only when send is hit** for the new
    session, as a step of that queued send, never earlier.
 7. **Effect, maximum quality.** Schema at every boundary, tagged errors,

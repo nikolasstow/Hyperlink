@@ -44,7 +44,8 @@ import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
-import { MESSAGE_GAP, MessageBubble } from "./MessageBubble";
+import { MESSAGE_GAP, MessageBubble, RECEIPT_HEIGHT } from "./MessageBubble";
+import { latestReceipt } from "./chat/receipt";
 import type { Arrival } from "./messageArrival";
 import { PermissionPrompt } from "./PermissionPrompt";
 import { setViewedSession } from "./push";
@@ -137,7 +138,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   }, [server, session, protocol]);
 
   // The conversation (what the server has), then what is still in the
-  // outbox: untinted, until the server has it too (same id) and the
+  // outbox, until the server has it too (same id) and the
   // conversation shows it.
   const v2Messages = useV2Transcript(server, session, protocol === "v2" && streamEnabled);
   const delivered = React.useMemo(
@@ -157,6 +158,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     return waiting.length === 0 ? delivered : [...delivered, ...waiting];
   }, [delivered, lane]);
   const byID = React.useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
+  const receipt = React.useMemo(() => latestReceipt(messages, lane?.held?.messageID), [messages, lane]);
   // Busy: v2 from the conversation (the answer still being written); v1 from
   // the live connection's run status.
   const busy = protocol === "v2" ? answering(delivered) : transcript.busy;
@@ -419,7 +421,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   );
 
   // Into the outbox: sent from there, in order, when the server can take it
-  // (sessions/../outbox). The bubble shows at once, untinted until it lands.
+  // (sessions/../outbox). The bubble shows at once; its receipt says how far it got.
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     if (protocol === undefined) return;
     // The chips selected go with this message, as file references; the
@@ -452,7 +454,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           geometry: barGeometry,
           keyboard: keyboardValue,
           restingBottom: composerRestingBottom(insets.bottom),
-          between: (files.length > 0 ? FILE_CHIPS_HEIGHT : 0) + BAR_SPACE_GAP + (busy ? BUSY_ROW_HEIGHT + BUSY_ROW_GAP : 0) + MESSAGE_GAP,
+          between: (files.length > 0 ? FILE_CHIPS_HEIGHT : 0) + BAR_SPACE_GAP + (busy ? BUSY_ROW_HEIGHT + BUSY_ROW_GAP : 0) + RECEIPT_HEIGHT + MESSAGE_GAP,
           onMounted: () => {
             // Once: the row keeps it while mounted; a later mount (scrolled
             // away and back) does not arrive again.
@@ -555,7 +557,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               disabled={!queued}
               onPress={() => onQueuedPress(message.id)}
             >
-              <MessageBubble message={message} arrival={arriving?.id === message.id ? arriving.arrival : undefined} />
+              <MessageBubble
+                message={message}
+                arrival={arriving?.id === message.id ? arriving.arrival : undefined}
+                receipt={receipt?.messageID === message.id ? receipt.receipt : undefined}
+              />
             </Pressable>
           );
         }}
