@@ -31,7 +31,6 @@ import { listLocalBranches, readCurrentBranch } from "./branchScan";
 import { runFs } from "./effect/runtime";
 import type { ScannedRepo, ScannedWorktree } from "./repoScan";
 import { randomSlug } from "./slug";
-import { createWorkspaceFolder } from "./repoCreate";
 import { NewRepoSheet } from "./NewRepoSheet";
 import {
   getDefaultWorktreePreference,
@@ -57,10 +56,26 @@ export type RepoTarget = {
   readonly branch: string;
 };
 
-export type SessionTarget = FolderTarget | RepoTarget;
+/** A workspace folder to make: made when a message is sent to a new session
+ * in it (the outbox's first step), never before. */
+export type NewFolderTarget = {
+  readonly kind: "newFolder";
+  readonly name: string;
+};
 
-export const sessionDirectory = (target: SessionTarget): string =>
-  target.kind === "folder" ? target.path : target.worktree.path;
+export type SessionTarget = FolderTarget | RepoTarget | NewFolderTarget;
+
+/** Where a session for the target runs; none yet for a folder still to make. */
+export const sessionDirectory = (target: SessionTarget): string | undefined => {
+  switch (target.kind) {
+    case "folder":
+      return target.path;
+    case "repo":
+      return target.worktree.path;
+    case "newFolder":
+      return undefined;
+  }
+};
 
 export const worktreeLabel = (wt: ScannedWorktree): string => (wt.isMain ? "main" : wt.name);
 
@@ -381,26 +396,19 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     );
   };
 
+  // Names the folder only: it is made when a message is sent to a session in
+  // it (the outbox), never before.
   const promptNewFolder = (): void => {
     Alert.prompt(
       "New workspace folder",
-      "A non-git folder under your root.",
+      "A non-git folder under your root, made when you send.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Create",
           onPress: (value?: string) => {
             const name = (value ?? "").trim();
-            if (name.length === 0) return;
-            createThenChoose(
-              name,
-              async () => {
-                const path = await createWorkspaceFolder(client, rootDir, name);
-                await props.onWorkspaceChanged();
-                return { kind: "folder", name, path };
-              },
-              "Couldn't create folder",
-            );
+            if (name.length > 0) props.onChange({ kind: "newFolder", name });
           },
         },
       ],
@@ -433,13 +441,13 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
           ? props.scanned.length === 0
             ? "Scanning…"
             : "Repo"
-          : props.target.kind === "folder"
-            ? props.target.name
-            : props.target.repo;
+          : props.target.kind === "repo"
+            ? props.target.repo
+            : props.target.name;
   // Repo-dropdown glyph (Home only) — a box for a git repo, a folder for a
   // workspace. Not shown when the repo is locked (that's static text instead).
   const repoIcon: React.ComponentProps<typeof Feather>["name"] =
-    props.target?.kind === "folder" ? "folder" : "box";
+    props.target?.kind === "folder" ? "folder" : props.target?.kind === "newFolder" ? "folder-plus" : "box";
   const worktreePill =
     props.target?.kind === "repo"
       ? worktreeLabel(props.target.worktree) || props.target.worktree.name || "Worktree"
@@ -449,8 +457,8 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       ? props.target.branch || "Branch"
       : "Branch";
 
-  const worktrees = (() => {
-    if (props.target?.kind !== "repo") return [] as ReadonlyArray<ScannedWorktree>;
+  const worktrees = ((): ReadonlyArray<ScannedWorktree> => {
+    if (props.target?.kind !== "repo") return [];
     const target = props.target;
     return props.scanned.find((r) => r.repo === target.repo)?.worktrees ?? [target.worktree];
   })();

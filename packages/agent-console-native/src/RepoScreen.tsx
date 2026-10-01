@@ -14,6 +14,13 @@
  *
  * @internal
  */
+import { serverAddressOf } from "./opencode/serverAddress";
+import { Agent } from "./opencode/schema/agent";
+import { Model } from "./opencode/schema/model";
+import { Provider } from "./opencode/schema/provider";
+import { AbsolutePath } from "./opencode/schema/schema";
+import { SessionID } from "./opencode/schema/session-id";
+import { sendMessage } from "./outbox/useOutbox";
 import { fetchSessions } from "./sessions/fetchSessions";
 import type { SessionSummary } from "./sessions/sessionList";
 import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
@@ -217,24 +224,28 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       if (target === undefined || sending) return;
       setSending(true);
       try {
+        const sessionID = SessionID.create();
         const directory = sessionDirectory(target);
-        const { data } = await client.session.create({ query: { directory } });
-        if (data === undefined) throw new Error("no session");
-        await client.session.promptAsync({
-          path: { id: data.id },
-          body: {
-            agent: AGENT,
-            parts: [{ type: "text", text }],
-            model: model === undefined ? undefined : { providerID: model.providerID, modelID: model.modelID },
-          },
+        // Into the outbox: it makes the folder (if new) and the session when the
+        // server can take them, then sends; the chat opens at once.
+        await sendMessage({
+          server: serverAddressOf(address),
+          sessionID,
+          protocol: "v2",
+          directory: directory === undefined ? undefined : AbsolutePath.make(directory),
+          create: target.kind === "newFolder" ? { folder: { root: rootDir, name: target.name } } : {},
+          text,
+          files: [],
+          model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
+          agent: Agent.ID.make(AGENT),
         });
-        props.navigation.navigate("Chat", { sessionID: data.id });
+        props.navigation.navigate("Chat", { sessionID, protocol: "v2" });
         void load();
       } finally {
         setSending(false);
       }
     },
-    [target, sending, client, props.navigation, load],
+    [target, sending, address, rootDir, props.navigation, load],
   );
 
   // Rescan after a worktree/workspace is created from the pickers.
