@@ -47,6 +47,10 @@ export interface ChatMessage {
   readonly queued?: boolean;
 }
 
+/** Epoch ms: opencode has reported seconds in places, and a value small
+ * enough to be seconds would put a clock decades out. */
+export const epochMs = (time: number): number => (time < 1e12 ? time * 1000 : time);
+
 /** A message's text parts, joined. */
 export const textOf = (message: ChatMessage): string =>
   message.parts
@@ -65,7 +69,5 @@ export const answering = (messages: ReadonlyArray<ChatMessage>): boolean => {
 export const answerStartedAt = (messages: ReadonlyArray<ChatMessage>): number | undefined => {
   const last = messages.findLast((message) => message.role === "assistant");
   if (last?.time === undefined || last.time.completed !== undefined) return undefined;
-  // opencode reports epoch milliseconds; a value small enough to be seconds
-  // would put the clock decades out.
-  return last.time.created < 1e12 ? last.time.created * 1000 : last.time.created;
+  return epochMs(last.time.created);
 };

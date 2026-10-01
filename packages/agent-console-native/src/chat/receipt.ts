@@ -7,7 +7,8 @@
  *
  * @internal
  */
-import type { ChatMessage } from "./model";
+import { type ChatMessage, epochMs } from "./model";
+import { clockTime, daysBetween } from "./time";
 
 export type Receipt =
   | { readonly kind: "sending" }
@@ -21,9 +22,6 @@ export interface LatestReceipt {
   readonly receipt: Receipt;
 }
 
-/** Epoch ms (opencode has reported seconds in places). */
-const epochMs = (time: number): number => (time < 1e12 ? time * 1000 : time);
-
 export const latestReceipt = (messages: ReadonlyArray<ChatMessage>, heldID: string | undefined): LatestReceipt | undefined => {
   const index = messages.findLastIndex((message) => message.role === "user");
   const mine = messages[index];
@@ -36,19 +34,11 @@ export const latestReceipt = (messages: ReadonlyArray<ChatMessage>, heldID: stri
   };
 };
 
-const startOfDay = (time: number): number => {
-  const day = new Date(time);
-  day.setHours(0, 0, 0, 0);
-  return day.getTime();
-};
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /** When it was read, as Messages says it: the time today, Yesterday, the
  * weekday within the week, else the date. */
 export const readTimeLabel = (at: number, now: number): string => {
-  const days = Math.round((startOfDay(now) - startOfDay(at)) / DAY_MS);
-  if (days <= 0) return new Date(at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const days = daysBetween(at, now);
+  if (days <= 0) return clockTime(at);
   if (days === 1) return "Yesterday";
   if (days < 7) return new Date(at).toLocaleDateString([], { weekday: "long" });
   return new Date(at).toLocaleDateString([], { month: "numeric", day: "numeric", year: "2-digit" });

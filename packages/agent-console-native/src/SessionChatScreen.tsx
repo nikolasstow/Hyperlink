@@ -45,6 +45,7 @@ import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import { MESSAGE_GAP, MessageBubble, RECEIPT_HEIGHT } from "./MessageBubble";
+import { dateHeaders } from "./chat/dateHeaders";
 import { latestReceipt } from "./chat/receipt";
 import type { Arrival } from "./messageArrival";
 import { PermissionPrompt } from "./PermissionPrompt";
@@ -159,6 +160,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   }, [delivered, lane]);
   const byID = React.useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const receipt = React.useMemo(() => latestReceipt(messages, lane?.held?.messageID), [messages, lane]);
+  const headers = React.useMemo(() => dateHeaders(messages), [messages]);
   // Busy: v2 from the conversation (the answer still being written); v1 from
   // the live connection's run status.
   const busy = protocol === "v2" ? answering(delivered) : transcript.busy;
@@ -561,6 +563,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
                 message={message}
                 arrival={arriving?.id === message.id ? arriving.arrival : undefined}
                 receipt={receipt?.messageID === message.id ? receipt.receipt : undefined}
+                dateHeader={headers.get(message.id)}
               />
             </Pressable>
           );

@@ -1,6 +1,6 @@
 /**
  * The chat's view (model.ts) of messages still in the outbox: shown after the
- * conversation, untinted (`queued`), until the server has them (then the
+ * conversation (`queued`), until the server has them (then the
  * conversation has them, under the same id, and these step aside). Cached per
  * queued message, so its bubble keeps its identity while it waits.
  *

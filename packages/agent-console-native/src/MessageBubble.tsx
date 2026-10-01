@@ -10,7 +10,8 @@
  * output are collapsed detail; sweeping them into a copy would produce
  * something nobody meant to paste.
  *
- * Under your latest message, its read receipt (chat/receipt.ts), as Messages
+ * Over a message that opens a new day or follows an hour's quiet, its date
+ * (chat/dateHeaders.ts); under your latest message, its read receipt (chat/receipt.ts), as Messages
  * shows it: a set-height line at the bubble's right edge.
  *
  * Your message just sent arrives from the input (`arrival`, messageArrival.ts):
@@ -34,6 +35,7 @@ import { Markdown } from "./Markdown";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { useTextColors, useTheme } from "./theme";
 import { colors } from "./colors";
+import { dateHeaderLabel } from "./chat/dateHeaders";
 import { type Receipt, readTimeLabel } from "./chat/receipt";
 import { ToolCallBubble } from "./ToolCallBubble";
 import { type ChatMessage, textOf } from "./chat/model";
@@ -66,6 +68,8 @@ const MessageBubbleImpl = (props: {
   readonly arrival?: Arrival;
   /** Your latest message's read receipt. */
   readonly receipt?: Receipt;
+  /** The date over it, when it gets one (epoch ms). */
+  readonly dateHeader?: number;
 }): React.ReactElement => {
   const isUser = props.message.role === "user";
   const text = textOf(props.message).trim();
@@ -100,33 +104,46 @@ const MessageBubbleImpl = (props: {
     }
   });
   return (
-    <View style={[styles.row, isUser && styles.rowUser]}>
-      <ContextMenuView
-        style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
-        // Nothing to act on until some prose exists.
-        actions={props.noMenu === true || text === "" ? [] : MENU}
-        previewCornerRadius={isUser ? USER_RADIUS : ASSISTANT_RADIUS}
-        onAction={onAction}
-      >
-        {/* The user's bubble is glass, tinted with the theme's primary,
-         * rounded on itself behind the text; nothing clips it. */}
-        {isUser ? (
-          <>
-            <AnimatedGlassView
-              style={[StyleSheet.absoluteFill, styles.bubbleGlass]}
-              glassEffectStyle="regular"
-              tintColor={themeColors.bubbleGlassTint}
-              colorScheme={scheme}
-              entering={entering?.glass}
-            />
-            <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View>
-          </>
-        ) : (
-          parts
-        )}
-      </ContextMenuView>
-      {isUser && props.receipt !== undefined ? <ReceiptLine receipt={props.receipt} /> : null}
-    </View>
+    <>
+      {props.dateHeader !== undefined ? <DateHeader at={props.dateHeader} /> : null}
+      <View style={[styles.row, isUser && styles.rowUser]}>
+        <ContextMenuView
+          style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
+          // Nothing to act on until some prose exists.
+          actions={props.noMenu === true || text === "" ? [] : MENU}
+          previewCornerRadius={isUser ? USER_RADIUS : ASSISTANT_RADIUS}
+          onAction={onAction}
+        >
+          {/* The user's bubble is glass, tinted with the theme's primary,
+           * rounded on itself behind the text; nothing clips it. */}
+          {isUser ? (
+            <>
+              <AnimatedGlassView
+                style={[StyleSheet.absoluteFill, styles.bubbleGlass]}
+                glassEffectStyle="regular"
+                tintColor={themeColors.bubbleGlassTint}
+                colorScheme={scheme}
+                entering={entering?.glass}
+              />
+              <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View>
+            </>
+          ) : (
+            parts
+          )}
+        </ContextMenuView>
+        {isUser && props.receipt !== undefined ? <ReceiptLine receipt={props.receipt} /> : null}
+      </View>
+    </>
+  );
+};
+
+const DateHeader = (props: { readonly at: number }): React.ReactElement => {
+  const textColors = useTextColors();
+  const label = dateHeaderLabel(props.at, Date.now());
+  return (
+    <Text style={[styles.dateHeader, { color: textColors.secondaryLabel }]} numberOfLines={1}>
+      <Text style={styles.receiptState}>{label.day}</Text> {label.time}
+    </Text>
   );
 };
 
@@ -171,6 +188,13 @@ const styles = StyleSheet.create({
   },
   receiptState: {
     fontWeight: "600",
+  },
+  dateHeader: {
+    alignSelf: "center",
+    marginTop: 4,
+    marginBottom: 10,
+    fontSize: 12,
+    lineHeight: 16,
   },
   bubble: {},
   bubbleAssistant: {
