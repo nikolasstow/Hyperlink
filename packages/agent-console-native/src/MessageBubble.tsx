@@ -10,6 +10,9 @@
  * output are collapsed detail; sweeping them into a copy would produce
  * something nobody meant to paste.
  *
+ * Your message just sent arrives from the input (`arrival`, messageArrival.ts):
+ * its glass and its text are their own animated views for that.
+ *
  * Memoized for the same reason as the web version: `useSessionStream`'s
  * updater only creates a new `TranscriptMessage` object for the message an
  * incoming event actually touched, so this skips re-rendering every other
@@ -20,8 +23,10 @@
 import * as React from "react";
 import { GlassView } from "expo-glass-effect";
 import { Clipboard, Share, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
+import Reanimated from "react-native-reanimated";
 import { ContextMenuView, type MenuAction } from "../modules/context-menu";
 import { ROW_GUTTER } from "./layout";
+import { type Arrival, BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, glassArrival, textArrival } from "./messageArrival";
 import { Markdown } from "./Markdown";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { useTheme } from "./theme";
@@ -36,15 +41,19 @@ const MENU: ReadonlyArray<MenuAction> = [
 /** The lifted bubble's corners: yours, its glass's; the agent's prose, soft. */
 const USER_RADIUS = 18;
 const ASSISTANT_RADIUS = 12;
+/** The space under each message. */
+export const MESSAGE_GAP = 14;
 /** Your bubble's widest, of the row inside its gutters. */
 const USER_MAX_SHARE = 0.88;
-const USER_PADDING_HORIZONTAL = 14;
-const USER_PADDING_VERTICAL = 10;
+
+const AnimatedGlassView = Reanimated.createAnimatedComponent(GlassView);
 
 const MessageBubbleImpl = (props: {
   readonly message: ChatMessage;
   /** No long-press menu (a preview already inside one). */
   readonly noMenu?: boolean;
+  /** Just sent: it arrives from the input (at its mount only). */
+  readonly arrival?: Arrival;
 }): React.ReactElement => {
   const isUser = props.message.role === "user";
   const text = textOf(props.message).trim();
@@ -58,7 +67,26 @@ const MessageBubbleImpl = (props: {
   // or your bubble's widest inside its padding.
   const { width: windowWidth } = useWindowDimensions();
   const rowWidth = windowWidth - ROW_GUTTER * 2;
-  const textWidth = isUser ? Math.floor(rowWidth * USER_MAX_SHARE) - USER_PADDING_HORIZONTAL * 2 : rowWidth;
+  const textWidth = isUser ? Math.floor(rowWidth * USER_MAX_SHARE) - BUBBLE_PADDING_HORIZONTAL * 2 : rowWidth;
+  // Read at the mount only, as the entering animations are.
+  const [arrival] = React.useState(props.arrival);
+  const entering = React.useMemo(
+    () => (arrival === undefined ? undefined : { glass: glassArrival(arrival), text: textArrival(arrival) }),
+    [arrival],
+  );
+  React.useLayoutEffect(() => {
+    arrival?.onMounted();
+  }, [arrival]);
+  const parts = props.message.parts.map((part) => {
+    switch (part.kind) {
+      case "text":
+        return <Markdown key={part.id} text={part.text} width={textWidth} />;
+      case "reasoning":
+        return <ReasoningBlock key={part.id} part={part} />;
+      case "tool":
+        return <ToolCallBubble key={part.id} part={part} />;
+    }
+  });
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
       <ContextMenuView
@@ -72,23 +100,19 @@ const MessageBubbleImpl = (props: {
          * rounded on itself behind the text; nothing clips it. Still queued
          * (not on the server yet), it is untinted. */}
         {isUser ? (
-          <GlassView
-            style={[StyleSheet.absoluteFill, styles.bubbleGlass]}
-            glassEffectStyle="regular"
-            tintColor={props.message.queued === true ? undefined : themeColors.bubbleGlassTint}
-            colorScheme={scheme}
-          />
-        ) : null}
-        {props.message.parts.map((part) => {
-          switch (part.kind) {
-            case "text":
-              return <Markdown key={part.id} text={part.text} width={textWidth} />;
-            case "reasoning":
-              return <ReasoningBlock key={part.id} part={part} />;
-            case "tool":
-              return <ToolCallBubble key={part.id} part={part} />;
-          }
-        })}
+          <>
+            <AnimatedGlassView
+              style={[StyleSheet.absoluteFill, styles.bubbleGlass]}
+              glassEffectStyle="regular"
+              tintColor={props.message.queued === true ? undefined : themeColors.bubbleGlassTint}
+              colorScheme={scheme}
+              entering={entering?.glass}
+            />
+            <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View>
+          </>
+        ) : (
+          parts
+        )}
       </ContextMenuView>
     </View>
   );
@@ -100,7 +124,7 @@ export const MessageBubble = React.memo(MessageBubbleImpl);
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    marginBottom: 14,
+    marginBottom: MESSAGE_GAP,
     paddingHorizontal: ROW_GUTTER,
   },
   rowUser: {
@@ -117,8 +141,8 @@ const styles = StyleSheet.create({
     // Still inset — a sent message reads as a bubble, and the asymmetry is
     // what distinguishes the two sides now that replies run edge to edge.
     maxWidth: `${USER_MAX_SHARE * 100}%`,
-    paddingHorizontal: USER_PADDING_HORIZONTAL,
-    paddingVertical: USER_PADDING_VERTICAL,
+    paddingHorizontal: BUBBLE_PADDING_HORIZONTAL,
+    paddingVertical: BUBBLE_PADDING_VERTICAL,
   },
   bubbleGlass: {
     borderRadius: USER_RADIUS,

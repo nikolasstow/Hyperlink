@@ -111,6 +111,9 @@ export interface Send {
   readonly files: ReadonlyArray<{ readonly path: string; readonly name: string }>;
   readonly model?: Model.Ref;
   readonly agent: Agent.ID;
+  /** The message's id, when the sender made it (to know its bubble before
+   * it shows); otherwise made here. */
+  readonly id?: SessionMessage.ID;
 }
 
 type State = HashMap.HashMap<LaneKey, Lane>;
@@ -307,7 +310,7 @@ const make = Effect.gen(function* () {
     send: (input: Send): Effect.Effect<QueuedMessage> =>
       Effect.gen(function* () {
         const message = QueuedMessage.make({
-          id: SessionMessage.ID.create(),
+          id: input.id ?? SessionMessage.ID.create(),
           text: input.text,
           files: input.files.map((file) => Attachment.make(file)),
           model: input.model,

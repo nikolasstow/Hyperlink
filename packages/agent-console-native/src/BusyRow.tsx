@@ -20,6 +20,10 @@ import { TypingIndicator } from "./TypingIndicator";
 import { type TextColors, useThemedStyles } from "./theme";
 
 const TICK_MS = 1000;
+/** The row's height (its Stop pill fits inside), and the gap under it: set,
+ * so the room it takes in the chat is known. */
+export const BUSY_ROW_HEIGHT = 28;
+export const BUSY_ROW_GAP = 14;
 
 const elapsedLabel = (sinceMs: number): string => {
   const total = Math.max(0, Math.floor((Date.now() - sinceMs) / 1000));
@@ -64,7 +68,8 @@ const makeStyles = (text: TextColors) =>
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 14,
+    height: BUSY_ROW_HEIGHT,
+    marginBottom: BUSY_ROW_GAP,
     paddingHorizontal: ROW_GUTTER,
   },
   elapsed: {

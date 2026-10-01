@@ -32,18 +32,20 @@ import { Model } from "./opencode/schema/model";
 import { Provider } from "./opencode/schema/provider";
 import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
+import { SessionMessage } from "./opencode/schema/session-message";
 import type { Protocol } from "./outbox/model";
 import { removeQueued, retryLane, sendMessage, useLane } from "./outbox/useOutbox";
 import { interruptSession, sessionProtocol } from "./sessions/protocol";
 import { AGENT } from "./client";
 import { promptRenameSession } from "./sessionActions";
-import { BusyRow } from "./BusyRow";
+import { BUSY_ROW_GAP, BUSY_ROW_HEIGHT, BusyRow } from "./BusyRow";
 import { startLiveActivity } from "../modules/live-activity";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
-import { MessageBubble } from "./MessageBubble";
+import { MESSAGE_GAP, MessageBubble } from "./MessageBubble";
+import type { Arrival } from "./messageArrival";
 import { PermissionPrompt } from "./PermissionPrompt";
 import { setViewedSession } from "./push";
 import { markSessionRead } from "./sessionReads";
@@ -71,6 +73,11 @@ const SESSION_DUBZ: DubzContext = {
   surface: "session",
   scope: { kind: "all" },
 };
+
+/** The gap between the bar's room and the rows above it. */
+const BAR_SPACE_GAP = 8;
+/** The longest the input waits for its bubble to show before clearing. */
+const ARRIVAL_WAIT_MS = 250;
 
 /** Within this of the newest message, a new one scrolls into view. */
 const NEAR_NEWEST = 80;
@@ -196,6 +203,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // The bar's heights, which the composer animates and the list's bottom
   // space follows in the same frame.
   const barGeometry = useBarGeometry();
+  const keyboardValue = useKeyboardHeightValue();
+  // Your message just sent, arriving from the input.
+  const [arriving, setArriving] = React.useState<{ readonly id: string; readonly arrival: Arrival } | undefined>(undefined);
   // Keyboard up: select it for the message (or unselect). Down: open it.
   const onFile = (file: SessionFile): void => {
     if (keyboardHeight === 0) {
@@ -428,7 +438,32 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       title: title ?? "Session",
       action: "Working…",
     });
+    const id = SessionMessage.ID.create();
+    // It flies from the input when its row lands at the bottom of the list
+    // as you see it: you are at the newest, and nothing sits below it.
+    const landed = new Promise<void>((resolve) => {
+      if (scrolledBack.current > 0 || pendingPermission !== undefined) {
+        resolve();
+        return;
+      }
+      setArriving({
+        id,
+        arrival: {
+          geometry: barGeometry,
+          keyboard: keyboardValue,
+          restingBottom: composerRestingBottom(insets.bottom),
+          between: (files.length > 0 ? FILE_CHIPS_HEIGHT : 0) + BAR_SPACE_GAP + (busy ? BUSY_ROW_HEIGHT + BUSY_ROW_GAP : 0) + MESSAGE_GAP,
+          onMounted: () => {
+            // Once: the row keeps it while mounted; a later mount (scrolled
+            // away and back) does not arrive again.
+            setArriving(undefined);
+            resolve();
+          },
+        },
+      });
+    });
     await sendMessage({
+      id,
       server,
       sessionID: session,
       protocol,
@@ -438,6 +473,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
       agent: Agent.ID.make(AGENT),
     });
+    // The input clears as its bubble mounts behind it; not later than this
+    // even if the row is slow to show.
+    await Promise.race([landed, new Promise<void>((resolve) => setTimeout(resolve, ARRIVAL_WAIT_MS))]);
   };
 
   // The model the conversation was last answered with, for the composer.
@@ -506,12 +544,18 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           }
           const message = byID.get(item);
           if (message === undefined) return null;
-          if (message.queued !== true) return <MessageBubble message={message} />;
+          const queued = message.queued === true;
           // Still in the outbox: a tap offers to send it again now (or, for one
-          // the server refused, after a fix) or take it out.
+          // the server refused, after a fix) or take it out. The same element
+          // once delivered, so the bubble stays mounted (its arrival runs on).
           return (
-            <Pressable accessibilityRole="button" accessibilityLabel="Queued message" onPress={() => onQueuedPress(message.id)}>
-              <MessageBubble message={message} />
+            <Pressable
+              accessibilityRole={queued ? "button" : undefined}
+              accessibilityLabel={queued ? "Queued message" : undefined}
+              disabled={!queued}
+              onPress={() => onQueuedPress(message.id)}
+            >
+              <MessageBubble message={message} arrival={arriving?.id === message.id ? arriving.arrival : undefined} />
             </Pressable>
           );
         }}
@@ -585,7 +629,7 @@ const BarSpace = (props: {
   const keyboardHeight = useKeyboardHeightValue();
   const { geometry, restingBottom, chips } = props;
   const space = useAnimatedStyle(() => ({
-    height: Math.max(keyboardHeight.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(geometry) + chips + 8,
+    height: Math.max(keyboardHeight.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(geometry) + chips + BAR_SPACE_GAP,
   }));
   return <Animated.View style={space} />;
 };

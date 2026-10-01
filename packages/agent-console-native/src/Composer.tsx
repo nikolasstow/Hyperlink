@@ -298,16 +298,23 @@ export const Composer = (props: {
     setFocused(false);
   };
 
+  // One send at a time: the text stays until it is on its way.
+  const sending = React.useRef(false);
   const send = async (): Promise<void> => {
     const value = text.trim();
-    if (value.length === 0 || props.disabled) return;
-    setText("");
+    if (value.length === 0 || props.disabled || sending.current) return;
+    sending.current = true;
     setError(undefined);
     try {
+      // Cleared once it is on its way: the chat's bubble starts where the
+      // text is, so the two swap in place.
       await props.onSend(value, selectedModel);
+      setText("");
       if (selectedModel !== undefined) void recordModelUse(selectedModel);
     } catch {
       setError("Message failed to send — is the OpenCode server running?");
+    } finally {
+      sending.current = false;
     }
   };
 
