@@ -5,6 +5,11 @@
  * log. Ported from packages/agent-console/src/components/MessageBubble.tsx,
  * with markdown via `Markdown.tsx` (no Shiki — monospaced fences only).
  *
+ * Long-press any message (yours or the agent's) for the iOS context menu:
+ * the bubble lifts, and Copy / Share act on its prose. Reasoning and tool
+ * output are collapsed detail; sweeping them into a copy would produce
+ * something nobody meant to paste.
+ *
  * Memoized for the same reason as the web version: `useSessionStream`'s
  * updater only creates a new `TranscriptMessage` object for the message an
  * incoming event actually touched, so this skips re-rendering every other
@@ -14,22 +19,46 @@
  */
 import * as React from "react";
 import { GlassView } from "expo-glass-effect";
-import { StyleSheet, useColorScheme, View } from "react-native";
+import { Clipboard, Share, StyleSheet, useColorScheme, View } from "react-native";
+import { ContextMenuView, type MenuAction } from "../modules/context-menu";
 import { ROW_GUTTER } from "./layout";
 import { Markdown } from "./Markdown";
-import { MessageActions } from "./MessageActions";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { useTheme } from "./theme";
 import { ToolCallBubble } from "./ToolCallBubble";
-import type { ChatMessage } from "./chat/model";
+import { type ChatMessage, textOf } from "./chat/model";
 
-const MessageBubbleImpl = (props: { readonly message: ChatMessage; readonly hideActions?: boolean }): React.ReactElement => {
+const MENU: ReadonlyArray<MenuAction> = [
+  { id: "copy", title: "Copy", systemImage: "doc.on.doc" },
+  { id: "share", title: "Share", systemImage: "square.and.arrow.up" },
+];
+
+/** The lifted bubble's corners: yours, its glass's; the agent's prose, soft. */
+const USER_RADIUS = 18;
+const ASSISTANT_RADIUS = 12;
+
+const MessageBubbleImpl = (props: {
+  readonly message: ChatMessage;
+  /** No long-press menu (a preview already inside one). */
+  readonly noMenu?: boolean;
+}): React.ReactElement => {
   const isUser = props.message.role === "user";
+  const text = textOf(props.message).trim();
+  const onAction = (id: string): void => {
+    if (id === "copy") Clipboard.setString(text);
+    if (id === "share") void Share.share({ message: text });
+  };
   const { colors: themeColors } = useTheme();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
-      <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
+      <ContextMenuView
+        style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}
+        // Nothing to act on until some prose exists.
+        actions={props.noMenu === true || text === "" ? [] : MENU}
+        previewCornerRadius={isUser ? USER_RADIUS : ASSISTANT_RADIUS}
+        onAction={onAction}
+      >
         {/* The user's bubble is glass, tinted with the theme's primary,
          * rounded on itself behind the text; nothing clips it. Still queued
          * (not on the server yet), it is untinted. */}
@@ -51,10 +80,7 @@ const MessageBubbleImpl = (props: { readonly message: ChatMessage; readonly hide
               return <ToolCallBubble key={part.id} part={part} />;
           }
         })}
-        {/* Assistant only: there is nothing to copy back out of your own
-          * message, and a row of controls under every sent line is noise. */}
-        {isUser || props.hideActions === true ? null : <MessageActions message={props.message} />}
-      </View>
+      </ContextMenuView>
     </View>
   );
 };
@@ -86,6 +112,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   bubbleGlass: {
-    borderRadius: 18,
+    borderRadius: USER_RADIUS,
   },
 });
