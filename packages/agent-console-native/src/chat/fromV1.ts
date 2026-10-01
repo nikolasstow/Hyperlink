@@ -37,11 +37,9 @@ const partOf = (part: RenderablePart): ChatPart => {
   }
 };
 
-/** Undefined until the server says whose message it is (its role). */
-export const chatMessageOfV1 = (message: TranscriptMessage): ChatMessage | undefined => {
+export const chatMessageOfV1 = (message: TranscriptMessage): ChatMessage => {
   const known = views.get(message);
   if (known !== undefined) return known;
-  if (message.role === undefined) return undefined;
   const view: ChatMessage = {
     id: message.id,
     role: message.role,

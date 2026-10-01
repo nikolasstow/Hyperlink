@@ -51,9 +51,7 @@ export type RenderablePart = TextPart | ToolPart | ReasoningPart;
 
 export type TranscriptMessage = {
   readonly id: string;
-  /** Unknown until the server reports the message itself: a part can arrive
-   * before it, and nothing in a part says whose message it is. */
-  readonly role?: "user" | "assistant";
+  readonly role: "user" | "assistant";
   readonly parts: ReadonlyMap<string, RenderablePart>;
   /** Present on assistant messages once the server reports them. */
   readonly providerID?: string;
@@ -139,9 +137,7 @@ export const withRole = (
 
 export const withPart = (transcript: Transcript, part: RenderablePart): Transcript => {
   const existing = transcript.messages.get(part.messageID);
-  // Not guessed: a part arriving before its message leaves the role unknown
-  // (guessing "assistant" showed your own message as the agent's).
-  const role = existing?.role;
+  const role = existing?.role ?? "assistant";
   const parts = new Map(existing?.parts ?? []);
   parts.set(part.id, part);
   const messages = new Map(transcript.messages);

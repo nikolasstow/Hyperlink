@@ -37,7 +37,7 @@ export const lastMessageSummary = (transcript: Transcript | undefined): { readon
   if (transcript === undefined) return undefined;
   for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
     const message = transcript.messages.get(transcript.order[i]);
-    if (message?.role === undefined) continue;
+    if (message === undefined) continue;
     const text = Array.from(message.parts.values())
       .filter((part) => part.type === "text")
       .map((part) => part.text)
