@@ -42,8 +42,6 @@ export const BUBBLE_PADDING_VERTICAL = 10;
 const SHRINK = BAR_MOTION;
 const RISE_DELAY = 100;
 const RISE = { duration: 260, easing: BAR_MOTION.easing };
-/** The whole flight, to its landing. */
-export const ARRIVAL_MS = Math.max(SHRINK.duration, RISE_DELAY + RISE.duration);
 
 /** Where the arriving message's input was, as UI-thread values. */
 interface ArrivalSource {

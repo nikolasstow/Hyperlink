@@ -28,7 +28,9 @@ the server being down, and the agent being busy.
    on the device (server unreachable); once admitted, v2 `delivery: "queue"`
    holds it on the server until the agent is idle, phone asleep or not.
 5. **No status text on queued messages.** The app already has a status
-   indicator at the top. Queued bubbles are simply untinted (no theme tint).
+   indicator at the top. Bubbles are tinted whether queued or sent (2026-10-01:
+   the untinted queued look was dropped); sending state will be shown by
+   iOS-style read indicators instead.
 6. **A new workspace folder is created only when send is hit** for the new
    session, as a step of that queued send, never earlier.
 7. **Effect, maximum quality.** Schema at every boundary, tagged errors,
@@ -77,8 +79,8 @@ Done, on `app/double-agent/ios`:
   `Folders`, background drain task, React bridge. Tested
   (`Outbox.test.ts`) and verified against the live server.
 - `src/chat`: protocol-neutral view, v1/v2 adapters, live v2 transcript
-  (session events + deltas). Chat sends through the outbox; queued bubbles
-  untinted; tap one to send again or delete.
+  (session events + deltas). Chat sends through the outbox; tap a queued
+  bubble to send it again or delete it.
 - `src/sessions`: session lists from v2 (every project); protocol per session.
 - Home/Repo: new sessions are v2 under a client id, through the outbox; a new
   workspace folder is made when sent.
