@@ -42,7 +42,8 @@ export const ChatPreview = (props: {
         <CollapsiblePartsProvider newestID={undefined}>
           {tail.map((id) => {
             const message = props.transcript?.messages.get(id);
-            return message === undefined ? null : <MessageBubble key={id} message={chatMessageOfV1(message)} hideActions />;
+            const view = message === undefined ? undefined : chatMessageOfV1(message);
+            return view === undefined ? null : <MessageBubble key={id} message={view} hideActions />;
           })}
         </CollapsiblePartsProvider>
       )}

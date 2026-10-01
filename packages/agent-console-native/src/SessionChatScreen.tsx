@@ -134,7 +134,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         ? v2Messages
         : transcript.order.flatMap((id) => {
             const message = transcript.messages.get(id);
-            return message === undefined ? [] : [chatMessageOfV1(message)];
+            const view = message === undefined ? undefined : chatMessageOfV1(message);
+            return view === undefined ? [] : [view];
           }),
     [protocol, v2Messages, transcript],
   );
