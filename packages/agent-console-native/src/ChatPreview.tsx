@@ -16,6 +16,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
+import { chatMessageOfV1 } from "./chat/fromV1";
 import { MessageBubble } from "./MessageBubble";
 import type { Transcript } from "./useSessionStream";
 import { type TextColors, useThemedStyles } from "./theme";
@@ -41,7 +42,7 @@ export const ChatPreview = (props: {
         <CollapsiblePartsProvider newestID={undefined}>
           {tail.map((id) => {
             const message = props.transcript?.messages.get(id);
-            return message === undefined ? null : <MessageBubble key={id} message={message} hideActions />;
+            return message === undefined ? null : <MessageBubble key={id} message={chatMessageOfV1(message)} hideActions />;
           })}
         </CollapsiblePartsProvider>
       )}

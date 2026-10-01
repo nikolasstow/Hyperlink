@@ -59,3 +59,13 @@ export const answering = (messages: ReadonlyArray<ChatMessage>): boolean => {
   const last = messages.findLast((message) => message.role === "assistant");
   return last !== undefined && last.time !== undefined && last.time.completed === undefined;
 };
+
+/** When the answer being written started (epoch ms), for the elapsed clock;
+ * undefined when none is. */
+export const answerStartedAt = (messages: ReadonlyArray<ChatMessage>): number | undefined => {
+  const last = messages.findLast((message) => message.role === "assistant");
+  if (last?.time === undefined || last.time.completed !== undefined) return undefined;
+  // opencode reports epoch milliseconds; a value small enough to be seconds
+  // would put the clock decades out.
+  return last.time.created < 1e12 ? last.time.created * 1000 : last.time.created;
+};

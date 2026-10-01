@@ -17,23 +17,16 @@ import * as React from "react";
 import { Clipboard, Share, StyleSheet, TouchableOpacity, View } from "react-native";
 import { colors } from "./colors";
 import { SystemIcon } from "./SystemIcon";
-import type { TranscriptMessage } from "./useSessionStream";
+import { type ChatMessage, textOf } from "./chat/model";
 import { useTextColors } from "./theme";
 
 /** How long the button stays confirming after a copy. */
 const COPIED_FEEDBACK_MS = 1400;
 
-export const textOf = (message: TranscriptMessage): string =>
-  Array.from(message.parts.values())
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("\n\n")
-    .trim();
-
-export const MessageActions = (props: { readonly message: TranscriptMessage }): React.ReactElement | null => {
+export const MessageActions = (props: { readonly message: ChatMessage }): React.ReactElement | null => {
   const textColors = useTextColors();
   const [copied, setCopied] = React.useState(false);
-  const text = textOf(props.message);
+  const text = textOf(props.message).trim();
 
   React.useEffect(() => {
     if (!copied) return;

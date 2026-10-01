@@ -1,6 +1,6 @@
 /**
  * Renders one tool call inline in the transcript — read/edit/write/glob/grep/
- * etc. `ToolPart.input`/`.output` are loosely typed by the SDK, so this reads
+ * etc. A tool's input is whatever the tool takes, so this reads it
  * defensively rather than assuming a schema. Ported from
  * packages/agent-console/src/components/ToolCallBubble.tsx, minus syntax
  * highlighting — that version's Shiki + `dangerouslySetInnerHTML` is a DOM
@@ -14,10 +14,10 @@
  * @internal
  */
 import * as React from "react";
-import type { ToolPart } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import { StyleSheet, Text, TouchableOpacity, useColorScheme } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import type { ChatTool } from "./chat/model";
 import { colors } from "./colors";
 import { asHtmlPayload, HtmlToolBlock } from "./HtmlToolBlock";
 import { useCollapsible } from "./CollapsibleParts";
@@ -29,7 +29,7 @@ const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
 const COLLAPSE_MS = 180;
 const EXIT_MS = 120;
 
-const filePathOf = (input: Record<string, unknown>): string | undefined => {
+const filePathOf = (input: Readonly<Record<string, unknown>>): string | undefined => {
   for (const key of ["filePath", "file_path", "path"]) {
     const value = input[key];
     if (typeof value === "string") return value;
@@ -37,27 +37,24 @@ const filePathOf = (input: Record<string, unknown>): string | undefined => {
   return undefined;
 };
 
-export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactElement => {
+export const ToolCallBubble = (props: { readonly part: ChatTool }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { part } = props;
-  const path = filePathOf(part.state.input);
-  const isEditFamily = EDIT_FAMILY.has(part.tool);
-  const lineCount = part.state.status === "completed" ? part.state.output.split("\n").length : 0;
+  const path = filePathOf(part.input);
+  const isEditFamily = EDIT_FAMILY.has(part.name);
+  const lineCount = part.status === "completed" && part.output !== undefined ? part.output.split("\n").length : 0;
   const { open, toggle } = useCollapsible(part.id);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
 
   // `render_html` returns a page, not text. Its own output string is a short
   // summary meant for the model's next turn — showing it here instead of the
   // page would be strictly worse than useless.
-  const htmlPayload =
-    part.tool === "render_html" && part.state.status === "completed"
-      ? asHtmlPayload(part.state.metadata)
-      : undefined;
+  const htmlPayload = part.name === "render_html" && part.status === "completed" ? asHtmlPayload(part.metadata) : undefined;
 
   const body = (() => {
     if (htmlPayload !== undefined) return <HtmlToolBlock payload={htmlPayload} />;
-    switch (part.state.status) {
+    switch (part.status) {
       case "pending":
         return null;
       case "running":
@@ -65,13 +62,13 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
       case "completed":
         return (
           <Text style={styles.output} selectable>
-            {part.state.output}
+            {part.output}
           </Text>
         );
       case "error":
         return (
           <Text style={[styles.output, styles.errorOutput]} selectable>
-            {part.state.error}
+            {part.error}
           </Text>
         );
     }
@@ -83,13 +80,13 @@ export const ToolCallBubble = (props: { readonly part: ToolPart }): React.ReactE
        * it. */}
       <GlassView style={[StyleSheet.absoluteFill, styles.glass]} glassEffectStyle="regular" colorScheme={scheme} />
       <TouchableOpacity style={styles.header} activeOpacity={0.6} onPress={toggle}>
-        <Text style={styles.toolName}>{part.tool}</Text>
+        <Text style={styles.toolName}>{part.name}</Text>
         {path !== undefined ? (
           <Text style={styles.path} numberOfLines={1}>
             {path}
           </Text>
         ) : null}
-        {part.state.status === "completed" && !isEditFamily ? <Text style={styles.meta}>{lineCount} lines</Text> : null}
+        {part.status === "completed" && !isEditFamily ? <Text style={styles.meta}>{lineCount} lines</Text> : null}
         <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={textColors.secondaryLabel} />
       </TouchableOpacity>
       {open ? (

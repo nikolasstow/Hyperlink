@@ -48,7 +48,9 @@ import { SessionListScreen } from "./SessionListScreen";
 
 export type RootStackParamList = {
   Home: undefined;
-  Chat: { sessionID: string };
+  /** `protocol`: known when the app just made the session (v2); found out
+   * otherwise (sessions/protocol.ts). */
+  Chat: { sessionID: string; protocol?: "v1" | "v2" };
   Settings: undefined;
   Extensions: undefined;
   Appearance: undefined;

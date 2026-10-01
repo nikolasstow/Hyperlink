@@ -109,21 +109,7 @@ export const readSessionStatus = (raw: unknown): { readonly sessionID: string; r
   return { sessionID, type };
 };
 
-/** When the in-flight run started, for the elapsed clock. Taken from the
- * server's own timestamp so reopening the chat does not restart it. */
-export const runStartedAt = (transcript: Transcript): number | undefined => {
-  for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
-    const message = transcript.messages.get(transcript.order[i]);
-    if (message === undefined || message.role !== "assistant") continue;
-    if (message.time === undefined || message.time.completed !== undefined) return undefined;
-    // opencode reports epoch milliseconds; a value small enough to be seconds
-    // would put the clock decades out.
-    return message.time.created < 1e12 ? message.time.created * 1000 : message.time.created;
-  }
-  return undefined;
-};
 const MAX_RECONNECT_DELAY_MS = 10_000;
-const LOCAL_ID_PREFIX = "local-";
 
 export const isRenderablePart = (part: Part): part is RenderablePart =>
   part.type === "text" || part.type === "tool" || part.type === "reasoning";
@@ -182,16 +168,8 @@ export const useSessionStream = (
    * than auto-approving. Null while nothing is pending. */
   readonly pendingPermission: PendingPermission | undefined;
   readonly replyPermission: (reply: PermissionReply) => Promise<void>;
-  readonly markBusy: () => void;
+  /** Ends busy now (Stop): the run's own idle corrects it either way. */
   readonly clearBusy: () => void;
-  /** Adds the just-sent text to the transcript immediately, under a local
-   * placeholder id, rather than waiting for it to round-trip back as a
-   * server-confirmed `message.updated`/`message.part.updated` event pair —
-   * standard chat-app optimistic echo. Reconciled automatically inside
-   * `apply`: the composer disables itself while a send is in flight, so at
-   * most one placeholder is ever pending, and it's dropped the moment any
-   * *other* new user message shows up (the real, server-confirmed one). */
-  readonly sendOptimistic: (text: string) => void;
   /** Whether the `/global/event` stream is actually connected right now —
    * real state from the same reconnect loop `run` below already runs, not
    * a synthesized/always-on badge. False until the first successful
@@ -221,49 +199,14 @@ export const useSessionStream = (
   const currentRef = React.useRef<Transcript>(transcript);
   const sessionIdRef = React.useRef(sessionID);
   sessionIdRef.current = sessionID;
-  const pendingOptimisticIdRef = React.useRef<string | undefined>(undefined);
-  // True while THIS screen is running a prompt (markBusy → clearBusy around an
-  // awaited `session.prompt()`). While set, the prompt's completion is the
-  // authoritative busy signal, so the event stream's `session.idle` is ignored —
-  // the stream reconnects constantly (expo/fetch closes it every few seconds)
-  // and opencode replays recent events on each re-subscribe, so a *stale*
-  // `session.idle` can arrive mid-run and would otherwise end the run early. */
-  const runInFlightRef = React.useRef(false);
 
   const apply = React.useCallback((updater: (t: Transcript) => Transcript): void => {
-    const previous = currentRef.current;
-    let next = updater(previous);
-
-    const pendingId = pendingOptimisticIdRef.current;
-    if (pendingId !== undefined) {
-      const realUserMessageArrived = Array.from(next.messages.values()).some(
-        (m) => m.role === "user" && m.id !== pendingId && !previous.messages.has(m.id),
-      );
-      if (realUserMessageArrived) {
-        const messages = new Map(next.messages);
-        messages.delete(pendingId);
-        next = { ...next, messages, order: next.order.filter((id) => id !== pendingId) };
-        pendingOptimisticIdRef.current = undefined;
-      }
-    }
-
+    const next = updater(currentRef.current);
     currentRef.current = next;
     const id = sessionIdRef.current;
     if (id !== undefined) transcriptCache.set(id, next);
     setTranscript(next);
   }, []);
-
-  const sendOptimistic = React.useCallback(
-    (text: string) => {
-      const id = sessionIdRef.current;
-      if (id === undefined) return;
-      const tempId = `${LOCAL_ID_PREFIX}${Math.random().toString(36).slice(2)}`;
-      pendingOptimisticIdRef.current = tempId;
-      const part: TextPart = { id: `${tempId}-part`, sessionID: id, messageID: tempId, type: "text", text };
-      apply((t) => withPart(withRole(t, tempId, "user"), part));
-    },
-    [apply],
-  );
 
   React.useEffect(() => {
     setConnected(false);
@@ -318,13 +261,9 @@ export const useSessionStream = (
           }
         }
         // `withRole`/`withPart` preserve `busy`, so `next` already carries the
-        // live busy — leave it, EXCEPT on a genuine first load with no local run
-        // in flight, where it's reconciled from history. Never touch busy while
-        // this screen is running a prompt: `prompt()` owns completion, and the
-        // stream effect can re-run (a flapping dep) mid-send, which would
-        // otherwise reset `firstLoad` and clear busy from history before the
-        // assistant message exists — ending the Live Activity early.
-        return isFirst && !runInFlightRef.current ? { ...next, busy: busyFromHistory(next) } : next;
+        // live busy — leave it, EXCEPT on a genuine first load, where it's
+        // reconciled from history.
+        return isFirst ? { ...next, busy: busyFromHistory(next) } : next;
       });
     };
 
@@ -351,11 +290,9 @@ export const useSessionStream = (
             if (asked !== undefined && asked.sessionID === sessionID) {
               if (getPermissionMode(sessionID) === "ask") setPendingPermission(asked);
             } else if (event.type === "session.idle" && event.properties.sessionID === sessionID) {
-              // opencode's true "run done" signal for a run this screen did NOT
-              // itself start (e.g. returning to an in-flight session). For a
-              // local send, the awaited `prompt()` owns completion and this is
-              // ignored — a reconnect can replay a stale idle mid-run.
-              if (!runInFlightRef.current) apply((t) => ({ ...t, busy: false }));
+              // opencode's true "run done" signal (sends go through the
+              // outbox, so this connection is what knows a run has ended).
+              apply((t) => ({ ...t, busy: false }));
             } else if (status !== undefined && status.sessionID === sessionID) {
               // Keeps busy true while a run is in flight (and re-affirms it when
               // returning to an in-flight session). Its `idle` is deliberately
@@ -414,15 +351,9 @@ export const useSessionStream = (
     };
   }, [sessionID, apply, client, enabled, address, refreshNonce]);
 
-  const markBusy = React.useCallback(() => {
-    runInFlightRef.current = true;
-    apply((t) => ({ ...t, busy: true }));
-  }, [apply]);
-
   const clearBusy = React.useCallback(() => {
-    runInFlightRef.current = false;
     apply((t) => ({ ...t, busy: false }));
   }, [apply]);
 
-  return { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected, refresh };
+  return { transcript, pendingPermission, replyPermission, clearBusy, connected, refresh };
 };

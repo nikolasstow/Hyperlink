@@ -21,9 +21,9 @@ import { MessageActions } from "./MessageActions";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { useTheme } from "./theme";
 import { ToolCallBubble } from "./ToolCallBubble";
-import type { TranscriptMessage } from "./useSessionStream";
+import type { ChatMessage } from "./chat/model";
 
-const MessageBubbleImpl = (props: { readonly message: TranscriptMessage; readonly hideActions?: boolean }): React.ReactElement => {
+const MessageBubbleImpl = (props: { readonly message: ChatMessage; readonly hideActions?: boolean }): React.ReactElement => {
   const isUser = props.message.role === "user";
   const { colors: themeColors } = useTheme();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -31,22 +31,23 @@ const MessageBubbleImpl = (props: { readonly message: TranscriptMessage; readonl
     <View style={[styles.row, isUser && styles.rowUser]}>
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
         {/* The user's bubble is glass, tinted with the theme's primary,
-         * rounded on itself behind the text; nothing clips it. */}
+         * rounded on itself behind the text; nothing clips it. Still queued
+         * (not on the server yet), it is untinted. */}
         {isUser ? (
           <GlassView
             style={[StyleSheet.absoluteFill, styles.bubbleGlass]}
             glassEffectStyle="regular"
-            tintColor={themeColors.bubbleGlassTint}
+            tintColor={props.message.queued === true ? undefined : themeColors.bubbleGlassTint}
             colorScheme={scheme}
           />
         ) : null}
-        {Array.from(props.message.parts.values()).map((part) => {
-          switch (part.type) {
+        {props.message.parts.map((part) => {
+          switch (part.kind) {
             case "text":
               return <Markdown key={part.id} text={part.text} />;
             case "reasoning":
               return <ReasoningBlock key={part.id} part={part} />;
-            default:
+            case "tool":
               return <ToolCallBubble key={part.id} part={part} />;
           }
         })}

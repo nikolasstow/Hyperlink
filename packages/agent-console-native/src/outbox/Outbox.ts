@@ -186,16 +186,20 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  /** Where the lane's session runs, making its new folder first if it has
-   * one (and recording the folder's path on the lane). */
-  const directoryOf = (key: LaneKey, lane: Lane): Effect.Effect<AbsolutePath, Transient | Refused> => {
+  /** Where the lane's session runs, recorded on the lane once known: given
+   * when queued; for a session in a new folder, the folder's path once made;
+   * for an existing session queued before its folder was known, the
+   * server's. */
+  const directoryOf = (key: LaneKey, lane: Lane, client: OpencodeClient): Effect.Effect<AbsolutePath, Transient | Refused> => {
     if (lane.directory !== undefined) return Effect.succeed(lane.directory);
     const folder = lane.create?.folder;
-    if (folder === undefined) return Effect.fail(new Refused({ reason: "The session has no folder to run in." }));
-    return makeFolder(lane.server, folder).pipe(
-      Effect.map((path) => AbsolutePath.make(path)),
-      Effect.tap((directory) => updateLane(key, (current) => Lane.make({ ...current, directory }))),
-    );
+    const found =
+      folder !== undefined
+        ? makeFolder(lane.server, folder).pipe(Effect.map((path) => AbsolutePath.make(path)))
+        : lane.create === undefined
+          ? step(lane.server, client["server.session"]["session.get"]({ params: { sessionID: lane.sessionID } })).pipe(Effect.map((session) => session.data.location.directory))
+          : Effect.fail(new Refused({ reason: "The new session has no folder to run in." }));
+    return found.pipe(Effect.tap((directory) => updateLane(key, (current) => Lane.make({ ...current, directory }))));
   };
 
   const sendV2 = (client: OpencodeClient, lane: Lane, message: QueuedMessage) =>
@@ -246,7 +250,7 @@ const make = Effect.gen(function* () {
       const lane = found.value;
       yield* reachability.awaitReachable(lane.server);
       const client = yield* opencode.client(lane.server);
-      const directory = yield* directoryOf(key, lane);
+      const directory = yield* directoryOf(key, lane, client);
       if (lane.create !== undefined) {
         yield* makeSession(client, lane, directory, message);
         yield* updateLane(key, (current) => Lane.make({ ...current, create: undefined }));

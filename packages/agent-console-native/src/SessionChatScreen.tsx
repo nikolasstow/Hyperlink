@@ -21,6 +21,20 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
+import { chatMessageOfV1 } from "./chat/fromV1";
+import { chatMessageOfQueued } from "./chat/fromOutbox";
+import { answering, answerStartedAt, type ChatMessage } from "./chat/model";
+import { useV2Transcript } from "./chat/useV2Transcript";
+import { runApp } from "./effect/runtime";
+import { serverAddressOf } from "./opencode/serverAddress";
+import { Agent } from "./opencode/schema/agent";
+import { Model } from "./opencode/schema/model";
+import { Provider } from "./opencode/schema/provider";
+import { AbsolutePath } from "./opencode/schema/schema";
+import { SessionID } from "./opencode/schema/session-id";
+import type { Protocol } from "./outbox/model";
+import { sendMessage, useLane } from "./outbox/useOutbox";
+import { interruptSession, sessionProtocol } from "./sessions/protocol";
 import { AGENT } from "./client";
 import { promptRenameSession } from "./sessionActions";
 import { BusyRow } from "./BusyRow";
@@ -36,7 +50,6 @@ import { markSessionRead } from "./sessionReads";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
 import { Composer } from "./Composer";
-import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { FILE_CHIPS_HEIGHT, FileChips } from "./FileChips";
 import { sessionFiles, type SessionFile } from "./sessionFiles";
@@ -45,7 +58,7 @@ import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
-import { runStartedAt, useSessionStream } from "./useSessionStream";
+import { useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 import { type TextColors, useThemedStyles } from "./theme";
 
@@ -91,8 +104,50 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       void markSessionRead(sessionID, Date.now());
     };
   }, [streamEnabled, sessionID]);
-  const { transcript, pendingPermission, replyPermission, markBusy, clearBusy, sendOptimistic, connected, refresh } =
-    useSessionStream(client, sessionID, address, streamEnabled);
+  // The live connection: a v1 session's conversation, and permission asks
+  // (both APIs' asks come over it, so it runs for a v2 session too).
+  const { transcript, pendingPermission, replyPermission, clearBusy, connected, refresh } = useSessionStream(client, sessionID, address, streamEnabled);
+
+  // Which API the session is spoken to over (sessions/protocol.ts): known
+  // when the app just made it, found out otherwise.
+  const server = React.useMemo(() => serverAddressOf(address), [address]);
+  const session = React.useMemo(() => SessionID.make(sessionID), [sessionID]);
+  const [protocol, setProtocol] = React.useState<Protocol | undefined>(props.route.params.protocol);
+  React.useEffect(() => {
+    if (protocol !== undefined) return undefined;
+    let cancelled = false;
+    void runApp(sessionProtocol(server, session)).then((found) => {
+      if (!cancelled) setProtocol(found);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [server, session, protocol]);
+
+  // The conversation (what the server has), then what is still in the
+  // outbox: untinted, until the server has it too (same id) and the
+  // conversation shows it.
+  const v2Messages = useV2Transcript(server, session, protocol === "v2" && streamEnabled);
+  const delivered = React.useMemo(
+    (): ReadonlyArray<ChatMessage> =>
+      protocol === "v2"
+        ? v2Messages
+        : transcript.order.flatMap((id) => {
+            const message = transcript.messages.get(id);
+            return message === undefined ? [] : [chatMessageOfV1(message)];
+          }),
+    [protocol, v2Messages, transcript],
+  );
+  const lane = useLane(server, session);
+  const messages = React.useMemo((): ReadonlyArray<ChatMessage> => {
+    const known = new Set(delivered.map((message) => message.id));
+    const waiting = (lane?.messages ?? []).filter((message) => !known.has(message.id)).map(chatMessageOfQueued);
+    return waiting.length === 0 ? delivered : [...delivered, ...waiting];
+  }, [delivered, lane]);
+  const byID = React.useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
+  // Busy: v2 from the conversation (the answer still being written); v1 from
+  // the live connection's run status.
+  const busy = protocol === "v2" ? answering(delivered) : transcript.busy;
 
   // The files the agent has been touching, as chips over the bar. Relative
   // paths resolve against the session's folder.
@@ -113,12 +168,12 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // reconnects (briefly empty) never empties the row.
   const seenFiles = React.useRef<ReadonlyArray<SessionFile>>([]);
   const touched = React.useMemo(() => {
-    const current = sessionFiles(transcript, directory);
+    const current = sessionFiles(messages, directory);
     const known = new Set(current.map((file) => file.path));
     const merged = [...current, ...seenFiles.current.filter((file) => !known.has(file.path))];
     seenFiles.current = merged;
     return merged;
-  }, [transcript, directory]);
+  }, [messages, directory]);
   // Chips selected for the next message, in the order chosen: they lead the
   // row, tinted, and go with the message as file references.
   const [selected, setSelected] = React.useState<ReadonlyArray<string>>([]);
@@ -150,7 +205,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // reliably, so this still explicitly re-pins to `offset: 0` (an
   // inverted list's "start", i.e. its bottom) whenever a message is
   // appended — the same role the old `scrollToEnd` played pre-inversion.
-  const reversedOrder = React.useMemo(() => [...transcript.order].reverse(), [transcript.order]);
+  const reversedOrder = React.useMemo(() => messages.map((message) => message.id).reverse(), [messages]);
   const listRef = React.useRef<FlatList<string>>(null);
   // The one collapsible allowed to be open by default: the most recent
   // reasoning block or tool call anywhere in the transcript. Scanned newest
@@ -164,17 +219,12 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   );
 
   const newestCollapsibleID = React.useMemo(() => {
-    for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
-      const message = transcript.messages.get(transcript.order[i]);
-      if (message === undefined) continue;
-      const parts = Array.from(message.parts.values());
-      for (let j = parts.length - 1; j >= 0; j -= 1) {
-        const part = parts[j];
-        if (part.type === "reasoning" || part.type === "tool") return part.id;
-      }
+    for (const message of [...messages].reverse()) {
+      const part = message.parts.findLast((candidate) => candidate.kind === "reasoning" || candidate.kind === "tool");
+      if (part !== undefined) return part.id;
     }
     return undefined;
-  }, [transcript]);
+  }, [messages]);
   // The composer floats over the list (see its absolute wrapper below) so
   // the glass actually has content passing behind it, which means the list
   // reserves that space itself: the bar's height, a constant
@@ -192,7 +242,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // vanish when the app was foregrounded and re-backgrounded mid-stream.
   const wasBusy = React.useRef(false);
   React.useEffect(() => {
-    if (transcript.busy && !wasBusy.current) {
+    if (busy && !wasBusy.current) {
       // Repo/worktree are not tracked on this screen yet, so the activity
       // carries the session title alone rather than inventing a location.
       // `startLiveActivity` is a no-op if one is already running for the
@@ -205,11 +255,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         action: "Working…",
       });
     }
-    if (wasBusy.current && !transcript.busy) {
+    if (wasBusy.current && !busy) {
       Vibration.vibrate();
     }
-    wasBusy.current = transcript.busy;
-  }, [transcript.busy, sessionID, title]);
+    wasBusy.current = busy;
+  }, [busy, sessionID, title]);
 
   // The activity's live content (the streamed thoughts / messages / tool labels)
   // is driven entirely by the SERVER, which watches opencode and pushes quality,
@@ -315,41 +365,26 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // will correct it either way.
   const onStop = async (): Promise<void> => {
     try {
-      await client.session.abort({ path: { id: sessionID } });
+      if (protocol === "v2") await runApp(interruptSession(server, session));
+      else await client.session.abort({ path: { id: sessionID } });
     } finally {
       clearBusy();
     }
   };
 
+  // Into the outbox: sent from there, in order, when the server can take it
+  // (sessions/../outbox). The bubble shows at once, untinted until it lands.
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
-    // The chips selected go with this message; the selection clears.
+    if (protocol === undefined) return;
+    // The chips selected go with this message, as file references; the
+    // selection clears.
     const attached = files.filter((file) => selectedSet.has(file.path));
-    // The text, and each selected file as a file reference.
-    const parts: Array<TextPartInput | FilePartInput> = [
-      {
-        type: "text",
-        text,
-      },
-      ...attached.map(
-        (file): FilePartInput => ({
-          type: "file",
-          mime: "text/plain",
-          url: `file://${file.path}`,
-          filename: file.name,
-        }),
-      ),
-    ];
     setSelected([]);
     setOrderVersion((version) => version + 1);
-    sendOptimistic(text);
-    markBusy();
     // Start the Live Activity synchronously at the tap, while the app is
-    // definitely foreground. ActivityKit refuses to START an activity from the
-    // background, so deferring to the reactive busy effect (which runs a render
-    // tick later) loses the race when you send and immediately background to
-    // watch it — the start would only land when you reopened. The effect still
-    // covers opening a session mid-run; startLiveActivity no-ops if one is
-    // already live for this session.
+    // definitely foreground: ActivityKit refuses to START one from the
+    // background, so waiting for the run to begin loses the race when you send
+    // and immediately switch away. A no-op if one is already live.
     void startLiveActivity({
       sessionID,
       repo: "",
@@ -357,44 +392,23 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       title: title ?? "Session",
       action: "Working…",
     });
-    try {
-      // `prompt` (not `promptAsync`) resolves when the whole run — every turn and
-      // tool call — is done, so its completion drives `busy` deterministically.
-      // The live transcript still streams in over the event bus meanwhile; this
-      // just owns the busy lifecycle, immune to the event stream's constant
-      // reconnects and event replays. `markBusy` set the run-in-flight guard, so
-      // a replayed `session.idle` can't clear busy early.
-      await client.session.prompt({
-        path: { id: sessionID },
-        body: {
-          agent: AGENT,
-          parts,
-          model:
-            model === undefined
-              ? undefined
-              : { providerID: model.providerID, modelID: model.modelID },
-        },
-      });
-    } finally {
-      clearBusy();
-    }
+    await sendMessage({
+      server,
+      sessionID: session,
+      protocol,
+      directory: directory === undefined ? undefined : AbsolutePath.make(directory),
+      text,
+      files: attached.map((file) => ({ path: file.path, name: file.name })),
+      model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
+      agent: Agent.ID.make(AGENT),
+    });
   };
 
+  // The model the conversation was last answered with, for the composer.
   const seedModel = React.useMemo((): ModelOption | undefined => {
-    for (let i = transcript.order.length - 1; i >= 0; i -= 1) {
-      const message = transcript.messages.get(transcript.order[i]!);
-      if (message?.role !== "assistant" || message.providerID === undefined || message.modelID === undefined) {
-        continue;
-      }
-      return {
-        providerID: message.providerID,
-        providerName: message.providerID,
-        modelID: message.modelID,
-        name: message.modelID,
-      };
-    }
-    return undefined;
-  }, [transcript]);
+    const model = messages.findLast((message) => message.role === "assistant" && message.model !== undefined)?.model;
+    return model === undefined ? undefined : { providerID: model.providerID, providerName: model.providerID, modelID: model.modelID, name: model.modelID };
+  }, [messages]);
 
   const [resolvedSeed, setResolvedSeed] = React.useState<ModelOption | undefined>(undefined);
   React.useEffect(() => {
@@ -450,14 +464,14 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               />
             );
           }
-          const message = transcript.messages.get(item);
+          const message = byID.get(item);
           return message === undefined ? null : <MessageBubble message={message} />;
         }}
         ListEmptyComponent={<Text style={styles.empty}>Ask a question, or ask it to make a change.</Text>}
         // Below the newest message, not above the oldest — the header, not
         // the footer, is what renders nearest the (inverted) start of the
         // list, which an inverted list pins to the bottom of the screen.
-        ListHeaderComponent={transcript.busy ? <BusyRow onStop={onStop} startedAt={runStartedAt(transcript)} /> : null}
+        ListHeaderComponent={busy ? <BusyRow onStop={onStop} startedAt={answerStartedAt(messages)} /> : null}
         // `inverted` flips the whole content area as a unit, so these are
         // swapped from how they read: `paddingBottom` — normally "space
         // after the last item" — renders as reserved space at the screen's
@@ -474,7 +488,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         ]}
       />
       </ScrollViewMarker>
-      <EdgeBlurBars bottomInset={keyboardHeight} busy={transcript.busy} />
+      <EdgeBlurBars bottomInset={keyboardHeight} busy={busy} />
       {/* While the keyboard is up, one tap outside the composer only collapses
        * it (consumed here) instead of hitting a message/row behind it. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} />
@@ -490,7 +504,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       <Animated.View style={[styles.composerFloat, composerSlide]} pointerEvents="box-none">
         <Composer
           onSend={onSend}
-          disabled={transcript.busy}
+          // v2: send any time (the server holds a message until the agent is
+          // free). v1 would hand it to the running turn, so it waits for idle.
+          disabled={protocol === undefined || (protocol === "v1" && transcript.busy)}
           directory={directory}
           bottomInset={0}
           placeholder="Message"

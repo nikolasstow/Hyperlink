@@ -1,11 +1,13 @@
 /**
  * The files an agent has been touching in a session: the files its tools read
- * or changed, newest first, each once. From the transcript's tool calls: a
- * tool naming a file does so as `filePath` (read, edit, write); tools taking a
- * folder (list, glob, grep) name it as `path`, and are left out.
+ * or changed, newest first, each once. From the chat's tool calls (either
+ * protocol, chat/model.ts): a tool naming a file does so as `filePath` (read,
+ * edit, write); tools taking a folder (list, glob, grep) name it as `path`,
+ * and are left out.
  *
  * @internal
  */
+import type { ChatMessage } from "./chat/model";
 
 /** A file the agent touched. */
 export interface SessionFile {
@@ -33,31 +35,16 @@ const fileOf = (input: unknown): string | undefined => {
 const absolute = (path: string, directory: string | undefined): string =>
   path.startsWith("/") || path.startsWith("~") || directory === undefined ? path : `${directory.replace(/\/+$/, "")}/${path}`;
 
-/** The part of a transcript read here: its messages' parts, and their order
- * (a Transcript is one). */
-export interface PartsSource {
-  readonly order: ReadonlyArray<string>;
-  readonly messages: ReadonlyMap<
-    string,
-    {
-      readonly parts: ReadonlyMap<string, { readonly type: string; readonly tool?: string; readonly state?: { readonly input?: unknown } }>;
-    }
-  >;
-}
-
 /** The session's files, newest first, each once (edited if any tool changed it). */
-export const sessionFiles = (transcript: PartsSource, directory: string | undefined): ReadonlyArray<SessionFile> => {
+export const sessionFiles = (messages: ReadonlyArray<ChatMessage>, directory: string | undefined): ReadonlyArray<SessionFile> => {
   const seen = new Map<string, SessionFile>();
-  const order = [...transcript.order].reverse();
-  for (const id of order) {
-    const message = transcript.messages.get(id);
-    if (message === undefined) continue;
-    for (const part of [...message.parts.values()].reverse()) {
-      if (part.type !== "tool" || part.tool === undefined) continue;
-      const file = fileOf(part.state?.input);
+  for (const message of [...messages].reverse()) {
+    for (const part of [...message.parts].reverse()) {
+      if (part.kind !== "tool") continue;
+      const file = fileOf(part.input);
       if (file === undefined) continue;
       const path = absolute(file, directory);
-      const edited = EDITING_TOOLS.has(part.tool);
+      const edited = EDITING_TOOLS.has(part.name);
       const known = seen.get(path);
       if (known === undefined) {
         seen.set(path, {

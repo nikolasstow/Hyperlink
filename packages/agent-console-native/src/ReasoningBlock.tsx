@@ -1,10 +1,6 @@
 /**
  * The agent's reasoning, inline in the transcript.
  *
- * `ReasoningPart` has been arriving over the stream all along — it was
- * `isRenderablePart` that dropped it, so this is surfacing existing data
- * rather than fetching anything new.
- *
  * Open/closed is not decided here: `useCollapsible` gives the transcript a
  * single auto-expanded item, the newest one, so a finished chain of thought
  * folds away when the next tool call or reasoning block starts. A tap pins it.
@@ -16,10 +12,10 @@
  * @internal
  */
 import * as React from "react";
-import type { ReasoningPart } from "@opencode-ai/sdk";
 import { GlassView } from "expo-glass-effect";
 import { StyleSheet, Text, TouchableOpacity, useColorScheme } from "react-native";
 import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import type { ChatReasoning } from "./chat/model";
 import { colors } from "./colors";
 import { useCollapsible } from "./CollapsibleParts";
 import { SystemIcon } from "./SystemIcon";
@@ -32,13 +28,13 @@ const COLLAPSE_MS = 180;
 const EXIT_MS = 120;
 
 /** Seconds, rounded — sub-second precision is noise at this size. */
-const durationLabel = (time: ReasoningPart["time"]): string | undefined => {
-  if (time.end === undefined) return undefined;
+const durationLabel = (time: ChatReasoning["time"]): string | undefined => {
+  if (time?.end === undefined) return undefined;
   const seconds = Math.max(0, Math.round((time.end - time.start) / 1000));
   return seconds < 1 ? "Thought for a moment" : `Thought for ${seconds}s`;
 };
 
-export const ReasoningBlock = (props: { readonly part: ReasoningPart }): React.ReactElement | null => {
+export const ReasoningBlock = (props: { readonly part: ChatReasoning }): React.ReactElement | null => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { part } = props;

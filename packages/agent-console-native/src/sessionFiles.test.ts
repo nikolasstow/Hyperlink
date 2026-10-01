@@ -1,23 +1,23 @@
 import { describe, expect, it } from "vitest";
+import type { ChatMessage, ChatTool } from "./chat/model";
 import { sessionFiles } from "./sessionFiles";
-import type { PartsSource } from "./sessionFiles";
 
-const toolPart = (id: string, tool: string, input: Record<string, unknown>) => ({
+const toolPart = (id: string, name: string, input: Record<string, unknown>): ChatTool => ({
+  kind: "tool",
   id,
-  type: "tool",
-  tool,
-  state: { status: "completed", input, output: "", title: "", metadata: {}, time: { start: 0, end: 0 } },
+  name,
+  status: "completed",
+  input,
+  output: "",
 });
 
-const message = (id: string, parts: ReadonlyArray<ReturnType<typeof toolPart>>) => ({
+const message = (id: string, parts: ReadonlyArray<ChatTool>): ChatMessage => ({
   id,
-  parts: new Map(parts.map((p) => [p.id, p])),
+  role: "assistant",
+  parts,
 });
 
-const transcript = (messages: ReadonlyArray<ReturnType<typeof message>>): PartsSource => ({
-  messages: new Map(messages.map((m) => [m.id, m])),
-  order: messages.map((m) => m.id),
-});
+const transcript = (messages: ReadonlyArray<ChatMessage>): ReadonlyArray<ChatMessage> => messages;
 
 describe("sessionFiles", () => {
   const t = transcript([
