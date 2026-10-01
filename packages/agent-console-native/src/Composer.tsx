@@ -352,8 +352,6 @@ export const Composer = (props: {
                 placeholder={props.placeholder}
                 placeholderTextColor={textColors.placeholderText}
                 multiline
-                submitBehavior="blurAndSubmit"
-                onSubmitEditing={() => void send()}
                 onFocus={onFocus}
                 onBlur={onBlur}
               />
