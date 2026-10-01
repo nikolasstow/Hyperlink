@@ -19,7 +19,7 @@
  */
 import * as React from "react";
 import { GlassView } from "expo-glass-effect";
-import { Clipboard, Share, StyleSheet, useColorScheme, View } from "react-native";
+import { Clipboard, Share, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
 import { ContextMenuView, type MenuAction } from "../modules/context-menu";
 import { ROW_GUTTER } from "./layout";
 import { Markdown } from "./Markdown";
@@ -36,6 +36,10 @@ const MENU: ReadonlyArray<MenuAction> = [
 /** The lifted bubble's corners: yours, its glass's; the agent's prose, soft. */
 const USER_RADIUS = 18;
 const ASSISTANT_RADIUS = 12;
+/** Your bubble's widest, of the row inside its gutters. */
+const USER_MAX_SHARE = 0.88;
+const USER_PADDING_HORIZONTAL = 14;
+const USER_PADDING_VERTICAL = 10;
 
 const MessageBubbleImpl = (props: {
   readonly message: ChatMessage;
@@ -50,6 +54,11 @@ const MessageBubbleImpl = (props: {
   };
   const { colors: themeColors } = useTheme();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  // The width the text lays out in: the row inside its gutters (the agent's),
+  // or your bubble's widest inside its padding.
+  const { width: windowWidth } = useWindowDimensions();
+  const rowWidth = windowWidth - ROW_GUTTER * 2;
+  const textWidth = isUser ? Math.floor(rowWidth * USER_MAX_SHARE) - USER_PADDING_HORIZONTAL * 2 : rowWidth;
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
       <ContextMenuView
@@ -73,7 +82,7 @@ const MessageBubbleImpl = (props: {
         {props.message.parts.map((part) => {
           switch (part.kind) {
             case "text":
-              return <Markdown key={part.id} text={part.text} />;
+              return <Markdown key={part.id} text={part.text} width={textWidth} />;
             case "reasoning":
               return <ReasoningBlock key={part.id} part={part} />;
             case "tool":
@@ -107,9 +116,9 @@ const styles = StyleSheet.create({
   bubbleUser: {
     // Still inset — a sent message reads as a bubble, and the asymmetry is
     // what distinguishes the two sides now that replies run edge to edge.
-    maxWidth: "88%",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    maxWidth: `${USER_MAX_SHARE * 100}%`,
+    paddingHorizontal: USER_PADDING_HORIZONTAL,
+    paddingVertical: USER_PADDING_VERTICAL,
   },
   bubbleGlass: {
     borderRadius: USER_RADIUS,

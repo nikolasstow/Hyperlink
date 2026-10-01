@@ -13,7 +13,6 @@ import {
   StyleSheet,
   Text,
   useColorScheme,
-  useWindowDimensions,
   View,
   type ColorValue,
   type TextStyle,
@@ -28,6 +27,9 @@ import RenderHTML from "react-native-render-html";
 import { colors } from "./colors";
 import { useTextColors, type TextColors } from "./theme";
 
+/** The space between a message's blocks (paragraphs, lists, code). */
+const BLOCK_GAP = 8;
+
 const HTML_TAG_RE = /<\/?[a-z][\s\S]*>/i;
 
 function isMostlyHtml(value: string): boolean {
@@ -36,7 +38,11 @@ function isMostlyHtml(value: string): boolean {
   return HTML_TAG_RE.test(trimmed);
 }
 
-/** The markdown styles, their text in the colours for the background. */
+/** The markdown styles, their text in the colours for the background.
+ * Blocks carry no vertical margin or padding of their own (the library's
+ * defaults pad every paragraph 8 above and below): the root spaces them by
+ * BLOCK_GAP, so a message is exactly as tall as its text, with nothing extra
+ * after its last paragraph. */
 const makeMarkdownStyles = (text: TextColors): MarkedStyles => ({
   text: {
     color: text.label,
@@ -44,8 +50,8 @@ const makeMarkdownStyles = (text: TextColors): MarkedStyles => ({
     lineHeight: 22,
   },
   paragraph: {
-    marginTop: 0,
-    marginBottom: 8,
+    paddingVertical: 0,
+    marginVertical: 0,
   },
   strong: {
     color: text.label,
@@ -62,40 +68,37 @@ const makeMarkdownStyles = (text: TextColors): MarkedStyles => ({
     color: text.label,
     fontSize: 22,
     fontWeight: "700",
-    marginBottom: 8,
-    marginTop: 4,
+    marginVertical: 0,
   },
   h2: {
     color: text.label,
     fontSize: 20,
     fontWeight: "700",
-    marginBottom: 6,
-    marginTop: 4,
+    marginVertical: 0,
   },
   h3: {
     color: text.label,
     fontSize: 18,
     fontWeight: "600",
-    marginBottom: 4,
-    marginTop: 2,
+    marginVertical: 0,
   },
   h4: {
     color: text.label,
     fontSize: 16,
     fontWeight: "600",
-    marginBottom: 4,
+    marginVertical: 0,
   },
   h5: {
     color: text.label,
     fontSize: 15,
     fontWeight: "600",
-    marginBottom: 2,
+    marginVertical: 0,
   },
   h6: {
     color: text.secondaryLabel,
     fontSize: 14,
     fontWeight: "600",
-    marginBottom: 2,
+    marginVertical: 0,
   },
   codespan: {
     color: text.label,
@@ -107,16 +110,16 @@ const makeMarkdownStyles = (text: TextColors): MarkedStyles => ({
     backgroundColor: colors.fillBackground,
     borderRadius: 8,
     padding: 10,
-    marginBottom: 8,
+    marginVertical: 0,
   },
   blockquote: {
     borderLeftWidth: 3,
     borderLeftColor: colors.separator,
     paddingLeft: 10,
-    marginBottom: 8,
+    marginVertical: 0,
   },
   list: {
-    marginBottom: 8,
+    marginVertical: 0,
   },
   li: {
     color: text.label,
@@ -126,11 +129,11 @@ const makeMarkdownStyles = (text: TextColors): MarkedStyles => ({
   hr: {
     backgroundColor: colors.separator,
     height: StyleSheet.hairlineWidth,
-    marginVertical: 12,
+    marginVertical: 4,
   },
   table: {
     borderColor: colors.separator,
-    marginBottom: 8,
+    marginVertical: 0,
   },
   tableRow: {
     borderColor: colors.separator,
@@ -190,10 +193,13 @@ class HtmlAwareRenderer extends Renderer implements RendererInterface {
   }
 }
 
-export const Markdown = (props: { readonly text: string }): React.ReactElement => {
+export const Markdown = (props: {
+  readonly text: string;
+  /** The width the text lays out in (its bubble's inside), for HTML. */
+  readonly width: number;
+}): React.ReactElement | null => {
   const colorScheme = useColorScheme();
-  const { width: windowWidth } = useWindowDimensions();
-  const contentWidth = Math.max(120, Math.min(windowWidth - 80, 560));
+  const contentWidth = props.width;
   // Text in the colours for the background (light on a darkish one).
   const textColors = useTextColors();
   const markdownStyles = React.useMemo(() => makeMarkdownStyles(textColors), [textColors]);
@@ -209,9 +215,7 @@ export const Markdown = (props: { readonly text: string }): React.ReactElement =
     renderer,
   });
 
-  if (!props.text.trim()) {
-    return <View style={styles.root} />;
-  }
+  if (!props.text.trim()) return null;
 
   if (isMostlyHtml(props.text)) {
     return (
@@ -242,5 +246,6 @@ export const Markdown = (props: { readonly text: string }): React.ReactElement =
 const styles = StyleSheet.create({
   root: {
     flexShrink: 1,
+    gap: BLOCK_GAP,
   },
 });

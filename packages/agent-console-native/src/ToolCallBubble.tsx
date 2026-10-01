@@ -15,8 +15,7 @@
  */
 import * as React from "react";
 import { GlassView } from "expo-glass-effect";
-import { StyleSheet, Text, TouchableOpacity, useColorScheme } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native";
 import type { ChatTool } from "./chat/model";
 import { colors } from "./colors";
 import { asHtmlPayload, HtmlToolBlock } from "./HtmlToolBlock";
@@ -25,9 +24,6 @@ import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 const EDIT_FAMILY = new Set(["edit", "write", "patch"]);
-/** Same timings as ReasoningBlock, so the two read as one system. */
-const COLLAPSE_MS = 180;
-const EXIT_MS = 120;
 
 const filePathOf = (input: Readonly<Record<string, unknown>>): string | undefined => {
   for (const key of ["filePath", "file_path", "path"]) {
@@ -75,7 +71,7 @@ export const ToolCallBubble = (props: { readonly part: ChatTool }): React.ReactE
   })();
 
   return (
-    <Animated.View style={styles.root} layout={LinearTransition.duration(COLLAPSE_MS)}>
+    <View style={styles.root}>
       {/* A glass card, rounded on itself behind the content; nothing clips
        * it. */}
       <GlassView style={[StyleSheet.absoluteFill, styles.glass]} glassEffectStyle="regular" colorScheme={scheme} />
@@ -89,12 +85,8 @@ export const ToolCallBubble = (props: { readonly part: ChatTool }): React.ReactE
         {part.status === "completed" && !isEditFamily ? <Text style={styles.meta}>{lineCount} lines</Text> : null}
         <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={textColors.secondaryLabel} />
       </TouchableOpacity>
-      {open ? (
-        <Animated.View entering={FadeIn.duration(COLLAPSE_MS)} exiting={FadeOut.duration(EXIT_MS)}>
-          {body}
-        </Animated.View>
-      ) : null}
-    </Animated.View>
+      {open ? body : null}
+    </View>
   );
 };
 

@@ -13,19 +13,12 @@
  */
 import * as React from "react";
 import { GlassView } from "expo-glass-effect";
-import { StyleSheet, Text, TouchableOpacity, useColorScheme } from "react-native";
-import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from "react-native";
 import type { ChatReasoning } from "./chat/model";
 import { colors } from "./colors";
 import { useCollapsible } from "./CollapsibleParts";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
-
-/** Matches the composer's expand timing — fast enough not to feel like
- * waiting, slow enough to read as motion. */
-const COLLAPSE_MS = 180;
-/** Shorter on the way out: a panel that lingers while closing feels stuck. */
-const EXIT_MS = 120;
 
 /** Seconds, rounded — sub-second precision is noise at this size. */
 const durationLabel = (time: ChatReasoning["time"]): string | undefined => {
@@ -48,7 +41,7 @@ export const ReasoningBlock = (props: { readonly part: ChatReasoning }): React.R
   const label = durationLabel(part.time) ?? "Thinking…";
 
   return (
-    <Animated.View style={styles.root} layout={LinearTransition.duration(COLLAPSE_MS)}>
+    <View style={styles.root}>
       {/* A glass card, as the tool calls are: rounded on itself behind the
        * content; nothing clips it. */}
       <GlassView style={[StyleSheet.absoluteFill, styles.glass]} glassEffectStyle="regular" colorScheme={scheme} />
@@ -58,17 +51,13 @@ export const ReasoningBlock = (props: { readonly part: ChatReasoning }): React.R
         <SystemIcon name={open ? "chevron.up" : "chevron.down"} size={12} color={textColors.secondaryLabel} />
       </TouchableOpacity>
       {open ? (
-        <Animated.View
-          style={styles.body}
-          entering={FadeIn.duration(COLLAPSE_MS)}
-          exiting={FadeOut.duration(EXIT_MS)}
-        >
+        <View style={styles.body}>
           <Text style={styles.text} selectable>
             {part.text}
           </Text>
-        </Animated.View>
+        </View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 };
 
