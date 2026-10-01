@@ -26,7 +26,7 @@ import { Clipboard, Share, StyleSheet, useColorScheme, useWindowDimensions, View
 import Reanimated from "react-native-reanimated";
 import { ContextMenuView, type MenuAction } from "../modules/context-menu";
 import { ROW_GUTTER } from "./layout";
-import { type Arrival, BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, glassArrival, textArrival } from "./messageArrival";
+import { ARRIVAL_MS, type Arrival, BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, glassArrival, textArrival } from "./messageArrival";
 import { Markdown } from "./Markdown";
 import { ReasoningBlock } from "./ReasoningBlock";
 import { useTheme } from "./theme";
@@ -77,6 +77,14 @@ const MessageBubbleImpl = (props: {
   React.useLayoutEffect(() => {
     arrival?.onMounted();
   }, [arrival]);
+  // Landed (or never flying): the glass shows whether it is sent yet.
+  const [landed, setLanded] = React.useState(arrival === undefined);
+  React.useEffect(() => {
+    if (landed) return;
+    const timer = setTimeout(() => setLanded(true), ARRIVAL_MS);
+    return () => clearTimeout(timer);
+  }, [landed]);
+  const sent = landed && props.message.queued !== true;
   const parts = props.message.parts.map((part) => {
     switch (part.kind) {
       case "text":
@@ -101,12 +109,15 @@ const MessageBubbleImpl = (props: {
          * (not on the server yet), it is untinted. */}
         {isUser ? (
           <>
+            {/* A new glass once sent: GlassView does not redraw a tint changed
+              * in place. Not before it lands, which would cut its flight. */}
             <AnimatedGlassView
+              key={sent ? "sent" : "queued"}
               style={[StyleSheet.absoluteFill, styles.bubbleGlass]}
               glassEffectStyle="regular"
-              tintColor={props.message.queued === true ? undefined : themeColors.bubbleGlassTint}
+              tintColor={sent ? themeColors.bubbleGlassTint : undefined}
               colorScheme={scheme}
-              entering={entering?.glass}
+              entering={sent ? undefined : entering?.glass}
             />
             <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View>
           </>
