@@ -15,7 +15,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
-import { ActionSheetIOS, Alert, FlatList, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,7 +33,7 @@ import { Provider } from "./opencode/schema/provider";
 import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import type { Protocol } from "./outbox/model";
-import { sendMessage, useLane } from "./outbox/useOutbox";
+import { removeQueued, retryLane, sendMessage, useLane } from "./outbox/useOutbox";
 import { interruptSession, sessionProtocol } from "./sessions/protocol";
 import { AGENT } from "./client";
 import { promptRenameSession } from "./sessionActions";
@@ -372,6 +372,29 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     }
   };
 
+  // A queued message: send its lane again from the first message (frees a
+  // refused one to go, after whatever stopped it is fixed), or take it out.
+  const onQueuedPress = React.useCallback(
+    (messageID: string) => {
+      const queued = lane?.messages.find((message) => message.id === messageID);
+      if (queued === undefined) return;
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: lane?.held?.messageID === queued.id ? `Not sent: ${lane.held.reason}` : "Waiting to send",
+          options: ["Send again", "Delete", "Cancel"],
+          destructiveButtonIndex: 1,
+          cancelButtonIndex: 2,
+        },
+        (index) => {
+          const done =
+            index === 0 ? retryLane(server, session) : index === 1 ? removeQueued(server, session, queued.id) : undefined;
+          done?.catch((error: unknown) => Alert.alert("Couldn’t change the queue", error instanceof Error ? error.message : String(error)));
+        },
+      );
+    },
+    [lane, server, session],
+  );
+
   // Into the outbox: sent from there, in order, when the server can take it
   // (sessions/../outbox). The bubble shows at once, untinted until it lands.
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
@@ -465,7 +488,15 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
             );
           }
           const message = byID.get(item);
-          return message === undefined ? null : <MessageBubble message={message} />;
+          if (message === undefined) return null;
+          if (message.queued !== true) return <MessageBubble message={message} />;
+          // Still in the outbox: a tap offers to send it again now (or, for one
+          // the server refused, after a fix) or take it out.
+          return (
+            <Pressable accessibilityRole="button" accessibilityLabel="Queued message" onPress={() => onQueuedPress(message.id)}>
+              <MessageBubble message={message} />
+            </Pressable>
+          );
         }}
         ListEmptyComponent={<Text style={styles.empty}>Ask a question, or ask it to make a change.</Text>}
         // Below the newest message, not above the oldest — the header, not

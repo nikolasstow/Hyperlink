@@ -65,3 +65,26 @@ no-op when unchanged) immediately before admitting the message.
 4. Chat on v2: transcript from v2 messages + `/api/event`, queued bubbles.
 5. New sessions (Home, Repo) through the outbox, folder creation as a step.
 6. Session list through v2.
+
+## Status (2026-10-01)
+
+Done, on `app/double-agent/ios`:
+
+- `src/opencode`: protocol, schema and message updater vendored from opencode
+  v1.18.33 (`pnpm vendor:opencode` re-syncs); `Opencode` derives a typed v2
+  client per server from the server's own `HttpApi`.
+- `src/outbox`: `Outbox` (lanes, workers, persistence, retry/hold), `Reachability`,
+  `Folders`, background drain task, React bridge. Tested
+  (`Outbox.test.ts`) and verified against the live server.
+- `src/chat`: protocol-neutral view, v1/v2 adapters, live v2 transcript
+  (session events + deltas). Chat sends through the outbox; queued bubbles
+  untinted; tap one to send again or delete.
+- `src/sessions`: session lists from v2 (every project); protocol per session.
+- Home/Repo: new sessions are v2 under a client id, through the outbox; a new
+  workspace folder is made when sent.
+
+Needs: the native build with expo-background-task, expo-task-manager,
+expo-network and expo-crypto (2a1e8c62 or later).
+
+Not yet: v1 sessions still wait for idle to send (v1 would inject a message
+into the running turn); a new session's title shows its id until reopened.
