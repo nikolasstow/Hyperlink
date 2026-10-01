@@ -54,6 +54,8 @@ import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 const INPUT_LINE_HEIGHT = 20;
 const MIN_INPUT_HEIGHT = INPUT_LINE_HEIGHT + 16;
 const MAX_INPUT_HEIGHT = 120;
+/** BottomBar's gap above its controls row while expanded. */
+const CONTROLS_GAP = 8;
 
 // `'keyboard'` is UIKit's own keyboard-curve constant (not `easeInEaseOut`,
 // which runs ~300ms and visibly lags the keyboard's ~250ms). 180ms trades exact
@@ -87,6 +89,10 @@ export const Composer = (props: {
   /** Above the bar, on its page, staying on top of it as it expands (the
    * chat's file chips). */
   readonly accessory?: React.ReactNode;
+  /** How much taller than collapsed (COMPOSER_BAR_HEIGHT) the bar is now, so
+   * a list behind it reserves the space. From the bar's own state (expanded,
+   * the input's height), not a measurement. */
+  readonly onExtraHeight?: (extra: number) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -117,6 +123,17 @@ export const Composer = (props: {
   // iOS multiline TextInput's intrinsic-size reporting doesn't reliably account
   // for its own padding; measure the content height directly instead.
   const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
+  // Ignore `contentHeight` while empty — belt and suspenders with
+  // onContentSizeChange's own guard, so the field always shrinks back after a
+  // send.
+  const inputHeight = text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT);
+  // Expanded, the bar adds the input and the gap above the controls
+  // (BottomBar's controlsRow paddingTop) to its collapsed height.
+  const extraHeight = expanded ? inputHeight + CONTROLS_GAP : 0;
+  const { onExtraHeight } = props;
+  React.useEffect(() => {
+    onExtraHeight?.(extraHeight);
+  }, [onExtraHeight, extraHeight]);
 
   // The model last sent with, once read; picked from the models once they load.
   const [lastModel, setLastModelRead] = React.useState<{ providerID: string; modelID: string } | undefined | null>(null);
@@ -340,10 +357,7 @@ export const Composer = (props: {
                 ref={inputRef}
                 style={[
                   styles.input,
-                  // Ignore `contentHeight` while empty — belt and suspenders with
-                  // onContentSizeChange's own guard, so the field always shrinks back
-                  // after a send.
-                  { height: text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT) },
+                  { height: inputHeight },
                 ]}
                 value={text}
                 onChangeText={setText}

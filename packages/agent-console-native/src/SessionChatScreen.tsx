@@ -188,6 +188,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     return [...chosen, ...touched.filter((file) => !selectedSet.has(file.path))];
   }, [touched, selected, selectedSet]);
   const { width: screenWidth } = useWindowDimensions();
+  // How much taller than collapsed the bar is (expanded: its input), so the
+  // list keeps the newest message clear of it and the file chips.
+  const [composerExtra, setComposerExtra] = React.useState(0);
   // Keyboard up: select it for the message (or unselect). Down: open it.
   const onFile = (file: SessionFile): void => {
     if (keyboardHeight === 0) {
@@ -514,7 +517,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           styles.content,
           {
             paddingBottom: topBarHeight + 16,
-            paddingTop: Math.max(keyboardHeight, composerRestingBottom(insets.bottom)) + COMPOSER_BAR_HEIGHT + (files.length > 0 ? FILE_CHIPS_HEIGHT : 0) + 8,
+            paddingTop: Math.max(keyboardHeight, composerRestingBottom(insets.bottom)) + COMPOSER_BAR_HEIGHT + composerExtra + (files.length > 0 ? FILE_CHIPS_HEIGHT : 0) + 8,
           },
         ]}
       />
@@ -543,6 +546,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           placeholder="Message"
           seedModel={resolvedSeed}
           dubzContext={SESSION_DUBZ}
+          onExtraHeight={setComposerExtra}
           accessory={<FileChips files={files} selected={selectedSet} orderVersion={orderVersion} width={screenWidth} onPress={onFile} />}
         />
       </Animated.View>

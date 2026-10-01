@@ -17,7 +17,7 @@
  * @internal
  */
 import * as React from "react";
-import type { Message, Part } from "@opencode-ai/sdk";
+import type { Message, Part, TextPart } from "@opencode-ai/sdk";
 import type { OpencodeClient } from "./client";
 import { transcriptCache } from "./transcriptCache";
 import { EMPTY, isRenderablePart, withPart, withRole, type Transcript } from "./useSessionStream";
@@ -39,7 +39,9 @@ export const lastMessageSummary = (transcript: Transcript | undefined): { readon
     const message = transcript.messages.get(transcript.order[i]);
     if (message === undefined) continue;
     const text = Array.from(message.parts.values())
-      .filter((part) => part.type === "text")
+      // Not opencode's synthetic text (an attached file's contents): what was
+      // written.
+      .filter((part): part is TextPart => part.type === "text" && part.synthetic !== true)
       .map((part) => part.text)
       .join(" ")
       .trim()

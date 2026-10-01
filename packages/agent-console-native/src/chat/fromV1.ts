@@ -43,7 +43,10 @@ export const chatMessageOfV1 = (message: TranscriptMessage): ChatMessage => {
   const view: ChatMessage = {
     id: message.id,
     role: message.role,
-    parts: Array.from(message.parts.values(), partOf),
+    // Without opencode's synthetic text: what it adds for the agent (an
+    // attached file's contents, the read that fetched them), not what was
+    // written. Its own interface hides them too.
+    parts: Array.from(message.parts.values()).filter((part) => !(part.type === "text" && part.synthetic === true)).map(partOf),
     model: message.providerID !== undefined && message.modelID !== undefined ? { providerID: message.providerID, modelID: message.modelID } : undefined,
     time: message.time,
   };
