@@ -47,6 +47,12 @@ const schemaImportsOf = (path: Path.Path, file: string, source: string, fromProt
     return [`${path.normalize(path.join(path.dirname(file), specifier))}.ts`];
   });
 
+/** React Native's Babel codegen plugin runs on every file and rejects any
+ * export named `Commands` (reserved for native component commands); the one
+ * vendored module that has one keeps its wire identifier (a string) and gets
+ * its binding renamed. */
+const reactNativeSafe = (source: string): string => source.replace(/(?<![.\w"])Commands\b/g, "ProjectCommands");
+
 /** Protocol's `@opencode-ai/schema/x` imports, pointed at the vendored copy
  * (`depth` = how far the module sits below `src/opencode/protocol`). */
 const rewriteSchemaImports = (source: string, depth: number): string =>
@@ -111,7 +117,7 @@ const vendor = Command.make("vendor-opencode", {
           );
           yield* fs.writeFileString(path.join(dir, "VERSION"), `opencode ${ref} (${commit})\n`);
         });
-      yield* write(path.join(root, "schema"), schema, (_, source) => source);
+      yield* write(path.join(root, "schema"), schema, (_, source) => reactNativeSafe(source));
       yield* write(path.join(root, "protocol"), protocol, (file, source) => rewriteSchemaImports(source, file.split("/").length - 1));
       yield* write(path.join(root, "core"), core, (_, source) => source);
       yield* Effect.log(`Vendored ${protocol.size} protocol, ${core.size} core and ${schema.size} schema modules from opencode ${ref} into src/opencode.`);

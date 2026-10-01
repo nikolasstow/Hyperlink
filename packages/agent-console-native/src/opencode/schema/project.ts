@@ -15,12 +15,12 @@ export const Icon = Schema.Struct({
   color: optional(Schema.String),
 }).annotate({ identifier: "Project.Icon" })
 export interface Icon extends Schema.Schema.Type<typeof Icon> {}
-export const Commands = Schema.Struct({
+export const ProjectCommands = Schema.Struct({
   start: optional(
     Schema.String.annotate({ description: "Startup script to run when creating a new workspace (worktree)" }),
   ),
 }).annotate({ identifier: "Project.Commands" })
-export interface Commands extends Schema.Schema.Type<typeof Commands> {}
+export interface ProjectCommands extends Schema.Schema.Type<typeof ProjectCommands> {}
 export const Time = Schema.Struct({
   created: NonNegativeInt,
   updated: NonNegativeInt,
@@ -34,7 +34,7 @@ export const Info = Schema.Struct({
   vcs: optional(Vcs),
   name: optional(Schema.String),
   icon: optional(Icon),
-  commands: optional(Commands),
+  commands: optional(ProjectCommands),
   time: Time,
   sandboxes: Schema.Array(Schema.String),
 }).annotate({ identifier: "Project" })
