@@ -17,6 +17,7 @@
 import * as React from "react";
 import { AppState } from "react-native";
 import { useAppContext } from "./AppContext";
+import { fetchSessions } from "./sessions/fetchSessions";
 import { asPendingPermission, getPermissionMode, replyToPermission, type PendingPermission } from "./sessionPermissions";
 
 /** Wait before reconnecting after the stream drops, growing to this cap. */
@@ -65,8 +66,8 @@ export const PermissionAutoApprover = (): null => {
 
     /** Approve every ask already pending, in every session's directory. */
     const sweep = async (): Promise<void> => {
-      const { data: sessions } = await client.session.list();
-      const directories = new Set((sessions ?? []).map((session) => session.directory));
+      const sessions = await fetchSessions(address);
+      const directories = new Set(sessions.map((session) => session.directory));
       for (const directory of directories) {
         if (cancelled) return;
         for (const pending of await pendingIn(address, directory)) approve(address, pending);

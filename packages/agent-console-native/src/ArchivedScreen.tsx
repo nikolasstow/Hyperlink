@@ -11,7 +11,8 @@
  *
  * @internal
  */
-import type { Session } from "@opencode-ai/sdk";
+import { fetchSessions } from "./sessions/fetchSessions";
+import type { SessionSummary } from "./sessions/sessionList";
 import * as React from "react";
 import Reanimated, { LinearTransition } from "react-native-reanimated";
 import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -41,7 +42,7 @@ type Load =
   | { readonly kind: "loading" }
   | {
       readonly kind: "ready";
-      readonly sessions: ReadonlyArray<Session>;
+      readonly sessions: ReadonlyArray<SessionSummary>;
       readonly archivedAt: Readonly<Record<string, number>>;
       readonly scanned: ReadonlyArray<ScannedRepo>;
     }
@@ -70,12 +71,11 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
   /** The archive and the sessions, fresh from the server. */
   const fetchAll = React.useCallback(async (): Promise<void> => {
     try {
-      const [archivedAt, list, scanned] = await Promise.all([fetchArchive(apiBase), client.session.list(), readWorkspace()]);
-      if (list.error !== undefined || list.data === undefined) throw new Error("the server did not return its sessions");
+      const [archivedAt, list, scanned] = await Promise.all([fetchArchive(apiBase), fetchSessions(address), readWorkspace()]);
       shown.current = true;
       setLoad({
         kind: "ready",
-        sessions: list.data.filter((session) => session.id in archivedAt),
+        sessions: list.filter((session) => session.id in archivedAt),
         archivedAt,
         scanned: scanned ?? [],
       });
@@ -83,13 +83,13 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
       if (shown.current) console.error("[archived] refreshing failed; the list on screen stays", error);
       else setLoad({ kind: "failed", message: messageOf(error) });
     }
-  }, [apiBase, client]);
+  }, [apiBase, address]);
 
   React.useEffect(() => {
     void fetchAll();
   }, [fetchAll]);
 
-  const listed = React.useMemo((): ReadonlyArray<Session> => {
+  const listed = React.useMemo((): ReadonlyArray<SessionSummary> => {
     if (load.kind !== "ready") return [];
     const archived = load.sessions.filter((session) => archivedSet.has(session.id));
     const scoped = repo === undefined ? archived : (groupByRepo(archived, load.scanned).find((group) => group.repo === repo)?.sessions ?? []);

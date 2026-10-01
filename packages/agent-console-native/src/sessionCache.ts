@@ -11,16 +11,16 @@
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { Session } from "@opencode-ai/sdk";
+import type { SessionSummary } from "./sessions/sessionList";
 import { Predicate } from "effect";
 
 const STORAGE_KEY = "agent-console-native:sessions";
 
-let inMemory: ReadonlyArray<Session> | undefined;
+let inMemory: ReadonlyArray<SessionSummary> | undefined;
 
 /** Whether a stored entry has what a session needs to be listed. The rest of
  * the SDK's session is carried as it was stored. */
-const isSession = (value: unknown): value is Session =>
+const isSession = (value: unknown): value is SessionSummary =>
   Predicate.hasProperty(value, "id") &&
   Predicate.isString(value.id) &&
   Predicate.hasProperty(value, "title") &&
@@ -31,7 +31,7 @@ const isSession = (value: unknown): value is Session =>
   Predicate.hasProperty(value.time, "updated") &&
   Predicate.isNumber(value.time.updated);
 
-export const getCachedSessions = async (): Promise<ReadonlyArray<Session> | undefined> => {
+export const getCachedSessions = async (): Promise<ReadonlyArray<SessionSummary> | undefined> => {
   if (inMemory !== undefined) return inMemory;
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -53,7 +53,7 @@ export const getCachedSessions = async (): Promise<ReadonlyArray<Session> | unde
   }
 };
 
-export const setCachedSessions = async (sessions: ReadonlyArray<Session>): Promise<void> => {
+export const setCachedSessions = async (sessions: ReadonlyArray<SessionSummary>): Promise<void> => {
   inMemory = sessions;
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));

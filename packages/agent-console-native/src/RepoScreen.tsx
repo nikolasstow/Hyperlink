@@ -14,7 +14,8 @@
  *
  * @internal
  */
-import type { Session } from "@opencode-ai/sdk";
+import { fetchSessions } from "./sessions/fetchSessions";
+import type { SessionSummary } from "./sessions/sessionList";
 import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
@@ -147,7 +148,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const isFocused = useIsFocused();
   const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
 
-  const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
+  const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [refreshing, setRefreshing] = React.useState(false);
   const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
@@ -167,14 +168,20 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   );
 
   const load = React.useCallback(async (): Promise<void> => {
-    const [list, scan] = await Promise.all([client.session.list(), readWorkspace()]);
-    if (list.error === undefined && list.data !== undefined) {
-      const visible = list.data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
+    const [list, scan] = await Promise.all([
+      fetchSessions(address).catch((cause: unknown) => {
+        console.error("[sessions] loading the sessions failed", cause);
+        return undefined;
+      }),
+      readWorkspace(),
+    ]);
+    if (list !== undefined) {
+      const visible = list.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
       setSessions(visible);
       void setCachedSessions(withoutArchived(visible));
     }
     if (scan !== undefined) setScanned(scan);
-  }, [client]);
+  }, [address]);
 
   React.useEffect(() => {
     void (async () => {
@@ -265,11 +272,11 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
   // Unread = updated since you last opened it AND since app setup (so a fresh
   // install doesn't treat every pre-existing session as unread).
-  const isUnread = (session: Session): boolean =>
+  const isUnread = (session: SessionSummary): boolean =>
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
   const recent = repoSessions.slice(0, perGroup);
   const unread = repoSessions.filter(isUnread).slice(0, perGroup);
-  const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<Session>]> = group ? [...group.worktrees.entries()] : [];
+  const worktreeGroups: ReadonlyArray<readonly [string, ReadonlyArray<SessionSummary>]> = group ? [...group.worktrees.entries()] : [];
   // Group by worktree only when there's more than one; otherwise a flat list.
   const grouped = worktreeGroups.length > 1;
 
@@ -287,7 +294,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
 
   // `keyPrefix` keeps keys unique when a session shows in more than one section
   // (Unread + Recent + its worktree group).
-  const sessionCard = (session: Session, showWorktree: boolean, keyPrefix: string): React.ReactElement => {
+  const sessionCard = (session: SessionSummary, showWorktree: boolean, keyPrefix: string): React.ReactElement => {
     const wt = showWorktree ? displayWorktree(matchSession(session.directory, scanned).worktree) : undefined;
     return (
       <SessionCard

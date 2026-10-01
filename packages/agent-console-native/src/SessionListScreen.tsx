@@ -5,7 +5,8 @@
  *
  * @internal
  */
-import type { Session } from "@opencode-ai/sdk";
+import { fetchSessions } from "./sessions/fetchSessions";
+import type { SessionSummary } from "./sessions/sessionList";
 import * as React from "react";
 import Reanimated, { LinearTransition } from "react-native-reanimated";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
@@ -41,7 +42,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   const isFocused = useIsFocused();
   const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
 
-  const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
+  const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   const [refreshing, setRefreshing] = React.useState(false);
   const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
@@ -56,18 +57,24 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
     }, []),
   );
 
-  const isUnread = (session: Session): boolean =>
+  const isUnread = (session: SessionSummary): boolean =>
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
 
   const load = React.useCallback(async (): Promise<void> => {
-    const [list, scan] = await Promise.all([client.session.list(), readWorkspace()]);
-    if (list.error === undefined && list.data !== undefined) {
-      const visible = list.data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
+    const [list, scan] = await Promise.all([
+      fetchSessions(address).catch((cause: unknown) => {
+        console.error("[sessions] loading the sessions failed", cause);
+        return undefined;
+      }),
+      readWorkspace(),
+    ]);
+    if (list !== undefined) {
+      const visible = list.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
       setSessions(visible);
       void setCachedSessions(withoutArchived(visible));
     }
     if (scan !== undefined) setScanned(scan);
-  }, [client]);
+  }, [address]);
 
   React.useEffect(() => {
     void (async () => {

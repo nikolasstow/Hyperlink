@@ -9,7 +9,8 @@
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import type { Session } from "@opencode-ai/sdk";
+import { fetchSessions } from "./sessions/fetchSessions";
+import type { SessionSummary } from "./sessions/sessionList";
 import { RefreshControl, StyleSheet, Text, View } from "react-native";
 import Animated, { LinearTransition } from "react-native-reanimated";
 import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
@@ -66,7 +67,7 @@ const HOME_DUBZ: DubzContext = {
 
 type Row =
   | { readonly kind: "heading"; readonly title: string }
-  | { readonly kind: "session"; readonly session: Session; readonly repo: string; readonly worktree: string | undefined }
+  | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined }
   | { readonly kind: "repo"; readonly group: RepoGroup };
 
 export const HomeScreen = (props: Props): React.ReactElement => {
@@ -83,7 +84,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // flips a session unread the instant a message lands, without a refresh.
   const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
   const [setupDate, setSetupDate] = React.useState<number>(() => Date.now());
-  const [sessions, setSessions] = React.useState<ReadonlyArray<Session>>([]);
+  const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
   // Worktree pickers and pages read the scan too (primaryWorktree.ts).
   React.useEffect(() => {
@@ -96,15 +97,18 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const [sending, setSending] = React.useState(false);
 
   const loadSessions = React.useCallback(async (): Promise<void> => {
-    const { data, error: fetchError } = await client.session.list();
-    if (fetchError !== undefined || data === undefined) {
+    const data = await fetchSessions(address).catch((cause: unknown) => {
+      console.error("[home] loading the sessions failed", cause);
+      return undefined;
+    });
+    if (data === undefined) {
       setError("Couldn't reach the OpenCode server.");
       return;
     }
     const visible = data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
     setSessions(visible);
     void setCachedSessions(withoutArchived(visible));
-  }, [client]);
+  }, [address]);
 
   const loadScan = React.useCallback(
     async (force: boolean): Promise<void> => {
@@ -189,7 +193,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // A session is unread when its latest activity is newer than both the last
   // time it was opened and the app's setup date. Latest activity is the live
   // `activityAt` when the stream has seen something, else the REST update time.
-  const isUnread = (session: Session): boolean =>
+  const isUnread = (session: SessionSummary): boolean =>
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
 
   // Warm every repo's and worktree's extension views now, while this list is

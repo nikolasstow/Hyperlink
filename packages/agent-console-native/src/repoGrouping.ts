@@ -6,7 +6,7 @@
  *
  * @internal
  */
-import type { Session } from "@opencode-ai/sdk";
+import type { SessionSummary } from "./sessions/sessionList";
 import type { ScannedRepo } from "./repoScan";
 
 export type RepoWorktree = {
@@ -47,17 +47,17 @@ export const matchSession = (
 
 export type RepoGroup = {
   readonly repo: string;
-  readonly sessions: ReadonlyArray<Session>;
-  readonly worktrees: ReadonlyMap<string, ReadonlyArray<Session>>;
+  readonly sessions: ReadonlyArray<SessionSummary>;
+  readonly worktrees: ReadonlyMap<string, ReadonlyArray<SessionSummary>>;
   readonly mostRecentUpdate: number;
   readonly isKnownRepo: boolean;
 };
 
 export const groupByRepo = (
-  sessions: ReadonlyArray<Session>,
+  sessions: ReadonlyArray<SessionSummary>,
   scanned: ReadonlyArray<ScannedRepo>,
 ): ReadonlyArray<RepoGroup> => {
-  const byRepo = new Map<string, Session[]>();
+  const byRepo = new Map<string, SessionSummary[]>();
   for (const session of sessions) {
     const { repo } = matchSession(session.directory, scanned);
     const list = byRepo.get(repo);
@@ -68,7 +68,7 @@ export const groupByRepo = (
   const groups: Array<RepoGroup> = [];
   for (const [repo, repoSessions] of byRepo) {
     const sorted = [...repoSessions].sort((a, b) => b.time.updated - a.time.updated);
-    const byWorktree = new Map<string, Session[]>();
+    const byWorktree = new Map<string, SessionSummary[]>();
     for (const session of sorted) {
       const { worktree } = matchSession(session.directory, scanned);
       const list = byWorktree.get(worktree);
