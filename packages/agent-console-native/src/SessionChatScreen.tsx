@@ -16,7 +16,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
 import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
-import Animated from "react-native-reanimated";
+import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -49,6 +49,7 @@ import { setViewedSession } from "./push";
 import { markSessionRead } from "./sessionReads";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
+import { barExtra, type BarGeometry, useBarGeometry } from "./barGeometry";
 import { Composer } from "./Composer";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { FILE_CHIPS_HEIGHT, FileChips } from "./FileChips";
@@ -56,6 +57,7 @@ import { sessionFiles, type SessionFile } from "./sessionFiles";
 import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
+import { useKeyboardHeightValue } from "./keyboardHeight";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useSessionStream } from "./useSessionStream";
@@ -188,9 +190,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     return [...chosen, ...touched.filter((file) => !selectedSet.has(file.path))];
   }, [touched, selected, selectedSet]);
   const { width: screenWidth } = useWindowDimensions();
-  // How much taller than collapsed the bar is (expanded: its input), so the
-  // list keeps the newest message clear of it and the file chips.
-  const [composerExtra, setComposerExtra] = React.useState(0);
+  // The bar's heights, which the composer animates and the list's bottom
+  // space follows in the same frame.
+  const barGeometry = useBarGeometry();
   // Keyboard up: select it for the message (or unselect). Down: open it.
   const onFile = (file: SessionFile): void => {
     if (keyboardHeight === 0) {
@@ -505,24 +507,29 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // Below the newest message, not above the oldest — the header, not
         // the footer, is what renders nearest the (inverted) start of the
         // list, which an inverted list pins to the bottom of the screen.
-        ListHeaderComponent={busy ? <BusyRow onStop={onStop} startedAt={answerStartedAt(messages)} /> : null}
+        // The bar's room is the header's last child, at the very bottom.
+        ListHeaderComponent={
+          <>
+            {busy ? <BusyRow onStop={onStop} startedAt={answerStartedAt(messages)} /> : null}
+            <BarSpace geometry={barGeometry} restingBottom={composerRestingBottom(insets.bottom)} chips={files.length > 0 ? FILE_CHIPS_HEIGHT : 0} />
+          </>
+        }
         // `inverted` flips the whole content area as a unit, so these are
         // swapped from how they read: `paddingBottom` — normally "space
         // after the last item" — renders as reserved space at the screen's
         // visual TOP (under the header), and `paddingTop`
         // renders at the visual BOTTOM (under the floating composer).
-        // The visual bottom reaches exactly the bar's top: its resting spot
-        // (or the keyboard) plus the bar, and a small gap.
+        // The visual bottom is BarSpace, in the header.
         contentContainerStyle={[
           styles.content,
           {
             paddingBottom: topBarHeight + 16,
-            paddingTop: Math.max(keyboardHeight, composerRestingBottom(insets.bottom)) + COMPOSER_BAR_HEIGHT + composerExtra + (files.length > 0 ? FILE_CHIPS_HEIGHT : 0) + 8,
+            paddingTop: 0,
           },
         ]}
       />
       </ScrollViewMarker>
-      <EdgeBlurBars bottomInset={keyboardHeight} busy={busy} />
+      <EdgeBlurBars busy={busy} />
       {/* While the keyboard is up, one tap outside the composer only collapses
        * it (consumed here) instead of hitting a message/row behind it. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} />
@@ -546,13 +553,29 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           placeholder="Message"
           seedModel={resolvedSeed}
           dubzContext={SESSION_DUBZ}
-          onExtraHeight={setComposerExtra}
+          geometry={barGeometry}
           accessory={<FileChips files={files} selected={selectedSet} orderVersion={orderVersion} width={screenWidth} onPress={onFile} />}
         />
       </Animated.View>
     </View>
     </CollapsiblePartsProvider>
   );
+};
+
+/** The room under the newest message: the keyboard (or the bar's resting
+ * spot), the bar as tall as it is this frame, its file chips, and a small gap.
+ * On the UI thread, from the same values the bar lays out by. */
+const BarSpace = (props: {
+  readonly geometry: BarGeometry;
+  readonly restingBottom: number;
+  readonly chips: number;
+}): React.ReactElement => {
+  const keyboardHeight = useKeyboardHeightValue();
+  const { geometry, restingBottom, chips } = props;
+  const space = useAnimatedStyle(() => ({
+    height: Math.max(keyboardHeight.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(geometry) + chips + 8,
+  }));
+  return <Animated.View style={space} />;
 };
 
 const makeStyles = (text: TextColors) =>

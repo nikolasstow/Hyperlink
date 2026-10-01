@@ -39,7 +39,7 @@ import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { clearForward } from "./fileNavHistory";
-import { HomeTargetPickers, sessionDirectory, type SessionTarget } from "./HomeTargetPickers";
+import { HomeTargetPickers, sessionDirectory, type SessionTarget, TARGET_PICKERS_HEIGHT } from "./HomeTargetPickers";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -754,7 +754,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       <KeyboardDismissOverlay active={keyboardHeight > 0} dim />
       {/* Only the BOTTOM feather here — the repo header draws its own top blur
        * above, and a second top feather would sit over the header. */}
-      <EdgeBlurBars bottomInset={keyboardHeight} variant="bottom" />
+      <EdgeBlurBars variant="bottom" />
       <Animated.View
         // From the screen's top down to the keyboard (or the bar's resting
         // spot), letting touches through where empty: the bar sits at its
@@ -770,17 +770,20 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           bottomInset={0}
           placeholder="Plan, ask, build…"
           dubzContext={dubzContext}
-          topSection={
-            <HomeTargetPickers
-              scanned={scanned}
-              otherFolders={[]}
-              activityByName={EMPTY_ACTIVITY}
-              target={target}
-              onChange={setTarget}
-              onWorkspaceChanged={onWorkspaceChanged}
-              lockedRepo={{ name, dir, isRepo }}
-            />
-          }
+          topSection={{
+            height: TARGET_PICKERS_HEIGHT,
+            node: (
+              <HomeTargetPickers
+                scanned={scanned}
+                otherFolders={[]}
+                activityByName={EMPTY_ACTIVITY}
+                target={target}
+                onChange={setTarget}
+                onWorkspaceChanged={onWorkspaceChanged}
+                lockedRepo={{ name, dir, isRepo }}
+              />
+            ),
+          }}
         />
       </Animated.View>
     </View>

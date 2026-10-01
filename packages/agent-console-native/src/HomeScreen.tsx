@@ -44,6 +44,7 @@ import {
   sessionDirectory,
   type FolderTarget,
   type SessionTarget,
+  TARGET_PICKERS_HEIGHT,
 } from "./HomeTargetPickers";
 import type { DubzContext } from "./dubzSuggestions";
 import { prefetchTaskCounts } from "./taskCounts";
@@ -378,7 +379,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         contentContainerStyle={[styles.content, { paddingTop: navBarHeight + HOME_CONTENT_TOP_GAP, paddingBottom: COMPOSER_BAR_HEIGHT + keyboardHeight + 16 }]}
       />
       </ScrollViewMarker>
-      <EdgeBlurBars bottomInset={keyboardHeight} />
+      <EdgeBlurBars />
       {/* One tap outside the composer collapses it (consumed) instead of hitting
        * a card behind it while the keyboard is up. */}
       <KeyboardDismissOverlay active={keyboardHeight > 0} dim />
@@ -394,16 +395,19 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           bottomInset={0}
           placeholder="Plan, ask, build…"
           dubzContext={HOME_DUBZ}
-          topSection={
-            <HomeTargetPickers
-              scanned={scanned}
-              otherFolders={sessionFolders}
-              activityByName={activityByName}
-              target={target}
-              onChange={setTarget}
-              onWorkspaceChanged={refreshWorktrees}
-            />
-          }
+          topSection={{
+            height: TARGET_PICKERS_HEIGHT,
+            node: (
+              <HomeTargetPickers
+                scanned={scanned}
+                otherFolders={sessionFolders}
+                activityByName={activityByName}
+                target={target}
+                onChange={setTarget}
+                onWorkspaceChanged={refreshWorktrees}
+              />
+            ),
+          }}
         />
       </Animated.View>
     </View>

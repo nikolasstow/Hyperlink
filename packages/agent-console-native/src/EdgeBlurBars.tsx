@@ -3,13 +3,17 @@
  *
  * Directions are the working on-device pair — top=`down`, bottom=`up`.
  * Do not flip. When `busy`, the bottom wash tints system blue and pulses.
+ * The bottom feather rides the keyboard's own UI-thread height, frame by
+ * frame with the bar above it.
  *
  * @internal
  */
 import * as React from "react";
 import { Animated, DynamicColorIOS, Platform, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
 import { VariableBlur } from "../modules/variable-blur";
+import { useKeyboardHeightValue } from "./keyboardHeight";
 
 const TOP_BLUR_RADIUS = 5;
 const BOTTOM_BLUR_RADIUS = 3;
@@ -42,8 +46,6 @@ const EDGE_LOCATIONS = [0, 0.35, 0.7, 1] as const;
 const BUSY_PULSE_MS = 900;
 
 export const EdgeBlurBars = (props: {
-  /** Bottom feather offset. Ignored for `variant: "top"`. */
-  readonly bottomInset?: number;
   readonly busy?: boolean;
   /** "top" renders only the top feather (a header over scrolling content);
    * "bottom" only the bottom feather (a floating bar over content whose top
@@ -51,6 +53,8 @@ export const EdgeBlurBars = (props: {
   readonly variant?: "both" | "top" | "bottom";
 }): React.ReactElement | null => {
   const pulse = React.useRef(new Animated.Value(0)).current;
+  const keyboardHeight = useKeyboardHeightValue();
+  const bottomEdge = useAnimatedStyle(() => ({ bottom: keyboardHeight.value }));
 
   React.useEffect(() => {
     if (!props.busy) {
@@ -87,7 +91,7 @@ export const EdgeBlurBars = (props: {
       </View>
       )}
       {props.variant === "top" ? null : (
-      <View style={[styles.edge, { bottom: props.bottomInset ?? 0, height: BOTTOM_BLUR_HEIGHT }]} pointerEvents="none">
+      <Reanimated.View style={[styles.edge, { height: BOTTOM_BLUR_HEIGHT }, bottomEdge]} pointerEvents="none">
         <VariableBlur blurRadius={BOTTOM_BLUR_RADIUS} direction="up" style={StyleSheet.absoluteFill} />
         <LinearGradient
           colors={[...EDGE_LIGHT_STOPS]}
@@ -107,7 +111,7 @@ export const EdgeBlurBars = (props: {
             />
           </Animated.View>
         ) : null}
-      </View>
+      </Reanimated.View>
       )}
     </>
   );

@@ -112,6 +112,9 @@ const MENU_MODIFIERS = [
 ] as const;
 
 const PILL_HEIGHT = 32;
+const ROW_GAP = 6;
+/** The pickers' row in the bar: the pills and the gap under them. */
+export const TARGET_PICKERS_HEIGHT = PILL_HEIGHT + ROW_GAP;
 const PILL_MAX_WIDTH = 160;
 const PILL_MIN_WIDTH = 56;
 
@@ -641,7 +644,8 @@ const styles = StyleSheet.create({
     gap: 8,
     // Right breathing room so the worktree isn't flush against the field edge.
     paddingRight: 2,
-    marginBottom: 6,
+    height: PILL_HEIGHT,
+    marginBottom: ROW_GAP,
   },
   leading: {
     flexDirection: "row",

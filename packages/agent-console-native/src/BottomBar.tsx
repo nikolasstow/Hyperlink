@@ -23,15 +23,19 @@
  *   `overflow: hidden` parent: that crops iOS's glass to a hard shape and it
  *   falls back to a flat look (Dubz.tsx has the rules). No `borderCurve` on the
  *   glass either; that broke it outright.
- * - The expand/collapse animation is the variant's to trigger
- *   (`LayoutAnimation.configureNext` in its focus/blur/send handlers); the
- *   layout change it animates lives here, driven by the `expanded` prop.
+ * - Expanding and collapsing animate on the UI thread from the variant's
+ *   `geometry` (barGeometry.ts): the section heights and the controls' gap are
+ *   `open` × a known height, so whatever reserves room for the bar reads the
+ *   same values in the same frame. Layout, never a transform or opacity on the
+ *   glass.
  *
  * @internal
  */
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
+import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
+import { type BarGeometry, CONTROLS_GAP } from "./barGeometry";
 import { colors } from "./colors";
 import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 
@@ -40,16 +44,19 @@ import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_SEND_CHIP_SIZE } f
 const FIELD_RADIUS = 30;
 
 export interface BottomBarProps {
-  /** Focused or non-empty — the variant computes it and owns the animation. */
+  /** Focused or non-empty — the variant computes it; gates touches. */
   readonly expanded: boolean;
+  /** The animated heights the bar lays out by (the variant drives them). */
+  readonly geometry: BarGeometry;
   /** Home-indicator safe-area inset (0 when the keyboard covers it). */
   readonly bottomInset: number;
   /** An error line above the bar, or nothing. */
   readonly error?: string;
-  /** Extra content inside the bubble above the input (Home's pickers); collapses
-   * with the input. Omit for chat. */
-  readonly topSection?: React.ReactNode;
-  /** The growing input element (a `TextInput`); the shell collapses its section. */
+  /** Extra content inside the bubble above the input (Home's pickers), at a
+   * set height; collapses with the input. Omit for chat. */
+  readonly topSection?: BarTopSection;
+  /** The growing input element (a `TextInput` as tall as `geometry.input`);
+   * the shell collapses its section. */
   readonly input: React.ReactNode;
   /** Left control, always visible (the `+` chip). */
   readonly leading: React.ReactNode;
@@ -63,29 +70,50 @@ export interface BottomBarProps {
   readonly onExpandRequest: () => void;
 }
 
+export interface BarTopSection {
+  readonly node: React.ReactNode;
+  readonly height: number;
+}
+
 export const BottomBar = (props: BottomBarProps): React.ReactElement => {
   const scheme = useColorScheme();
-  const { expanded } = props;
+  const { expanded, geometry } = props;
+  const topHeight = props.topSection?.height ?? 0;
+  const topStyle = useAnimatedStyle(() => ({
+    height: geometry.open.value * topHeight,
+    opacity: geometry.open.value,
+  }));
+  const inputStyle = useAnimatedStyle(() => ({
+    height: geometry.open.value * geometry.input.value,
+    opacity: geometry.open.value,
+  }));
+  const controlsStyle = useAnimatedStyle(() => ({
+    paddingTop: geometry.open.value * CONTROLS_GAP,
+  }));
 
   return (
     <View style={[styles.root, { paddingBottom: Math.max(props.bottomInset, 8) }]}>
-      {props.error !== undefined ? <Text style={styles.error}>{props.error}</Text> : null}
+      {props.error !== undefined ? (
+        <Text style={styles.error} numberOfLines={1}>
+          {props.error}
+        </Text>
+      ) : null}
       {/* The small drop shadow lives on this OUTER wrapper; it does not clip or
        * round the glass (the glass rounds itself). */}
       <View style={styles.pillShadow}>
         <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
           {props.topSection !== undefined ? (
-            <View style={[styles.topSection, !expanded && styles.topSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
-              {props.topSection}
-            </View>
+            <Reanimated.View style={[styles.section, topStyle]} pointerEvents={expanded ? "auto" : "none"}>
+              {props.topSection.node}
+            </Reanimated.View>
           ) : null}
-          {/* inputSection — the input alone, grows upward, collapses to 0
-           * height + 0 opacity when idle; never unmounts. */}
-          <View style={[styles.inputSection, !expanded && styles.inputSectionCollapsed]} pointerEvents={expanded ? "auto" : "none"}>
+          {/* The input alone, grows upward, collapses to 0 height + 0 opacity
+           * when idle; never unmounts. */}
+          <Reanimated.View style={[styles.section, inputStyle]} pointerEvents={expanded ? "auto" : "none"}>
             {props.input}
-          </View>
+          </Reanimated.View>
           {/* controlsRow — always visible: leading | centre | trailing. */}
-          <View style={[styles.controlsRow, !expanded && styles.controlsRowCollapsed]}>
+          <Reanimated.View style={[styles.controlsRow, controlsStyle]}>
             {props.leading}
             {/* Two always-mounted, absolutely-stacked centre slots, cross-faded
              * by opacity/pointerEvents on `expanded` — never conditionally
@@ -103,7 +131,7 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
             <View style={styles.sendSlot}>
               {props.trailing}
             </View>
-          </View>
+          </Reanimated.View>
           {/* Collapsed: catch taps anywhere the buttons don't claim so the
            * whole pill expands. Expanded: gone, so the controls work normally. */}
           {!expanded ? (
@@ -121,9 +149,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
   },
+  // One line at a set height (ERROR_LINE_HEIGHT), so the room it takes is known.
   error: {
     color: colors.destructive,
     fontSize: 13,
+    lineHeight: 16,
     marginBottom: 6,
     paddingHorizontal: 4,
   },
@@ -145,29 +175,13 @@ const styles = StyleSheet.create({
   expandHit: {
     ...StyleSheet.absoluteFill,
   },
-  topSection: {
+  section: {
     overflow: "hidden",
-  },
-  topSectionCollapsed: {
-    height: 0,
-    opacity: 0,
-    marginBottom: 0,
-  },
-  inputSection: {
-    overflow: "hidden",
-  },
-  inputSectionCollapsed: {
-    height: 0,
-    opacity: 0,
   },
   controlsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingTop: 8,
-  },
-  controlsRowCollapsed: {
-    paddingTop: 0,
   },
   pickerSlot: {
     flex: 1,

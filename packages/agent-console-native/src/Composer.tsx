@@ -21,9 +21,9 @@
  * `input`, `leading` (+), `expandedCenter` (model picker), `collapsedCenter`
  * (the one-line mirror) and `trailing` (send). The shell never owns state; it
  * lays out what it's given and gates it by the single `expanded` flag this
- * computes. The animation stays this file's to trigger
- * (`LayoutAnimation.configureNext` in the focus/blur/send handlers); the layout
- * it animates lives in the shell.
+ * computes. This file animates the bar's geometry (barGeometry.ts) to follow
+ * `expanded` and the input's content; the shell lays out by it, and a screen
+ * can pass its own to reserve the same room in the same frame.
  *
  * `+`/send are the bar's shared buttons (composerChips.tsx). Attachment (`+`)
  * is still a stub; model selection is real (`client.provider.list()`), passed
@@ -32,12 +32,13 @@
  * @internal
  */
 import * as React from "react";
-import { LayoutAnimation, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useAppContext } from "./AppContext";
 import { useAgentButtonVisible } from "./agentButtonSettings";
-import { BottomBar } from "./BottomBar";
+import { type BarGeometry, INPUT_LINE_HEIGHT, INPUT_PADDING_VERTICAL, MIN_INPUT_HEIGHT, setBarOpen, setInputHeight, useBarGeometry } from "./barGeometry";
+import { type BarTopSection, BottomBar } from "./BottomBar";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import type { DubzContext } from "./dubzSuggestions";
@@ -48,25 +49,7 @@ import { recordModelUse } from "./modelUsage";
 import { getLastModel, setLastModel } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
-// A fontSize:16 line needs roughly INPUT_LINE_HEIGHT of vertical room. iOS
-// multiline TextInput can't render shorter than its content needs, so this is
-// the real single-line minimum regardless of the row-visibility mechanism.
-const INPUT_LINE_HEIGHT = 20;
-const MIN_INPUT_HEIGHT = INPUT_LINE_HEIGHT + 16;
-const MAX_INPUT_HEIGHT = 120;
-/** BottomBar's gap above its controls row while expanded. */
-const CONTROLS_GAP = 8;
-
-// `'keyboard'` is UIKit's own keyboard-curve constant (not `easeInEaseOut`,
-// which runs ~300ms and visibly lags the keyboard's ~250ms). 180ms trades exact
-// sync for a snappier feel — deliberate; go back toward 250 if the desync reads
-// worse than the speed is worth.
-const EXPAND_ANIMATION = {
-  duration: 180,
-  create: { type: "keyboard", property: "opacity" },
-  update: { type: "keyboard" },
-  delete: { type: "keyboard", property: "opacity" },
-} as const;
+const AnimatedTextInput = Reanimated.createAnimatedComponent(TextInput);
 
 const noop = (): void => undefined;
 
@@ -81,18 +64,18 @@ export const Composer = (props: {
   readonly placeholder: string;
   /** Prefer this model when set (e.g. last assistant turn in a session). */
   readonly seedModel?: ModelOption;
-  /** Rendered inside the bubble above the input — Home's pickers; chat omits it. */
-  readonly topSection?: React.ReactNode;
+  /** Rendered inside the bubble above the input, at a set height — Home's
+   * pickers; chat omits it. */
+  readonly topSection?: BarTopSection;
   /** Where this bar is: whether Dubz is its second page (per the user's
    * settings, by surface), and what Dubz suggests there. */
   readonly dubzContext: DubzContext;
   /** Above the bar, on its page, staying on top of it as it expands (the
    * chat's file chips). */
   readonly accessory?: React.ReactNode;
-  /** How much taller than collapsed (COMPOSER_BAR_HEIGHT) the bar is now, so
-   * a list behind it reserves the space. From the bar's own state (expanded,
-   * the input's height), not a measurement. */
-  readonly onExtraHeight?: (extra: number) => void;
+  /** The bar's geometry, when a screen reserves room for the bar by it (the
+   * chat's list); the composer drives it. */
+  readonly geometry?: BarGeometry;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -120,20 +103,16 @@ export const Composer = (props: {
   // Where the pages stand: 0 this composer, 1 Dubz.
   const pageX = useSharedValue(withDubz && lastPage === "dubz" ? 1 : 0);
   const hasContent = text.trim().length > 0 && !props.disabled;
-  // iOS multiline TextInput's intrinsic-size reporting doesn't reliably account
-  // for its own padding; measure the content height directly instead.
-  const [contentHeight, setContentHeight] = React.useState(MIN_INPUT_HEIGHT);
-  // Ignore `contentHeight` while empty — belt and suspenders with
-  // onContentSizeChange's own guard, so the field always shrinks back after a
-  // send.
-  const inputHeight = text.length === 0 ? MIN_INPUT_HEIGHT : Math.min(Math.max(contentHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT);
-  // Expanded, the bar adds the input and the gap above the controls
-  // (BottomBar's controlsRow paddingTop) to its collapsed height.
-  const extraHeight = expanded ? inputHeight + CONTROLS_GAP : 0;
-  const { onExtraHeight } = props;
+  const ownGeometry = useBarGeometry();
+  const geometry = props.geometry ?? ownGeometry;
+  // The bar opens and closes with `expanded`, on the UI thread.
   React.useEffect(() => {
-    onExtraHeight?.(extraHeight);
-  }, [onExtraHeight, extraHeight]);
+    setBarOpen(geometry, expanded);
+  }, [geometry, expanded]);
+  React.useEffect(() => {
+    geometry.error.value = error !== undefined ? 1 : 0;
+  }, [geometry, error]);
+  const inputStyle = useAnimatedStyle(() => ({ height: geometry.input.value }));
 
   // The model last sent with, once read; picked from the models once they load.
   const [lastModel, setLastModelRead] = React.useState<{ providerID: string; modelID: string } | undefined | null>(null);
@@ -197,21 +176,19 @@ export const Composer = (props: {
   const directory = props.directory;
   const refreshCatalog = React.useCallback(() => reloadModels(client, address, directory), [client, address, directory]);
 
-  // onContentSizeChange fires once on mount with an unreliable measurement,
-  // before any typing; ignoring it entirely while empty is the invariant that
-  // matters — an empty field has no real content height to latch onto.
+  // The input is as tall as its text, as iOS lays it out (its intrinsic size
+  // misses its own padding; the content size does not). It fires once on
+  // mount with an unreliable height, before any typing; an empty field is one
+  // line, whatever it reports.
   const onContentSizeChange = (height: number): void => {
     if (text.length === 0) return;
-    LayoutAnimation.configureNext(EXPAND_ANIMATION);
-    setContentHeight(height);
+    setInputHeight(geometry, height);
   };
+  React.useEffect(() => {
+    if (text.length === 0) setInputHeight(geometry, MIN_INPUT_HEIGHT);
+  }, [geometry, text.length]);
 
   const onFocus = (): void => {
-    // Only when it expands: held (sliding in from Dubz), with text, or back
-    // from the model window, it is expanded already. (LayoutAnimation animates
-    // every layout change in the next commit, app-wide; configured needlessly
-    // it fought the model window's own grow and dropped frames.)
-    if (!expanded) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(true);
     setHeld(false);
     if (withDubz) rememberPage(pageType, "compose");
@@ -318,20 +295,13 @@ export const Composer = (props: {
   }));
 
   const onBlur = (): void => {
-    // Only animate the collapse when it will actually happen — typed text, or
-    // being held as a page, keeps `expanded` true across a blur, so there's no
-    // layout change to animate then.
-    // Nor when the model window takes the focus (it keeps the bar expanded).
-    if (text.length === 0 && !held && !modelsOpen) LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setFocused(false);
   };
 
   const send = async (): Promise<void> => {
     const value = text.trim();
     if (value.length === 0 || props.disabled) return;
-    LayoutAnimation.configureNext(EXPAND_ANIMATION);
     setText("");
-    setContentHeight(MIN_INPUT_HEIGHT);
     setError(undefined);
     try {
       await props.onSend(value, selectedModel);
@@ -348,17 +318,15 @@ export const Composer = (props: {
           {props.accessory}
           <BottomBar
             expanded={expanded}
+            geometry={geometry}
             bottomInset={props.bottomInset}
             error={error}
             topSection={props.topSection}
             onExpandRequest={expand}
             input={
-              <TextInput
+              <AnimatedTextInput
                 ref={inputRef}
-                style={[
-                  styles.input,
-                  { height: inputHeight },
-                ]}
+                style={[styles.input, inputStyle]}
                 value={text}
                 onChangeText={setText}
                 onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
@@ -427,7 +395,7 @@ const makeStyles = (text: TextColors) =>
     // Explicit, computed against MIN_INPUT_HEIGHT so the two can't drift.
     lineHeight: INPUT_LINE_HEIGHT,
     paddingHorizontal: 4,
-    paddingVertical: 8,
+    paddingVertical: INPUT_PADDING_VERTICAL,
   },
   // The Dubz page lies over the composer's bar, bottom to bottom, beside it
   // (`left` from dubzSlide).
