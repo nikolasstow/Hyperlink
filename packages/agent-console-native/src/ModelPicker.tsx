@@ -161,14 +161,16 @@ export const ModelPicker = (props: {
   const textColors = useTextColors();
   const label = props.selected?.name ?? (props.models.length === 0 ? "Model…" : "Model");
   return (
-    <Host style={styles.host} matchContents={{ horizontal: true }} ignoreSafeArea="all">
+    // A set box (the label's widest), the label at its leading edge: SwiftUI
+    // never sizes the box after it renders.
+    <Host style={styles.host} ignoreSafeArea="all">
       <HStack
         spacing={4}
         modifiers={[
-          frame({ maxWidth: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE }),
           padding({ trailing: 4 }),
           contentShape(shapes.rectangle()),
           onTapGesture(props.onPress),
+          frame({ maxWidth: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE, alignment: "leading" }),
         ]}
       >
         <Text modifiers={[font({ size: 13, weight: "medium" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1), truncationMode("middle")]}>
@@ -483,9 +485,9 @@ const ModelRow = (props: {
 
 const styles = StyleSheet.create({
   host: {
+    width: LABEL_MAX_WIDTH,
     height: COMPOSER_CHIP_SIZE,
     maxWidth: "100%",
-    alignSelf: "flex-start",
   },
 });
 
