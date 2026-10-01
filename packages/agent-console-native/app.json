@@ -45,7 +45,8 @@
       "expo-status-bar",
       "@bacons/apple-targets",
       "expo-web-browser",
-      "./plugins/withAppIntents.js"
+      "./plugins/withAppIntents.js",
+      "expo-background-task"
     ],
     "experiments": {
       "autolinkingModuleResolution": true

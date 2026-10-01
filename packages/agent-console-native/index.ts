@@ -1,4 +1,5 @@
 import "react-native-gesture-handler";
+import "./src/cryptoPolyfill";
 import { registerRootComponent } from "expo";
 import { fetch as expoFetch } from "expo/fetch";
 

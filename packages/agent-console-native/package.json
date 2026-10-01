@@ -15,16 +15,20 @@
     "effect": "4.0.0-beta.102",
     "expo": "~57.0.16",
     "expo-asset": "^57.0.18",
+    "expo-background-task": "~57.0.21",
     "expo-blur": "^57.0.2",
     "expo-constants": "~57.0.17",
+    "expo-crypto": "~57.0.3",
     "expo-dev-client": "^57.0.18",
     "expo-device": "~57.0.1",
     "expo-document-picker": "~57.0.2",
     "expo-file-system": "~57.0.7",
     "expo-glass-effect": "~57.0.1",
     "expo-linear-gradient": "^57.0.1",
+    "expo-network": "~57.0.2",
     "expo-notifications": "~57.0.16",
     "expo-status-bar": "~57.0.1",
+    "expo-task-manager": "~57.0.21",
     "expo-web-browser": "~57.0.2",
     "react": "19.2.3",
     "react-native": "0.86.2",
@@ -65,7 +69,8 @@
     "build:dev": "tsx scripts/build.ts dev",
     "build:preview": "tsx scripts/build.ts preview",
     "build:master": "tsx scripts/build.ts master",
-    "prepare": "tsx scripts/worktree-setup.ts"
+    "prepare": "tsx scripts/worktree-setup.ts",
+    "vendor:opencode-schema": "tsx scripts/vendor-opencode-schema.ts"
   },
   "private": true
 }
