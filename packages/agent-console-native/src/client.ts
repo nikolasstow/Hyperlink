@@ -16,15 +16,9 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/client";
 import { fetch as expoFetch } from "expo/fetch";
 
-/** Accepts "host:port", "http://host:port", with or without a trailing
- * slash — normalizes to a bare "http://host:port" base URL. Defaults to
- * http:// (not https://) since this always points at a local/Tailscale
- * opencode server, never a public host. */
-export const normalizeServerAddress = (input: string): string => {
-  const trimmed = input.trim().replace(/\/+$/, "");
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-  return `http://${trimmed}`;
-};
+import { normalizeServerAddress } from "./opencode/serverAddress";
+
+export { normalizeServerAddress };
 
 export const makeClient = (serverAddress: string) =>
   createOpencodeClient({ baseUrl: normalizeServerAddress(serverAddress), fetch: (request) => expoFetch(request) });

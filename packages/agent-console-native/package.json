@@ -70,7 +70,7 @@
     "build:preview": "tsx scripts/build.ts preview",
     "build:master": "tsx scripts/build.ts master",
     "prepare": "tsx scripts/worktree-setup.ts",
-    "vendor:opencode-schema": "tsx scripts/vendor-opencode-schema.ts"
+    "vendor:opencode": "tsx scripts/vendor-opencode.ts"
   },
   "private": true
 }
