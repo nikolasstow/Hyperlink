@@ -13,8 +13,9 @@
 import * as React from "react";
 import { Easing, type SharedValue, useSharedValue, withTiming } from "react-native-reanimated";
 
-/** A fontSize:16 line of the input. */
-export const INPUT_LINE_HEIGHT = 20;
+/** A fontSize:16 line of the input: the message bubble's line (Markdown's
+ * 16/22), so the text keeps its lines from the input into the bubble. */
+export const INPUT_LINE_HEIGHT = 22;
 /** The input's padding above and below its text. */
 export const INPUT_PADDING_VERTICAL = 8;
 /** One line: iOS's multiline TextInput renders no shorter than its content. */

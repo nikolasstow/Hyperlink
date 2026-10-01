@@ -72,6 +72,9 @@ const SESSION_DUBZ: DubzContext = {
   scope: { kind: "all" },
 };
 
+/** Within this of the newest message, a new one scrolls into view. */
+const NEAR_NEWEST = 80;
+
 /** Sentinel row id for the pending-permission bubble. Prefixed so it can
  * never collide with a real message id (`msg_…`). */
 const PERMISSION_ROW_ID = "__permission__";
@@ -230,14 +233,19 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     }
     return undefined;
   }, [messages]);
-  // The composer floats over the list (see its absolute wrapper below) so
-  // the glass actually has content passing behind it, which means the list
-  // reserves that space itself: the bar's height, a constant
-  // (COMPOSER_BAR_HEIGHT), never a measurement.
-
+  // How far the reader is from the newest message (the inverted list's
+  // offset).
+  const scrolledBack = React.useRef(0);
+  // A new message brings the list to it only when you sent it, or you were
+  // already at the newest; reading back, you stay where you are.
+  const newestID = reversedOrder[0];
+  const shownNewest = React.useRef(newestID);
   React.useEffect(() => {
-    if (reversedOrder.length > 0) listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [reversedOrder.length]);
+    if (newestID === undefined || newestID === shownNewest.current) return;
+    shownNewest.current = newestID;
+    const yours = byID.get(newestID)?.role === "user";
+    if (yours || scrolledBack.current < NEAR_NEWEST) listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [newestID, byID]);
 
   // Start the Live Activity when a run begins, and buzz once when it ends. The
   // app NEVER ends the activity: the server owns that (it ends on the real
@@ -470,6 +478,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       <FlatList
         ref={listRef}
         inverted
+        onScroll={(event) => {
+          scrolledBack.current = event.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={32}
         // No automatic insets: the list is inverted, so iOS's header inset
         // (at the scroll view's native top) landed at the visual bottom, on top
         // of the bar's room, and "scroll to newest" (offset 0) stopped short of
