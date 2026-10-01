@@ -68,7 +68,11 @@ const classify = (error: unknown): Transient | Refused => {
   if (error instanceof TypeError) return new Transient({ cause: error, unreachable: true });
   if (HttpClientError.isHttpClientError(error)) {
     if (error.reason._tag === "TransportError") return new Transient({ cause: error, unreachable: true });
-    if (error.reason._tag === "StatusCodeError" && error.reason.response.status >= 500) return new Transient({ cause: error, unreachable: false });
+    // A server error, by its status whatever the reason says: an undeclared
+    // 5xx reaches here as a body that did not decode, not a status error.
+    if ("response" in error.reason && error.reason.response !== undefined && error.reason.response.status >= 500) {
+      return new Transient({ cause: error, unreachable: false });
+    }
     return new Refused({ reason: error.message });
   }
   if (error instanceof ServiceUnavailableError || error instanceof UnknownError) return new Transient({ cause: error, unreachable: false });
