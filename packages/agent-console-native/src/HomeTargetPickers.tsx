@@ -70,7 +70,10 @@ type Props = {
   /** Most-recent session time per repo / folder name — drives "Recent" sort. */
   readonly activityByName: ReadonlyMap<string, number>;
   readonly target: SessionTarget | undefined;
-  readonly onChange: (target: SessionTarget) => void;
+  /** `undefined` while a new folder, worktree or repo is being made: nothing
+   * can be sent until it exists (it is then chosen), and nothing else stands
+   * in for it. */
+  readonly onChange: (target: SessionTarget | undefined) => void;
   /** Rescan repos after create/clone/mkdir/worktree. */
   readonly onWorkspaceChanged: () => Promise<void>;
   /** When set, the repo is FIXED to this one (the repo/workspace pages): the
@@ -161,6 +164,33 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     );
   }, [props.otherFolders, props.activityByName, sort]);
 
+  // The folder, worktree or repo being made, by name, while it is: the picker
+  // reads "Creating <name>…", and no default fills the empty target meanwhile.
+  const [creating, setCreating] = React.useState<string | undefined>(undefined);
+  // A target has been set (by default or by hand): the default never fills an
+  // empty target again (an empty one is a create underway, or one that
+  // failed, and nothing stands in for it).
+  const settled = React.useRef(props.target !== undefined);
+  if (props.target !== undefined) settled.current = true;
+
+  /** Make something new and choose it; the target is empty meanwhile, and stays
+   * empty if it fails. */
+  const createThenChoose = (name: string, make: () => Promise<SessionTarget>, failure: string): void => {
+    setCreating(name);
+    props.onChange(undefined);
+    void make().then(
+      (target) => {
+        setCreating(undefined);
+        props.onChange(target);
+      },
+      (cause: unknown) => {
+        console.warn("[targets] create failed", name, cause);
+        setCreating(undefined);
+        Alert.alert(failure, cause instanceof Error ? cause.message : String(cause));
+      },
+    );
+  };
+
   // Default to first known repo once scan lands (respects default-worktree pref).
   // When a repo is locked (repo/workspace pages) select IT instead — a workspace
   // becomes a folder target, a git repo its main (or last-used) worktree.
@@ -194,10 +224,14 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     };
   }, [chosenPrimary, backend]);
   React.useEffect(() => {
-    if (props.target !== undefined) return;
+    if (props.target !== undefined || settled.current) return;
+    // Applies a default only if the target is still unset by then.
+    const choose = (target: SessionTarget): void => {
+      if (!settled.current) onChange(target);
+    };
     if (lockedRepo !== undefined) {
       if (!lockedRepo.isRepo) {
-        onChange({ kind: "folder", name: lockedRepo.name, path: lockedRepo.dir });
+        choose({ kind: "folder", name: lockedRepo.name, path: lockedRepo.dir });
         return;
       }
       const found = scanned.find((r) => r.repo === lockedRepo.name);
@@ -211,7 +245,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         { name: "main", path: lockedRepo.dir, isMain: true };
       void (async () => {
         const branch = (await runFs(readCurrentBranch(backend, worktree.path))) ?? "main";
-        onChange({ kind: "repo", repo: lockedRepo.name, worktree, branch });
+        choose({ kind: "repo", repo: lockedRepo.name, worktree, branch });
       })();
       return;
     }
@@ -230,7 +264,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
       const chosen = chosenPrimaryOf(repo.repo) ?? fromLast ?? main;
       if (chosen === undefined) return;
       const branch = (await runFs(readCurrentBranch(backend, chosen.path))) ?? "main";
-      onChange({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
+      choose({ kind: "repo", repo: repo.repo, worktree: chosen, branch });
     })();
   }, [sortedRepos, props.target, onChange, lockedRepo, scanned, backend]);
 
@@ -324,22 +358,22 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         {
           text: "Create",
           onPress: (value?: string) => {
-            void (async () => {
-              const name = (value ?? "").trim() || randomSlug();
-              try {
+            const name = (value ?? "").trim() || randomSlug();
+            createThenChoose(
+              name,
+              async () => {
                 const path = await createWorktree(client, rootDir, target.repo, main.path, name);
                 await props.onWorkspaceChanged();
                 void setLastWorktreeForRepo(target.repo, name);
-                props.onChange({
+                return {
                   kind: "repo",
                   repo: target.repo,
                   worktree: { name, path, isMain: false },
                   branch: name,
-                });
-              } catch {
-                Alert.alert("Couldn't create worktree", `Failed to create "${name}".`);
-              }
-            })();
+                };
+              },
+              "Couldn't create worktree",
+            );
           },
         },
       ],
@@ -356,17 +390,17 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
         {
           text: "Create",
           onPress: (value?: string) => {
-            void (async () => {
-              const name = (value ?? "").trim();
-              if (name.length === 0) return;
-              try {
+            const name = (value ?? "").trim();
+            if (name.length === 0) return;
+            createThenChoose(
+              name,
+              async () => {
                 const path = await createWorkspaceFolder(client, rootDir, name);
                 await props.onWorkspaceChanged();
-                props.onChange({ kind: "folder", name, path });
-              } catch {
-                Alert.alert("Couldn't create folder", `Failed to create "${name}".`);
-              }
-            })();
+                return { kind: "folder", name, path };
+              },
+              "Couldn't create folder",
+            );
           },
         },
       ],
@@ -374,29 +408,34 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
     );
   };
 
-  const onRepoCreated = (repoName: string, mainPath: string): void => {
-    void (async () => {
-      await props.onWorkspaceChanged();
-      const branch = (await runFs(readCurrentBranch(backend, mainPath))) ?? "main";
-      props.onChange({
-        kind: "repo",
-        repo: repoName,
-        worktree: { name: "(main)", path: mainPath, isMain: true },
-        branch,
-      });
-    })();
-  };
+  const onRepoCreated = (repoName: string, mainPath: string): void =>
+    createThenChoose(
+      repoName,
+      async () => {
+        await props.onWorkspaceChanged();
+        const branch = (await runFs(readCurrentBranch(backend, mainPath))) ?? "main";
+        return {
+          kind: "repo",
+          repo: repoName,
+          worktree: { name: "(main)", path: mainPath, isMain: true },
+          branch,
+        };
+      },
+      "Couldn't open the new repo",
+    );
 
   const repoLabel =
-    props.lockedRepo !== undefined
-      ? props.lockedRepo.name
-      : props.target === undefined
-        ? props.scanned.length === 0
-          ? "Scanning…"
-          : "Repo"
-        : props.target.kind === "folder"
-          ? props.target.name
-          : props.target.repo;
+    creating !== undefined
+      ? `Creating ${creating}…`
+      : props.lockedRepo !== undefined
+        ? props.lockedRepo.name
+        : props.target === undefined
+          ? props.scanned.length === 0
+            ? "Scanning…"
+            : "Repo"
+          : props.target.kind === "folder"
+            ? props.target.name
+            : props.target.repo;
   // Repo-dropdown glyph (Home only) — a box for a git repo, a folder for a
   // workspace. Not shown when the repo is locked (that's static text instead).
   const repoIcon: React.ComponentProps<typeof Feather>["name"] =
