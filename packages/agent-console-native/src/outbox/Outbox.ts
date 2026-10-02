@@ -28,7 +28,7 @@
  * @internal
  */
 import { Cause, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, Schedule, Schema, Stream, SubscriptionRef } from "effect";
-import { HttpClient, HttpClientError, HttpClientRequest } from "effect/unstable/http";
+import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 import { KeyValueStore } from "effect/unstable/persistence";
 import { Opencode, type OpencodeClient } from "../opencode/Opencode";
 import type { ServerAddress } from "../opencode/serverAddress";
@@ -94,6 +94,13 @@ const V1Prompt = Schema.Struct({
   model: Schema.optional(Schema.Struct({ providerID: Schema.String, modelID: Schema.String })),
   parts: Schema.Array(V1Part),
 });
+
+/** v1's run status of a folder's sessions: only those not idle are listed. */
+const V1Statuses = Schema.Record(Schema.String, Schema.Struct({ type: Schema.String }));
+
+/** How often a v1 message waiting on a busy session looks again. Only while
+ * one waits; v1 has no event for it that reaches here. */
+const V1_IDLE_CHECK = Duration.seconds(2);
 
 // ── The service ─────────────────────────────────────────────────────────────
 
@@ -246,6 +253,23 @@ const make = Effect.gen(function* () {
       (effect) => step(lane.server, effect),
     );
 
+  /** Whether a v1 session is running a turn now. */
+  const v1Busy = (lane: Lane, directory: AbsolutePath) =>
+    http.get(`${lane.server}/session/status`, { urlParams: { directory } }).pipe(
+      Effect.flatMap(HttpClientResponse.filterStatusOk),
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(V1Statuses)),
+      Effect.map((statuses) => {
+        const status = statuses[lane.sessionID];
+        return status !== undefined && status.type !== "idle";
+      }),
+      (effect) => step(lane.server, effect),
+    );
+
+  /** Waits until a v1 session is idle: a message sent mid-run would go into
+   * the running turn, not after it. (v2 queues on the server.) */
+  const awaitV1Idle = (lane: Lane, directory: AbsolutePath) =>
+    v1Busy(lane, directory).pipe(Effect.repeat({ while: (busy) => busy, schedule: Schedule.spaced(V1_IDLE_CHECK) }), Effect.asVoid);
+
   /** Sends a lane's first message, waiting for the server and retrying what
    * may clear; fails only with what holds the lane. Each attempt reads the
    * lane afresh, so what an earlier attempt finished (the folder, the
@@ -263,7 +287,10 @@ const make = Effect.gen(function* () {
         yield* updateLane(key, (current) => Lane.make({ ...current, create: undefined }));
       }
       if (lane.protocol === "v2") yield* sendV2(client, lane, message);
-      else yield* sendV1(lane, directory, message);
+      else {
+        yield* awaitV1Idle(lane, directory);
+        yield* sendV1(lane, directory, message);
+      }
     }).pipe(
       // What may clear is retried for as long as it takes (awaiting the server
       // each time); only a refusal ends it.

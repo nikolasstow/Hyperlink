@@ -17,8 +17,10 @@ const directory = AbsolutePath.make("/work/repo");
 
 /** A fake opencode v2 server: sessions it made, prompts it admitted (in
  * order), and how it answers a given message text. */
-const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse" | "fail", sessions = new Set<string>()) => {
+const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse" | "fail", sessions = new Set<string>(), busyChecks = 0) => {
   const admitted: Array<string> = [];
+  // v1: the session reads busy for this many status checks, then idle.
+  const status = { checks: 0 };
   const attempts = new Map<string, number>();
   const json = (request: Parameters<typeof HttpClientResponse.fromWeb>[0], status: number, body: unknown) =>
     HttpClientResponse.fromWeb(request, new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
@@ -27,6 +29,17 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
       const path = url.pathname;
       const body: unknown = request.body._tag === "Uint8Array" ? JSON.parse(new TextDecoder().decode(request.body.body)) : undefined;
       if (path === "/api/health") return json(request, 200, { healthy: true });
+      if (path === "/session/status") {
+        status.checks += 1;
+        return json(request, 200, status.checks <= busyChecks ? Object.fromEntries([...sessions].map((id) => [id, { type: "busy" }])) : {});
+      }
+      const v1Prompt = /^\/session\/([^/]+)\/prompt_async$/.exec(path);
+      if (request.method === "POST" && v1Prompt !== null) {
+        const parts = typeof body === "object" && body !== null && "parts" in body && Array.isArray(body.parts) ? body.parts : [];
+        const first: unknown = parts[0];
+        admitted.push(typeof first === "object" && first !== null && "text" in first && typeof first.text === "string" ? `${first.text} after ${status.checks} checks` : "");
+        return HttpClientResponse.fromWeb(request, new Response(null, { status: 204 }));
+      }
       if (request.method === "POST" && path === "/api/session") {
         const id = typeof body === "object" && body !== null && "id" in body && typeof body.id === "string" ? body.id : "ses_unknown";
         sessions.add(id);
@@ -52,7 +65,7 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
       return json(request, 404, { error: `no route ${request.method} ${path}` });
     }),
   );
-  return { client, admitted, attempts, sessions };
+  return { client, admitted, attempts, sessions, status };
 };
 
 /** A device's storage that outlives one outbox (the app being killed and
@@ -91,6 +104,20 @@ const send = (outbox: Outbox["Service"], sessionID: SessionID, text: string, cre
 const settled = (outbox: Outbox["Service"]) => outbox.drain.pipe(Effect.timeout("10 seconds"));
 
 describe("Outbox", () => {
+  it("holds a v1 message while its session runs a turn, then sends it", async () => {
+    const sessionID = SessionID.create();
+    const fake = fakeServer(() => "admit", new Set([sessionID]), 2);
+    await run(
+      fake,
+      Effect.gen(function* () {
+        const outbox = yield* Outbox;
+        yield* outbox.send({ server, sessionID, protocol: "v1", directory, text: "later", files: [], agent: Agent.ID.make("build") });
+        yield* settled(outbox);
+      }),
+    );
+    expect(fake.admitted).toEqual(["later after 3 checks"]);
+  }, 15_000);
+
   it("makes the session, then sends a lane's messages in order", async () => {
     const fake = fakeServer(() => "admit");
     await run(
