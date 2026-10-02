@@ -26,6 +26,7 @@ import { SettingsScreen } from "./SettingsScreen";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { AppearanceScreen } from "./AppearanceScreen";
 import { AgentButtonSettingsScreen } from "./AgentButtonSettingsScreen";
+import { SessionSettingsScreen } from "./SessionSettingsScreen";
 import { ExtensionsScreen } from "./ExtensionsScreen";
 import { PluginDetailScreen } from "./PluginDetailScreen";
 import { PluginsScreen } from "./PluginsScreen";
@@ -51,6 +52,7 @@ export type RootStackParamList = {
   /** `protocol`: known when the app just made the session (v2); found out
    * otherwise (sessions/protocol.ts). */
   Chat: { sessionID: string; protocol?: "v1" | "v2" };
+  SessionSettings: { sessionID: string };
   Settings: undefined;
   Extensions: undefined;
   Appearance: undefined;
@@ -301,6 +303,7 @@ export const RootNavigator = (): React.ReactElement => {
          * collapses on scroll (not the custom glass header). */}
         <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Settings" }} />
         <Stack.Screen name="Extensions" component={ExtensionsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Extensions" }} />
+        <Stack.Screen name="SessionSettings" component={SessionSettingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Session Settings" /> }} />
         <Stack.Screen name="Plugins" component={PluginsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Plugins" /> }} />
         <Stack.Screen name="PluginDetail" component={PluginDetailScreen} options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={route.params.name} /> })} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />

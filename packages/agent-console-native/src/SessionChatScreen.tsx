@@ -51,7 +51,6 @@ import type { Arrival } from "./messageArrival";
 import { PermissionPrompt } from "./PermissionPrompt";
 import { setViewedSession } from "./push";
 import { markSessionRead } from "./sessionReads";
-import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
 import { barExtra, useBarGeometry } from "./barGeometry";
 import { Composer } from "./Composer";
@@ -286,8 +285,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     setSelected((current) => (current.includes(file.path) ? current.filter((path) => path !== file.path) : [file.path, ...current]));
     setOrderVersion((version) => version + 1);
   };
-  // Mirrors the module-level store so the menu re-renders with the choice.
-  const [permissionMode, setMode] = React.useState<PermissionMode>(() => getPermissionMode(sessionID));
   const [title, setTitle] = React.useState<string | undefined>(undefined);
   // Newest-first — paired with `inverted` below, which should anchor the
   // list to the newest message on its own. In practice it wasn't sticking
@@ -364,33 +361,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // and there's no client/server race writing the same activity. The app only
   // starts the activity (above); it doesn't push content.
 
-  const applyPermissionMode = React.useCallback(
-    (next: PermissionMode) => {
-      setPermissionMode(sessionID, next);
-      setMode(next);
-    },
-    [sessionID],
-  );
-
-  // Confirmation stays an action sheet: it is a decision, not navigation, and
-  // it only guards the direction that grants power. Switching back to asking
-  // takes effect immediately.
-  const confirmAllowAll = React.useCallback(() => {
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: "Allow all tool actions?",
-        message:
-          "Tools run without asking for the rest of this session, including shell commands and delegating to a subagent that has its own unrestricted permissions.",
-        options: ["Allow all", "Cancel"],
-        destructiveButtonIndex: 0,
-        cancelButtonIndex: 1,
-      },
-      (index) => {
-        if (index === 0) applyPermissionMode("full");
-      },
-    );
-  }, [applyPermissionMode]);
-
   // Rename via the shared action; apply the new title locally on success.
   const renameSession = React.useCallback(() => {
     promptRenameSession(client, sessionID, title ?? "", setTitle);
@@ -422,29 +392,17 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               },
               {
                 type: "action",
-                label: "Allow all",
-                description: "Tools run without asking",
-                state: permissionMode === "full" ? "on" : "off",
-                // Destructive because choosing it grants shell access and
-                // subagent delegation for the rest of the session.
-                destructive: permissionMode !== "full",
-                onPress: () => {
-                  if (permissionMode !== "full") confirmAllowAll();
-                },
-              },
-              {
-                type: "action",
-                label: "Ask before each action",
-                description: "Each tool action waits for approval",
-                state: permissionMode === "ask" ? "on" : "off",
-                onPress: () => applyPermissionMode("ask"),
+                label: "Settings",
+                description: "This session's permissions",
+                icon: { type: "sfSymbol", name: "gearshape" },
+                onPress: () => props.navigation.navigate("SessionSettings", { sessionID }),
               },
             ],
           },
         },
       ],
     });
-  }, [props.navigation, title, sessionID, connected, permissionMode, confirmAllowAll, applyPermissionMode, refresh, renameSession]);
+  }, [props.navigation, title, sessionID, connected, refresh, renameSession]);
 
   React.useEffect(() => {
     setTitle(undefined);
