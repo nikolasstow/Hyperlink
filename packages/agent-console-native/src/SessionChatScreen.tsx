@@ -245,7 +245,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // resting spot), the bar as tall as it is now, its file chips.
   const restingBottom = composerRestingBottom(insets.bottom);
   const chipsHeight = files.length > 0 ? FILE_CHIPS_HEIGHT : 0;
-  const listInset = useDerivedValue(() => Math.max(keyboardValue.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(barGeometry) + chipsHeight);
+  // At rest (keyboard down, bar collapsed) that room is part of the list's
+  // own layout, a spacer under the newest message, so a chat opens in place
+  // from its first frame. What the keyboard and the open bar add is the
+  // scroll view's inset, set every frame on the UI thread (an inset is no
+  // layout; resizing the spacer every frame re-laid out the whole list).
+  const restingRoom = restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight;
+  const listInset = useDerivedValue(() => Math.max(keyboardValue.value, restingBottom) - restingBottom + barExtra(barGeometry));
   // The list's scroll position (the newest message is at -listInset).
   const listOffset = useSharedValue(0);
   const onListScroll = useAnimatedScrollHandler({
@@ -265,17 +271,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       scrollTo(listRef, 0, offset, false);
     },
   );
-  // Animated props reach the list only when what they read changes, never at
-  // its mount (a plain prop of the same name is dropped): the mount bumps
-  // this, so the room is in place at once.
-  const mounted = useSharedValue(0);
   const listInsetProps = useAnimatedProps(() => ({
-    contentInset: { top: listInset.value + mounted.value * 0, left: 0, bottom: 0, right: 0 },
+    contentInset: { top: listInset.value, left: 0, bottom: 0, right: 0 },
     scrollIndicatorInsets: { top: listInset.value, left: 0, bottom: 0, right: 0 },
   }));
-  React.useEffect(() => {
-    mounted.value = 1;
-  }, [mounted]);
   // Your message just sent, arriving from the input.
   const [arriving, setArriving] = React.useState<{ readonly id: string; readonly arrival: Arrival } | undefined>(undefined);
   // Keyboard up: select it for the message (or unselect). Down: open it.
@@ -321,16 +320,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     (animated: boolean): void => listRef.current?.scrollToOffset({ offset: -listInset.value, animated }),
     [listRef, listInset],
   );
-  // Opens at the newest once its messages are laid out (a scroll before
-  // that is put back in range as they are, the room not counted yet), and
-  // stays there as they come in, until you first scroll.
-  const untouched = React.useRef(true);
-  const onContentSizeChange = React.useCallback((): void => {
-    if (untouched.current) toNewest(false);
-  }, [toNewest]);
-  const onScrollBeginDrag = React.useCallback((): void => {
-    untouched.current = false;
-  }, []);
   // A new message brings the list to it only when you sent it, or you were
   // already at the newest; reading back, you stay where you are.
   const newestID = reversedOrder[0];
@@ -655,8 +644,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // newest message, without this.
         scrollToOverflowEnabled
         onScroll={onListScroll}
-        onContentSizeChange={onContentSizeChange}
-        onScrollBeginDrag={onScrollBeginDrag}
         scrollEventThrottle={16}
         // No automatic insets: the list is inverted, so iOS's header inset
         // (at the scroll view's native top) landed at the visual bottom, on top
@@ -678,7 +665,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // Below the newest message, not above the oldest — the header, not
         // the footer, is what renders nearest the (inverted) start of the
         // list, which an inverted list pins to the bottom of the screen.
-        ListHeaderComponent={busy ? <BusyRow onStop={onStop} startedAt={answerStartedAt(messages)} /> : null}
+        // Under the newest message: the busy row, then the bar's resting room.
+        ListHeaderComponent={
+          <>
+            {busy ? <BusyRow onStop={onStop} startedAt={answerStartedAt(messages)} /> : null}
+            <View style={{ height: restingRoom }} />
+          </>
+        }
         // `inverted` flips the whole content area as a unit, so these are
         // swapped from how they read: `paddingBottom` — normally "space
         // after the last item" — renders as reserved space at the screen's
