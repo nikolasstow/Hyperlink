@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider, useAppContext } from "./src/AppContext";
 import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
+import { ConversationPreloader } from "./src/conversations/ConversationPreloader";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
@@ -191,6 +192,8 @@ const AppInner = (): React.ReactElement => {
           <ThemeSync />
           {/* Answers permission asks for allow-all sessions, app-wide. */}
           <PermissionAutoApprover />
+          {/* Keeps the recent conversations on the device, before any is opened. */}
+          <ConversationPreloader />
           {/* Makes this the app notifications go to whenever it is opened. */}
           <PushOnForeground />
           {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}

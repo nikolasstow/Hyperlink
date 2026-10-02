@@ -35,6 +35,7 @@ import { SessionID } from "./opencode/schema/session-id";
 import { SessionMessage } from "./opencode/schema/session-message";
 import type { Protocol } from "./outbox/model";
 import { removeQueued, retryLane, sendMessage, useLane } from "./outbox/useOutbox";
+import { rememberConversation, useKeptConversation } from "./conversations/useConversations";
 import { interruptSession, sessionProtocol } from "./sessions/protocol";
 import { AGENT } from "./client";
 import { promptRenameSession } from "./sessionActions";
@@ -75,6 +76,10 @@ const SESSION_DUBZ: DubzContext = {
   surface: "session",
   scope: { kind: "all" },
 };
+
+const NO_MESSAGES: ReadonlyArray<ChatMessage> = [];
+/** An open chat's messages are kept this long after they last change. */
+const REMEMBER_DEBOUNCE_MS = 1000;
 
 /** The gap between the bar's room and the rows above it. */
 const BAR_SPACE_GAP = 8;
@@ -120,13 +125,17 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   }, [streamEnabled, sessionID]);
   // The live connection: a v1 session's conversation, and permission asks
   // (both APIs' asks come over it, so it runs for a v2 session too).
-  const { transcript, pendingPermission, replyPermission, clearBusy, connected, refresh } = useSessionStream(client, sessionID, address, streamEnabled);
+  const { transcript, loaded, pendingPermission, replyPermission, clearBusy, connected, refresh } = useSessionStream(client, sessionID, address, streamEnabled);
 
-  // Which API the session is spoken to over (sessions/protocol.ts): known
-  // when the app just made it, found out otherwise.
   const server = React.useMemo(() => serverAddressOf(address), [address]);
   const session = React.useMemo(() => SessionID.make(sessionID), [sessionID]);
-  const [protocol, setProtocol] = React.useState<Protocol | undefined>(props.route.params.protocol);
+  // What the device kept of the conversation (conversations/): the chat opens
+  // on it, nothing to fetch, and shows it until its whole history is in.
+  const kept = useKeptConversation(server, sessionID);
+  // Which API the session is spoken to over (sessions/protocol.ts): known
+  // when the app just made it or kept it, found out otherwise.
+  const [foundProtocol, setProtocol] = React.useState<Protocol | undefined>(props.route.params.protocol);
+  const protocol = foundProtocol ?? kept?.protocol;
   // Being found out: a send made meanwhile waits for it.
   const finding = React.useRef<Promise<Protocol> | undefined>(undefined);
   React.useEffect(() => {
@@ -146,16 +155,28 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // outbox, until the server has it too (same id) and the
   // conversation shows it.
   const v2Messages = useV2Transcript(server, session, protocol === "v2" && streamEnabled);
-  const delivered = React.useMemo(
-    (): ReadonlyArray<ChatMessage> =>
+  // The whole conversation, once in: undefined until then.
+  const live = React.useMemo(
+    (): ReadonlyArray<ChatMessage> | undefined =>
       protocol === "v2"
         ? v2Messages
-        : transcript.order.flatMap((id) => {
-            const message = transcript.messages.get(id);
-            return message === undefined ? [] : [chatMessageOfV1(message)];
-          }),
-    [protocol, v2Messages, transcript],
+        : protocol === "v1" && loaded
+          ? transcript.order.flatMap((id) => {
+              const message = transcript.messages.get(id);
+              return message === undefined ? [] : [chatMessageOfV1(message)];
+            })
+          : undefined,
+    [protocol, v2Messages, loaded, transcript],
   );
+  const delivered = live ?? kept?.messages ?? NO_MESSAGES;
+  // The newest of it kept as it changes, so the next open starts from here.
+  React.useEffect(() => {
+    if (live === undefined || protocol === undefined) return undefined;
+    const timer = setTimeout(() => {
+      rememberConversation(server, sessionID, protocol, live).catch((error: unknown) => console.error("[conversations] keeping the chat failed", error));
+    }, REMEMBER_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [server, sessionID, protocol, live]);
   const lane = useLane(server, session);
   // After the conversation: what is queued, and what the server took that the
   // conversation does not show yet (fromOutbox.ts). Carried from render to

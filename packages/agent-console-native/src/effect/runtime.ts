@@ -10,7 +10,8 @@
  * - the device's signals (network, foreground);
  * - opencode v2 clients per server, their reachability;
  * - the outbox (its lanes persisted in AsyncStorage under their own prefix),
- *   and how it makes new folders.
+ *   and how it makes new folders;
+ * - the conversations kept on the device (their own prefix).
  *
  * No per-server state lives in the layers' construction (servers are passed
  * to each call), so the runtime never needs rebuilding on reconnect.
@@ -19,6 +20,7 @@
  */
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { Conversations } from "../conversations/Conversations";
 import { Opencode } from "../opencode/Opencode";
 import { layer as foldersLayer } from "../outbox/foldersNative";
 import { Outbox } from "../outbox/Outbox";
@@ -27,10 +29,11 @@ import { layer as asyncStorageLayer } from "./asyncStorage";
 import { layer as deviceSignalsLayer } from "./deviceSignalsNative";
 
 const OUTBOX_STORAGE_PREFIX = "agent-console-native:outbox:";
+const CONVERSATIONS_STORAGE_PREFIX = "agent-console-native:conversations:";
 
 const platform = Layer.mergeAll(FetchHttpClient.layer, deviceSignalsLayer, foldersLayer);
 
-const AppLayer = Outbox.layer.pipe(
+const AppLayer = Layer.mergeAll(Outbox.layer, Conversations.layer.pipe(Layer.provide(asyncStorageLayer(CONVERSATIONS_STORAGE_PREFIX)))).pipe(
   Layer.provideMerge(Reachability.layer),
   Layer.provideMerge(Opencode.layer),
   Layer.provide(asyncStorageLayer(OUTBOX_STORAGE_PREFIX)),

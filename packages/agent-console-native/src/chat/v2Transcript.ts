@@ -12,13 +12,15 @@
  *   session. A delta for text that has ended is dropped, so a late one cannot
  *   add to finished text (the durable "ended" carries the full text anyway).
  *
- * Both reconnect with backoff for as long as the stream is read. A snapshot
- * of the messages is published after each change; consumers coalesce them
- * (useV2Transcript.ts).
+ * Both reconnect with backoff for as long as the stream is read. Nothing is
+ * published while the history replays (a chat shows the messages the device
+ * kept meanwhile); once events go quiet for `REPLAY_QUIET` it is caught up,
+ * and from then a snapshot is published after each change; consumers
+ * coalesce them (useV2Transcript.ts).
  *
  * @internal
  */
-import { Duration, Effect, HashSet, Ref, Schedule, Stream, SubscriptionRef } from "effect";
+import { Duration, Effect, FiberHandle, HashSet, Ref, Schedule, Stream, SubscriptionRef } from "effect";
 import { memory, type MemoryState, update } from "../opencode/core/message-updater";
 import { Opencode } from "../opencode/Opencode";
 import type { ServerAddress } from "../opencode/serverAddress";
@@ -28,6 +30,8 @@ import type { SessionMessage } from "../opencode/schema/session-message";
 
 const RECONNECT_FIRST = "500 millis";
 const RECONNECT_LONGEST = Duration.seconds(10);
+/** No event for this long while replaying: the history is in. */
+const REPLAY_QUIET = Duration.millis(250);
 
 const reconnect = Schedule.exponential(RECONNECT_FIRST).pipe(
   Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, RECONNECT_LONGEST))),
@@ -77,6 +81,12 @@ export const v2Transcript = (server: ServerAddress, sessionID: SessionID): Strea
       const ended = yield* Ref.make(HashSet.empty<string>());
       // A snapshot of the projection as it is when this runs.
       const publish = Effect.suspend(() => SubscriptionRef.set(messages, [...state.messages]));
+      // Caught up once the replay goes quiet; until then each event only
+      // pushes that moment back.
+      const caughtUp = yield* Ref.make(false);
+      const quiet = yield* FiberHandle.make();
+      const settle = FiberHandle.run(quiet, Effect.sleep(REPLAY_QUIET).pipe(Effect.andThen(Ref.set(caughtUp, true)), Effect.andThen(publish)));
+      const changed = Effect.flatMap(Ref.get(caughtUp), (live) => (live ? publish : settle));
 
       const applyDurable = (event: SessionEvent.Event) =>
         Effect.gen(function* () {
@@ -86,7 +96,7 @@ export const v2Transcript = (server: ServerAddress, sessionID: SessionID): Strea
           if (seq !== undefined) yield* Ref.set(lastSeq, seq);
           const block = blockOf(event);
           if (block !== undefined) yield* Ref.update(ended, HashSet.add(block));
-          yield* publish;
+          yield* changed;
         });
 
       const applyDelta = (event: Delta) =>
@@ -94,8 +104,11 @@ export const v2Transcript = (server: ServerAddress, sessionID: SessionID): Strea
           const block = blockOf(event);
           if (block !== undefined && HashSet.has(yield* Ref.get(ended), block)) return;
           yield* update(adapter, event);
-          yield* publish;
+          yield* changed;
         });
+
+      // A session with no history yet is caught up as soon as it is quiet.
+      yield* settle;
 
       yield* keepConnected(
         "session events",

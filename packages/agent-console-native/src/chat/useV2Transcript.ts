@@ -5,7 +5,8 @@
  * it had.
  *
  * Snapshots arrive per event (a streamed reply sends many a second); React
- * gets at most one per frame, the latest.
+ * gets at most one per frame, the latest. Undefined until the history is in
+ * (the chat shows what the device kept meanwhile).
  *
  * @internal
  */
@@ -19,10 +20,8 @@ import { chatMessagesOfV2 } from "./fromV2";
 import type { ChatMessage } from "./model";
 import { v2Transcript } from "./v2Transcript";
 
-const NONE: ReadonlyArray<ChatMessage> = [];
-
-export const useV2Transcript = (server: ServerAddress, sessionID: SessionID, enabled: boolean): ReadonlyArray<ChatMessage> => {
-  const [messages, setMessages] = React.useState<ReadonlyArray<ChatMessage>>(NONE);
+export const useV2Transcript = (server: ServerAddress, sessionID: SessionID, enabled: boolean): ReadonlyArray<ChatMessage> | undefined => {
+  const [messages, setMessages] = React.useState<ReadonlyArray<ChatMessage> | undefined>(undefined);
   React.useEffect(() => {
     if (!enabled) return undefined;
     let latest: ReadonlyArray<SessionMessage.Message> | undefined;

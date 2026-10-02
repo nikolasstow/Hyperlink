@@ -4,6 +4,7 @@ import { registerRootComponent } from "expo";
 import { fetch as expoFetch } from "expo/fetch";
 
 import App from "./App";
+import { startConversations } from "./src/conversations/useConversations";
 import { startOutbox } from "./src/outbox/useOutbox";
 
 // The OpenCode SDK's SSE helper (client.event.subscribe, used by
@@ -22,6 +23,10 @@ globalThis.fetch = expoFetch;
 // The outbox resumes what was queued (and defines its background task, which
 // iOS may launch the app straight into).
 startOutbox();
+
+// What the device kept of conversations is read back now, before any chat
+// is opened.
+startConversations();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

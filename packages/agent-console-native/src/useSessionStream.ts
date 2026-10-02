@@ -165,6 +165,9 @@ export const useSessionStream = (
   enabled: boolean,
 ): {
   readonly transcript: Transcript;
+  /** Whether `transcript` is the session's whole history (loaded this
+   * launch); until then a chat shows what the device kept. */
+  readonly loaded: boolean;
   /** A permission the server is waiting on, when this session asks rather
    * than auto-approving. Null while nothing is pending. */
   readonly pendingPermission: PendingPermission | undefined;
@@ -183,6 +186,7 @@ export const useSessionStream = (
 } => {
   const [transcript, setTranscript] = React.useState<Transcript>(() => (sessionID !== undefined ? (transcriptCache.get(sessionID) ?? EMPTY) : EMPTY));
   const [connected, setConnected] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(() => sessionID !== undefined && transcriptCache.has(sessionID));
   const [pendingPermission, setPendingPermission] = React.useState<PendingPermission | undefined>(undefined);
   // Bumped by `refresh()`; part of the stream effect's deps, so incrementing it
   // tears the connection down and re-runs it (a fresh history load included).
@@ -229,6 +233,7 @@ export const useSessionStream = (
     const seeded = transcriptCache.get(sessionID) ?? EMPTY;
     currentRef.current = seeded;
     setTranscript(seeded);
+    setLoaded(transcriptCache.has(sessionID));
 
     const controller = new AbortController();
     let cancelled = false;
@@ -266,6 +271,7 @@ export const useSessionStream = (
         // reconciled from history.
         return isFirst ? { ...next, busy: busyFromHistory(next) } : next;
       });
+      setLoaded(true);
     };
 
     const run = async (): Promise<void> => {
@@ -356,5 +362,5 @@ export const useSessionStream = (
     apply((t) => ({ ...t, busy: false }));
   }, [apply]);
 
-  return { transcript, pendingPermission, replyPermission, clearBusy, connected, refresh };
+  return { transcript, loaded, pendingPermission, replyPermission, clearBusy, connected, refresh };
 };
