@@ -15,7 +15,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
-import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, Keyboard, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View, type ViewStyle } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle } from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,7 +45,6 @@ import { startLiveActivity } from "../modules/live-activity";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { ROW_GUTTER } from "./layout";
 import { EdgeBlurBars } from "./EdgeBlurBars";
-import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import { MESSAGE_GAP, MessageBubble, RECEIPT_HEIGHT } from "./MessageBubble";
 import { dateHeaders } from "./chat/dateHeaders";
 import { latestReceipt } from "./chat/receipt";
@@ -84,6 +84,9 @@ const BAR_SPACE_GAP = 8;
 /** The longest the input waits for its bubble to show before clearing. */
 const ARRIVAL_WAIT_MS = 250;
 
+/** How far a finger may move and still tap (points). */
+const TAP_SLOP = 10;
+
 /** Within this of the newest message, a new one scrolls into view. */
 const NEAR_NEWEST = 80;
 
@@ -97,6 +100,18 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
+  // A tap on the chat closes the keyboard; a drag (a scroll) is not a tap.
+  const dismissKeyboard = React.useMemo(
+    () =>
+      Gesture.Tap()
+        // Any real movement is a scroll, not a tap.
+        .maxDistance(TAP_SLOP)
+        .runOnJS(true)
+        .onEnd((_event, success) => {
+          if (success) Keyboard.dismiss();
+        }),
+    [],
+  );
   // Reanimated keyboard tracking so the floating composer rides the keyboard
   // exactly (real position each frame). The list padding / blur bars keep the
   // plain number (behind it, where a snap is invisible).
@@ -552,6 +567,14 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         * set because the list is `inverted` (a scaleY(-1) transform), so
         * its native top edge is the visual bottom — targeting one edge
         * would mean guessing at that mapping. */}
+      {/* The list ends at the bar's top: its bottom edge rides the bar and the
+        * keyboard (ListFrame). Its content draws past that edge, so messages
+        * still pass behind the glass. */}
+      {/* With the keyboard up, a tap on the chat only closes it (the rows
+        * take no touches then, so it hits none of them); a drag fails the tap
+        * and scrolls. */}
+      <GestureDetector gesture={dismissKeyboard}>
+      <ListFrame geometry={barGeometry} restingBottom={composerRestingBottom(insets.bottom)} chips={files.length > 0 ? FILE_CHIPS_HEIGHT : 0}>
       <ScrollViewMarker style={styles.flex} scrollEdgeEffects={{ top: "soft", bottom: "soft" }}>
       <FlatList
         ref={listRef}
@@ -566,7 +589,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // it, leaving blank space below. The padding below is exact instead;
         // the scroll edge effect comes from ScrollViewMarker, as on Home.
         contentInsetAdjustmentBehavior="never"
-        style={styles.flex}
+        // Draws past its frame: messages pass behind the bar's glass.
+        style={styles.list}
+        pointerEvents={keyboardHeight > 0 ? "box-only" : "auto"}
         data={listData}
         keyExtractor={(id) => id}
         renderItem={({ item }) => {
@@ -608,32 +633,24 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // Below the newest message, not above the oldest — the header, not
         // the footer, is what renders nearest the (inverted) start of the
         // list, which an inverted list pins to the bottom of the screen.
-        // The bar's room is the header's last child, at the very bottom.
-        ListHeaderComponent={
-          <>
-            {busy ? <BusyRow onStop={onStop} startedAt={answerStartedAt(messages)} /> : null}
-            <BarSpace geometry={barGeometry} restingBottom={composerRestingBottom(insets.bottom)} chips={files.length > 0 ? FILE_CHIPS_HEIGHT : 0} />
-          </>
-        }
+        ListHeaderComponent={busy ? <BusyRow onStop={onStop} startedAt={answerStartedAt(messages)} /> : null}
         // `inverted` flips the whole content area as a unit, so these are
         // swapped from how they read: `paddingBottom` — normally "space
         // after the last item" — renders as reserved space at the screen's
         // visual TOP (under the header), and `paddingTop`
-        // renders at the visual BOTTOM (under the floating composer).
-        // The visual bottom is BarSpace, in the header.
+        // renders at the visual BOTTOM (a small gap above the bar).
         contentContainerStyle={[
           styles.content,
           {
             paddingBottom: topBarHeight + 16,
-            paddingTop: 0,
+            paddingTop: BAR_SPACE_GAP,
           },
         ]}
       />
       </ScrollViewMarker>
+      </ListFrame>
+      </GestureDetector>
       <EdgeBlurBars busy={busy} />
-      {/* While the keyboard is up, one tap outside the composer only collapses
-       * it (consumed here) instead of hitting a message/row behind it. */}
-      <KeyboardDismissOverlay active={keyboardHeight > 0} />
       {/* Absolutely positioned, not a flex sibling — otherwise it takes
        * layout space away from the list and nothing ever passes behind
        * it, which defeats the glass. `bottom` tracks the keyboard
@@ -663,21 +680,31 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   );
 };
 
-/** The room under the newest message: the keyboard (or the bar's resting
- * spot), the bar as tall as it is this frame, its file chips, and a small gap.
- * On the UI thread, from the same values the bar lays out by. */
-const BarSpace = (props: {
+/** The list's frame: the screen down to the bar's top, which is the
+ * keyboard (or the bar's resting spot), the bar as tall as it is this frame
+ * and its file chips. On the UI thread, from the same values the bar lays out
+ * by. Only the frame moves; nothing inside the list is laid out again, which
+ * a space inside it (resized every frame) did, dropping frames. */
+const ListFrame = (props: {
   readonly geometry: BarGeometry;
   readonly restingBottom: number;
   readonly chips: number;
+  readonly children: React.ReactNode;
 }): React.ReactElement => {
   const keyboardHeight = useKeyboardHeightValue();
   const { geometry, restingBottom, chips } = props;
-  const space = useAnimatedStyle(() => ({
-    height: Math.max(keyboardHeight.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(geometry) + chips + BAR_SPACE_GAP,
+  const frame = useAnimatedStyle(() => ({
+    bottom: Math.max(keyboardHeight.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(geometry) + chips,
   }));
-  return <Animated.View style={space} />;
+  return <Animated.View style={[listFrameStyle, frame]}>{props.children}</Animated.View>;
 };
+
+const listFrameStyle = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+} satisfies ViewStyle;
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
@@ -686,6 +713,10 @@ const makeStyles = (text: TextColors) =>
   },
   flex: {
     flex: 1,
+  },
+  list: {
+    flex: 1,
+    overflow: "visible",
   },
   composerFloat: {
     position: "absolute",
