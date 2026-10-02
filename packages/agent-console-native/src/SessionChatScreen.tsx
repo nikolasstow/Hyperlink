@@ -83,9 +83,6 @@ const BAR_SPACE_GAP = 8;
 /** The longest the input waits for its bubble to show before clearing. */
 const ARRIVAL_WAIT_MS = 250;
 
-/** Within this of the newest, a change of the room under it keeps it there. */
-const PINNED_SLOP = 4;
-
 /** Within this of the newest message, a new one scrolls into view. */
 const NEAR_NEWEST = 80;
 
@@ -251,32 +248,23 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const listInset = useDerivedValue(() => Math.max(keyboardValue.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(barGeometry) + chipsHeight);
   // Opens at the newest.
   const [initialOffset] = React.useState(() => ({ x: 0, y: -(restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight) }));
-  // The list's scroll position (the newest message is at -listInset), and
-  // whether it is at the newest: from the start, and again whenever a scroll
-  // ends there.
+  // The list's scroll position (the newest message is at -listInset).
   const listOffset = useSharedValue(initialOffset.y);
-  const pinned = useSharedValue(true);
   const onListScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       listOffset.value = event.contentOffset.y;
     },
-    onBeginDrag: () => {
-      pinned.value = false;
-    },
-    onEndDrag: (event) => {
-      pinned.value = event.contentOffset.y <= -listInset.value + PINNED_SLOP;
-    },
-    onMomentumEnd: (event) => {
-      pinned.value = event.contentOffset.y <= -listInset.value + PINNED_SLOP;
-    },
   });
-  // At the newest, it stays there as the room changes: the messages ride the
-  // bar and the keyboard. Read back, they stay where they are.
+  // As the room changes, the messages move with it, wherever the list is
+  // scrolled: what is in view stays in line with the bar and the keyboard.
   useAnimatedReaction(
     () => listInset.value,
     (inset, previous) => {
-      if (previous === null || inset === previous || !pinned.value) return;
-      scrollTo(listRef, 0, -inset, false);
+      if (previous === null || inset === previous) return;
+      const offset = listOffset.value - (inset - previous);
+      // Taken now: the scroll event that reports it comes a frame later.
+      listOffset.value = offset;
+      scrollTo(listRef, 0, offset, false);
     },
   );
   const listInsetProps = useAnimatedProps(() => ({
@@ -325,11 +313,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // (the newest sits at -listInset).
   const scrolledBack = React.useCallback((): number => listOffset.value + listInset.value, [listOffset, listInset]);
   const toNewest = React.useCallback(
-    (animated: boolean): void => {
-      pinned.value = true;
-      listRef.current?.scrollToOffset({ offset: -listInset.value, animated });
-    },
-    [listRef, listInset, pinned],
+    (animated: boolean): void => listRef.current?.scrollToOffset({ offset: -listInset.value, animated }),
+    [listRef, listInset],
   );
   // A new message brings the list to it only when you sent it, or you were
   // already at the newest; reading back, you stay where you are.
