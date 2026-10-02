@@ -147,6 +147,7 @@ export const withPart = (transcript: Transcript, part: RenderablePart): Transcri
     parts,
     providerID: existing?.providerID,
     modelID: existing?.modelID,
+    time: existing?.time,
   });
   const order = existing === undefined ? [...transcript.order, part.messageID] : transcript.order;
   return { ...transcript, messages, order };

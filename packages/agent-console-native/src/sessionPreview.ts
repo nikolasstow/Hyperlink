@@ -66,7 +66,7 @@ const toTranscript = (messages: ReadonlyArray<{ readonly info: Message; readonly
       info.id,
       info.role,
       info.role === "assistant" ? { providerID: info.providerID, modelID: info.modelID } : undefined,
-      info.role === "assistant" ? info.time : undefined,
+      info.time,
     );
     for (const part of parts) {
       if (isRenderablePart(part)) transcript = withPart(transcript, part);
