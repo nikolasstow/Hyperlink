@@ -330,7 +330,8 @@ export const Composer = (props: {
                 value={text}
                 onChangeText={setText}
                 onLayout={(e) => onInputLayout(e.nativeEvent.layout.height)}
-                editable={!props.disabled}
+                // Always editable: disabled only holds the send (iOS drops the
+                // keyboard from an input that stops being editable).
                 placeholder={props.placeholder}
                 placeholderTextColor={textColors.placeholderText}
                 multiline
