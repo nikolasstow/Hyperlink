@@ -15,9 +15,8 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
-import { ActionSheetIOS, Alert, FlatList, Keyboard, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View, type ViewStyle } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle } from "react-native-reanimated";
+import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
+import Animated, { scrollTo, useAnimatedProps, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -54,7 +53,7 @@ import { setViewedSession } from "./push";
 import { markSessionRead } from "./sessionReads";
 import { getPermissionMode, setPermissionMode, type PermissionMode } from "./sessionPermissions";
 import type { RootStackParamList } from "./RootNavigator";
-import { barExtra, type BarGeometry, useBarGeometry } from "./barGeometry";
+import { barExtra, useBarGeometry } from "./barGeometry";
 import { Composer } from "./Composer";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { FILE_CHIPS_HEIGHT, FileChips } from "./FileChips";
@@ -84,8 +83,8 @@ const BAR_SPACE_GAP = 8;
 /** The longest the input waits for its bubble to show before clearing. */
 const ARRIVAL_WAIT_MS = 250;
 
-/** How far a finger may move and still tap (points). */
-const TAP_SLOP = 10;
+/** Within this of the newest, a change of the room under it keeps it there. */
+const PINNED_SLOP = 4;
 
 /** Within this of the newest message, a new one scrolls into view. */
 const NEAR_NEWEST = 80;
@@ -100,18 +99,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
-  // A tap on the chat closes the keyboard; a drag (a scroll) is not a tap.
-  const dismissKeyboard = React.useMemo(
-    () =>
-      Gesture.Tap()
-        // Any real movement is a scroll, not a tap.
-        .maxDistance(TAP_SLOP)
-        .runOnJS(true)
-        .onEnd((_event, success) => {
-          if (success) Keyboard.dismiss();
-        }),
-    [],
-  );
   // Reanimated keyboard tracking so the floating composer rides the keyboard
   // exactly (real position each frame). The list padding / blur bars keep the
   // plain number (behind it, where a snap is invisible).
@@ -255,7 +242,35 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // The bar's heights, which the composer animates and the list's bottom
   // space follows in the same frame.
   const barGeometry = useBarGeometry();
+  const listRef = useAnimatedRef<FlatList<string>>();
   const keyboardValue = useKeyboardHeightValue();
+  // The room under the newest message, this frame: the keyboard (or the bar's
+  // resting spot), the bar as tall as it is now, its file chips.
+  const restingBottom = composerRestingBottom(insets.bottom);
+  const chipsHeight = files.length > 0 ? FILE_CHIPS_HEIGHT : 0;
+  const listInset = useDerivedValue(() => Math.max(keyboardValue.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(barGeometry) + chipsHeight);
+  // The list's scroll position (the newest message is at -listInset).
+  const listOffset = useSharedValue(0);
+  const onListScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      listOffset.value = event.contentOffset.y;
+    },
+  });
+  // At the newest, it stays there as the room changes: the messages ride the
+  // bar and the keyboard. Read back, they stay where they are.
+  useAnimatedReaction(
+    () => listInset.value,
+    (inset, previous) => {
+      if (previous === null || inset === previous) return;
+      if (listOffset.value <= -previous + PINNED_SLOP) scrollTo(listRef, 0, -inset, false);
+    },
+  );
+  const listInsetProps = useAnimatedProps(() => ({
+    contentInset: { top: listInset.value, left: 0, bottom: 0, right: 0 },
+    scrollIndicatorInsets: { top: listInset.value, left: 0, bottom: 0, right: 0 },
+  }));
+  // Opens at the newest.
+  const [initialOffset] = React.useState(() => ({ x: 0, y: -(restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight) }));
   // Your message just sent, arriving from the input.
   const [arriving, setArriving] = React.useState<{ readonly id: string; readonly arrival: Arrival } | undefined>(undefined);
   // Keyboard up: select it for the message (or unselect). Down: open it.
@@ -276,7 +291,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // inverted list's "start", i.e. its bottom) whenever a message is
   // appended — the same role the old `scrollToEnd` played pre-inversion.
   const reversedOrder = React.useMemo(() => messages.map((message) => message.id).reverse(), [messages]);
-  const listRef = React.useRef<FlatList<string>>(null);
   // The one collapsible allowed to be open by default: the most recent
   // reasoning block or tool call anywhere in the transcript. Scanned newest
   // message first so a long history costs nothing — it exits on the first hit.
@@ -295,9 +309,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     }
     return undefined;
   }, [messages]);
-  // How far the reader is from the newest message (the inverted list's
-  // offset).
-  const scrolledBack = React.useRef(0);
+  // How far the reader is from the newest message, and taking them to it
+  // (the newest sits at -listInset).
+  const scrolledBack = React.useCallback((): number => listOffset.value + listInset.value, [listOffset, listInset]);
+  const toNewest = React.useCallback(
+    (animated: boolean): void => listRef.current?.scrollToOffset({ offset: -listInset.value, animated }),
+    [listRef, listInset],
+  );
   // A new message brings the list to it only when you sent it, or you were
   // already at the newest; reading back, you stay where you are.
   const newestID = reversedOrder[0];
@@ -306,8 +324,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     if (newestID === undefined || newestID === shownNewest.current) return;
     shownNewest.current = newestID;
     const yours = byID.get(newestID)?.role === "user";
-    if (yours || scrolledBack.current < NEAR_NEWEST) listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [newestID, byID]);
+    if (yours || scrolledBack() < NEAR_NEWEST) toNewest(true);
+  }, [newestID, byID, scrolledBack, toNewest]);
 
   // Start the Live Activity when a run begins, and buzz once when it ends. The
   // app NEVER ends the activity: the server owns that (it ends on the real
@@ -500,7 +518,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         resolve();
         return;
       }
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      toNewest(false);
       setArriving({
         id,
         arrival: {
@@ -555,6 +573,48 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     };
   }, [client, directory, seedModel?.providerID, seedModel?.modelID]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Stable while the conversation is: the list re-renders a row only when
+  // that row's own data changes, not whenever the screen does (the keyboard
+  // showing re-rendered every row, a heavy native update as it rose).
+  const renderItem = React.useCallback(
+    ({ item }: { readonly item: string }): React.ReactElement | null => {
+      if (item === PERMISSION_ROW_ID) {
+        return pendingPermission === undefined ? null : (
+          <PermissionPrompt
+            pending={pendingPermission}
+            onReply={(reply) => {
+              replyPermission(reply).catch((error: unknown) =>
+                Alert.alert("Couldn’t answer the permission", error instanceof Error ? error.message : String(error)),
+              );
+            }}
+          />
+        );
+      }
+      const message = byID.get(item);
+      if (message === undefined) return null;
+      const queued = message.queued === true;
+      // Still in the outbox: a tap offers to send it again now (or, for one
+      // the server refused, after a fix) or take it out. The same element
+      // once delivered, so the bubble stays mounted (its arrival runs on).
+      return (
+        <Pressable
+          accessibilityRole={queued ? "button" : undefined}
+          accessibilityLabel={queued ? "Queued message" : undefined}
+          disabled={!queued}
+          onPress={() => onQueuedPress(message.id)}
+        >
+          <MessageBubble
+            message={message}
+            arrival={arriving?.id === message.id ? arriving.arrival : undefined}
+            receipt={receipt?.messageID === message.id ? receipt.receipt : undefined}
+            dateHeader={headers.get(message.id)}
+          />
+        </Pressable>
+      );
+    },
+    [pendingPermission, replyPermission, byID, onQueuedPress, arriving, receipt, headers],
+  );
+
   // No `paddingBottom: keyboardHeight` on root — the composer is
   // absolutely positioned, and absolute children weren't being offset by
   // that padding (they sat behind the keyboard instead), so both the
@@ -567,68 +627,33 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         * set because the list is `inverted` (a scaleY(-1) transform), so
         * its native top edge is the visual bottom — targeting one edge
         * would mean guessing at that mapping. */}
-      {/* The list ends at the bar's top: its bottom edge rides the bar and the
-        * keyboard (ListFrame). Its content draws past that edge, so messages
-        * still pass behind the glass. */}
-      {/* With the keyboard up, a tap on the chat only closes it (the rows
-        * take no touches then, so it hits none of them); a drag fails the tap
-        * and scrolls. */}
-      <GestureDetector gesture={dismissKeyboard}>
-      <ListFrame geometry={barGeometry} restingBottom={composerRestingBottom(insets.bottom)} chips={files.length > 0 ? FILE_CHIPS_HEIGHT : 0}>
       <ScrollViewMarker style={styles.flex} scrollEdgeEffects={{ top: "soft", bottom: "soft" }}>
-      <FlatList
+      <Animated.FlatList
         ref={listRef}
         inverted
-        onScroll={(event) => {
-          scrolledBack.current = event.nativeEvent.contentOffset.y;
-        }}
-        scrollEventThrottle={32}
+        // The room under the newest message is the scroll view's own inset,
+        // following the bar and the keyboard frame by frame (listInset); an
+        // inset is no layout, so nothing in the list is laid out again.
+        animatedProps={listInsetProps}
+        contentOffset={initialOffset}
+        onScroll={onListScroll}
+        scrollEventThrottle={16}
         // No automatic insets: the list is inverted, so iOS's header inset
         // (at the scroll view's native top) landed at the visual bottom, on top
         // of the bar's room, and "scroll to newest" (offset 0) stopped short of
         // it, leaving blank space below. The padding below is exact instead;
         // the scroll edge effect comes from ScrollViewMarker, as on Home.
         contentInsetAdjustmentBehavior="never"
-        // Draws past its frame: messages pass behind the bar's glass.
-        style={styles.list}
-        pointerEvents={keyboardHeight > 0 ? "box-only" : "auto"}
+        // The whole screen: messages pass behind the bar's glass.
+        style={styles.flex}
+        // With the keyboard up, a tap on the chat only closes it (the list
+        // takes the touch, so no row gets it); a scroll keeps it up. React
+        // Native's own handling: a touch that ends without scrolling blurs.
+        keyboardShouldPersistTaps="never"
+        keyboardDismissMode="none"
         data={listData}
         keyExtractor={(id) => id}
-        renderItem={({ item }) => {
-          if (item === PERMISSION_ROW_ID) {
-            return pendingPermission === undefined ? null : (
-              <PermissionPrompt
-                pending={pendingPermission}
-                onReply={(reply) => {
-                  replyPermission(reply).catch((error: unknown) =>
-                    Alert.alert("Couldn’t answer the permission", error instanceof Error ? error.message : String(error)),
-                  );
-                }}
-              />
-            );
-          }
-          const message = byID.get(item);
-          if (message === undefined) return null;
-          const queued = message.queued === true;
-          // Still in the outbox: a tap offers to send it again now (or, for one
-          // the server refused, after a fix) or take it out. The same element
-          // once delivered, so the bubble stays mounted (its arrival runs on).
-          return (
-            <Pressable
-              accessibilityRole={queued ? "button" : undefined}
-              accessibilityLabel={queued ? "Queued message" : undefined}
-              disabled={!queued}
-              onPress={() => onQueuedPress(message.id)}
-            >
-              <MessageBubble
-                message={message}
-                arrival={arriving?.id === message.id ? arriving.arrival : undefined}
-                receipt={receipt?.messageID === message.id ? receipt.receipt : undefined}
-                dateHeader={headers.get(message.id)}
-              />
-            </Pressable>
-          );
-        }}
+        renderItem={renderItem}
         ListEmptyComponent={<Text style={styles.empty}>Ask a question, or ask it to make a change.</Text>}
         // Below the newest message, not above the oldest — the header, not
         // the footer, is what renders nearest the (inverted) start of the
@@ -648,8 +673,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         ]}
       />
       </ScrollViewMarker>
-      </ListFrame>
-      </GestureDetector>
       <EdgeBlurBars busy={busy} />
       {/* Absolutely positioned, not a flex sibling — otherwise it takes
        * layout space away from the list and nothing ever passes behind
@@ -680,32 +703,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   );
 };
 
-/** The list's frame: the screen down to the bar's top, which is the
- * keyboard (or the bar's resting spot), the bar as tall as it is this frame
- * and its file chips. On the UI thread, from the same values the bar lays out
- * by. Only the frame moves; nothing inside the list is laid out again, which
- * a space inside it (resized every frame) did, dropping frames. */
-const ListFrame = (props: {
-  readonly geometry: BarGeometry;
-  readonly restingBottom: number;
-  readonly chips: number;
-  readonly children: React.ReactNode;
-}): React.ReactElement => {
-  const keyboardHeight = useKeyboardHeightValue();
-  const { geometry, restingBottom, chips } = props;
-  const frame = useAnimatedStyle(() => ({
-    bottom: Math.max(keyboardHeight.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(geometry) + chips,
-  }));
-  return <Animated.View style={[listFrameStyle, frame]}>{props.children}</Animated.View>;
-};
-
-const listFrameStyle = {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-} satisfies ViewStyle;
-
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
   root: {
@@ -713,10 +710,6 @@ const makeStyles = (text: TextColors) =>
   },
   flex: {
     flex: 1,
-  },
-  list: {
-    flex: 1,
-    overflow: "visible",
   },
   composerFloat: {
     position: "absolute",
