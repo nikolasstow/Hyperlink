@@ -443,13 +443,15 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       action: "Working…",
     });
     const id = SessionMessage.ID.create();
-    // It flies from the input when its row lands at the bottom of the list
-    // as you see it: you are at the newest, and nothing sits below it.
+    // It flies from the input to its row at the bottom of the list: the list
+    // goes to the newest first (from wherever it was), unless a permission
+    // prompt sits below the newest message.
     const landed = new Promise<void>((resolve) => {
-      if (scrolledBack.current > 0 || pendingPermission !== undefined) {
+      if (pendingPermission !== undefined) {
         resolve();
         return;
       }
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
       setArriving({
         id,
         arrival: {
