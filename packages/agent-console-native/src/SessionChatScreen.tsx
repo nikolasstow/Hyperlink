@@ -249,11 +249,25 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const restingBottom = composerRestingBottom(insets.bottom);
   const chipsHeight = files.length > 0 ? FILE_CHIPS_HEIGHT : 0;
   const listInset = useDerivedValue(() => Math.max(keyboardValue.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(barGeometry) + chipsHeight);
-  // The list's scroll position (the newest message is at -listInset).
-  const listOffset = useSharedValue(0);
+  // Opens at the newest.
+  const [initialOffset] = React.useState(() => ({ x: 0, y: -(restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight) }));
+  // The list's scroll position (the newest message is at -listInset), and
+  // whether it is at the newest: from the start, and again whenever a scroll
+  // ends there.
+  const listOffset = useSharedValue(initialOffset.y);
+  const pinned = useSharedValue(true);
   const onListScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       listOffset.value = event.contentOffset.y;
+    },
+    onBeginDrag: () => {
+      pinned.value = false;
+    },
+    onEndDrag: (event) => {
+      pinned.value = event.contentOffset.y <= -listInset.value + PINNED_SLOP;
+    },
+    onMomentumEnd: (event) => {
+      pinned.value = event.contentOffset.y <= -listInset.value + PINNED_SLOP;
     },
   });
   // At the newest, it stays there as the room changes: the messages ride the
@@ -261,16 +275,14 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   useAnimatedReaction(
     () => listInset.value,
     (inset, previous) => {
-      if (previous === null || inset === previous) return;
-      if (listOffset.value <= -previous + PINNED_SLOP) scrollTo(listRef, 0, -inset, false);
+      if (previous === null || inset === previous || !pinned.value) return;
+      scrollTo(listRef, 0, -inset, false);
     },
   );
   const listInsetProps = useAnimatedProps(() => ({
     contentInset: { top: listInset.value, left: 0, bottom: 0, right: 0 },
     scrollIndicatorInsets: { top: listInset.value, left: 0, bottom: 0, right: 0 },
   }));
-  // Opens at the newest.
-  const [initialOffset] = React.useState(() => ({ x: 0, y: -(restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight) }));
   // Your message just sent, arriving from the input.
   const [arriving, setArriving] = React.useState<{ readonly id: string; readonly arrival: Arrival } | undefined>(undefined);
   // Keyboard up: select it for the message (or unselect). Down: open it.
@@ -313,8 +325,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // (the newest sits at -listInset).
   const scrolledBack = React.useCallback((): number => listOffset.value + listInset.value, [listOffset, listInset]);
   const toNewest = React.useCallback(
-    (animated: boolean): void => listRef.current?.scrollToOffset({ offset: -listInset.value, animated }),
-    [listRef, listInset],
+    (animated: boolean): void => {
+      pinned.value = true;
+      listRef.current?.scrollToOffset({ offset: -listInset.value, animated });
+    },
+    [listRef, listInset, pinned],
   );
   // A new message brings the list to it only when you sent it, or you were
   // already at the newest; reading back, you stay where you are.

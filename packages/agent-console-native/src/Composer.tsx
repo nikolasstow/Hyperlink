@@ -180,6 +180,11 @@ export const Composer = (props: {
   const onInputLayout = (height: number): void => {
     setInputHeight(geometry, height);
   };
+  // Cleared (sent), it is one line again: iOS reports no new layout for an
+  // input emptied in place.
+  React.useEffect(() => {
+    if (text.length === 0) setInputHeight(geometry, MIN_INPUT_HEIGHT);
+  }, [geometry, text.length]);
 
   const onFocus = (): void => {
     setFocused(true);
