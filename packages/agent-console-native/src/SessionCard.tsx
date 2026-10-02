@@ -15,7 +15,7 @@
  * @internal
  */
 import { Button, Circle, ContextMenu, Host, HStack, Image, RNHostView, Section, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, cornerRadius, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, contentShape, cornerRadius, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
@@ -279,7 +279,9 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
           </RNHostView>
         </ContextMenu.Preview>
         <ContextMenu.Trigger>
-          <VStack modifiers={[onTapGesture(props.onOpen)]}>
+          {/* The whole card opens it, glass and all: without a shape, SwiftUI
+            * hits only what is drawn (the text), not the space around it. */}
+          <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(props.onOpen)]}>
             <CardBody
               width={cardWidth}
               title={props.title}
