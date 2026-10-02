@@ -246,8 +246,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const restingBottom = composerRestingBottom(insets.bottom);
   const chipsHeight = files.length > 0 ? FILE_CHIPS_HEIGHT : 0;
   const listInset = useDerivedValue(() => Math.max(keyboardValue.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(barGeometry) + chipsHeight);
-  // Opens at the newest.
-  const [initialOffset] = React.useState(() => ({ x: 0, y: -(restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight) }));
+  // Opens at the newest, with the room under it in place from the first
+  // frame: the animated inset reaches the list only once the room changes,
+  // so the list mounts with it (and keeps the resting one as files come and
+  // go); the animated one takes over as the bar and the keyboard move.
+  const restingRoom = restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight;
+  const [initialOffset] = React.useState(() => ({ x: 0, y: -restingRoom }));
+  const restingInset = React.useMemo(() => ({ top: restingRoom, left: 0, bottom: 0, right: 0 }), [restingRoom]);
   // The list's scroll position (the newest message is at -listInset).
   const listOffset = useSharedValue(initialOffset.y);
   const onListScroll = useAnimatedScrollHandler({
@@ -635,7 +640,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // following the bar and the keyboard frame by frame (listInset); an
         // inset is no layout, so nothing in the list is laid out again.
         animatedProps={listInsetProps}
+        contentInset={restingInset}
+        scrollIndicatorInsets={restingInset}
         contentOffset={initialOffset}
+        // Its follow-the-room scroll lands in the same frame as the room grows;
+        // React Native would clamp it to the room as it was, short of the
+        // newest message, without this.
+        scrollToOverflowEnabled
         onScroll={onListScroll}
         scrollEventThrottle={16}
         // No automatic insets: the list is inverted, so iOS's header inset
