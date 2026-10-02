@@ -16,7 +16,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
 import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
-import Animated, { runOnUI, scrollTo, useAnimatedProps, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useDerivedValue, useSharedValue } from "react-native-reanimated";
+import Animated, { scrollTo, useAnimatedProps, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -267,7 +267,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   );
   // Animated props reach the list only when what they read changes, never at
   // its mount (a plain prop of the same name is dropped): the mount bumps
-  // this, so the room is in place at once, then opens at the newest.
+  // this, so the room is in place at once.
   const mounted = useSharedValue(0);
   const listInsetProps = useAnimatedProps(() => ({
     contentInset: { top: listInset.value + mounted.value * 0, left: 0, bottom: 0, right: 0 },
@@ -275,12 +275,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   }));
   React.useEffect(() => {
     mounted.value = 1;
-    runOnUI(() => {
-      "worklet";
-      listOffset.value = -listInset.value;
-      scrollTo(listRef, 0, -listInset.value, false);
-    })();
-  }, [mounted, listOffset, listInset, listRef]);
+  }, [mounted]);
   // Your message just sent, arriving from the input.
   const [arriving, setArriving] = React.useState<{ readonly id: string; readonly arrival: Arrival } | undefined>(undefined);
   // Keyboard up: select it for the message (or unselect). Down: open it.
@@ -326,6 +321,16 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     (animated: boolean): void => listRef.current?.scrollToOffset({ offset: -listInset.value, animated }),
     [listRef, listInset],
   );
+  // Opens at the newest once its messages are laid out (a scroll before
+  // that is put back in range as they are, the room not counted yet), and
+  // stays there as they come in, until you first scroll.
+  const untouched = React.useRef(true);
+  const onContentSizeChange = React.useCallback((): void => {
+    if (untouched.current) toNewest(false);
+  }, [toNewest]);
+  const onScrollBeginDrag = React.useCallback((): void => {
+    untouched.current = false;
+  }, []);
   // A new message brings the list to it only when you sent it, or you were
   // already at the newest; reading back, you stay where you are.
   const newestID = reversedOrder[0];
@@ -650,6 +655,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // newest message, without this.
         scrollToOverflowEnabled
         onScroll={onListScroll}
+        onContentSizeChange={onContentSizeChange}
+        onScrollBeginDrag={onScrollBeginDrag}
         scrollEventThrottle={16}
         // No automatic insets: the list is inverted, so iOS's header inset
         // (at the scroll view's native top) landed at the visual bottom, on top
