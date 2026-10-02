@@ -101,7 +101,7 @@ export const BottomBar = (props: BottomBarProps): React.ReactElement => {
       {/* The small drop shadow lives on this OUTER wrapper; it does not clip or
        * round the glass (the glass rounds itself). */}
       <View style={styles.pillShadow}>
-        <GlassView style={styles.field} glassEffectStyle="regular" colorScheme={scheme === "dark" ? "dark" : "light"}>
+        <GlassView style={styles.field} glassEffectStyle="clear" colorScheme={scheme === "dark" ? "dark" : "light"}>
           {props.topSection !== undefined ? (
             <Reanimated.View style={[styles.section, topStyle]} pointerEvents={expanded ? "auto" : "none"}>
               {props.topSection.node}
