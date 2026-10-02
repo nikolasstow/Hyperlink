@@ -170,7 +170,7 @@ export const ModelPicker = (props: {
           padding({ trailing: 4 }),
           contentShape(shapes.rectangle()),
           onTapGesture(props.onPress),
-          frame({ maxWidth: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE, alignment: "leading" }),
+          frame({ width: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE, alignment: "leading" }),
         ]}
       >
         <Text modifiers={[font({ size: 13, weight: "medium" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1), truncationMode("middle")]}>
@@ -487,7 +487,6 @@ const styles = StyleSheet.create({
   host: {
     width: LABEL_MAX_WIDTH,
     height: COMPOSER_CHIP_SIZE,
-    maxWidth: "100%",
   },
 });
 
