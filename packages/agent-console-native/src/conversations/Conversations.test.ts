@@ -2,6 +2,8 @@ import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { KeyValueStore } from "effect/unstable/persistence";
 import { describe, expect, it } from "vitest";
+import type { ChatMessage } from "../chat/model";
+import { DeviceSignals } from "../effect/DeviceSignals";
 import { Opencode } from "../opencode/Opencode";
 import { serverAddressOf } from "../opencode/serverAddress";
 import { Conversations } from "./Conversations";
@@ -51,7 +53,7 @@ const deviceStorage = () => {
 const run = <A, E>(fake: ReturnType<typeof fakeServer>, program: Effect.Effect<A, E, Conversations>, storage = deviceStorage()) =>
   Effect.runPromise(
     program.pipe(
-      Effect.provide(Conversations.layer.pipe(Layer.provideMerge(Opencode.layer), Layer.provide(Layer.mergeAll(Layer.succeed(HttpClient.HttpClient)(fake.client), storage)))),
+      Effect.provide(Conversations.layer.pipe(Layer.provideMerge(Opencode.layer), Layer.provide(Layer.mergeAll(Layer.succeed(HttpClient.HttpClient)(fake.client), storage, DeviceSignals.layerNone)))),
       Effect.scoped,
     ),
   );
@@ -102,6 +104,22 @@ describe("Conversations", () => {
       }),
     );
     expect(fake.fetched).toEqual(["ses_1", "ses_1"]);
+  });
+
+  it("keeps an open chat's messages once they stop changing", async () => {
+    const fake = fakeServer([]);
+    const kept = await run(
+      fake,
+      Effect.gen(function* () {
+        const conversations = yield* Conversations;
+        const message = (text: string): ChatMessage => ({ id: "msg_a", role: "user", parts: [{ kind: "text", id: "p", text }] });
+        yield* conversations.remember(server, "ses_1", "v2", [message("first")]);
+        yield* conversations.remember(server, "ses_1", "v2", [message("second")]);
+        return yield* keptWhen(conversations, "ses_1", 0);
+      }),
+    );
+    const conversation = Option.getOrThrow(kept);
+    expect(conversation.messages.map((message) => message.parts.map((part) => (part.kind === "text" ? part.text : "")))).toEqual([["second"]]);
   });
 
   it("reads back what the device kept when the app opens again", async () => {

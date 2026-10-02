@@ -5,11 +5,12 @@
  *
  * - **Preloaded** for the sessions someone might open next: every button
  *   that opens a session asks for its own (usePreloadConversation.ts), and
- *   the most recent are asked for when the app opens or comes back. A
+ *   `keepRecent` asks for the most recent when the app opens and each time
+ *   it comes back. A
  *   session the server has not changed since it was kept is not fetched
  *   again; one already being fetched is not fetched twice; a few at a time.
  * - **Kept current by the chat**: an open chat hands back its newest
- *   messages as they change, so the next open starts from them.
+ *   messages as they change (coalesced), so the next open starts from them.
  * - **On the device** (KeyValueStore, one entry per conversation, writes
  *   coalesced), read back at launch.
  *
@@ -22,6 +23,7 @@ import { Context, Duration, Effect, FiberMap, HashMap, Layer, Option, Schema, Se
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { KeyValueStore } from "effect/unstable/persistence";
 import { chatMessagesOfV1History } from "../chat/fromV1";
+import { DeviceSignals } from "../effect/DeviceSignals";
 import { chatMessagesOfV2 } from "../chat/fromV2";
 import type { ChatMessage } from "../chat/model";
 import { Opencode } from "../opencode/Opencode";
@@ -29,6 +31,7 @@ import type { ServerAddress } from "../opencode/serverAddress";
 import { SessionID } from "../opencode/schema/session-id";
 import type { Protocol } from "../outbox/model";
 import { sessionProtocol } from "../sessions/protocol";
+import { listSessions, type SessionSummary } from "../sessions/sessionList";
 import { Conversation, conversationKey, ConversationKeys } from "./model";
 
 /** Messages kept per conversation: a screenful and more. */
@@ -37,6 +40,10 @@ export const KEPT_MESSAGES = 30;
 const PRELOAD_CONCURRENCY = 3;
 /** Writes to the device, coalesced per conversation. */
 const PERSIST_DEBOUNCE = Duration.millis(500);
+/** An open chat's messages are kept this long after they last change. */
+const REMEMBER_DEBOUNCE = Duration.seconds(1);
+/** The most recent sessions kept on opening: Home's lists and more. */
+const RECENT_SESSIONS = 30;
 const KEYS_KEY = "keys";
 
 /** v1's history page, as far as the chat reads it. */
@@ -71,6 +78,7 @@ export const newest = (messages: ReadonlyArray<ChatMessage>): ReadonlyArray<Chat
 const make = Effect.gen(function* () {
   const opencode = yield* Opencode;
   const http = yield* HttpClient.HttpClient;
+  const device = yield* DeviceSignals;
   const kv = yield* KeyValueStore.KeyValueStore;
   const conversations = KeyValueStore.toSchemaStore(kv, Conversation);
   const keys = KeyValueStore.toSchemaStore(kv, ConversationKeys);
@@ -146,6 +154,24 @@ const make = Effect.gen(function* () {
       Effect.catchCause((cause) => Effect.logWarning(`[conversations] preloading ${session.id} failed`, cause)),
     );
 
+  const preload = (server: ServerAddress, sessions: ReadonlyArray<Wanted>) =>
+    Effect.forEach(
+      [...sessions].sort((a, b) => b.updated - a.updated),
+      (session) => want(server, session),
+      { discard: true },
+    );
+
+  /** The most recent top-level sessions, as `shown` leaves them. */
+  const preloadRecent = (server: ServerAddress, shown: (sessions: ReadonlyArray<SessionSummary>) => ReadonlyArray<SessionSummary>) =>
+    listSessions(server).pipe(
+      Effect.provideService(Opencode, opencode),
+      Effect.map((sessions) => shown(sessions.filter((session) => session.parentID === undefined)).slice(0, RECENT_SESSIONS)),
+      Effect.flatMap((recent) => preload(server, recent.map((session) => ({ id: session.id, updated: session.time.updated })))),
+      Effect.catchCause((cause) => Effect.logWarning("[conversations] preloading the recent sessions failed", cause)),
+    );
+
+  const remembering = yield* FiberMap.make<string>();
+
   /** Starts keeping a session (in the background), unless it already is. */
   const want = (server: ServerAddress, session: Wanted) =>
     FiberMap.run(inFlight, conversationKey(server, session.id), refresh(server, session), { onlyIfMissing: true }).pipe(Effect.asVoid);
@@ -154,15 +180,24 @@ const make = Effect.gen(function* () {
     /** Every conversation kept, as it changes (the current one first). */
     changes: SubscriptionRef.changes(state),
     /** Starts keeping these sessions' newest messages, most recent first. */
-    preload: (server: ServerAddress, sessions: ReadonlyArray<Wanted>) =>
-      Effect.forEach(
-        [...sessions].sort((a, b) => b.updated - a.updated),
-        (session) => want(server, session),
-        { discard: true },
+    preload,
+    /** Keeps the most recent sessions now and each time the app comes back,
+     * for as long as it runs. `shown` leaves out what the lists do not show
+     * (archived). */
+    keepRecent: (server: ServerAddress, shown: (sessions: ReadonlyArray<SessionSummary>) => ReadonlyArray<SessionSummary>) =>
+      Stream.concat(Stream.succeed("start"), device.signals.pipe(Stream.filter((signal) => signal === "foreground"))).pipe(
+        Stream.runForEach(() => preloadRecent(server, shown)),
       ),
-    /** An open chat's newest messages, kept as they change. */
-    remember: (server: ServerAddress, sessionID: string, protocol: Protocol, messages: ReadonlyArray<ChatMessage>) =>
-      keep(conversationKey(server, sessionID), { protocol, updated: Date.now(), messages: newest(messages) }),
+    /** An open chat's newest messages, kept once they stop changing for a
+     * moment. */
+    remember: (server: ServerAddress, sessionID: string, protocol: Protocol, messages: ReadonlyArray<ChatMessage>) => {
+      const key = conversationKey(server, sessionID);
+      return FiberMap.run(
+        remembering,
+        key,
+        Effect.sleep(REMEMBER_DEBOUNCE).pipe(Effect.andThen(keep(key, { protocol, updated: Date.now(), messages: newest(messages) }))),
+      ).pipe(Effect.asVoid);
+    },
   };
 });
 

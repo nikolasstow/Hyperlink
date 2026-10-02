@@ -9,12 +9,13 @@
  *
  * @internal
  */
-import { Effect, HashMap, Option, Stream } from "effect";
+import { Effect, Fiber, HashMap, Option, Stream } from "effect";
 import * as React from "react";
 import type { ChatMessage } from "../chat/model";
 import { forkApp, runApp } from "../effect/runtime";
 import { serverAddressOf, type ServerAddress } from "../opencode/serverAddress";
 import type { Protocol } from "../outbox/model";
+import type { SessionSummary } from "../sessions/sessionList";
 import { conversationChanges, Conversations, type Wanted } from "./Conversations";
 import { type Conversation, conversationKey } from "./model";
 
@@ -60,7 +61,21 @@ export const preloadConversations = (address: string, sessions: ReadonlyArray<Wa
     }),
   );
 
-/** Keeps an open chat's newest messages. */
+/** Keeps the most recent sessions now and each time the app comes back,
+ * until the returned stop is called. */
+export const keepRecentConversations = (address: string, shown: (sessions: ReadonlyArray<SessionSummary>) => ReadonlyArray<SessionSummary>): (() => void) => {
+  const fiber = forkApp(
+    Effect.gen(function* () {
+      const conversations = yield* Conversations;
+      yield* conversations.keepRecent(serverAddressOf(address), shown);
+    }),
+  );
+  return () => {
+    forkApp(Fiber.interrupt(fiber));
+  };
+};
+
+/** Keeps an open chat's newest messages (once they stop changing). */
 export const rememberConversation = (server: ServerAddress, sessionID: string, protocol: Protocol, messages: ReadonlyArray<ChatMessage>): Promise<void> =>
   runApp(
     Effect.gen(function* () {

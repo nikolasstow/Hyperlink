@@ -23,13 +23,13 @@ that shows the control preloads for free.
   keeping them. On the device (KeyValueStore over AsyncStorage, one entry per
   conversation, writes coalesced), read back at launch.
 - Preloaded: every session card asks for its own; the 30 most recent
-  top-level sessions are asked for when the app opens and when it returns to
-  the foreground. A session unchanged since kept is not fetched; one being
+  top-level sessions are asked for when the app opens and on each foreground
+  signal (`keepRecent`, an Effect over `DeviceSignals`). A session unchanged since kept is not fetched; one being
   fetched is not fetched twice; three at a time.
 - The chat opens on what is kept (no protocol check, no wait). Its whole
   history and live stream load behind it; it switches to them once they are
   in (v1: history loaded; v2: event replay gone quiet). An open chat hands its
-  newest messages back as they change.
+  newest messages back as they change; the store coalesces them.
 - Code: `src/conversations/` (`Conversations.ts` service, `model.ts` schema,
   `useConversations.ts` React bridge, `usePreloadConversation.ts`,
   `ConversationPreloader.tsx`).

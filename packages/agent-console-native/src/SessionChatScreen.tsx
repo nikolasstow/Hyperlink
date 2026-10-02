@@ -78,8 +78,6 @@ const SESSION_DUBZ: DubzContext = {
 };
 
 const NO_MESSAGES: ReadonlyArray<ChatMessage> = [];
-/** An open chat's messages are kept this long after they last change. */
-const REMEMBER_DEBOUNCE_MS = 1000;
 
 /** The gap between the bar's room and the rows above it. */
 const BAR_SPACE_GAP = 8;
@@ -171,11 +169,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const delivered = live ?? kept?.messages ?? NO_MESSAGES;
   // The newest of it kept as it changes, so the next open starts from here.
   React.useEffect(() => {
-    if (live === undefined || protocol === undefined) return undefined;
-    const timer = setTimeout(() => {
-      rememberConversation(server, sessionID, protocol, live).catch((error: unknown) => console.error("[conversations] keeping the chat failed", error));
-    }, REMEMBER_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
+    if (live === undefined || protocol === undefined) return;
+    rememberConversation(server, sessionID, protocol, live).catch((error: unknown) => console.error("[conversations] keeping the chat failed", error));
   }, [server, sessionID, protocol, live]);
   const lane = useLane(server, session);
   // After the conversation: what is queued, and what the server took that the
