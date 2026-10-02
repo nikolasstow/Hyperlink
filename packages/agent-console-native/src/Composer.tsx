@@ -37,7 +37,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useAppContext } from "./AppContext";
 import { useAgentButtonVisible } from "./agentButtonSettings";
-import { type BarGeometry, INPUT_LINE_HEIGHT, INPUT_PADDING_VERTICAL, MIN_INPUT_HEIGHT, setBarOpen, setInputHeight, useBarGeometry } from "./barGeometry";
+import { type BarGeometry, INPUT_LINE_HEIGHT, INPUT_PADDING_VERTICAL, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT, setBarOpen, setInputHeight, useBarGeometry } from "./barGeometry";
 import { type BarTopSection, BottomBar } from "./BottomBar";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
@@ -48,8 +48,6 @@ import type { CloseReason } from "./BarWindow";
 import { recordModelUse } from "./modelUsage";
 import { getLastModel, setLastModel } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
-
-const AnimatedTextInput = Reanimated.createAnimatedComponent(TextInput);
 
 const noop = (): void => undefined;
 
@@ -112,7 +110,6 @@ export const Composer = (props: {
   React.useEffect(() => {
     geometry.error.value = error !== undefined ? 1 : 0;
   }, [geometry, error]);
-  const inputStyle = useAnimatedStyle(() => ({ height: geometry.input.value }));
 
   // The model last sent with, once read; picked from the models once they load.
   const [lastModel, setLastModelRead] = React.useState<{ providerID: string; modelID: string } | undefined | null>(null);
@@ -176,17 +173,13 @@ export const Composer = (props: {
   const directory = props.directory;
   const refreshCatalog = React.useCallback(() => reloadModels(client, address, directory), [client, address, directory]);
 
-  // The input is as tall as its text, as iOS lays it out (its intrinsic size
-  // misses its own padding; the content size does not). It fires once on
-  // mount with an unreliable height, before any typing; an empty field is one
-  // line, whatever it reports.
-  const onContentSizeChange = (height: number): void => {
-    if (text.length === 0) return;
+  // The input sizes itself to its text (one line to MAX_INPUT_HEIGHT, then it
+  // scrolls); its section follows, animated, by the height Yoga gave it. Not
+  // `onContentSizeChange`: on iOS's new architecture it fires once, empty,
+  // and never as lines are added.
+  const onInputLayout = (height: number): void => {
     setInputHeight(geometry, height);
   };
-  React.useEffect(() => {
-    if (text.length === 0) setInputHeight(geometry, MIN_INPUT_HEIGHT);
-  }, [geometry, text.length]);
 
   const onFocus = (): void => {
     setFocused(true);
@@ -331,12 +324,12 @@ export const Composer = (props: {
             topSection={props.topSection}
             onExpandRequest={expand}
             input={
-              <AnimatedTextInput
+              <TextInput
                 ref={inputRef}
-                style={[styles.input, inputStyle]}
+                style={styles.input}
                 value={text}
                 onChangeText={setText}
-                onContentSizeChange={(e) => onContentSizeChange(e.nativeEvent.contentSize.height)}
+                onLayout={(e) => onInputLayout(e.nativeEvent.layout.height)}
                 editable={!props.disabled}
                 placeholder={props.placeholder}
                 placeholderTextColor={textColors.placeholderText}
@@ -403,6 +396,16 @@ const makeStyles = (text: TextColors) =>
     lineHeight: INPUT_LINE_HEIGHT,
     paddingHorizontal: 4,
     paddingVertical: INPUT_PADDING_VERTICAL,
+    minHeight: MIN_INPUT_HEIGHT,
+    maxHeight: MAX_INPUT_HEIGHT,
+    // Out of the flow, at the top of its section: an in-flow child of the
+    // section (a set height, clipping) is measured no taller than it, so the
+    // input could never grow past the section, nor the section past the
+    // input. Positioned, it is measured on its text alone.
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
   },
   // The Dubz page lies over the composer's bar, bottom to bottom, beside it
   // (`left` from dubzSlide).
