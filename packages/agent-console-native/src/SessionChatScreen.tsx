@@ -16,7 +16,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
 import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
-import Animated, { scrollTo, useAnimatedProps, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useDerivedValue, useSharedValue } from "react-native-reanimated";
+import Animated, { runOnUI, scrollTo, useAnimatedProps, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
@@ -246,15 +246,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const restingBottom = composerRestingBottom(insets.bottom);
   const chipsHeight = files.length > 0 ? FILE_CHIPS_HEIGHT : 0;
   const listInset = useDerivedValue(() => Math.max(keyboardValue.value, restingBottom) + COMPOSER_BAR_HEIGHT + barExtra(barGeometry) + chipsHeight);
-  // Opens at the newest, with the room under it in place from the first
-  // frame: the animated inset reaches the list only once the room changes,
-  // so the list mounts with it (and keeps the resting one as files come and
-  // go); the animated one takes over as the bar and the keyboard move.
-  const restingRoom = restingBottom + COMPOSER_BAR_HEIGHT + chipsHeight;
-  const [initialOffset] = React.useState(() => ({ x: 0, y: -restingRoom }));
-  const restingInset = React.useMemo(() => ({ top: restingRoom, left: 0, bottom: 0, right: 0 }), [restingRoom]);
   // The list's scroll position (the newest message is at -listInset).
-  const listOffset = useSharedValue(initialOffset.y);
+  const listOffset = useSharedValue(0);
   const onListScroll = useAnimatedScrollHandler({
     onScroll: (event) => {
       listOffset.value = event.contentOffset.y;
@@ -272,10 +265,22 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       scrollTo(listRef, 0, offset, false);
     },
   );
+  // Animated props reach the list only when what they read changes, never at
+  // its mount (a plain prop of the same name is dropped): the mount bumps
+  // this, so the room is in place at once, then opens at the newest.
+  const mounted = useSharedValue(0);
   const listInsetProps = useAnimatedProps(() => ({
-    contentInset: { top: listInset.value, left: 0, bottom: 0, right: 0 },
+    contentInset: { top: listInset.value + mounted.value * 0, left: 0, bottom: 0, right: 0 },
     scrollIndicatorInsets: { top: listInset.value, left: 0, bottom: 0, right: 0 },
   }));
+  React.useEffect(() => {
+    mounted.value = 1;
+    runOnUI(() => {
+      "worklet";
+      listOffset.value = -listInset.value;
+      scrollTo(listRef, 0, -listInset.value, false);
+    })();
+  }, [mounted, listOffset, listInset, listRef]);
   // Your message just sent, arriving from the input.
   const [arriving, setArriving] = React.useState<{ readonly id: string; readonly arrival: Arrival } | undefined>(undefined);
   // Keyboard up: select it for the message (or unselect). Down: open it.
@@ -640,9 +645,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         // following the bar and the keyboard frame by frame (listInset); an
         // inset is no layout, so nothing in the list is laid out again.
         animatedProps={listInsetProps}
-        contentInset={restingInset}
-        scrollIndicatorInsets={restingInset}
-        contentOffset={initialOffset}
         // Its follow-the-room scroll lands in the same frame as the room grows;
         // React Native would clamp it to the room as it was, short of the
         // newest message, without this.
