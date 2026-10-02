@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
 import { chatMessageOfV1 } from "./chat/fromV1";
-import { chatMessageOfQueued } from "./chat/fromOutbox";
+import { chatMessageOfQueued, pendingMessages, sameMessages } from "./chat/fromOutbox";
 import { answering, answerStartedAt, type ChatMessage } from "./chat/model";
 import { useV2Transcript } from "./chat/useV2Transcript";
 import { runApp } from "./effect/runtime";
@@ -127,11 +127,15 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const server = React.useMemo(() => serverAddressOf(address), [address]);
   const session = React.useMemo(() => SessionID.make(sessionID), [sessionID]);
   const [protocol, setProtocol] = React.useState<Protocol | undefined>(props.route.params.protocol);
+  // Being found out: a send made meanwhile waits for it.
+  const finding = React.useRef<Promise<Protocol> | undefined>(undefined);
   React.useEffect(() => {
     if (protocol !== undefined) return undefined;
     let cancelled = false;
-    void runApp(sessionProtocol(server, session)).then((found) => {
-      if (!cancelled) setProtocol(found);
+    const found = runApp(sessionProtocol(server, session));
+    finding.current = found;
+    void found.then((answer) => {
+      if (!cancelled) setProtocol(answer);
     });
     return () => {
       cancelled = true;
@@ -153,11 +157,24 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     [protocol, v2Messages, transcript],
   );
   const lane = useLane(server, session);
-  const messages = React.useMemo((): ReadonlyArray<ChatMessage> => {
-    const known = new Set(delivered.map((message) => message.id));
-    const waiting = (lane?.messages ?? []).filter((message) => !known.has(message.id)).map(chatMessageOfQueued);
-    return waiting.length === 0 ? delivered : [...delivered, ...waiting];
-  }, [delivered, lane]);
+  // After the conversation: what is queued, and what the server took that the
+  // conversation does not show yet (fromOutbox.ts). Carried from render to
+  // render, so a message never leaves the list between the two.
+  const [pending, setPending] = React.useState<ReadonlyArray<ChatMessage>>([]);
+  const nextPending = React.useMemo(
+    () =>
+      pendingMessages(
+        pending,
+        (lane?.messages ?? []).map(chatMessageOfQueued),
+        new Set(delivered.map((message) => message.id)),
+      ),
+    [pending, lane, delivered],
+  );
+  if (!sameMessages(nextPending, pending)) setPending(nextPending);
+  const messages = React.useMemo(
+    (): ReadonlyArray<ChatMessage> => (nextPending.length === 0 ? delivered : [...delivered, ...nextPending]),
+    [delivered, nextPending],
+  );
   const byID = React.useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const receipt = React.useMemo(() => latestReceipt(messages, lane?.held?.messageID), [messages, lane]);
   const headers = React.useMemo(() => dateHeaders(messages), [messages]);
@@ -425,7 +442,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // Into the outbox: sent from there, in order, when the server can take it
   // (sessions/../outbox). The bubble shows at once; its receipt says how far it got.
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
-    if (protocol === undefined) return;
+    const spoken = protocol ?? (await finding.current);
+    if (spoken === undefined) throw new Error("The session's protocol is not known");
     // The chips selected go with this message, as file references; the
     // selection clears.
     const attached = files.filter((file) => selectedSet.has(file.path));
@@ -472,7 +490,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       id,
       server,
       sessionID: session,
-      protocol,
+      protocol: spoken,
       directory: directory === undefined ? undefined : AbsolutePath.make(directory),
       text,
       files: attached.map((file) => ({ path: file.path, name: file.name })),
@@ -612,9 +630,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       <Animated.View style={[styles.composerFloat, composerSlide]} pointerEvents="box-none">
         <Composer
           onSend={onSend}
-          // v2: send any time (the server holds a message until the agent is
-          // free). v1 would hand it to the running turn, so it waits for idle.
-          disabled={protocol === undefined || (protocol === "v1" && transcript.busy)}
+          // Send any time: a message waits in the outbox (v1) or on the server
+          // (v2) until the agent is free.
+          disabled={false}
           directory={directory}
           bottomInset={0}
           placeholder="Message"
