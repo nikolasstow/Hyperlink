@@ -15,7 +15,8 @@ import { Platform, type NativeSyntheticEvent, type ViewProps } from "react-nativ
 type NativeProps = ViewProps & {
   readonly stops: ReadonlyArray<number>;
   readonly value: number;
-  readonly onChange: (event: NativeSyntheticEvent<{ readonly value: number }>) => void;
+  // Not `onChange`: React Native has that as a bubbling event already.
+  readonly onValueChange: (event: NativeSyntheticEvent<{ readonly value: number }>) => void;
 };
 
 export type DetentSliderProps = ViewProps & {
@@ -24,12 +25,14 @@ export type DetentSliderProps = ViewProps & {
   readonly onValueChange: (value: number) => void;
 };
 
-const available = Platform.OS === "ios" && requireOptionalNativeModule("DetentSlider") !== null;
-const NativeView = available ? requireNativeView<NativeProps>("DetentSlider") : undefined;
+// V2 (DetentSliderModule.swift): a build with only the first version has
+// none, and callers fall back.
+const available = Platform.OS === "ios" && requireOptionalNativeModule("DetentSliderV2") !== null;
+const NativeView = available ? requireNativeView<NativeProps>("DetentSliderV2") : undefined;
 
 const DetentSliderImpl = (props: DetentSliderProps): React.ReactElement | null => {
   const { onValueChange, ...rest } = props;
-  return NativeView === undefined ? null : <NativeView {...rest} onChange={(event) => onValueChange(event.nativeEvent.value)} />;
+  return NativeView === undefined ? null : <NativeView {...rest} onValueChange={(event) => onValueChange(event.nativeEvent.value)} />;
 };
 
 /** The native slider, or undefined where this build has none. */

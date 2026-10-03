@@ -38,7 +38,7 @@ struct DetentSliderContent: View {
 /// A native SwiftUI slider whose thumb only rests on the given stops.
 public final class DetentSliderView: ExpoView {
   let model: DetentSliderModel
-  let onChange = EventDispatcher()
+  let onValueChange = EventDispatcher()
   private let host: UIHostingController<DetentSliderContent>
 
   public required init(appContext: AppContext? = nil) {
@@ -49,7 +49,7 @@ public final class DetentSliderView: ExpoView {
     host.view.backgroundColor = .clear
     addSubview(host.view)
     model.onChange = { [weak self] value in
-      self?.onChange(["value": value])
+      self?.onValueChange(["value": value])
     }
   }
 
