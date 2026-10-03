@@ -121,6 +121,26 @@ export const ThemeProvider = (props: { readonly children: React.ReactNode }): Re
   return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>;
 };
 
+/** Below it, the screens' background is these colours where set (one
+ * session's own, say), and the text follows them; the rest of the theme as
+ * above. */
+export const BackgroundOverride = (props: {
+  readonly light: string | undefined;
+  readonly dark: string | undefined;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  const parent = useTheme();
+  const { light, dark } = props;
+  const value = React.useMemo(
+    (): ThemeContextValue =>
+      light === undefined && dark === undefined
+        ? parent
+        : { ...parent, theme: { ...parent.theme, backgroundLight: light ?? parent.theme.backgroundLight, backgroundDark: dark ?? parent.theme.backgroundDark } },
+    [parent, light, dark],
+  );
+  return <ThemeContext.Provider value={value}>{props.children}</ThemeContext.Provider>;
+};
+
 export const useTheme = (): ThemeContextValue => {
   const value = React.useContext(ThemeContext);
   if (value === undefined) throw new Error("useTheme() called outside ThemeProvider");

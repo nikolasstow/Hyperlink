@@ -9,7 +9,7 @@
  *
  * Default is `full`: asks are answered `once` automatically, so an agent has
  * full control and never stalls. `ask` hands each request to the UI instead.
- * Toggled per session from the chat's overflow menu.
+ * Set per session on its Session Settings page.
  *
  * `once` rather than `always` even on auto-approve — `always` writes a saved
  * rule server-side that outlives this session and applies beyond it, which is

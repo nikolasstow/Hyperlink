@@ -65,7 +65,8 @@ import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
-import { type TextColors, useThemedStyles } from "./theme";
+import { BackgroundOverride, type TextColors, useScreenBackground, useThemedStyles } from "./theme";
+import { useSessionBackground } from "./sessions/useSessionBackground";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -128,6 +129,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // What the device kept of the conversation (conversations/): the chat opens
   // on it, nothing to fetch, and shows it until its whole history is in.
   const kept = useKeptConversation(server, sessionID);
+  // Its own background, when it has one (Session Settings).
+  const background = useSessionBackground(sessionID);
   // Which API the session is spoken to over (sessions/protocol.ts): known
   // when the app just made it or kept it, found out otherwise.
   const [foundProtocol, setProtocol] = React.useState<Protocol | undefined>(props.route.params.protocol);
@@ -583,8 +586,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // composer and the list account for the keyboard explicitly below
   // rather than relying on padding-box positioning semantics.
   return (
+    <BackgroundOverride light={background?.light} dark={background?.dark}>
     <CollapsiblePartsProvider newestID={newestCollapsibleID}>
     <View style={styles.root}>
+      <ChatBackground />
       {/* Marks this list for iOS 26's scroll edge effect. Both edges are
         * set because the list is `inverted` (a scaleY(-1) transform), so
         * its native top edge is the visual bottom — targeting one edge
@@ -671,7 +676,15 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       </Animated.View>
     </View>
     </CollapsiblePartsProvider>
+    </BackgroundOverride>
   );
+};
+
+/** The chat's background: the session's own colour where it has one, else
+ * the app's (BackgroundOverride above it). */
+const ChatBackground = (): React.ReactElement => {
+  const backgroundColor = useScreenBackground();
+  return <View style={[StyleSheet.absoluteFill, { backgroundColor }]} pointerEvents="none" />;
 };
 
 const makeStyles = (text: TextColors) =>
