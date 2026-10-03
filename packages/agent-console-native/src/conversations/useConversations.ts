@@ -83,3 +83,12 @@ export const rememberConversation = (server: ServerAddress, sessionID: string, p
       yield* conversations.remember(server, sessionID, protocol, messages);
     }),
   );
+
+/** Keeps a renamed session's title for its header. */
+export const retitleConversation = (server: ServerAddress, sessionID: string, title: string): Promise<void> =>
+  runApp(
+    Effect.gen(function* () {
+      const conversations = yield* Conversations;
+      yield* conversations.retitle(server, sessionID, title);
+    }),
+  );

@@ -1,7 +1,7 @@
 /**
  * What the device keeps of a conversation: the newest of its messages (the
- * chat's own view, chat/model.ts), which API it is spoken over, and when the
- * server last changed it as of keeping them. Schema, so it is stored and read
+ * chat's own view, chat/model.ts), its title, which API it is spoken over,
+ * and when the server last changed it as of keeping them. Schema, so it is stored and read
  * back as JSON (`Schema.toCodecJson`), checked.
  *
  * @internal
@@ -60,6 +60,8 @@ export const Conversation = Schema.Struct({
   protocol: Schema.Literals(["v1", "v2"]),
   /** When the server last changed the session, as of these messages (ms). */
   updated: Schema.Number,
+  /** Its title, for the chat's header from the first frame. */
+  title: Schema.optional(Schema.String),
   /** The newest messages, oldest first. */
   messages: Schema.Array(Message),
 });

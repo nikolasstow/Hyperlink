@@ -192,7 +192,7 @@ const CardBody = (props: {
 
 export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   // It opens a chat: that chat's newest messages are kept before the tap.
-  usePreloadConversation(props.sessionId, props.updatedAt);
+  usePreloadConversation(props.sessionId, props.updatedAt, props.title);
   const { colors: themeColors } = useTheme();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const cardWidth = screenWidth - CARD_GUTTER * 2;

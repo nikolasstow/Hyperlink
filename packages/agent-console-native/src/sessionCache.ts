@@ -68,3 +68,6 @@ export const forgetCachedSession = async (id: string): Promise<void> => {
   const cached = await getCachedSessions();
   if (cached !== undefined && cached.some((session) => session.id === id)) await setCachedSessions(cached.filter((session) => session.id !== id));
 };
+
+/** A session's title from the list already read this launch, if it is there. */
+export const cachedSessionTitle = (id: string): string | undefined => inMemory?.find((session) => session.id === id)?.title;

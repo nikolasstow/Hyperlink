@@ -65,10 +65,12 @@ const V1History = Schema.Array(
 
 type Kept = HashMap.HashMap<string, Conversation>;
 
-/** A session to keep: which, and when the server last changed it (ms). */
+/** A session to keep: which, when the server last changed it (ms), and its
+ * title when known. */
 export interface Wanted {
   readonly id: string;
   readonly updated: number;
+  readonly title?: string;
 }
 
 /** The newest `KEPT_MESSAGES` of a conversation. */
@@ -142,13 +144,18 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const key = conversationKey(server, session.id);
       const kept = HashMap.get(yield* SubscriptionRef.get(state), key);
-      if (Option.isSome(kept) && kept.value.updated >= session.updated) return;
+      if (Option.isSome(kept) && kept.value.updated >= session.updated) {
+        // Its messages are current; its title may be newer than kept.
+        if (session.title !== undefined && session.title !== kept.value.title) yield* keep(key, { ...kept.value, title: session.title });
+        return;
+      }
       const sessionID = SessionID.make(session.id);
       const protocol: Protocol = Option.isSome(kept)
         ? kept.value.protocol
         : yield* sessionProtocol(server, sessionID).pipe(Effect.provideService(HttpClient.HttpClient, http), Effect.provideService(Opencode, opencode));
       const messages = protocol === "v1" ? yield* v1Newest(server, session.id) : yield* v2Newest(server, sessionID);
-      yield* keep(key, { protocol, updated: session.updated, messages });
+      const title = session.title ?? Option.getOrUndefined(Option.map(kept, (conversation) => conversation.title));
+      yield* keep(key, { protocol, updated: session.updated, title, messages });
     }).pipe(
       fetching.withPermits(1),
       Effect.catchCause((cause) => Effect.logWarning(`[conversations] preloading ${session.id} failed`, cause)),
@@ -166,7 +173,7 @@ const make = Effect.gen(function* () {
     listSessions(server).pipe(
       Effect.provideService(Opencode, opencode),
       Effect.map((sessions) => shown(sessions.filter((session) => session.parentID === undefined)).slice(0, RECENT_SESSIONS)),
-      Effect.flatMap((recent) => preload(server, recent.map((session) => ({ id: session.id, updated: session.time.updated })))),
+      Effect.flatMap((recent) => preload(server, recent.map((session) => ({ id: session.id, updated: session.time.updated, title: session.title })))),
       Effect.catchCause((cause) => Effect.logWarning("[conversations] preloading the recent sessions failed", cause)),
     );
 
@@ -195,8 +202,26 @@ const make = Effect.gen(function* () {
       return FiberMap.run(
         remembering,
         key,
-        Effect.sleep(REMEMBER_DEBOUNCE).pipe(Effect.andThen(keep(key, { protocol, updated: Date.now(), messages: newest(messages) }))),
+        Effect.sleep(REMEMBER_DEBOUNCE).pipe(
+          Effect.andThen(SubscriptionRef.get(state)),
+          Effect.flatMap((kept) => {
+            const title = Option.getOrUndefined(Option.map(HashMap.get(kept, key), (conversation) => conversation.title));
+            return keep(key, { protocol, updated: Date.now(), title, messages: newest(messages) });
+          }),
+        ),
       ).pipe(Effect.asVoid);
+    },
+    /** A session's new title (renamed), kept for its header. */
+    retitle: (server: ServerAddress, sessionID: string, title: string) => {
+      const key = conversationKey(server, sessionID);
+      return SubscriptionRef.get(state).pipe(
+        Effect.flatMap((kept) =>
+          Option.match(HashMap.get(kept, key), {
+            onNone: () => Effect.void,
+            onSome: (conversation) => keep(key, { ...conversation, title }),
+          }),
+        ),
+      );
     },
   };
 });

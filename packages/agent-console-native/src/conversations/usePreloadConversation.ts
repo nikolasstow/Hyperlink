@@ -10,11 +10,11 @@ import * as React from "react";
 import { useAppContext } from "../AppContext";
 import { preloadConversations } from "./useConversations";
 
-export const usePreloadConversation = (sessionID: string, updated: number): void => {
+export const usePreloadConversation = (sessionID: string, updated: number, title: string): void => {
   const { address } = useAppContext();
   React.useEffect(() => {
-    preloadConversations(address, [{ id: sessionID, updated }]).catch((error: unknown) =>
+    preloadConversations(address, [{ id: sessionID, updated, title }]).catch((error: unknown) =>
       console.error(`[conversations] preloading ${sessionID} failed`, error),
     );
-  }, [address, sessionID, updated]);
+  }, [address, sessionID, updated, title]);
 };

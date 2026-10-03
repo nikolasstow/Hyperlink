@@ -106,6 +106,24 @@ describe("Conversations", () => {
     expect(fake.fetched).toEqual(["ses_1", "ses_1"]);
   });
 
+  it("keeps a session's title, and a newer one without fetching its messages again", async () => {
+    const fake = fakeServer([{ id: "msg_a", text: "hello" }]);
+    const kept = await run(
+      fake,
+      Effect.gen(function* () {
+        const conversations = yield* Conversations;
+        yield* conversations.preload(server, [{ id: "ses_1", updated: 10, title: "First" }]);
+        yield* keptWhen(conversations, "ses_1", 10);
+        yield* conversations.preload(server, [{ id: "ses_1", updated: 10, title: "Second" }]);
+        yield* Effect.sleep("50 millis");
+        yield* conversations.retitle(server, "ses_1", "Renamed");
+        return yield* keptWhen(conversations, "ses_1", 10);
+      }),
+    );
+    expect(Option.getOrThrow(kept).title).toBe("Renamed");
+    expect(fake.fetched).toEqual(["ses_1"]);
+  });
+
   it("keeps an open chat's messages once they stop changing", async () => {
     const fake = fakeServer([]);
     const kept = await run(

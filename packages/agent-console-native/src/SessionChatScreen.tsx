@@ -35,7 +35,8 @@ import { SessionID } from "./opencode/schema/session-id";
 import { SessionMessage } from "./opencode/schema/session-message";
 import type { Protocol } from "./outbox/model";
 import { removeQueued, retryLane, sendMessage, useLane } from "./outbox/useOutbox";
-import { rememberConversation, useKeptConversation } from "./conversations/useConversations";
+import { rememberConversation, retitleConversation, useKeptConversation } from "./conversations/useConversations";
+import { cachedSessionTitle } from "./sessionCache";
 import { interruptSession, sessionProtocol } from "./sessions/protocol";
 import { AGENT } from "./client";
 import { promptRenameSession } from "./sessionActions";
@@ -288,7 +289,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     setSelected((current) => (current.includes(file.path) ? current.filter((path) => path !== file.path) : [file.path, ...current]));
     setOrderVersion((version) => version + 1);
   };
-  const [title, setTitle] = React.useState<string | undefined>(undefined);
+  // Its title from the first frame: kept with the conversation, or from the
+  // session list read this launch; renamed here, the new one.
+  const [renamed, setRenamed] = React.useState<string | undefined>(undefined);
+  const title = renamed ?? kept?.title ?? cachedSessionTitle(sessionID);
   // Newest-first — paired with `inverted` below, which should anchor the
   // list to the newest message on its own. In practice it wasn't sticking
   // reliably, so this still explicitly re-pins to `offset: 0` (an
@@ -366,14 +370,18 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
 
   // Rename via the shared action; apply the new title locally on success.
   const renameSession = React.useCallback(() => {
-    promptRenameSession(client, sessionID, title ?? "", setTitle);
-  }, [client, sessionID, title]);
+    promptRenameSession(client, sessionID, title ?? "", (next) => {
+      setRenamed(next);
+      retitleConversation(server, sessionID, next).catch((error: unknown) => console.error("[conversations] keeping the new title failed", error));
+    });
+  }, [client, server, sessionID, title]);
 
   // Title and connection state are screen state, so they reach the header
-  // through setOptions rather than static screen options.
-  React.useEffect(() => {
+  // through setOptions rather than static screen options; before the first
+  // frame is drawn (a layout effect), so the header never arrives late.
+  React.useLayoutEffect(() => {
     props.navigation.setOptions({
-      headerTitle: () => <SessionHeaderTitle title={title ?? sessionID} connected={connected} />,
+      headerTitle: () => <SessionHeaderTitle title={title ?? ""} connected={connected} />,
       unstable_headerRightItems: () => [
         {
           type: "menu",
@@ -406,16 +414,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       ],
     });
   }, [props.navigation, title, sessionID, connected, refresh, renameSession]);
-
-  React.useEffect(() => {
-    setTitle(undefined);
-    client.session
-      .get({ path: { id: sessionID } })
-      .then(({ data }) => setTitle(data?.title))
-      .catch(() => {
-        // Non-critical — the header just shows the raw id as a fallback.
-      });
-  }, [client, sessionID]);
 
   // Abort the running turn. `clearBusy` runs regardless: if the request
   // fails the run may still be going server-side, but leaving the UI pinned
