@@ -51,7 +51,7 @@ import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
 import { TabOverview } from "./TabOverview";
 import { type TabFilter, type TabLayout, tabLayout } from "./tabLayout";
-import { PREVIEW_RADIUS } from "./tabShape";
+import { CARD_GAP, CARD_SCALE, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav } from "./useFileNav";
 
@@ -68,9 +68,7 @@ const WARM_SURFACES = 2;
 const ZOOM = { duration: 520, easing: Easing.bezier(0.32, 0.72, 0, 1) };
 /** Swiping between tabs (Safari's): the page shrinks into a card this far,
  * rounded so, beside the next card past this gap; the swipe settles so. */
-const CARD_SCALE = 0.9;
 const CARD_RADIUS = 44;
-const CARD_GAP = 14;
 const CARD_IN = { duration: 220, easing: Easing.out(Easing.cubic) };
 const CARD_SETTLE = { duration: 300, easing: Easing.bezier(0.32, 0.72, 0, 1) };
 /** How far (a fraction of a card) or fast a swipe must go to change tabs. */
