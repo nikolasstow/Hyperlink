@@ -19,7 +19,7 @@ import { base, request } from "./extensionsClient";
 export const pageKind = Schema.Literals(["tree", "sections", "collection"]);
 export type PageKind = typeof pageKind.Type;
 
-const viewInfo = Schema.Struct({
+export const viewInfo = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   extension: Schema.String,

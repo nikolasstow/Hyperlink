@@ -10,10 +10,17 @@
  * screen and carries its error beside them, so nothing is lost and nothing is
  * hidden.
  *
+ * Each workspace's list of views is also kept on the device and read back at
+ * launch, so the repo menu has its rows from its first frame (its height
+ * known, nothing resizing) and only changes when the list does; the read-back
+ * lists are revalidated as before.
+ *
  * @internal
  */
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Option, Schema } from "effect";
 import * as React from "react";
-import { listViews, viewTree, warmViews, type TreeEntry, type TreeRefresh, type ViewInfo } from "./extensionViewsClient";
+import { listViews, viewInfo, viewTree, warmViews, type TreeEntry, type TreeRefresh, type ViewInfo } from "./extensionViewsClient";
 import { prefetchPage } from "./pagesStore";
 
 export type Load<A> =
@@ -44,6 +51,51 @@ const update = (workspace: string, change: (entry: WorkspaceEntry) => WorkspaceE
   state = new Map([...state, [workspace, change(entry)]]);
   emit();
 };
+
+// ── Kept on the device ──
+
+const STORAGE_KEY = "agent-console-native:extensionViews";
+const StoredViews = Schema.Record(Schema.String, Schema.Array(viewInfo));
+/** Workspaces whose views were read back, not yet revalidated. */
+const readBack = new Set<string>();
+
+/** Keeps every workspace's ready list of views. */
+const keepViews = (): void => {
+  const lists = Object.fromEntries(
+    [...state].flatMap(([workspace, entry]): ReadonlyArray<readonly [string, ReadonlyArray<ViewInfo>]> => (entry.views.kind === "ready" ? [[workspace, entry.views.value]] : [])),
+  );
+  AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(lists)).catch((error: unknown) => console.error("[extension views] keeping the views failed", error));
+};
+
+// Read back once, at launch: a workspace not loaded yet starts from its kept
+// list (revalidated on its next ensure or prefetch).
+AsyncStorage.getItem(STORAGE_KEY).then(
+  (raw) => {
+    if (raw === null) return;
+    const decoded = Schema.decodeUnknownOption(Schema.fromJsonString(StoredViews))(raw);
+    if (Option.isNone(decoded)) {
+      console.error("[extension views] the kept views could not be read; starting without them");
+      return;
+    }
+    let changed = false;
+    const next = new Map(state);
+    for (const [workspace, views] of Object.entries(decoded.value)) {
+      if (next.has(workspace)) continue;
+      next.set(workspace, { views: { kind: "ready", value: views, refreshing: true }, trees: new Map() });
+      readBack.add(workspace);
+      changed = true;
+    }
+    if (changed) {
+      state = next;
+      emit();
+    }
+  },
+  (error: unknown) => console.error("[extension views] reading the kept views failed", error),
+);
+
+/** Whether a workspace's views still need loading: never loaded, or only read
+ * back from the device. */
+const needsLoad = (workspace: string): boolean => !state.has(workspace) || readBack.has(workspace);
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -82,11 +134,17 @@ const loadTree = (apiBase: string, workspace: string, view: string, refresh: Tre
 const loadWorkspace = (apiBase: string, workspace: string): Promise<void> =>
   once(`views ${workspace}`, async () => {
     try {
+      readBack.delete(workspace);
       const views = await listViews(apiBase, workspace);
       update(workspace, (entry) => ({ ...entry, views: { kind: "ready", value: views, refreshing: false } }));
+      keepViews();
       await Promise.all(views.map((view) => (view.kind === "tree" ? loadTree(apiBase, workspace, view.id, "none") : prefetchPage(apiBase, workspace, view.id, view.kind))));
     } catch (error: unknown) {
-      update(workspace, (entry) => ({ ...entry, views: { kind: "failed", message: messageOf(error) } }));
+      // Rows on screen (kept, or from before) stay, the failure beside them.
+      update(workspace, (entry) => ({
+        ...entry,
+        views: entry.views.kind === "ready" ? { ...entry.views, refreshing: false, error: messageOf(error) } : { kind: "failed", message: messageOf(error) },
+      }));
     }
   });
 
@@ -96,7 +154,7 @@ const loadWorkspace = (apiBase: string, workspace: string): Promise<void> =>
  * run together; a workspace that fails records its own failure.
  */
 export const prefetchWorkspaces = (apiBase: string, workspaces: ReadonlyArray<string>): void => {
-  const missing = workspaces.filter((workspace) => !state.has(workspace));
+  const missing = workspaces.filter(needsLoad);
   if (missing.length === 0) return;
   // The warm-up only speeds things up; any workspace it cannot take fails its
   // own load below, which is where that shows.
@@ -109,7 +167,7 @@ export const prefetchWorkspaces = (apiBase: string, workspaces: ReadonlyArray<st
 
 /** Load a workspace not seen before (a repo opened some other way). */
 export const ensureWorkspace = (apiBase: string, workspace: string): void => {
-  if (!state.has(workspace)) void loadWorkspace(apiBase, workspace);
+  if (needsLoad(workspace)) void loadWorkspace(apiBase, workspace);
 };
 
 /** Retry a workspace whose views failed to load. */

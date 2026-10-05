@@ -121,7 +121,10 @@ const BAR_CONTENT_HEIGHT = 44;
 const SQUIRCLE_INSET = 12;
 const BODY_TOP_GAP = 6;
 const BODY_BOTTOM_PAD = 10;
-const DEFAULT_BODY_HEIGHT = 250;
+/** The menu's info line and each of its rows: set heights, so the menu's
+ * height is known from its entries. */
+const MENU_INFO_HEIGHT = 40;
+const MENU_ROW_HEIGHT = 50;
 const GLASS_BUTTON = 44;
 const BUTTON_ICON = 20;
 const BAR_EDGE_INSET = 16;
@@ -352,13 +355,11 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   ];
 
   // --- Collapse geometry -----------------------------------------------------
-  // The body's own clip animates its height, which re-fires the inner onLayout
-  // with the shrinking (clipped) value; accepting those would corrupt the
-  // geometry and wedge it collapsed. So a measurement is taken only when it
-  // GROWS: the clip can only ever shrink it, so growth is real content arriving
-  // late (the extension-view rows load after the first layout).
-  const [bodyHeight, setBodyHeight] = React.useState(DEFAULT_BODY_HEIGHT);
-  const bodyMeasured = React.useRef(0);
+  // The body is a list of known rows: its height is worked out, never
+  // measured (the info line, the separator, a row per entry). The entries come
+  // from the kept views (extensionViewsStore), so it is right from the first
+  // frame and changes only when the list does.
+  const bodyHeight = MENU_INFO_HEIGHT + StyleSheet.hairlineWidth + menuEntries.length * MENU_ROW_HEIGHT;
   const collapsedH = insets.top + BAR_CONTENT_HEIGHT;
   const expandedH = collapsedH + TOP_MARGIN + BODY_TOP_GAP + bodyHeight + BODY_BOTTOM_PAD;
   const collapseDistance = expandedH - collapsedH;
@@ -618,8 +619,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           />
         </Animated.View>
 
-        {/* Body — repo/workspace info, then the menu. Measured so the glass box
-         * hugs its contents. */}
+        {/* Body — repo/workspace info, then the menu; the glass box hugs it
+         * (its height worked out from its rows). */}
         <Animated.View
           pointerEvents="box-none"
           style={[
@@ -628,17 +629,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
             bodyStyle,
           ]}
         >
-          {/* Inner wrapper is measured (natural height) so the outer clip's
-           * animated height doesn't feed back into the measurement. */}
-          <View
-            onLayout={(event) => {
-              const measured = event.nativeEvent.layout.height;
-              if (measured > bodyMeasured.current) {
-                bodyMeasured.current = measured;
-                setBodyHeight(measured);
-              }
-            }}
-          >
+          {/* Its height worked out above (bodyHeight), the rows each set. */}
+          <View>
           <View style={styles.info}>
             <Text style={styles.infoMeta}>{metaParts.join(" · ")}</Text>
           </View>
@@ -820,22 +812,23 @@ const makeStyles = (text: TextColors) =>
     overflow: "hidden",
   },
   info: {
+    height: MENU_INFO_HEIGHT,
     paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 14,
-    gap: 5,
+    paddingBottom: 6,
     alignItems: "center",
+    justifyContent: "center",
   },
   infoMeta: {
     color: text.secondaryLabel,
     fontSize: 13,
+    lineHeight: 18,
     textAlign: "center",
   },
   menuRow: {
+    height: MENU_ROW_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    paddingVertical: 13,
     paddingHorizontal: 10,
   },
   menuSeparator: {
