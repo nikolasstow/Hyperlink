@@ -28,6 +28,7 @@ import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
 import { isRootPath, shownPath, useFullPaths } from "./filePaths";
+import { NAV_BAR_SIDE } from "./FileNavBar";
 import { parentOf, type TabFilter, type TabLayout } from "./tabLayout";
 
 import { TabPreview } from "./TabPreview";
@@ -313,10 +314,11 @@ const makeStyles = (text: TextColors) =>
       color: text.secondaryLabel,
       fontSize: 11,
     },
+    // In from the sides as Files' own bar is (its side margin).
     bar: {
       position: "absolute",
-      left: 12,
-      right: 12,
+      left: NAV_BAR_SIDE,
+      right: NAV_BAR_SIDE,
       height: OVERVIEW_BAR_HEIGHT + 16,
       flexDirection: "row",
       alignItems: "center",
