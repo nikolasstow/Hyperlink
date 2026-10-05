@@ -64,6 +64,9 @@ import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
+import { type HomeRow, LAYOUT_ROWS, sessionCardSize } from "./home/homeLayout";
+import { keepHomeLayout } from "./home/useHomeLayout";
+import { keptConversation } from "./conversations/useConversations";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -77,6 +80,8 @@ type Row =
   | { readonly kind: "heading"; readonly title: string }
   | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined }
   | { readonly kind: "repo"; readonly group: RepoGroup };
+
+const heading = (title: string): Row => ({ kind: "heading", title });
 
 export const HomeScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
@@ -257,17 +262,43 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     return map;
   }, [groups]);
 
-  const rows: Array<Row> = [
-    ...(recent.length > 0 ? [{ kind: "heading", title: "Recent" } as const] : []),
-    ...recent.map((session) => {
-      const { repo, worktree } = matchSession(session.directory, scanned);
-      return { kind: "session", session, repo, worktree: displayWorktree(worktree) } as const;
-    }),
-    ...(knownGroups.length > 0 ? [{ kind: "heading", title: "Repos" } as const] : []),
-    ...knownGroups.map((group) => ({ kind: "repo", group }) as const),
-    ...(otherGroups.length > 0 ? [{ kind: "heading", title: "Workspaces" } as const] : []),
-    ...otherGroups.map((group) => ({ kind: "repo", group }) as const),
-  ];
+  const rows = React.useMemo(
+    (): ReadonlyArray<Row> => [
+      ...(recent.length > 0 ? [heading("Recent")] : []),
+      ...recent.map((session): Row => {
+        const { repo, worktree } = matchSession(session.directory, scanned);
+        return { kind: "session", session, repo, worktree: displayWorktree(worktree) };
+      }),
+      ...(knownGroups.length > 0 ? [heading("Repos")] : []),
+      ...knownGroups.map((group): Row => ({ kind: "repo", group })),
+      ...(otherGroups.length > 0 ? [heading("Workspaces")] : []),
+      ...otherGroups.map((group): Row => ({ kind: "repo", group })),
+    ],
+    [recent, scanned, knownGroups, otherGroups],
+  );
+  // Its first screenful kept for the launch screen, which draws it before
+  // Home is up (home/homeLayout.ts).
+  React.useEffect(() => {
+    const server = serverAddressOf(address);
+    const layout = rows.slice(0, LAYOUT_ROWS).map((row, index): HomeRow => {
+      switch (row.kind) {
+        case "heading":
+          return { kind: "heading", title: row.title, first: index === 0 };
+        case "session":
+          return {
+            kind: "session",
+            size: sessionCardSize({
+              title: row.session.title,
+              pills: row.repo !== "" || row.worktree !== undefined,
+              summary: (keptConversation(server, row.session.id)?.messages.length ?? 0) > 0,
+            }),
+          };
+        case "repo":
+          return { kind: "repo", latest: row.group.sessions.length > 0 };
+      }
+    });
+    keepHomeLayout(layout).catch((error: unknown) => console.error("[home layout] keeping it failed", error));
+  }, [address, rows]);
 
   // The header is transparent, so content pads itself below it. A fixed
   // `insets.top + HOME_HEADER_HEIGHT` (shared with the launch screen) rather

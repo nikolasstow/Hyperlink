@@ -1,48 +1,37 @@
 /**
- * The Home screen's loading state: the real "Recent" section label with
- * placeholder cards under it, mirroring the actual session/repo layout so the
- * transition is seamless — the label stays put and the cards just fill in,
- * rather than the whole column shifting.
+ * Home before it is up (the launch screen, and Home while it has no list):
+ * Home's last layout as blank cards, its headings real, each card at the size
+ * Home worked out for it (home/homeLayout.ts), so the column is where Home's
+ * will be and nothing jumps when Home takes over. Before Home has ever kept a
+ * layout: "Recent" and a few medium cards.
  *
- * The label is real (not skeletonized) and doesn't pulse; only the cards pulse.
- * Fills use `tertiarySystemFill` (via `colors.fillBackground`) so it's
- * theme-aware, and the pulse runs on the native driver.
+ * The cards pulse (opacity, on the native driver; they are plain fills, not
+ * glass); the headings stay still.
  *
  * @internal
  */
 import * as React from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
-import type { DimensionValue } from "react-native";
 import { colors } from "./colors";
+import { CARD_GAP, CARD_GUTTER, type HomeLayout, type HomeRow, REPO_CARD_HEIGHT, SESSION_CARD_HEIGHT } from "./home/homeLayout";
+import { useKeptHomeLayout } from "./home/useHomeLayout";
 import { type TextColors, useThemedStyles } from "./theme";
 
-/** A single placeholder card matching `HomeScreen`'s `styles.card`. Widths vary
- * per card so the column doesn't look like a printed table. */
-const SkeletonCard = (props: { readonly titleWidth: DimensionValue; readonly secondLine: boolean }): React.ReactElement => {
-  const styles = useThemedStyles(makeStyles);
-  return (
-  <View style={styles.card}>
-    <View style={[styles.bar, styles.title, { width: props.titleWidth }]} />
-    {props.secondLine ? <View style={[styles.bar, styles.title, styles.titleSecond]} /> : null}
-    <View style={styles.badgeRow}>
-      <View style={[styles.bar, styles.pill]} />
-      <View style={[styles.bar, styles.pill, styles.pillNarrow]} />
-    </View>
-    <View style={[styles.bar, styles.meta]} />
-  </View>
-);
-};
-
-const CARDS: ReadonlyArray<{ readonly titleWidth: DimensionValue; readonly secondLine: boolean }> = [
-  { titleWidth: "72%", secondLine: true },
-  { titleWidth: "54%", secondLine: false },
-  { titleWidth: "66%", secondLine: true },
-  { titleWidth: "48%", secondLine: false },
-  { titleWidth: "60%", secondLine: false },
+const FIRST_LAUNCH: HomeLayout = [
+  { kind: "heading", title: "Recent", first: true },
+  { kind: "session", size: "medium" },
+  { kind: "session", size: "medium" },
+  { kind: "session", size: "medium" },
+  { kind: "session", size: "medium" },
 ];
+
+const heightOf = (row: Exclude<HomeRow, { readonly kind: "heading" }>): number =>
+  row.kind === "session" ? SESSION_CARD_HEIGHT[row.size] : row.latest ? REPO_CARD_HEIGHT.latest : REPO_CARD_HEIGHT.plain;
 
 export const HomeSkeleton = (): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
+  const kept = useKeptHomeLayout();
+  const layout = kept === undefined || kept.length === 0 ? FIRST_LAUNCH : kept;
   const pulse = React.useRef(new Animated.Value(0.5)).current;
 
   React.useEffect(() => {
@@ -58,66 +47,38 @@ export const HomeSkeleton = (): React.ReactElement => {
 
   return (
     <View accessibilityLabel="Loading sessions">
-      <Text style={styles.heading}>Recent</Text>
-      <Animated.View style={{ opacity: pulse }}>
-        {CARDS.map((card, index) => (
-          <SkeletonCard key={index} titleWidth={card.titleWidth} secondLine={card.secondLine} />
-        ))}
-      </Animated.View>
+      {layout.map((row, index) =>
+        row.kind === "heading" ? (
+          <Text key={index} style={[styles.heading, row.first && styles.headingFirst]}>
+            {row.title}
+          </Text>
+        ) : (
+          <Animated.View key={index} style={[styles.card, { height: heightOf(row), opacity: pulse }]} />
+        ),
+      )}
     </View>
   );
 };
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-  bar: {
-    backgroundColor: colors.fillBackground,
-    borderRadius: 6,
-    overflow: "hidden",
-  },
-  // Matches HomeScreen's `heading` + `headingFirst` exactly, so the real
-  // "Recent" heading lands in the same spot when data replaces the skeleton.
-  heading: {
-    color: text.secondaryLabel,
-    fontSize: 15,
-    fontWeight: "400",
-    marginTop: 4,
-    marginBottom: 10,
-    marginHorizontal: 16,
-  },
-  // Matches HomeScreen's `styles.card`.
-  card: {
-    marginHorizontal: 12,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: colors.cardBackground,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-  },
-  title: {
-    height: 15,
-  },
-  titleSecond: {
-    width: "40%",
-    marginTop: 7,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 10,
-  },
-  pill: {
-    width: 58,
-    height: 18,
-    borderRadius: 999,
-  },
-  pillNarrow: {
-    width: 42,
-  },
-  meta: {
-    width: "28%",
-    height: 10,
-    marginTop: 10,
-  },
-});
+    // HomeScreen's `heading` and `headingFirst`, so each lands where Home's
+    // does.
+    heading: {
+      color: text.secondaryLabel,
+      fontSize: 15,
+      fontWeight: "400",
+      marginTop: 22,
+      marginBottom: 10,
+      marginHorizontal: 16,
+    },
+    headingFirst: {
+      marginTop: 4,
+    },
+    card: {
+      marginHorizontal: CARD_GUTTER,
+      marginBottom: CARD_GAP,
+      borderRadius: 14,
+      backgroundColor: colors.fillBackground,
+    },
+  });

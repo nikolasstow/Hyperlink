@@ -6,6 +6,7 @@ import { fetch as expoFetch } from "expo/fetch";
 import App from "./App";
 import { startConversations } from "./src/conversations/useConversations";
 import { startSessionBackgrounds } from "./src/sessions/useSessionBackground";
+import { startHomeLayout } from "./src/home/useHomeLayout";
 import { startOutbox } from "./src/outbox/useOutbox";
 
 // The OpenCode SDK's SSE helper (client.event.subscribe, used by
@@ -29,6 +30,7 @@ startOutbox();
 // is opened.
 startConversations();
 startSessionBackgrounds();
+startHomeLayout();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

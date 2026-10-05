@@ -51,6 +51,10 @@ export const startConversations = (): void => {
 export const useKeptConversation = (server: ServerAddress, sessionID: string): Conversation | undefined =>
   React.useSyncExternalStore(subscribe, () => Option.getOrUndefined(HashMap.get(kept, conversationKey(server, sessionID))));
 
+/** A session's kept conversation, read now (outside React). */
+export const keptConversation = (server: ServerAddress, sessionID: string): Conversation | undefined =>
+  Option.getOrUndefined(HashMap.get(kept, conversationKey(server, sessionID)));
+
 /** Starts keeping these sessions' newest messages (most recent first), in
  * the background. */
 export const preloadConversations = (address: string, sessions: ReadonlyArray<Wanted>): Promise<void> =>
