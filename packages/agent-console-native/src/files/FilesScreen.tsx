@@ -227,7 +227,14 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       if (finished === true) runOnJS(opened)();
     });
   };
-  const closed = React.useCallback(() => setOverview({ kind: "closed" }), []);
+  // Closed, it is ready to open again: every tab, scrolled to the one showing
+  // (below), so it opens already where it goes.
+  const closed = React.useCallback(() => {
+    setOverview({ kind: "closed" });
+    setFilter("all");
+  }, []);
+  // The grid while closed: scrolled to the tab showing, as it will open.
+  const closedScroll = place === undefined ? 0 : scrollFor(layoutFor("all"), place.active);
   const zoomInto = (next: Overview): void => {
     setOverview(next);
     if (next.kind !== "closed") zoomTarget.value = next.frame;
@@ -461,7 +468,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           roots={pathRoots}
           filter={filter}
           onFilter={setFilter}
-          scrollTarget={overview.kind === "closed" ? 0 : overview.kind === "closing" ? overview.scroll : overview.initialScroll}
+          scrollTarget={overview.kind === "closed" ? closedScroll : overview.kind === "closing" ? overview.scroll : overview.initialScroll}
           interactive={overview.kind === "open"}
           onScroll={(y) => {
             scroll.current = y;
