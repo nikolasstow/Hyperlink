@@ -3,8 +3,8 @@
  * row — back · forward in one capsule, the address pill in the middle, a
  * round button at the end.
  *
- * - Back and forward are there only when the tab has somewhere to go: both, a
- *   capsule; one, a circle; neither, the pill takes their room.
+ * - Back and forward are always there, in one capsule, each dimmed when the
+ *   tab has nowhere to go that way.
  * - The address pill shows the current tab's name and is the tab bar: a tap,
  *   or a swipe up, opens the tab overview; a sideways swipe moves between
  *   tabs. Swiping, as Safari's, each tab has its own pill, riding its card:
@@ -83,13 +83,14 @@ const Piece = (props: { readonly style: ViewStyle; readonly children: React.Reac
   );
 };
 
-interface NavButtonProps {
+const NavButton = (props: {
   readonly icon: React.ComponentProps<typeof SystemIcon>["name"];
   readonly label: string;
+  /** Dimmed, and does nothing, when false. */
+  readonly enabled?: boolean;
   readonly onPress: () => void;
-}
-
-const NavButton = (props: NavButtonProps): React.ReactElement => {
+}): React.ReactElement => {
+  const enabled = props.enabled ?? true;
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   return (
@@ -97,9 +98,11 @@ const NavButton = (props: NavButtonProps): React.ReactElement => {
       style={styles.button}
       accessibilityRole="button"
       accessibilityLabel={props.label}
+      accessibilityState={{ disabled: !enabled }}
+      disabled={!enabled}
       onPress={props.onPress}
     >
-      <SystemIcon name={props.icon} size={19} weight="medium" color={textColors.label} />
+      <SystemIcon name={props.icon} size={19} weight="medium" color={enabled ? textColors.label : textColors.tertiaryLabel} />
     </Pressable>
   );
 };
@@ -233,23 +236,17 @@ export const FileNavBar = (props: {
   // Swiped back from Dubz's bar: this bar again.
   const pageBack = React.useMemo<PageBack>(() => ({ pageX, begin: noop, turn: () => setDubzOpen(false), stay: noop }), [pageX]);
 
-  // Back and forward, each only when it goes somewhere.
-  const back: NavButtonProps = { icon: "chevron.backward", label: "Back", onPress: props.onBack };
-  const forward: NavButtonProps = { icon: "chevron.forward", label: "Forward", onPress: props.onForward };
-  const navButtons = [...(props.canGoBack ? [back] : []), ...(props.canGoForward ? [forward] : [])];
-  // Their piece's width: a capsule for both, a circle for one.
-  const navWidth = navButtons.length === 2 ? NAV_PAIR_WIDTH : navButtons.length === 1 ? NAV_BAR_HEIGHT : 0;
   // Where the pills can be (worked out, not measured): from after back and
   // forward to the round button; swiping, a pill reaches a little under it,
   // as Safari's.
   const bounds = React.useMemo(
     (): PillBounds => ({
-      left: NAV_BAR_SIDE + (navWidth > 0 ? navWidth + BAR_GAP : 0),
+      left: NAV_BAR_SIDE + NAV_PAIR_WIDTH + BAR_GAP,
       right: screenW - NAV_BAR_SIDE - (withDubz ? NAV_BAR_HEIGHT + BAR_GAP : 0),
       screenWidth: screenW,
       cardStep: screenW * CARD_SCALE + CARD_GAP,
     }),
-    [navWidth, withDubz, screenW],
+    [withDubz, screenW],
   );
   const { swipe, paging } = props;
 
@@ -273,15 +270,12 @@ export const FileNavBar = (props: {
           {props.previous === undefined ? null : <TabPill entry={props.previous} offset={-1} swipe={swipe} paging={paging} bounds={bounds} />}
           <TabPill entry={{ name: props.name, kind: props.kind }} offset={0} swipe={swipe} paging={paging} bounds={bounds} />
           {props.next === undefined ? null : <TabPill entry={props.next} offset={1} swipe={swipe} paging={paging} bounds={bounds} />}
-          {navButtons.length === 0 ? null : (
-            <Piece style={navButtons.length === 2 ? pieceStyles.navPair : pieceStyles.round}>
-              <View style={styles.row}>
-                {navButtons.map((button) => (
-                  <NavButton key={button.label} icon={button.icon} label={button.label} onPress={button.onPress} />
-                ))}
-              </View>
-            </Piece>
-          )}
+          <Piece style={pieceStyles.navPair}>
+            <View style={styles.row}>
+              <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
+              <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
+            </View>
+          </Piece>
           {/* Where the pill is at rest: its gestures (the pills are drawn
             * apart, above). */}
           <GestureDetector gesture={props.pillGesture}>
