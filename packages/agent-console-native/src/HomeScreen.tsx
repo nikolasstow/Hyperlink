@@ -67,6 +67,7 @@ import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 import { type HomeRow, LAYOUT_ROWS, sessionCardSize } from "./home/homeLayout";
 import { keepHomeLayout } from "./home/useHomeLayout";
 import { keptConversation } from "./conversations/useConversations";
+import { lastSummary } from "./chat/model";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
@@ -287,14 +288,15 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         case "session":
           return {
             kind: "session",
+            // As the card works its own out (SessionCard.tsx).
             size: sessionCardSize({
               title: row.session.title,
-              pills: row.repo !== "" || row.worktree !== undefined,
-              summary: (keptConversation(server, row.session.id)?.messages.length ?? 0) > 0,
+              pills: true,
+              summary: lastSummary(keptConversation(server, row.session.id)?.messages ?? []) !== undefined,
             }),
           };
         case "repo":
-          return { kind: "repo", latest: row.group.sessions.length > 0 };
+          return { kind: "repo", latest: row.group.sessions[0]?.title !== undefined };
       }
     });
     keepHomeLayout(layout).catch((error: unknown) => console.error("[home layout] keeping it failed", error));

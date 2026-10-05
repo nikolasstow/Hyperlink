@@ -71,3 +71,18 @@ export const answerStartedAt = (messages: ReadonlyArray<ChatMessage>): number | 
   if (last?.time === undefined || last.time.completed !== undefined) return undefined;
   return epochMs(last.time.created);
 };
+
+/** Longer than two lines of a card can show; the card cuts it to two. */
+const SUMMARY_MAX = 160;
+
+/** A conversation's last written words, for a card: whose, and the text on
+ * one line (shortened). Undefined when nothing has been written. */
+export const lastSummary = (messages: ReadonlyArray<ChatMessage>): { readonly role: "user" | "assistant"; readonly text: string } | undefined => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message === undefined) continue;
+    const text = textOf(message).trim().replace(/\s+/g, " ");
+    if (text !== "") return { role: message.role, text: text.length > SUMMARY_MAX ? `${text.slice(0, SUMMARY_MAX - 1)}…` : text };
+  }
+  return undefined;
+};

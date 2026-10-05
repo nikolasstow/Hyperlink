@@ -23,7 +23,12 @@ import Animated, { Easing, FadeIn, LinearTransition, runOnJS, useAnimatedStyle, 
 import { ChatPreview } from "./ChatPreview";
 import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
-import { lastMessageSummary, useSessionPreview } from "./sessionPreview";
+import { useSessionPreview } from "./sessionPreview";
+import { lastSummary } from "./chat/model";
+import { SESSION_CARD_HEIGHT, sessionCardSize, titleLines } from "./home/homeLayout";
+import { useKeptConversation } from "./conversations/useConversations";
+import { useAppContext } from "./AppContext";
+import { serverAddressOf } from "./opencode/serverAddress";
 import { takeReturning } from "./sessionArchive";
 import { SystemIcon } from "./SystemIcon";
 import { useCardTint, useTextColors, useTheme } from "./theme";
@@ -148,6 +153,8 @@ const summaryLabel = (role: "user" | "assistant", text: string): string => (role
 // (SwiftUI hugs content otherwise) while the text stays left-aligned.
 const CardBody = (props: {
   readonly width: number;
+  readonly height: number;
+  readonly titleLines: number;
   readonly title: string;
   readonly repo?: string;
   readonly worktree?: string;
@@ -164,11 +171,16 @@ const CardBody = (props: {
   <VStack
     alignment="leading"
     spacing={8}
-    modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 })]}
+    modifiers={[
+      padding({ all: 14 }),
+      // Its size's height (home/homeLayout.ts), its content at the top.
+      frame({ width: props.width, height: props.height, alignment: "topLeading" }),
+      glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 }),
+    ]}
   >
     <HStack spacing={7} alignment="center">
       {props.unread ? <Circle modifiers={[frame({ width: 8, height: 8 }), foregroundStyle(props.unreadColor)]} /> : null}
-      <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(2)]}>{props.title}</UIText>
+      <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(props.titleLines)]}>{props.title}</UIText>
       {/* Muted: the bell Messages shows beside a muted conversation. */}
       {props.muted ? <Image systemName="bell.slash.fill" size={12} color={textColors.secondaryLabel} /> : null}
     </HStack>
@@ -198,7 +210,12 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const cardWidth = screenWidth - CARD_GUTTER * 2;
   const previewHeight = Math.round(screenHeight * PREVIEW_HEIGHT_FRACTION);
   const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
-  const summary = lastMessageSummary(transcript);
+  // Its last message from the conversation kept on the device, so it is
+  // there from the first frame and its size (worked out from the same) holds.
+  const { address } = useAppContext();
+  const kept = useKeptConversation(serverAddressOf(address), props.sessionId);
+  const summary = kept === undefined ? undefined : lastSummary(kept.messages);
+  const size = sessionCardSize({ title: props.title, pills: props.repo !== undefined || props.worktree !== undefined, summary: summary !== undefined });
 
   // Archiving: the row slides off to the left, then the session leaves the
   // list, and the rows below glide up into its place (the lists' layout
@@ -251,8 +268,8 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
       )}
     >
     <Host
-      style={{ marginHorizontal: CARD_GUTTER }}
-      matchContents={{ vertical: true, horizontal: false }}
+      style={{ marginHorizontal: CARD_GUTTER, height: SESSION_CARD_HEIGHT[size] }}
+      // Its size's height, set: nothing is measured.
       // Ignores the safe area: otherwise SwiftUI pads it as it scrolls under
       // the header or the home indicator, so it stretches and shrinks while
       // scrolling and overlaps its neighbours.
@@ -284,6 +301,8 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
           <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(props.onOpen)]}>
             <CardBody
               width={cardWidth}
+              height={SESSION_CARD_HEIGHT[size]}
+              titleLines={titleLines(props.title)}
               title={props.title}
               repo={props.repo}
               worktree={props.worktree}

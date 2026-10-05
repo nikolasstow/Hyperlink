@@ -16,6 +16,7 @@ import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
 import { useCardTint, useTextColors } from "./theme";
 import { repoMenuFor } from "./repoMenu";
+import { CARD_GAP, REPO_CARD_HEIGHT } from "./home/homeLayout";
 
 const CARD_GUTTER = 12;
 
@@ -34,6 +35,9 @@ export type RepoCardProps = {
   readonly onSelect?: (label: string) => void;
 };
 
+/** With its latest session's title, or without. */
+const repoCardHeight = (props: RepoCardProps): number => (props.mostRecentTitle !== undefined ? REPO_CARD_HEIGHT.latest : REPO_CARD_HEIGHT.plain);
+
 const plural = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 const Face = (props: { readonly width: number } & RepoCardProps): React.ReactElement => {
@@ -45,7 +49,12 @@ const Face = (props: { readonly width: number } & RepoCardProps): React.ReactEle
     <VStack
       alignment="leading"
       spacing={6}
-      modifiers={[padding({ all: 14 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 })]}
+      modifiers={[
+        padding({ all: 14 }),
+        // Its set height (home/homeLayout.ts), its content at the top.
+        frame({ width: props.width, height: repoCardHeight(props), alignment: "topLeading" }),
+        glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 }),
+      ]}
     >
       <HStack spacing={7} alignment="center">
         <Image systemName={icon} size={15} color={textColors.secondaryLabel} />
@@ -96,8 +105,8 @@ export const RepoCard = (props: RepoCardProps): React.ReactElement => {
 
   return (
     <Host
-      style={{ marginHorizontal: CARD_GUTTER, marginBottom: 10 }}
-      matchContents={{ vertical: true, horizontal: false }}
+      // Its set height: nothing is measured.
+      style={{ marginHorizontal: CARD_GUTTER, marginBottom: CARD_GAP, height: repoCardHeight(props) }}
       // Ignores the safe area: otherwise SwiftUI pads it as it scrolls under
       // the header or the home indicator, so it stretches and shrinks while
       // scrolling and overlaps its neighbours.
