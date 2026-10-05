@@ -180,6 +180,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const scroll = React.useRef(0);
   // 0: the tab at full screen; 1: shrunk into its preview.
   const zoom = useSharedValue(0);
+  // The preview's frame the tab zooms into or out of: set with the zoom's
+  // start (not on the render after it, which comes late while the grid
+  // redraws, so the zoom would run toward the wrong place).
+  const zoomTarget = useSharedValue<Frame>({ x: 0, y: 0, width: screen.width, height: screen.height });
   // Swiping between tabs (below): 0 to 1 as the page shrinks into a card;
   // `swipe`, how far the cards have moved, a fraction of a card (toward the
   // previous tab positive, the next negative). Declared here, before the
@@ -216,7 +220,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
     const laid = layoutFor("all");
     const initialScroll = scrollFor(laid, place.active);
     scroll.current = initialScroll;
-    setOverview({ kind: "opening", tab: place.active, initialScroll, frame: frameOf(laid, place.active, initialScroll) });
+    const frame = frameOf(laid, place.active, initialScroll);
+    setOverview({ kind: "opening", tab: place.active, initialScroll, frame });
+    zoomTarget.value = frame;
     zoom.value = withTiming(1, ZOOM, (finished) => {
       if (finished === true) runOnJS(opened)();
     });
@@ -224,6 +230,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const closed = React.useCallback(() => setOverview({ kind: "closed" }), []);
   const zoomInto = (next: Overview): void => {
     setOverview(next);
+    if (next.kind !== "closed") zoomTarget.value = next.frame;
     zoom.value = 1;
     zoom.value = withTiming(0, ZOOM, (finished) => {
       if (finished === true) runOnJS(closed)();
@@ -245,9 +252,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
 
   // The tab zooming: from full screen to its preview's frame (cropped to its
   // shape as it shrinks), or back.
-  const target: Frame = overview.kind === "closed" ? { x: 0, y: 0, width: screen.width, height: screen.height } : overview.frame;
-  const scaleTo = target.width / screen.width;
   const zoomStyle = useAnimatedStyle(() => {
+    const target = zoomTarget.value;
+    const scaleTo = target.width / screen.width;
     const scale = interpolate(zoom.value, [0, 1], [1, scaleTo]);
     // Its height, unscaled: the screen, cropped to the preview's shape.
     const height = interpolate(zoom.value, [0, 1], [screen.height, target.height / scaleTo]);
