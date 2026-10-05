@@ -241,7 +241,7 @@ const History = (props: {
                 {item.entry.name}
               </Text>
               <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                {item.entry.path}
+                {parentOf(item.entry.path)}
               </Text>
             </View>
           </Pressable>
