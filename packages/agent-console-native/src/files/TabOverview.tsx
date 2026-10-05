@@ -17,7 +17,7 @@ import { controlSize, font, pickerStyle, tag } from "@expo/ui/swift-ui/modifiers
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { FlatList, Modal as RNModal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
-import Reanimated, { type SharedValue, useAnimatedStyle } from "react-native-reanimated";
+import Reanimated, { Easing, LayoutAnimationConfig, LinearTransition, type SharedValue, useAnimatedStyle, ZoomIn, ZoomOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
 import { colors } from "../colors";
@@ -43,6 +43,9 @@ export const filteredTabs = (place: FilePlace, filter: TabFilter): ReadonlyArray
 const SIDE = 16;
 /** The overview bar's pieces (its own: Files' bar is sized apart). */
 const OVERVIEW_BAR_HEIGHT = 50;
+/** Tabs coming, going and gliding in the grid. */
+const GRID_MS = 300;
+const GRID_EASING = Easing.bezier(0.2, 0.9, 0.25, 1);
 
 const GAP = 14;
 
@@ -105,9 +108,7 @@ export const TabOverview = (props: {
   readonly reveal: SharedValue<number>;
   /** The page's top inset, as the previews draw it. */
   readonly pageTop: number;
-  /** Its bar: there while it is open or opening, gone the moment a tab
-   * starts growing out of it. */
-  readonly barShown: boolean;
+
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -119,6 +120,8 @@ export const TabOverview = (props: {
   const reportScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => onScroll(event.nativeEvent.contentOffset.y);
   const { reveal } = props;
   const fade = useAnimatedStyle(() => ({ opacity: reveal.value }));
+  const barAway = OVERVIEW_BAR_HEIGHT + 24 + insets.bottom;
+  const barSlide = useAnimatedStyle(() => ({ bottom: insets.bottom - (1 - reveal.value) * barAway }));
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -130,9 +133,20 @@ export const TabOverview = (props: {
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingTop: geometry.top, paddingBottom: insets.bottom + OVERVIEW_BAR_HEIGHT + 40, paddingHorizontal: SIDE }}
       >
+        {/* No entering on the grid's first render: opening, it fades in with
+          * the zoom; after that, tabs coming in do. */}
+        <LayoutAnimationConfig skipEntering>
         <View style={styles.grid}>
           {tabs.map(({ index, entry }) => (
-            <View key={props.place.tabs[index]?.id ?? index} style={[styles.cell, { width: geometry.cellWidth, height: geometry.rowHeight - ROW_GAP }]}>
+            <Reanimated.View
+              key={props.place.tabs[index]?.id ?? index}
+              style={[styles.cell, { width: geometry.cellWidth, height: geometry.rowHeight - ROW_GAP }]}
+              // Tabs coming (a new one, a filter) and going (closed, filtered
+              // out) fade and scale; the rest glide to their places.
+              entering={ZoomIn.duration(GRID_MS).easing(GRID_EASING)}
+              exiting={ZoomOut.duration(GRID_MS).easing(GRID_EASING)}
+              layout={LinearTransition.duration(GRID_MS).easing(GRID_EASING)}
+            >
               {/* The preview at its exact size; its outline drawn over it (so it
                 * shifts nothing), the close button in its corner. */}
               <View style={[styles.preview, { width: geometry.cellWidth, height: geometry.previewHeight }, props.hiddenTab === index && styles.hidden]}>
@@ -151,13 +165,15 @@ export const TabOverview = (props: {
               <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
                 {entry.path}
               </Text>
-            </View>
+            </Reanimated.View>
           ))}
         </View>
+        </LayoutAnimationConfig>
       </ScrollView>
       </Reanimated.View>
-      {props.barShown ? (
-      <View style={[styles.bar, { bottom: insets.bottom }]} pointerEvents="box-none">
+      {/* Its bar slides up in as the grid opens, and away as a tab grows
+        * out of it (by layout: it is glass). */}
+      <Reanimated.View style={[styles.bar, barSlide]} pointerEvents="box-none">
         <RoundButton icon="clock" label="History" onPress={() => setHistoryOpen(true)} />
         <Host style={styles.filterHost}>
           <Picker
@@ -171,8 +187,7 @@ export const TabOverview = (props: {
           </Picker>
         </Host>
         <RoundButton icon="plus" label="New tab" onPress={props.onNew} />
-      </View>
-      ) : null}
+      </Reanimated.View>
       <History
         open={historyOpen}
         visits={props.place.history}

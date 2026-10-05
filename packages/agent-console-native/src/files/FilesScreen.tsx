@@ -30,7 +30,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Pressable, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Reanimated, { Easing, interpolate, runOnJS, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { warmCodeSurfaces } from "../../modules/code-surface";
 import { codeSurfaceUri } from "../codeSurfaceAsset";
@@ -200,6 +200,14 @@ export const FilesScreen = (props: Props): React.ReactElement => {
     };
   });
 
+  // The page's top and bottom go with the zoom: off as the tab shrinks, back
+  // as one grows (the bar, also as a listing scrolls).
+  const topSlide = useAnimatedStyle(() => ({ top: insets.top - zoom.value * (insets.top + HOME_HEADER_HEIGHT + 16) }));
+  const blurFade = useAnimatedStyle(() => ({ opacity: 1 - zoom.value }));
+  const barDistance = BAR_ROOM + insets.bottom + 10;
+  const scrolledAway = barHide.hidden;
+  const barHidden = useDerivedValue(() => Math.max(scrolledAway.value, zoom.value * barDistance));
+
   // ── A tab opened from a row's menu: it rises in from the bar ──
   const rise = useSharedValue(1);
   const openInNewTab = React.useCallback(
@@ -285,7 +293,6 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           topInset={insets.top}
           reveal={zoom}
           pageTop={headerHeight}
-          barShown={overview.kind !== "closing"}
         />
       )}
       {/* The tab showing; over the overview, shrunk into its preview (gone
@@ -312,19 +319,25 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           </GestureDetector>
         </Reanimated.View>
       )}
-      {overview.kind === "closed" ? (
+      {/* The page's top and bottom, there until the overview is open: they
+        * slide away as the tab shrinks into the grid and back as a tab grows
+        * out of it, with the zoom (by layout: they are glass). */}
+      {overview.kind === "open" ? null : (
         <>
-          <EdgeBlurBars variant="top" />
+          <Reanimated.View style={[StyleSheet.absoluteFill, blurFade]} pointerEvents="none">
+            <EdgeBlurBars variant="top" />
+          </Reanimated.View>
           {/* The page's top: back to the repo, and its title (the worktree
             * picker at the root, else what is showing). */}
-          <View style={[styles.top, { top: insets.top }]} pointerEvents="box-none">
+          <Reanimated.View style={[styles.top, topSlide]} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
             <BackButton onPress={() => navigation.goBack()} />
             <View style={styles.title} pointerEvents="box-none">
               {isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />}
             </View>
-          </View>
+          </Reanimated.View>
           <FileNavBar
             name={current.name}
+            kind={current.kind}
             canGoBack={tabCanGoBack}
             canGoForward={tabCanGoForward}
             onBack={back}
@@ -333,10 +346,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
             onPreviousTab={() => step(-1)}
             onNextTab={() => step(1)}
             dubzContext={dubzContext}
-            hidden={barHide.hidden}
+            hidden={barHidden}
           />
         </>
-      ) : null}
+      )}
     </View>
   );
 };

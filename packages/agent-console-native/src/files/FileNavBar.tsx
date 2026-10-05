@@ -24,6 +24,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAgentButtonVisible } from "../agentButtonSettings";
 import { DubzPage, PAGE_MS, pageEasing, type PageBack } from "../Dubz";
 import type { DubzContext } from "../dubzSuggestions";
+import { iconForFile } from "../fileIcon";
+import { SetiIcon } from "../SetiIcon";
+import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { useKeyboardHeightValue } from "../keyboardHeight";
@@ -81,8 +84,9 @@ const NavButton = (props: {
 };
 
 export const FileNavBar = (props: {
-  /** The current tab's name (its file or folder). */
+  /** The current tab's name (its file or folder), and which it is. */
   readonly name: string;
+  readonly kind: "directory" | "file";
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
   readonly onBack: () => void;
@@ -170,6 +174,10 @@ export const FileNavBar = (props: {
           <GestureDetector gesture={pillGesture}>
             <View style={styles.pillSlot} accessibilityRole="button" accessibilityLabel={`${props.name}, tabs`}>
               <Piece style={pieceStyles.pill}>
+                {/* Its type, at the pill's left; its name in the middle. */}
+                <View style={styles.pillIcon} pointerEvents="none">
+                  <SetiIcon glyph={props.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(props.name).glyph} size={20} />
+                </View>
                 <Text style={styles.name} numberOfLines={1}>
                   {props.name}
                 </Text>
@@ -235,7 +243,15 @@ const makeStyles = (text: TextColors) =>
       alignItems: "center",
       justifyContent: "center",
     },
+    pillIcon: {
+      position: "absolute",
+      left: 14,
+      top: 0,
+      bottom: 0,
+      justifyContent: "center",
+    },
     name: {
+      marginHorizontal: 22,
       color: text.label,
       fontSize: 15,
       fontWeight: "600",
