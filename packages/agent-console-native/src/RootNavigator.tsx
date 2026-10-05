@@ -7,6 +7,7 @@
  *
  * @internal
  */
+import { keepNav, keptNavNow } from "./navigation/useKeptNav";
 import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import * as React from "react";
@@ -144,6 +145,12 @@ export const RootNavigator = (): React.ReactElement => {
     customBackground === undefined ? baseTheme : { ...baseTheme, colors: { ...baseTheme.colors, background: customBackground } };
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const { client, address } = useAppContext();
+  // The pages open when the app was last used (read back before the app
+  // shows): it opens on them again, after being closed.
+  const [initialState] = React.useState(() => {
+    const pages = keptNavNow() ?? [];
+    return pages.length === 0 ? undefined : { routes: pages.map((page) => (page.params === undefined ? { name: page.name } : { name: page.name, params: page.params })) };
+  });
 
   // Establish the unread "setup date" on first launch, so pre-existing sessions
   // are treated as already-read rather than flooding Unread.
@@ -243,8 +250,12 @@ export const RootNavigator = (): React.ReactElement => {
     <NavigationContainer
       ref={navigationRef}
       theme={navigationTheme}
-      // DIAG(app-perf): remove with perfMonitor.
-      onStateChange={() => setPerfScreen(navigationRef.getCurrentRoute()?.name ?? "?")}
+      initialState={initialState}
+      onStateChange={(state) => {
+        if (state !== undefined) void keepNav(state.routes);
+        // DIAG(app-perf): remove with perfMonitor.
+        setPerfScreen(navigationRef.getCurrentRoute()?.name ?? "?");
+      }}
     >
       <PerfMonitor />
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: background } }}>

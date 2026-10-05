@@ -14,7 +14,8 @@
  * - the conversations kept on the device (their own prefix);
  * - each session's own chat background (its own prefix);
  * - Home's last layout, for the launch screen (its own prefix);
- * - where Files is, per repo (its own prefix).
+ * - where Files is, per repo (its own prefix);
+ * - the pages open when the app was last used (its own prefix).
  *
  * No per-server state lives in the layers' construction (servers are passed
  * to each call), so the runtime never needs rebuilding on reconnect.
@@ -31,6 +32,7 @@ import { Opencode } from "../opencode/Opencode";
 import { layer as foldersLayer } from "../outbox/foldersNative";
 import { Outbox } from "../outbox/Outbox";
 import { Reachability } from "../outbox/Reachability";
+import { KeptNav } from "../navigation/KeptNav";
 import { layer as asyncStorageLayer } from "./asyncStorage";
 import { layer as deviceSignalsLayer } from "./deviceSignalsNative";
 
@@ -39,6 +41,7 @@ const CONVERSATIONS_STORAGE_PREFIX = "agent-console-native:conversations:";
 const SESSIONS_STORAGE_PREFIX = "agent-console-native:sessions:";
 const HOME_STORAGE_PREFIX = "agent-console-native:home:";
 const FILES_STORAGE_PREFIX = "agent-console-native:files:";
+const NAV_STORAGE_PREFIX = "agent-console-native:nav:";
 
 const platform = Layer.mergeAll(FetchHttpClient.layer, deviceSignalsLayer, foldersLayer);
 
@@ -48,6 +51,7 @@ const AppLayer = Layer.mergeAll(
   SessionBackgrounds.layer.pipe(Layer.provide(asyncStorageLayer(SESSIONS_STORAGE_PREFIX))),
   HomeLayoutStore.layer.pipe(Layer.provide(asyncStorageLayer(HOME_STORAGE_PREFIX))),
   FileNav.layer.pipe(Layer.provide(asyncStorageLayer(FILES_STORAGE_PREFIX))),
+  KeptNav.layer.pipe(Layer.provide(asyncStorageLayer(NAV_STORAGE_PREFIX))),
 ).pipe(
   Layer.provideMerge(Reachability.layer),
   Layer.provideMerge(Opencode.layer),

@@ -7,6 +7,9 @@ import { AppContextProvider, useAppContext } from "./src/AppContext";
 import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
 import { conversationsReadBack } from "./src/conversations/useConversations";
 import { homeLayoutReadBack } from "./src/home/useHomeLayout";
+import { keptNavReadBack } from "./src/navigation/useKeptNav";
+import { reposReadBack } from "./src/repoScanCache";
+import { sessionsReadBack } from "./src/sessionCache";
 import { ConversationPreloader } from "./src/conversations/ConversationPreloader";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
@@ -73,11 +76,13 @@ const AppInner = (): React.ReactElement => {
       // answered by the user's chosen default rather than the built-in one.
       // Home's cards are sized from the conversations kept on the device, and
       // the launch screen draws Home's kept layout: both read back before
-      // Home shows, so its cards are right from their first frame.
+      // Home shows, so its cards are right from their first frame. The
+      // session list, the repo scan and the pages last open read back too, so
+      // the app reopens on those pages, filled from their first frame.
       // Never longer than READ_BACK_WAIT_MS: a store that cannot be read must
       // not hold the app on the launch screen.
       const readBack = Promise.race([
-        Promise.all([conversationsReadBack, homeLayoutReadBack]),
+        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack]),
         new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS)),
       ]);
       primeDefaultPermissionMode(await getDefaultPermissionMode());
