@@ -6,13 +6,13 @@
  * layout: "Recent" and a few medium cards.
  *
  * The cards look like glass cards whose glass is not drawn (as in the app
- * switcher), and pulse (opacity, on the native driver; they are plain
- * fills, not glass); the headings stay still.
+ * switcher): a systemGray5 fill, a systemGray3 edge two pixels wide. They
+ * stay still, as that glass does (a pulse washed them out).
  *
  * @internal
  */
 import * as React from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { colors } from "./colors";
 import { CARD_GAP, CARD_GUTTER, type HomeLayout, type HomeRow, REPO_CARD_HEIGHT, SESSION_CARD_HEIGHT } from "./home/homeLayout";
 import { useKeptHomeLayout } from "./home/useHomeLayout";
@@ -35,18 +35,6 @@ export const HomeSkeleton = (): React.ReactElement => {
   // Until it is read back (a moment), nothing: drawing the first-launch
   // cards meanwhile would change under you.
   const layout = kept === undefined ? [] : kept.length === 0 ? FIRST_LAUNCH : kept;
-  const pulse = React.useRef(new Animated.Value(0.5)).current;
-
-  React.useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 750, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.5, duration: 750, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
 
   return (
     <View accessibilityLabel="Loading sessions">
@@ -56,7 +44,7 @@ export const HomeSkeleton = (): React.ReactElement => {
             {row.title}
           </Text>
         ) : (
-          <Animated.View key={index} style={[styles.card, { height: heightOf(row), opacity: pulse }]} />
+          <View key={index} style={[styles.card, { height: heightOf(row) }]} />
         ),
       )}
     </View>
@@ -86,7 +74,7 @@ const makeStyles = (text: TextColors) =>
       borderRadius: 14,
       borderCurve: "continuous",
       backgroundColor: colors.glassStandIn,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderWidth: StyleSheet.hairlineWidth * 2,
       borderColor: colors.glassStandInEdge,
     },
   });
