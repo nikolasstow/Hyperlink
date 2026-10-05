@@ -30,8 +30,11 @@ import { useKeyboardHeightValue } from "../keyboardHeight";
 import { composerRestingBottom } from "../useKeyboardSlide";
 
 /** The pieces' height (Safari's compact bar), and its buttons' width. */
-export const NAV_BAR_HEIGHT = 50;
-const BUTTON_WIDTH = 46;
+export const NAV_BAR_HEIGHT = 44;
+const BUTTON_WIDTH = 40;
+/** The bar's margins: at the sides, and under it (above where it rests). */
+export const NAV_BAR_SIDE = 28;
+export const NAV_BAR_BOTTOM = 18;
 /** How far a finger moves before a swipe on the pill counts, and how far (or
  * how fast) it must go to switch tabs or open the overview. */
 const SWIPE_SLOP = 12;
@@ -72,7 +75,7 @@ const NavButton = (props: {
       disabled={!props.enabled}
       onPress={props.onPress}
     >
-      <SystemIcon name={props.icon} size={20} weight="medium" color={props.enabled ? textColors.label : textColors.tertiaryLabel} />
+      <SystemIcon name={props.icon} size={18} weight="medium" color={props.enabled ? textColors.label : textColors.tertiaryLabel} />
     </Pressable>
   );
 };
@@ -213,9 +216,9 @@ const makeStyles = (text: TextColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
-      paddingHorizontal: 20,
+      paddingHorizontal: NAV_BAR_SIDE,
       paddingTop: 10,
-      paddingBottom: 10,
+      paddingBottom: NAV_BAR_BOTTOM,
     },
     shadow: {
       shadowColor: "#000000",
@@ -234,7 +237,7 @@ const makeStyles = (text: TextColors) =>
     },
     name: {
       color: text.label,
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: "600",
     },
   });

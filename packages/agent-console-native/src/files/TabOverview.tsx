@@ -23,7 +23,7 @@ import { colors } from "../colors";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { type FileNavEntry, type FilePlace, tabEntry, type Visit } from "./FileNav";
-import { NAV_BAR_HEIGHT } from "./FileNavBar";
+import { NAV_BAR_BOTTOM, NAV_BAR_HEIGHT, NAV_BAR_SIDE } from "./FileNavBar";
 import { TabPreview } from "./TabPreview";
 import { PREVIEW_ASPECT, PREVIEW_RADIUS } from "./tabShape";
 
@@ -76,7 +76,7 @@ const RoundButton = (props: { readonly icon: React.ComponentProps<typeof SystemI
   return (
     <GlassView style={styles.round} glassEffectStyle="clear" tintColor={scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT} colorScheme={scheme}>
       <Pressable style={styles.roundHit} accessibilityRole="button" accessibilityLabel={props.label} onPress={props.onPress}>
-        <SystemIcon name={props.icon} size={20} weight="medium" color={textColors.label} />
+        <SystemIcon name={props.icon} size={18} weight="medium" color={textColors.label} />
       </Pressable>
     </GlassView>
   );
@@ -141,7 +141,7 @@ export const TabOverview = (props: {
           ))}
         </View>
       </ScrollView>
-      <View style={[styles.bar, { bottom: insets.bottom }]} pointerEvents="box-none">
+      <View style={[styles.bar, { bottom: insets.bottom + NAV_BAR_BOTTOM - 8 }]} pointerEvents="box-none">
         <RoundButton icon="clock" label="History" onPress={() => setHistoryOpen(true)} />
         <Host style={styles.filterHost}>
           <Picker
@@ -266,8 +266,8 @@ const makeStyles = (text: TextColors) =>
     },
     bar: {
       position: "absolute",
-      left: 12,
-      right: 12,
+      left: NAV_BAR_SIDE,
+      right: NAV_BAR_SIDE,
       height: NAV_BAR_HEIGHT + 16,
       flexDirection: "row",
       alignItems: "center",
@@ -284,7 +284,7 @@ const makeStyles = (text: TextColors) =>
       justifyContent: "center",
     },
     filterHost: {
-      width: 230,
+      width: 210,
       height: NAV_BAR_HEIGHT,
     },
     sheet: {
