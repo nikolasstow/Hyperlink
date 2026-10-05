@@ -381,7 +381,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // frame is drawn (a layout effect), so the header never arrives late.
   React.useLayoutEffect(() => {
     props.navigation.setOptions({
-      headerTitle: () => <SessionHeaderTitle title={title ?? ""} connected={connected} />,
+      // The id while its name is not on the device (opened from a notification
+      // before the session list is read, a subagent's session).
+      headerTitle: () => <SessionHeaderTitle title={title ?? sessionID} connected={connected} />,
       unstable_headerRightItems: () => [
         {
           type: "menu",
