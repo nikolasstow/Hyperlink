@@ -250,7 +250,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
 
   // The page's top and bottom go with the zoom: off as the tab shrinks, back
   // as one grows (the bar, also as a listing scrolls).
-  const topSlide = useAnimatedStyle(() => ({ top: insets.top - Math.max(zoom.value, paging.value) * (insets.top + HOME_HEADER_HEIGHT + 16) }));
+  // Away, it ends well above the screen: its height and the status bar's
+  // twice over (its glass draws past its frame).
+  const topAway = insets.top * 2 + HOME_HEADER_HEIGHT * 2;
+  const topSlide = useAnimatedStyle(() => ({ top: insets.top - Math.max(zoom.value, paging.value) * topAway }));
   const blurFade = useAnimatedStyle(() => ({ opacity: 1 - Math.max(zoom.value, paging.value) }));
   const barDistance = BAR_ROOM + insets.bottom + 10;
   const scrolledAway = barHide.hidden;
