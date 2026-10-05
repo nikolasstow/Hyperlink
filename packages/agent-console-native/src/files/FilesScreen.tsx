@@ -76,6 +76,8 @@ const CARD_IN = { duration: 220, easing: Easing.out(Easing.cubic) };
 const CARD_SETTLE = { duration: 300, easing: Easing.bezier(0.32, 0.72, 0, 1) };
 /** The tab swiped to growing back to the page: even through its course, not
  * mostly in its first frames. */
+/** The swiped-to tab's preview fading off its page. */
+const COVER_FADE = { duration: 220, easing: Easing.out(Easing.quad) };
 const CARD_GROW = { duration: 380, easing: Easing.bezier(0.25, 0.1, 0.25, 1) };
 /** How far (a fraction of a card) or fast a swipe must go to change tabs. */
 const PAGE_TURN = 0.3;
@@ -341,14 +343,41 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const next = nextTab === undefined ? undefined : tabEntry(nextTab);
   const hasPrevious = previous !== undefined;
   const hasNext = next !== undefined;
+  // The tab swiped to's preview, over its page as the page is swapped in,
+  // fading away once the page is drawn (so the page comes in under it rather
+  // than popping in). Each swipe its own (`id`), so the store catching up
+  // does not start the fade again.
+  const [cover, setCover] = React.useState<{ readonly id: number; readonly entry: FileNavEntry } | undefined>(undefined);
+  const coverShown = useSharedValue(0);
   const swipeTo = React.useCallback(
     (by: number): void => {
       const index = shownIndex + by;
+      const swiped = place?.tabs[index];
+      const entry = swiped === undefined ? undefined : tabEntry(swiped);
+      if (entry !== undefined) {
+        coverShown.value = 1;
+        setCover({ id: Date.now(), entry });
+      }
       selectFileTab(repo, index);
       setSwipedTo(index);
     },
-    [repo, shownIndex],
+    [repo, shownIndex, place, coverShown],
   );
+  const clearCover = React.useCallback((id: number) => setCover((now) => (now?.id === id ? undefined : now)), []);
+  const coverId = cover?.id;
+  React.useEffect(() => {
+    if (coverId === undefined) return;
+    // Two frames: the page's first drawn, then the fade.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        coverShown.value = withTiming(0, COVER_FADE, (finished) => {
+          if (finished === true) runOnJS(clearCover)(coverId);
+        });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [coverId, coverShown, clearCover]);
+  const coverStyle = useAnimatedStyle(() => ({ opacity: coverShown.value }));
   // The tab swiped to, drawn as the page: in the middle, where its preview
   // card was (growing back already: the swipe started it).
   React.useLayoutEffect(() => {
@@ -464,6 +493,11 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                 />
               ) : (
                 <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} topInset={headerHeight} />
+              )}
+              {cover === undefined ? null : (
+                <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">
+                  <TabPreview entry={cover.entry} width={screen.width} topInset={headerHeight} aspect={screen.height / screen.width} />
+                </Reanimated.View>
               )}
             </Reanimated.View>
           </GestureDetector>
