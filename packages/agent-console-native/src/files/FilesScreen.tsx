@@ -54,7 +54,7 @@ import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
 import { TabOverview } from "./TabOverview";
 import { type TabFilter, type TabLayout, tabLayout } from "./tabLayout";
-import { CARD_GAP, CARD_SCALE, PREVIEW_RADIUS } from "./tabShape";
+import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav } from "./useFileNav";
 
@@ -181,7 +181,8 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const paging = useSharedValue(0);
   const swipe = useSharedValue(0);
   // How far apart the cards are.
-  const cardStep = screen.width * CARD_SCALE + CARD_GAP;
+  // How far a finger moves the cards a whole card (as they are while swiped).
+  const cardStep = cardStepAt(screen.width, 1);
   // Where everything in the grid is (tabLayout.ts); `extra`, a tab about to
   // be added.
   const layoutFor = (among: TabFilter, extra?: FileNavEntry): TabLayout =>
@@ -322,7 +323,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       opacity: rise.value,
       borderRadius: (paging.value * CARD_RADIUS) / card,
       transform: [
-        { translateX: drag.value + swipe.value * cardStep },
+        { translateX: drag.value + swipe.value * cardStepAt(screen.width, paging.value) },
         { translateY: interpolate(rise.value, [0, 1], [screen.height * 0.18, 0]) },
         { scale: interpolate(rise.value, [0, 1], [0.92, 1]) * card },
       ],
@@ -348,30 +349,12 @@ export const FilesScreen = (props: Props): React.ReactElement => {
     },
     [repo, shownIndex],
   );
-  // The tab swiped to is drawn in the middle: the cards start from there and
-  // the page grows back.
-  // It grows only once its page is drawn: mounting the page stalls the
-  // frames it takes, and growing through them reads as a snap.
-  // Started by the swipe, not by this render: the store catching up redraws
-  // at once, and the grow must not be cancelled by that (only by leaving).
-  const growFrame = React.useRef<number | undefined>(undefined);
+  // The tab swiped to, drawn as the page: in the middle, where its preview
+  // card was (growing back already: the swipe started it).
   React.useLayoutEffect(() => {
     if (swipedTo === undefined) return;
     swipe.value = 0;
-    if (growFrame.current !== undefined) cancelAnimationFrame(growFrame.current);
-    growFrame.current = requestAnimationFrame(() => {
-      growFrame.current = requestAnimationFrame(() => {
-        growFrame.current = undefined;
-        paging.value = withTiming(0, CARD_GROW);
-      });
-    });
-  }, [swipedTo, swipe, paging]);
-  React.useEffect(
-    () => () => {
-      if (growFrame.current !== undefined) cancelAnimationFrame(growFrame.current);
-    },
-    [],
-  );
+  }, [swipedTo, swipe]);
   // The overview's opener as of the latest render, for the pill's gestures
   // (built once, not every render).
   const openTabsLatest = React.useRef(openTabs);
@@ -398,8 +381,13 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           paging.value = withTiming(0, CARD_SETTLE);
           return;
         }
+        // In the middle, it grows back at once (here, not waiting on the page
+        // to be drawn): its preview card first, the page itself swapped in
+        // under it, in the same place, once drawn.
         swipe.value = withTiming(toPrevious ? 1 : -1, CARD_SETTLE, (finished) => {
-          if (finished === true) runOnJS(swipeTo)(toPrevious ? -1 : 1);
+          if (finished !== true) return;
+          paging.value = withTiming(0, CARD_GROW);
+          runOnJS(swipeTo)(toPrevious ? -1 : 1);
         });
       });
     const up = Gesture.Pan()
@@ -458,8 +446,8 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       >
           {place === undefined ? null : (
             <>
-              <NeighbourCard entry={previous} side={-1} swipe={swipe} paging={paging} step={cardStep} topInset={headerHeight} />
-              <NeighbourCard entry={next} side={1} swipe={swipe} paging={paging} step={cardStep} topInset={headerHeight} />
+              <NeighbourCard entry={previous} side={-1} swipe={swipe} paging={paging} topInset={headerHeight} />
+              <NeighbourCard entry={next} side={1} swipe={swipe} paging={paging} topInset={headerHeight} />
             </>
           )}
           <GestureDetector gesture={edgeSwipe}>
@@ -533,17 +521,16 @@ const NeighbourCard = (props: {
   readonly side: -1 | 1;
   readonly swipe: SharedValue<number>;
   readonly paging: SharedValue<number>;
-  readonly step: number;
   readonly topInset: number;
 }): React.ReactElement | null => {
   const screen = useWindowDimensions();
   const background = useScreenBackground("plain");
-  const { swipe, paging, step, side } = props;
+  const { swipe, paging, side } = props;
   const style = useAnimatedStyle(() => {
     const card = 1 - (1 - CARD_SCALE) * paging.value;
     return {
       borderRadius: (paging.value * CARD_RADIUS) / card,
-      transform: [{ translateX: (swipe.value + side) * step }, { scale: card }],
+      transform: [{ translateX: (swipe.value + side) * cardStepAt(screen.width, paging.value) }, { scale: card }],
     };
   });
   if (props.entry === undefined) return null;

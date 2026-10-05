@@ -36,7 +36,7 @@ import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { useKeyboardHeightValue } from "../keyboardHeight";
-import { CARD_GAP, CARD_SCALE } from "./tabShape";
+import { CARD_SCALE, cardStepAt } from "./tabShape";
 import { composerRestingBottom } from "../useKeyboardSlide";
 
 /** The pieces' height (Safari's compact bar), and its buttons' width. */
@@ -121,7 +121,6 @@ interface PillBounds {
   readonly left: number;
   readonly right: number;
   readonly screenWidth: number;
-  readonly cardStep: number;
 }
 
 /**
@@ -145,12 +144,12 @@ const TabPill = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const { swipe, paging, offset, forwardShown } = props;
-  const { left: boundLeft, right: boundRight, screenWidth, cardStep } = props.bounds;
+  const { left: boundLeft, right: boundRight, screenWidth } = props.bounds;
   const frame = useAnimatedStyle(() => {
     // Its card's span on the screen, less the bar's margins, within the
     // bounds (swiping, reaching just under the round button).
     const half = (screenWidth * (1 - (1 - CARD_SCALE) * paging.value)) / 2;
-    const middle = screenWidth / 2 + (offset + swipe.value) * cardStep;
+    const middle = screenWidth / 2 + (offset + swipe.value) * cardStepAt(screenWidth, paging.value);
     const left = Math.max(middle - half + NAV_BAR_SIDE, boundLeft + forwardShown.value * FORWARD_EXTRA);
     const width = Math.max(0, Math.min(middle + half - NAV_BAR_SIDE, boundRight + paging.value * PILL_REACH) - left);
     // Narrower than it is tall: a circle, shrinking.
@@ -254,7 +253,6 @@ export const FileNavBar = (props: {
       left: NAV_BAR_SIDE + NAV_BAR_HEIGHT + BAR_GAP,
       right: screenW - NAV_BAR_SIDE - (withDubz ? NAV_BAR_HEIGHT + BAR_GAP : 0),
       screenWidth: screenW,
-      cardStep: screenW * CARD_SCALE + CARD_GAP,
     }),
     [withDubz, screenW],
   );
