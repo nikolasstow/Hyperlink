@@ -141,3 +141,47 @@ Not yet: tabs, an editable path, and the preload decisions in
 `agent-console-native-preload.md` (the tree kept on the device, refreshed when the repo
 page opens; recently viewed files preloaded per folder; big files in parts with their
 colouring).
+
+## 9. Alterations (owner, 2026-10-05)
+
+Supersede §3.3's single pill and its tabs stub:
+
+1. **The layout matches Safari's compact bar**: three separate glass pieces, not one pill —
+   a back · forward capsule, the address capsule in the middle, a round button at the end.
+2. **The address capsule is the tab bar.** It shows the current tab, and a sideways swipe
+   on it moves between tabs, as Safari's does. (So Dubz is no longer a swipe away here.)
+3. **The round button is Dubz / chat**, not tabs.
+4. **Tabs mix two kinds**: an explorer tab (a folder) is a small pill; a file tab (view /
+   edit) is a shrunken preview of the file, always up to date. Tapping a tab expands it to
+   full, seamlessly.
+5. **The tab overview opens and closes as Safari's does** (the current tab shrinks into its
+   place in the overview, and grows back out of it).
+
+## 10. Tabs (owner, 2026-10-05)
+
+Supersedes §9.4 and fills in the rest:
+
+1. **All tabs are the same**: a preview of what the tab shows (a folder's listing or a
+   file), kept up to date. Tapping a preview opens that tab, expanding it to full screen.
+2. **The address pill shows the current tab's name** (the file or folder name), not its
+   path. The overview shows as much of each tab's path as fits under its preview, cut at
+   the start, not the end (the end matters most).
+3. **The overview opens** by tapping the address pill, or swiping up on it; a sideways
+   swipe on the pill moves between tabs.
+4. **The overview's bottom bar**: history at the bottom left; in the middle a switcher —
+   All · Files · Folders — filtering the tabs; a + at the bottom right for a new tab.
+
+## 11. Status: tabs (2026-10-05)
+
+Built (`src/files/`): `FileNav` now keeps tabs per repo (each its own back/forward, the
+active one, a history of what was opened, all on the device); `FileNavBar` is Safari's
+three pieces (back · forward, the name pill = tab bar, the Dubz button); `TabOverview` is
+the grid of previews (`TabPreview`: the tab drawn at screen size and scaled, folders from
+the listing cache, files' first lines re-read when shown) with history · All/Files/Folders
+(native segmented) · + at its bottom; `FilesScreen` zooms the tab into and out of its
+preview on the UI thread from the grid's fixed geometry. A row's long press has Open in
+New Tab. Tests: `FileNav.test.ts`.
+
+Not yet: a new tab (the +, history, Open in New Tab) opens without the zoom; a sideways
+swipe on the pill switches tabs at once (no slide); file previews are plain monospace
+(not coloured); the path pill is display-only.

@@ -19,6 +19,10 @@ import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import type { FileNavEntry } from "./FileNav";
+import { ContextMenuView, type MenuAction } from "../../modules/context-menu";
+
+/** A row's long-press menu. */
+const ROW_MENU: ReadonlyArray<MenuAction> = [{ id: "newTab", title: "Open in New Tab", systemImage: "plus.square.on.square" }];
 
 /** Left screen inset, indentation per level, and the leading chevron column.
  * Tuned to the Files reference: a small chevron with generous room around it,
@@ -89,13 +93,15 @@ export const FileListing = (props: {
   readonly topInset: number;
   readonly bottomInset: number;
   readonly onOpen: (entry: FileNavEntry) => void;
+  /** A long press on a row, Open in New Tab. */
+  readonly onOpenInNewTab: (entry: FileNavEntry) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { backend } = useAppContext();
   const tree = useFileTree(backend, props.dir);
   const { rows } = tree;
-  const { onOpen } = props;
+  const { onOpen, onOpenInNewTab } = props;
 
   const onToggle = (row: FileRow): void => {
     LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
@@ -125,7 +131,17 @@ export const FileListing = (props: {
   return (
     <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
       {rows.map((row, index) => (
-        <Row key={row.path} row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={open} />
+        // A long press: the row's menu (iOS's own, the row lifting).
+        <ContextMenuView
+          key={row.path}
+          actions={ROW_MENU}
+          previewCornerRadius={10}
+          onAction={(id) => {
+            if (id === "newTab") onOpenInNewTab({ path: row.path, name: row.name, kind: row.type });
+          }}
+        >
+          <Row row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={open} />
+        </ContextMenuView>
       ))}
     </ScrollView>
   );

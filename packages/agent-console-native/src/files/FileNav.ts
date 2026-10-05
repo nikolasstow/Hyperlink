@@ -1,9 +1,11 @@
 /**
- * Where Files is, per repo, as a browser keeps it: the entries visited (a
- * folder or a file) and which one is showing, so back and forward walk them
- * and leaving Files and coming back returns to the same place. Opening
- * something new drops what was ahead, as a browser does. The first entry is
- * the repo's root (its primary worktree); a new root starts the history over.
+ * Where Files is, per repo, as a browser keeps it: tabs, each with the
+ * entries it has visited (folders or files) and which one it shows, so back
+ * and forward walk them; the tab showing; and a history of everything opened
+ * (the overview's history). Leaving Files and coming back returns to the same
+ * tab and place. Opening something new in a tab drops what was ahead in it, as
+ * a browser does. A new tab starts at the repo's root (its primary worktree);
+ * a new root starts the repo over.
  *
  * Kept on the device (KeyValueStore), read back at launch. Decisions:
  * docs/handoffs/files-redesign-notes.md.
@@ -20,26 +22,66 @@ export const FileNavEntry = Schema.Struct({
 });
 export type FileNavEntry = typeof FileNavEntry.Type;
 
-export const FileNavState = Schema.Struct({
+export const FileTab = Schema.Struct({
+  id: Schema.String,
   entries: Schema.Array(FileNavEntry),
   index: Schema.Number,
 });
-export type FileNavState = typeof FileNavState.Type;
+export type FileTab = typeof FileTab.Type;
 
-const Stored = Schema.Record(Schema.String, FileNavState);
-const STORE_KEY = "nav";
+export const Visit = Schema.Struct({
+  entry: FileNavEntry,
+  at: Schema.Number,
+});
+export type Visit = typeof Visit.Type;
 
-/** The entry showing. */
-export const currentEntry = (state: FileNavState): FileNavEntry | undefined => state.entries[state.index];
-export const canGoBack = (state: FileNavState): boolean => state.index > 0;
-export const canGoForward = (state: FileNavState): boolean => state.index < state.entries.length - 1;
+export const FilePlace = Schema.Struct({
+  root: Schema.String,
+  tabs: Schema.Array(FileTab),
+  active: Schema.Number,
+  history: Schema.Array(Visit),
+});
+export type FilePlace = typeof FilePlace.Type;
 
-/** Opens an entry: after the current one, dropping what was ahead (the same
- * entry again is no step). */
-export const opened = (state: FileNavState, entry: FileNavEntry): FileNavState => {
-  if (currentEntry(state)?.path === entry.path) return state;
-  return { entries: [...state.entries.slice(0, state.index + 1), entry], index: state.index + 1 };
+const Stored = Schema.Record(Schema.String, FilePlace);
+const STORE_KEY = "places";
+/** Visits kept in the history, newest first. */
+const HISTORY_LIMIT = 200;
+
+/** A tab's entry showing. */
+export const tabEntry = (tab: FileTab): FileNavEntry | undefined => tab.entries[tab.index];
+export const activeTab = (place: FilePlace): FileTab | undefined => place.tabs[place.active];
+export const canGoBack = (tab: FileTab): boolean => tab.index > 0;
+export const canGoForward = (tab: FileTab): boolean => tab.index < tab.entries.length - 1;
+
+/** Opens an entry in a tab: after the current one, dropping what was ahead
+ * (the same entry again is no step). */
+export const opened = (tab: FileTab, entry: FileNavEntry): FileTab => {
+  if (tabEntry(tab)?.path === entry.path) return tab;
+  return { ...tab, entries: [...tab.entries.slice(0, tab.index + 1), entry], index: tab.index + 1 };
 };
+
+const newTabId = (): string => `tab_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+/** A repo's place with one tab at its root. */
+export const startedAt = (root: FileNavEntry): FilePlace => ({
+  root: root.path,
+  tabs: [{ id: newTabId(), entries: [root], index: 0 }],
+  active: 0,
+  history: [],
+});
+
+const withActive = (place: FilePlace, f: (tab: FileTab) => FileTab): FilePlace => {
+  const tab = activeTab(place);
+  if (tab === undefined) return place;
+  const next = f(tab);
+  return next === tab ? place : { ...place, tabs: place.tabs.map((each, index) => (index === place.active ? next : each)) };
+};
+
+const visited = (place: FilePlace, entry: FileNavEntry): FilePlace => ({
+  ...place,
+  history: [{ entry, at: Date.now() }, ...place.history.filter((visit) => visit.entry.path !== entry.path)].slice(0, HISTORY_LIMIT),
+});
 
 const make = Effect.gen(function* () {
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, Stored);
@@ -49,35 +91,47 @@ const make = Effect.gen(function* () {
   );
   const state = yield* SubscriptionRef.make(HashMap.fromIterable(Object.entries(stored)));
 
+  const save = (all: HashMap.HashMap<string, FilePlace>) =>
+    store.set(STORE_KEY, Object.fromEntries(all)).pipe(Effect.catch((error) => Effect.logError("[files] saving the place failed", error)));
+
   /** Changes a repo's place (when it has one), then keeps every repo's. */
-  const update = (repo: string, f: (current: FileNavState) => FileNavState) =>
+  const update = (repo: string, f: (place: FilePlace) => FilePlace) =>
     SubscriptionRef.updateAndGet(state, (all) =>
       Option.match(HashMap.get(all, repo), {
         onNone: () => all,
-        onSome: (current) => HashMap.set(all, repo, f(current)),
+        onSome: (place) => HashMap.set(all, repo, f(place)),
       }),
-    ).pipe(
-      Effect.flatMap((all) => store.set(STORE_KEY, Object.fromEntries(all))),
-      Effect.catch((error) => Effect.logError("[files] saving the place failed", error)),
-    );
+    ).pipe(Effect.flatMap(save));
 
   return {
     /** Every repo's place, as they change (the current ones first). */
     changes: SubscriptionRef.changes(state),
-    /** Starts a repo at its root, or over at a new root (another worktree);
-     * a repo already at this root keeps its place. */
+    /** Starts a repo at its root, or over at a new root (another worktree); a
+     * repo already at this root keeps its place. */
     ensureRoot: (repo: string, root: FileNavEntry) =>
       SubscriptionRef.updateAndGet(state, (all) => {
-        const current = HashMap.get(all, repo);
-        if (Option.isSome(current) && current.value.entries[0]?.path === root.path) return all;
-        return HashMap.set(all, repo, { entries: [root], index: 0 });
-      }).pipe(
-        Effect.flatMap((all) => store.set(STORE_KEY, Object.fromEntries(all))),
-        Effect.catch((error) => Effect.logError("[files] saving the place failed", error)),
-      ),
-    open: (repo: string, entry: FileNavEntry) => update(repo, (current) => opened(current, entry)),
-    back: (repo: string) => update(repo, (current) => (canGoBack(current) ? { ...current, index: current.index - 1 } : current)),
-    forward: (repo: string) => update(repo, (current) => (canGoForward(current) ? { ...current, index: current.index + 1 } : current)),
+        const place = HashMap.get(all, repo);
+        if (Option.isSome(place) && place.value.root === root.path && place.value.tabs.length > 0) return all;
+        return HashMap.set(all, repo, startedAt(root));
+      }).pipe(Effect.flatMap(save)),
+    /** Opens an entry in the tab showing. */
+    open: (repo: string, entry: FileNavEntry) => update(repo, (place) => visited(withActive(place, (tab) => opened(tab, entry)), entry)),
+    back: (repo: string) => update(repo, (place) => withActive(place, (tab) => (canGoBack(tab) ? { ...tab, index: tab.index - 1 } : tab))),
+    forward: (repo: string) => update(repo, (place) => withActive(place, (tab) => (canGoForward(tab) ? { ...tab, index: tab.index + 1 } : tab))),
+    /** Shows another tab. */
+    select: (repo: string, index: number) =>
+      update(repo, (place) => (index >= 0 && index < place.tabs.length ? { ...place, active: index } : place)),
+    /** A new tab, showing `entry` (the root, from the overview's +), shown. */
+    newTab: (repo: string, entry: FileNavEntry) =>
+      update(repo, (place) => ({ ...place, tabs: [...place.tabs, { id: newTabId(), entries: [entry], index: 0 }], active: place.tabs.length })),
+    /** Closes a tab; the last one closed leaves one at the root. */
+    close: (repo: string, index: number) =>
+      update(repo, (place) => {
+        const tabs = place.tabs.filter((_tab, each) => each !== index);
+        if (tabs.length === 0) return { ...place, tabs: [{ id: newTabId(), entries: [{ path: place.root, name: place.root.split("/").filter(Boolean).pop() ?? place.root, kind: "directory" }], index: 0 }], active: 0 };
+        const active = index < place.active ? place.active - 1 : Math.min(place.active, tabs.length - 1);
+        return { ...place, tabs, active };
+      }),
   };
 });
 

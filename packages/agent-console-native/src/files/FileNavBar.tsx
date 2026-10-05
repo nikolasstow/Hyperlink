@@ -1,13 +1,17 @@
 /**
- * Files' bottom bar, as Safari's: back, forward, the path showing, and tabs,
- * in one glass pill; Dubz is its second page, a swipe away, as beside the
- * composer (Composer.tsx, collapsed: there is nothing to type here, so the
- * pill never expands). It rides the keyboard and follows the bar's glass
- * rules (BottomBar.tsx): the glass rounds itself, nothing clips it, and it
- * moves by layout only.
+ * Files' bottom bar, laid out as Safari's compact bar: three glass pieces in a
+ * row — back · forward in one capsule, the address pill in the middle, a
+ * round button at the end.
  *
- * The path is shown only for now (typing one to jump comes later); tabs are a
- * stub. Decisions: docs/handoffs/files-redesign-notes.md.
+ * - The address pill shows the current tab's name and is the tab bar: a tap,
+ *   or a swipe up, opens the tab overview; a sideways swipe moves between
+ *   tabs.
+ * - The round button is Dubz: it slides Dubz's bar in (the page beside this
+ *   one, as beside the composer) and opens it; closed, Dubz slides away again.
+ *
+ * It rides the keyboard and follows the bar's glass rules (BottomBar.tsx): each
+ * glass rounds itself, nothing clips it, and it moves by layout only.
+ * Decisions: docs/handoffs/files-redesign-notes.md §9–§10.
  *
  * @internal
  */
@@ -18,18 +22,34 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAgentButtonVisible } from "../agentButtonSettings";
-import { FIELD_RADIUS, FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
-import { colors } from "../colors";
-import { COMPOSER_FIELD_PADDING, COMPOSER_SEND_CHIP_SIZE } from "../composerBarSpec";
-import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "../Dubz";
+import { FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
+import { DubzPage, PAGE_MS, pageEasing, type PageBack } from "../Dubz";
 import type { DubzContext } from "../dubzSuggestions";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { composerRestingBottom, useKeyboardSlide } from "../useKeyboardSlide";
 
+/** The pieces' height (Safari's compact bar), and its buttons' width. */
+export const NAV_BAR_HEIGHT = 50;
+const BUTTON_WIDTH = 46;
+/** How far a finger moves before a swipe on the pill counts, and how far (or
+ * how fast) it must go to switch tabs or open the overview. */
+const SWIPE_SLOP = 12;
+const SWIPE_TURN = 48;
+const SWIPE_FLING = 600;
+
 const noop = (): void => undefined;
 
-/** One of the pill's buttons: an icon, dimmed when it does nothing now. */
+/** A glass piece of the bar, rounded on itself. */
+const Piece = (props: { readonly style: React.ComponentProps<typeof View>["style"]; readonly children: React.ReactNode }): React.ReactElement => {
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  return (
+    <GlassView style={props.style} glassEffectStyle="clear" tintColor={scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT} colorScheme={scheme}>
+      {props.children}
+    </GlassView>
+  );
+};
+
 const NavButton = (props: {
   readonly icon: React.ComponentProps<typeof SystemIcon>["name"];
   readonly label: string;
@@ -46,83 +66,75 @@ const NavButton = (props: {
       accessibilityState={{ disabled: !props.enabled }}
       disabled={!props.enabled}
       onPress={props.onPress}
-      hitSlop={6}
     >
-      <SystemIcon name={props.icon} size={19} weight="medium" color={props.enabled ? textColors.label : textColors.tertiaryLabel} />
+      <SystemIcon name={props.icon} size={20} weight="medium" color={props.enabled ? textColors.label : textColors.tertiaryLabel} />
     </Pressable>
   );
 };
 
 export const FileNavBar = (props: {
-  /** The path showing, as the pill writes it (from the repo's root). */
-  readonly path: string;
+  /** The current tab's name (its file or folder). */
+  readonly name: string;
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
   readonly onBack: () => void;
   readonly onForward: () => void;
-  /** Where Dubz is: its suggestions, and which page the bar opens to. */
+  /** The tab overview: a tap on the pill, or a swipe up. */
+  readonly onOpenTabs: () => void;
+  /** The tab before or after this one: a swipe right or left on the pill. */
+  readonly onPreviousTab: () => void;
+  readonly onNextTab: () => void;
+  /** Where Dubz is: its suggestions. */
   readonly dubzContext: DubzContext;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const insets = useSafeAreaInsets();
   const slide = useKeyboardSlide(composerRestingBottom(insets.bottom));
   const { width: screenW } = useWindowDimensions();
-  const pageType = props.dubzContext.surface;
-  const withDubz = useAgentButtonVisible(pageType);
-  const lastPage = useBarPage(pageType);
+  const withDubz = useAgentButtonVisible(props.dubzContext.surface);
   const [dubzOpen, setDubzOpen] = React.useState(false);
   const dubzInputRef = React.useRef<TextInput>(null);
-  // Where the pages stand: 0 the nav pill, 1 Dubz.
-  const pageX = useSharedValue(withDubz && lastPage === "dubz" ? 1 : 0);
+  // Where the pages stand: 0 this bar, 1 Dubz's.
+  const pageX = useSharedValue(0);
 
-  // Closed, the bar shows this page type's page.
-  React.useEffect(() => {
-    if (dubzOpen) return;
-    pageX.value = withDubz && lastPage === "dubz" ? 1 : 0;
-  }, [dubzOpen, withDubz, lastPage, pageX]);
+  // The Dubz button: Dubz's bar slides in, then opens.
+  const openDubz = React.useCallback(() => setDubzOpen(true), []);
+  const toDubz = React.useCallback(() => {
+    pageX.value = withTiming(1, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+      if (finished === true) runOnJS(openDubz)();
+    });
+  }, [pageX, openDubz]);
+  // Closed, it slides away again.
+  const closeDubz = React.useCallback(() => {
+    setDubzOpen(false);
+    pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing });
+  }, [pageX]);
+  // Swiped back from Dubz's bar: this bar again.
+  const pageBack = React.useMemo<PageBack>(() => ({ pageX, begin: noop, turn: () => setDubzOpen(false), stay: noop }), [pageX]);
 
-  // A swipe left slides Dubz in (its bar; open it with a tap); turned, the
-  // page is this page type's from now on.
-  const turnToDubz = React.useCallback(() => rememberPage(pageType, "dubz"), [pageType]);
-  const toDubz = React.useMemo(
-    () =>
-      Gesture.Pan()
-        .enabled(withDubz)
-        .activeOffsetX([-PAGE_SLOP_X, PAGE_SLOP_X])
-        .failOffsetY([-PAGE_SLOP_Y, PAGE_SLOP_Y])
-        .onUpdate((e) => {
-          const moved = -e.translationX / screenW;
-          pageX.value = moved < 0 ? 0 : moved > 1 ? 1 : moved;
-        })
-        .onEnd((e) => {
-          const turned = pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING;
-          pageX.value = withTiming(turned ? 1 : 0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
-            if (finished === true && turned) runOnJS(turnToDubz)();
-          });
-        }),
-    [withDubz, pageX, screenW, turnToDubz],
-  );
-  // Back from Dubz: to this pill (Dubz closes if it was open).
-  const pageBack = React.useMemo<PageBack>(
-    () => ({
-      pageX,
-      begin: noop,
-      turn: () => {
-        rememberPage(pageType, "compose");
-        setDubzOpen(false);
-      },
-      stay: noop,
-    }),
-    [pageX, pageType],
-  );
-  const openDubz = React.useCallback(() => {
-    rememberPage(pageType, "dubz");
-    setDubzOpen(true);
-  }, [pageType]);
-  const closeDubz = React.useCallback(() => setDubzOpen(false), []);
+  // The pill: a sideways swipe moves between tabs, a swipe up opens the
+  // overview, a tap opens it too.
+  const { onOpenTabs, onPreviousTab, onNextTab } = props;
+  const pillGesture = React.useMemo(() => {
+    const swipe = Gesture.Pan()
+      .minDistance(SWIPE_SLOP)
+      .runOnJS(true)
+      .onEnd((e) => {
+        const sideways = Math.abs(e.translationX) > Math.abs(e.translationY);
+        if (sideways) {
+          if (e.translationX < -SWIPE_TURN || e.velocityX < -SWIPE_FLING) onNextTab();
+          else if (e.translationX > SWIPE_TURN || e.velocityX > SWIPE_FLING) onPreviousTab();
+        } else if (e.translationY < -SWIPE_TURN || e.velocityY < -SWIPE_FLING) {
+          onOpenTabs();
+        }
+      });
+    const tap = Gesture.Tap().runOnJS(true).onEnd((_e, success) => {
+      if (success) onOpenTabs();
+    });
+    return Gesture.Exclusive(swipe, tap);
+  }, [onOpenTabs, onPreviousTab, onNextTab]);
 
-  const navSlide = useAnimatedStyle(() => ({
+  const barSlide = useAnimatedStyle(() => ({
     marginLeft: -pageX.value * screenW,
     marginRight: pageX.value * screenW,
   }));
@@ -134,23 +146,26 @@ export const FileNavBar = (props: {
   return (
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
       <View style={styles.pages} pointerEvents="box-none">
-        <GestureDetector gesture={toDubz}>
-          <Reanimated.View style={[styles.bar, navSlide]}>
-            <GlassView style={styles.field} glassEffectStyle="clear" tintColor={scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT} colorScheme={scheme}>
-              <View style={styles.row}>
-                <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
-                <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
-                <View style={styles.pathPill}>
-                  <Text style={styles.path} numberOfLines={1} ellipsizeMode="middle">
-                    {props.path}
-                  </Text>
-                </View>
-                {/* Tabs come later. */}
-                <NavButton icon="square.on.square" label="Tabs" enabled={false} onPress={noop} />
-              </View>
-            </GlassView>
-          </Reanimated.View>
-        </GestureDetector>
+        <Reanimated.View style={[styles.bar, barSlide]}>
+          <Piece style={styles.navPair}>
+            <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
+            <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
+          </Piece>
+          <GestureDetector gesture={pillGesture}>
+            <View style={styles.pillSlot} accessibilityRole="button" accessibilityLabel={`${props.name}, tabs`}>
+              <Piece style={styles.pill}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {props.name}
+                </Text>
+              </Piece>
+            </View>
+          </GestureDetector>
+          {withDubz ? (
+            <Piece style={styles.round}>
+              <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" enabled onPress={toDubz} />
+            </Piece>
+          ) : null}
+        </Reanimated.View>
         {withDubz ? (
           <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
             <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} />
@@ -180,39 +195,47 @@ const makeStyles = (text: TextColors) =>
       top: 0,
       bottom: 0,
     },
-    // The composer's margins (BottomBar), so the two bars line up.
+    // The composer's margins (BottomBar), so the bars line up.
     bar: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
       paddingHorizontal: 12,
       paddingTop: 8,
       paddingBottom: 8,
     },
-    field: {
-      padding: COMPOSER_FIELD_PADDING,
-      borderRadius: FIELD_RADIUS,
-    },
-    row: {
+    navPair: {
       flexDirection: "row",
+      height: NAV_BAR_HEIGHT,
+      paddingHorizontal: 4,
+      borderRadius: NAV_BAR_HEIGHT / 2,
+    },
+    pillSlot: {
+      flex: 1,
+    },
+    pill: {
+      height: NAV_BAR_HEIGHT,
+      borderRadius: NAV_BAR_HEIGHT / 2,
       alignItems: "center",
-      gap: 4,
-      height: COMPOSER_SEND_CHIP_SIZE,
+      justifyContent: "center",
+      paddingHorizontal: 16,
+    },
+    round: {
+      width: NAV_BAR_HEIGHT,
+      height: NAV_BAR_HEIGHT,
+      borderRadius: NAV_BAR_HEIGHT / 2,
+      alignItems: "center",
+      justifyContent: "center",
     },
     button: {
-      width: COMPOSER_SEND_CHIP_SIZE,
-      height: COMPOSER_SEND_CHIP_SIZE,
+      width: BUTTON_WIDTH,
+      height: NAV_BAR_HEIGHT,
       alignItems: "center",
       justifyContent: "center",
     },
-    pathPill: {
-      flex: 1,
-      height: COMPOSER_SEND_CHIP_SIZE,
-      justifyContent: "center",
-      paddingHorizontal: 12,
-      borderRadius: COMPOSER_SEND_CHIP_SIZE / 2,
-      backgroundColor: colors.fillBackground,
-    },
-    path: {
+    name: {
       color: text.label,
-      fontFamily: "Menlo",
-      fontSize: 13,
+      fontSize: 15,
+      fontWeight: "600",
     },
   });
