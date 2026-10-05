@@ -76,7 +76,7 @@ const RoundButton = (props: { readonly icon: React.ComponentProps<typeof SystemI
   return (
     <GlassView style={styles.round} glassEffectStyle="clear" tintColor={scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT} colorScheme={scheme}>
       <Pressable style={styles.roundHit} accessibilityRole="button" accessibilityLabel={props.label} onPress={props.onPress}>
-        <SystemIcon name={props.icon} size={18} weight="medium" color={textColors.label} />
+        <SystemIcon name={props.icon} size={16} weight="medium" color={textColors.label} />
       </Pressable>
     </GlassView>
   );
@@ -147,9 +147,9 @@ export const TabOverview = (props: {
           <Picker
             selection={props.filter}
             onSelectionChange={(next: TabFilter) => props.onFilter(next)}
-            modifiers={[pickerStyle("segmented"), controlSize("extraLarge")]}
+            modifiers={[pickerStyle("segmented"), controlSize("large")]}
           >
-            <UIText modifiers={[tag("all"), font({ size: 17, weight: "semibold" })]}>All</UIText>
+            <UIText modifiers={[tag("all"), font({ size: 15, weight: "semibold" })]}>All</UIText>
             <UIImage systemName="doc" modifiers={[tag("files")]} />
             <UIImage systemName="folder" modifiers={[tag("folders")]} />
           </Picker>
@@ -284,7 +284,7 @@ const makeStyles = (text: TextColors) =>
       justifyContent: "center",
     },
     filterHost: {
-      width: 210,
+      width: 190,
       height: NAV_BAR_HEIGHT,
     },
     sheet: {

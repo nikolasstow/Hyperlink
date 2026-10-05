@@ -30,8 +30,8 @@ import { useKeyboardHeightValue } from "../keyboardHeight";
 import { composerRestingBottom } from "../useKeyboardSlide";
 
 /** The pieces' height (Safari's compact bar), and its buttons' width. */
-export const NAV_BAR_HEIGHT = 44;
-const BUTTON_WIDTH = 40;
+export const NAV_BAR_HEIGHT = 38;
+const BUTTON_WIDTH = 36;
 /** The bar's margins: at the sides, and under it (above where it rests). */
 export const NAV_BAR_SIDE = 28;
 export const NAV_BAR_BOTTOM = 18;
@@ -75,7 +75,7 @@ const NavButton = (props: {
       disabled={!props.enabled}
       onPress={props.onPress}
     >
-      <SystemIcon name={props.icon} size={18} weight="medium" color={props.enabled ? textColors.label : textColors.tertiaryLabel} />
+      <SystemIcon name={props.icon} size={16} weight="medium" color={props.enabled ? textColors.label : textColors.tertiaryLabel} />
     </Pressable>
   );
 };
@@ -237,7 +237,7 @@ const makeStyles = (text: TextColors) =>
     },
     name: {
       color: text.label,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: "600",
     },
   });
