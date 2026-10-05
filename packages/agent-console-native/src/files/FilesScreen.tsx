@@ -71,6 +71,9 @@ const ZOOM = { duration: 520, easing: Easing.bezier(0.32, 0.72, 0, 1) };
 const CARD_RADIUS = 44;
 const CARD_IN = { duration: 220, easing: Easing.out(Easing.cubic) };
 const CARD_SETTLE = { duration: 300, easing: Easing.bezier(0.32, 0.72, 0, 1) };
+/** The tab swiped to growing back to the page: even through its course, not
+ * mostly in its first frames. */
+const CARD_GROW = { duration: 380, easing: Easing.bezier(0.25, 0.1, 0.25, 1) };
 /** How far (a fraction of a card) or fast a swipe must go to change tabs. */
 const PAGE_TURN = 0.3;
 const PAGE_FLING = 600;
@@ -344,10 +347,17 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   );
   // The tab swiped to is drawn in the middle: the cards start from there and
   // the page grows back.
+  // It grows only once its page is drawn: mounting the page stalls the
+  // frames it takes, and growing through them reads as a snap.
   React.useLayoutEffect(() => {
     if (swipedTo === undefined) return;
     swipe.value = 0;
-    paging.value = withTiming(0, CARD_SETTLE);
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        paging.value = withTiming(0, CARD_GROW);
+      });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [swipedTo, swipe, paging]);
   // The overview's opener as of the latest render, for the pill's gestures
   // (built once, not every render).

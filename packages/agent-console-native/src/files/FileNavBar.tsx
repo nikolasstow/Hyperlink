@@ -106,7 +106,11 @@ const NavButton = (props: {
       disabled={!enabled}
       onPress={props.onPress}
     >
-      <SystemIcon name={props.icon} size={19} weight="medium" color={enabled ? textColors.label : textColors.tertiaryLabel} />
+      {/* Dimmed by its own opacity (not its colour: the SwiftUI symbol need
+        * not redraw for a new one). */}
+      <View style={enabled ? undefined : styles.disabled}>
+        <SystemIcon name={props.icon} size={19} weight="medium" color={textColors.label} />
+      </View>
     </Pressable>
   );
 };
@@ -361,6 +365,9 @@ const makeStyles = (text: TextColors) =>
     },
     row: {
       flexDirection: "row",
+    },
+    disabled: {
+      opacity: 0.3,
     },
     navFrame: {
       height: NAV_BAR_HEIGHT,
