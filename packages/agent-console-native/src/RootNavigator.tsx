@@ -356,11 +356,10 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="Files"
           component={FilesScreen}
-          // The header's back goes to the repo; back and forward within Files
-          // are its bottom bar's. The title is the screen's (worktree picker or
-          // what is showing).
-          // Its edge swipes are its own back and forward (FilesScreen).
-          options={{ ...pageHeader, contentStyle: { backgroundColor: plainBackground }, gestureEnabled: false }}
+          // Files draws its own top (back to the repo, the title), so it moves in
+          // step with its tab overview; its edge swipes are its own back and
+          // forward (FilesScreen).
+          options={{ headerShown: false, contentStyle: { backgroundColor: plainBackground }, gestureEnabled: false }}
         />
         <Stack.Screen
           name="FileViewer"

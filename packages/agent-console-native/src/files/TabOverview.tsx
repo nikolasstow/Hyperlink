@@ -17,13 +17,14 @@ import { controlSize, font, pickerStyle, tag } from "@expo/ui/swift-ui/modifiers
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { FlatList, Modal as RNModal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
+import Reanimated, { type SharedValue, useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
 import { colors } from "../colors";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { type FileNavEntry, type FilePlace, tabEntry, type Visit } from "./FileNav";
-import { NAV_BAR_BOTTOM, NAV_BAR_HEIGHT, NAV_BAR_SIDE } from "./FileNavBar";
+
 import { TabPreview } from "./TabPreview";
 import { PREVIEW_ASPECT, PREVIEW_RADIUS } from "./tabShape";
 
@@ -40,6 +41,8 @@ export const filteredTabs = (place: FilePlace, filter: TabFilter): ReadonlyArray
   });
 
 const SIDE = 16;
+/** The overview bar's pieces (its own: Files' bar is sized apart). */
+const OVERVIEW_BAR_HEIGHT = 50;
 
 const GAP = 14;
 
@@ -76,7 +79,7 @@ const RoundButton = (props: { readonly icon: React.ComponentProps<typeof SystemI
   return (
     <GlassView style={styles.round} glassEffectStyle="clear" tintColor={scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT} colorScheme={scheme}>
       <Pressable style={styles.roundHit} accessibilityRole="button" accessibilityLabel={props.label} onPress={props.onPress}>
-        <SystemIcon name={props.icon} size={17} weight="medium" color={textColors.label} />
+        <SystemIcon name={props.icon} size={20} weight="medium" color={textColors.label} />
       </Pressable>
     </GlassView>
   );
@@ -97,6 +100,14 @@ export const TabOverview = (props: {
   readonly onOpenVisit: (entry: FileNavEntry) => void;
   readonly screen: { readonly width: number; readonly height: number };
   readonly topInset: number;
+  /** The zoom (0 a tab at full screen, 1 in the grid): the grid fades in
+   * with it, around the zooming tab. */
+  readonly reveal: SharedValue<number>;
+  /** The page's top inset, as the previews draw it. */
+  readonly pageTop: number;
+  /** Its bar: there while it is open or opening, gone the moment a tab
+   * starts growing out of it. */
+  readonly barShown: boolean;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -106,15 +117,18 @@ export const TabOverview = (props: {
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const { onScroll } = props;
   const reportScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => onScroll(event.nativeEvent.contentOffset.y);
+  const { reveal } = props;
+  const fade = useAnimatedStyle(() => ({ opacity: reveal.value }));
 
   return (
     <View style={StyleSheet.absoluteFill}>
+      <Reanimated.View style={[StyleSheet.absoluteFill, fade]}>
       <ScrollView
         style={StyleSheet.absoluteFill}
         contentOffset={{ x: 0, y: props.initialScroll }}
         onScroll={reportScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingTop: geometry.top, paddingBottom: insets.bottom + NAV_BAR_HEIGHT + 40, paddingHorizontal: SIDE }}
+        contentContainerStyle={{ paddingTop: geometry.top, paddingBottom: insets.bottom + OVERVIEW_BAR_HEIGHT + 40, paddingHorizontal: SIDE }}
       >
         <View style={styles.grid}>
           {tabs.map(({ index, entry }) => (
@@ -123,7 +137,7 @@ export const TabOverview = (props: {
                 * shifts nothing), the close button in its corner. */}
               <View style={[styles.preview, { width: geometry.cellWidth, height: geometry.previewHeight }, props.hiddenTab === index && styles.hidden]}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Open ${entry.name}`} onPress={() => props.onSelect(index)}>
-                  <TabPreview entry={entry} width={geometry.cellWidth} topInset={props.topInset} />
+                  <TabPreview entry={entry} width={geometry.cellWidth} topInset={props.pageTop} />
                 </Pressable>
                 <View style={[styles.outline, index === props.place.active && styles.outlineActive]} pointerEvents="none" />
                 <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel={`Close ${entry.name}`} onPress={() => props.onClose(index)} hitSlop={10}>
@@ -141,21 +155,24 @@ export const TabOverview = (props: {
           ))}
         </View>
       </ScrollView>
-      <View style={[styles.bar, { bottom: insets.bottom + NAV_BAR_BOTTOM - 8 }]} pointerEvents="box-none">
+      </Reanimated.View>
+      {props.barShown ? (
+      <View style={[styles.bar, { bottom: insets.bottom }]} pointerEvents="box-none">
         <RoundButton icon="clock" label="History" onPress={() => setHistoryOpen(true)} />
         <Host style={styles.filterHost}>
           <Picker
             selection={props.filter}
             onSelectionChange={(next: TabFilter) => props.onFilter(next)}
-            modifiers={[pickerStyle("segmented"), controlSize("large")]}
+            modifiers={[pickerStyle("segmented"), controlSize("extraLarge")]}
           >
-            <UIText modifiers={[tag("all"), font({ size: 16, weight: "semibold" })]}>All</UIText>
+            <UIText modifiers={[tag("all"), font({ size: 17, weight: "semibold" })]}>All</UIText>
             <UIImage systemName="doc" modifiers={[tag("files")]} />
             <UIImage systemName="folder" modifiers={[tag("folders")]} />
           </Picker>
         </Host>
         <RoundButton icon="plus" label="New tab" onPress={props.onNew} />
       </View>
+      ) : null}
       <History
         open={historyOpen}
         visits={props.place.history}
@@ -266,17 +283,17 @@ const makeStyles = (text: TextColors) =>
     },
     bar: {
       position: "absolute",
-      left: NAV_BAR_SIDE,
-      right: NAV_BAR_SIDE,
-      height: NAV_BAR_HEIGHT + 16,
+      left: 12,
+      right: 12,
+      height: OVERVIEW_BAR_HEIGHT + 16,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
     },
     round: {
-      width: NAV_BAR_HEIGHT,
-      height: NAV_BAR_HEIGHT,
-      borderRadius: NAV_BAR_HEIGHT / 2,
+      width: OVERVIEW_BAR_HEIGHT,
+      height: OVERVIEW_BAR_HEIGHT,
+      borderRadius: OVERVIEW_BAR_HEIGHT / 2,
     },
     roundHit: {
       flex: 1,
@@ -284,8 +301,8 @@ const makeStyles = (text: TextColors) =>
       justifyContent: "center",
     },
     filterHost: {
-      width: 200,
-      height: NAV_BAR_HEIGHT,
+      width: 230,
+      height: OVERVIEW_BAR_HEIGHT,
     },
     sheet: {
       flex: 1,

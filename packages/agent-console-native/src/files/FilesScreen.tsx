@@ -18,16 +18,17 @@
  *   opened from a row's menu rises in from the bar. All on the UI thread, from
  *   the grid's fixed geometry (nothing measured).
  *
- * The header's only control is the system back button, to the repo; it is
- * hidden over the overview, as Safari's page is. Decisions:
+ * Its top (back to the repo, the title) is its own, not a native header, so
+ * it leaves the moment the overview opens and returns as a tab lands, in
+ * step with the zoom, and the overview's grid fades in and out around the
+ * zooming tab. Decisions:
  * docs/handoffs/files-redesign-notes.md.
  *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { Easing, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,7 +40,10 @@ import { HeaderTitlePill } from "../HeaderTitlePill";
 import { usePrimaryWorktree } from "../primaryWorktree";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScrollHide } from "../scrollHide";
-import { useScreenBackground } from "../theme";
+import { HOME_HEADER_HEIGHT } from "../homeHeader";
+import { SystemIcon } from "../SystemIcon";
+import { useScreenBackground, useTextColors } from "../theme";
+import { GlassView } from "expo-glass-effect";
 import { WorktreePicker } from "../WorktreePicker";
 import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
@@ -82,7 +86,6 @@ type Overview =
 export const FilesScreen = (props: Props): React.ReactElement => {
   const { repo, dir } = props.route.params;
   const { navigation } = props;
-  const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const screen = useWindowDimensions();
   const background = useScreenBackground("plain");
@@ -115,17 +118,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       .catch((cause: unknown) => console.error("[code surface] warming the pool failed", cause));
   }, []);
 
-  // The header: hidden over the overview; its title, at the root, the
-  // worktree picker, elsewhere what is showing. Before the first frame (a
-  // layout effect), so it never arrives late.
-  const overviewShowing = overview.kind !== "closed";
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: !overviewShowing,
-      headerTitle: () =>
-        isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />,
-    });
-  }, [navigation, overviewShowing, isRoot, primary.primary, repo, dir, rootName, current.name]);
+  // The page's top: Files draws its own (no native header), so it goes and
+  // comes in step with the overview.
+  const headerHeight = insets.top + HOME_HEADER_HEIGHT;
 
   // The bar drops away as a listing scrolls down; a new page brings it back.
   const barHide = useScrollHide(BAR_ROOM + insets.bottom + 10);
@@ -288,6 +283,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           onOpenVisit={startTab}
           screen={screen}
           topInset={insets.top}
+          reveal={zoom}
+          pageTop={headerHeight}
+          barShown={overview.kind !== "closing"}
         />
       )}
       {/* The tab showing; over the overview, shrunk into its preview (gone
@@ -317,6 +315,14 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       {overview.kind === "closed" ? (
         <>
           <EdgeBlurBars variant="top" />
+          {/* The page's top: back to the repo, and its title (the worktree
+            * picker at the root, else what is showing). */}
+          <View style={[styles.top, { top: insets.top }]} pointerEvents="box-none">
+            <BackButton onPress={() => navigation.goBack()} />
+            <View style={styles.title} pointerEvents="box-none">
+              {isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />}
+            </View>
+          </View>
           <FileNavBar
             name={current.name}
             canGoBack={tabCanGoBack}
@@ -335,9 +341,55 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   );
 };
 
+/** The page's back button, as the system's: a glass circle, a chevron. */
+const BackButton = (props: { readonly onPress: () => void }): React.ReactElement => {
+  const textColors = useTextColors();
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  return (
+    <View style={styles.backShadow}>
+      <GlassView style={styles.back} glassEffectStyle="regular" colorScheme={scheme}>
+        <Pressable style={styles.backHit} accessibilityRole="button" accessibilityLabel="Back" onPress={props.onPress}>
+          <SystemIcon name="chevron.backward" size={18} weight="semibold" color={textColors.label} />
+        </Pressable>
+      </GlassView>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  top: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    height: HOME_HEADER_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  title: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backShadow: {
+    borderRadius: HOME_HEADER_HEIGHT / 2,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    zIndex: 1,
+  },
+  back: {
+    width: HOME_HEADER_HEIGHT,
+    height: HOME_HEADER_HEIGHT,
+    borderRadius: HOME_HEADER_HEIGHT / 2,
+  },
+  backHit: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tab: {
     position: "absolute",
