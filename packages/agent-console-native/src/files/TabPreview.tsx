@@ -99,6 +99,9 @@ export const TabPreview = (props: {
   readonly width: number;
   /** Room at the page's top (the header, as on the full screen). */
   readonly topInset: number;
+  /** Its height to its width: 3:4 in the overview (the page's top); the
+   * screen's own while the pages are swiped (the whole page). */
+  readonly aspect?: number;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const background = useScreenBackground("plain");
@@ -106,7 +109,7 @@ export const TabPreview = (props: {
   const scale = props.width / screenW;
   return (
     // Safari's shape, 3:4: the page's top, the rest cropped.
-    <View style={[styles.frame, { width: props.width, height: props.width * PREVIEW_ASPECT, backgroundColor: background }]}>
+    <View style={[styles.frame, { width: props.width, height: props.width * (props.aspect ?? PREVIEW_ASPECT), backgroundColor: background }]}>
       <View
         style={[
           styles.page,

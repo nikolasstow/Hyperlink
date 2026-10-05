@@ -56,8 +56,12 @@ export const TabOverview = (props: {
   readonly place: FilePlace;
   readonly filter: TabFilter;
   readonly onFilter: (filter: TabFilter) => void;
-  /** Where the grid starts scrolled (so the tab it opened from is in view). */
-  readonly initialScroll: number;
+  /** Where the grid is scrolled to as it opens (the tab it opened from in
+   * view). It stays mounted, unseen, while Files is open (so opening it is
+   * only the animation), so this is applied whenever it changes. */
+  readonly scrollTarget: number;
+  /** Whether it takes touches (open), or lies unseen under the page. */
+  readonly interactive: boolean;
   readonly onScroll: (scroll: number) => void;
   /** The tab zooming in or out: its cell stays empty meanwhile. */
   readonly hiddenTab: number | undefined;
@@ -79,7 +83,11 @@ export const TabOverview = (props: {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const insets = useSafeAreaInsets();
-  const { layout } = props;
+  const { layout, scrollTarget } = props;
+  const scrollRef = React.useRef<ScrollView>(null);
+  React.useLayoutEffect(() => {
+    scrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
+  }, [scrollTarget]);
   const fullPaths = useFullPaths();
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const { onScroll } = props;
@@ -90,11 +98,11 @@ export const TabOverview = (props: {
   const barSlide = useAnimatedStyle(() => ({ bottom: insets.bottom - (1 - reveal.value) * barAway }));
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={StyleSheet.absoluteFill} pointerEvents={props.interactive ? "box-none" : "none"}>
       <Reanimated.View style={[StyleSheet.absoluteFill, fade]}>
       <ScrollView
+        ref={scrollRef}
         style={StyleSheet.absoluteFill}
-        contentOffset={{ x: 0, y: props.initialScroll }}
         onScroll={reportScroll}
         scrollEventThrottle={16}
         contentContainerStyle={{ height: layout.height + insets.bottom + OVERVIEW_BAR_HEIGHT + 40 }}

@@ -37,12 +37,10 @@ export const NAV_BAR_HEIGHT = 48;
 const BUTTON_WIDTH = 44;
 /** The bar's margins: at the sides, and under it (above where it rests). */
 export const NAV_BAR_SIDE = 28;
+const BAR_GAP = 10;
+/** The pill's padding at its sides. */
+const PILL_PAD = 0;
 export const NAV_BAR_BOTTOM = 18;
-/** How far a finger moves before a swipe on the pill counts, and how far (or
- * how fast) it must go to switch tabs or open the overview. */
-const SWIPE_SLOP = 12;
-const SWIPE_TURN = 48;
-const SWIPE_FLING = 600;
 
 const noop = (): void => undefined;
 
@@ -83,19 +81,49 @@ const NavButton = (props: {
   );
 };
 
-export const FileNavBar = (props: {
-  /** The current tab's name (its file or folder), and which it is. */
+/** A tab's name in the pill: its type at the pill's left, its name in the
+ * middle. */
+const PillLabel = (props: { readonly entry: PillEntry | undefined; readonly width: number }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const { entry } = props;
+  return (
+    <View style={[styles.pillLabel, { width: props.width }]}>
+      {entry === undefined ? null : (
+        <>
+          <View style={styles.pillIcon}>
+            <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={20} />
+          </View>
+          <Text style={styles.name} numberOfLines={1}>
+            {entry.name}
+          </Text>
+        </>
+      )}
+    </View>
+  );
+};
+
+interface PillEntry {
   readonly name: string;
   readonly kind: "directory" | "file";
+}
+
+export const FileNavBar = (props: {
+  /** The current tab's name (its file or folder), and which it is; the tabs
+   * beside it, whose names slide in as the pages are swiped. */
+  readonly name: string;
+  readonly kind: "directory" | "file";
+  readonly previous: PillEntry | undefined;
+  readonly next: PillEntry | undefined;
+  /** The pill's gestures (the tab bar's: FilesScreen). */
+  readonly pillGesture: ReturnType<typeof Gesture.Race>;
+  /** The pages' swipe, as a fraction of a page (-1 to the next, 1 to the
+   * previous), and how far into paging (0 to 1: the buttons dim). */
+  readonly swipe: SharedValue<number>;
+  readonly paging: SharedValue<number>;
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
   readonly onBack: () => void;
   readonly onForward: () => void;
-  /** The tab overview: a tap on the pill, or a swipe up. */
-  readonly onOpenTabs: () => void;
-  /** The tab before or after this one: a swipe right or left on the pill. */
-  readonly onPreviousTab: () => void;
-  readonly onNextTab: () => void;
   /** Where Dubz is: its suggestions. */
   readonly dubzContext: DubzContext;
   /** How far it is dropped out of sight as the page scrolls down (0 shown;
@@ -132,27 +160,13 @@ export const FileNavBar = (props: {
   // Swiped back from Dubz's bar: this bar again.
   const pageBack = React.useMemo<PageBack>(() => ({ pageX, begin: noop, turn: () => setDubzOpen(false), stay: noop }), [pageX]);
 
-  // The pill: a sideways swipe moves between tabs, a swipe up opens the
-  // overview, a tap opens it too.
-  const { onOpenTabs, onPreviousTab, onNextTab } = props;
-  const pillGesture = React.useMemo(() => {
-    const swipe = Gesture.Pan()
-      .minDistance(SWIPE_SLOP)
-      .runOnJS(true)
-      .onEnd((e) => {
-        const sideways = Math.abs(e.translationX) > Math.abs(e.translationY);
-        if (sideways) {
-          if (e.translationX < -SWIPE_TURN || e.velocityX < -SWIPE_FLING) onNextTab();
-          else if (e.translationX > SWIPE_TURN || e.velocityX > SWIPE_FLING) onPreviousTab();
-        } else if (e.translationY < -SWIPE_TURN || e.velocityY < -SWIPE_FLING) {
-          onOpenTabs();
-        }
-      });
-    const tap = Gesture.Tap().runOnJS(true).onEnd((_e, success) => {
-      if (success) onOpenTabs();
-    });
-    return Gesture.Exclusive(swipe, tap);
-  }, [onOpenTabs, onPreviousTab, onNextTab]);
+  // The pill's width, worked out (the bar's width less the other pieces), so
+  // the names slide a whole pill as the pages move a whole page.
+  const pillWidth =
+    screenW - NAV_BAR_SIDE * 2 - (BUTTON_WIDTH * 2 + 12) - (withDubz ? NAV_BAR_HEIGHT + BAR_GAP : 0) - BAR_GAP - PILL_PAD * 2;
+  const { swipe, paging } = props;
+  const names = useAnimatedStyle(() => ({ transform: [{ translateX: -pillWidth + swipe.value * pillWidth }] }));
+  const dim = useAnimatedStyle(() => ({ opacity: 1 - paging.value * 0.6 }));
 
   const barSlide = useAnimatedStyle(() => ({
     marginLeft: -pageX.value * screenW,
@@ -168,25 +182,33 @@ export const FileNavBar = (props: {
       <View style={styles.pages} pointerEvents="box-none">
         <Reanimated.View style={[styles.bar, barSlide]}>
           <Piece style={pieceStyles.navPair}>
-            <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
-            <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
+            {/* Dimmed while the pages are swiped (the icons, not the glass). */}
+            <Reanimated.View style={[styles.row, dim]}>
+              <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
+              <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
+            </Reanimated.View>
           </Piece>
-          <GestureDetector gesture={pillGesture}>
+          <GestureDetector gesture={props.pillGesture}>
             <View style={styles.pillSlot} accessibilityRole="button" accessibilityLabel={`${props.name}, tabs`}>
               <Piece style={pieceStyles.pill}>
-                {/* Its type, at the pill's left; its name in the middle. */}
-                <View style={styles.pillIcon} pointerEvents="none">
-                  <SetiIcon glyph={props.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(props.name).glyph} size={20} />
+                {/* The names of the tab before, this one and the one after,
+                  * side by side, sliding with the pages; clipped inside the
+                  * glass (never the glass itself). */}
+                <View style={styles.pillClip} pointerEvents="none">
+                  <Reanimated.View style={[styles.names, names]}>
+                    <PillLabel entry={props.previous} width={pillWidth} />
+                    <PillLabel entry={{ name: props.name, kind: props.kind }} width={pillWidth} />
+                    <PillLabel entry={props.next} width={pillWidth} />
+                  </Reanimated.View>
                 </View>
-                <Text style={styles.name} numberOfLines={1}>
-                  {props.name}
-                </Text>
               </Piece>
             </View>
           </GestureDetector>
           {withDubz ? (
             <Piece style={pieceStyles.round}>
-              <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" enabled onPress={toDubz} />
+              <Reanimated.View style={dim}>
+                <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" enabled onPress={toDubz} />
+              </Reanimated.View>
             </Piece>
           ) : null}
         </Reanimated.View>
@@ -223,7 +245,7 @@ const makeStyles = (text: TextColors) =>
     bar: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 10,
+      gap: BAR_GAP,
       paddingHorizontal: NAV_BAR_SIDE,
       paddingTop: 10,
       paddingBottom: NAV_BAR_BOTTOM,
@@ -239,6 +261,23 @@ const makeStyles = (text: TextColors) =>
     },
     button: {
       width: BUTTON_WIDTH,
+      height: NAV_BAR_HEIGHT,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    row: {
+      flexDirection: "row",
+    },
+    pillClip: {
+      ...StyleSheet.absoluteFill,
+      overflow: "hidden",
+      borderRadius: NAV_BAR_HEIGHT / 2,
+    },
+    names: {
+      flexDirection: "row",
+      height: NAV_BAR_HEIGHT,
+    },
+    pillLabel: {
       height: NAV_BAR_HEIGHT,
       alignItems: "center",
       justifyContent: "center",
@@ -269,9 +308,6 @@ const pieceStyles = StyleSheet.create({
   pill: {
     height: NAV_BAR_HEIGHT,
     borderRadius: NAV_BAR_HEIGHT / 2,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
   },
   round: {
     width: NAV_BAR_HEIGHT,

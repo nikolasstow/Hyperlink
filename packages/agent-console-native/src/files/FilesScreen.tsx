@@ -30,7 +30,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Pressable, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { Easing, interpolate, runOnJS, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
+import Reanimated, { Easing, interpolate, runOnJS, type SharedValue, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { warmCodeSurfaces } from "../../modules/code-surface";
 import { codeSurfaceUri } from "../codeSurfaceAsset";
@@ -52,6 +52,7 @@ import { FileView } from "./FileView";
 import { TabOverview } from "./TabOverview";
 import { type TabFilter, type TabLayout, tabLayout } from "./tabLayout";
 import { PREVIEW_RADIUS } from "./tabShape";
+import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav } from "./useFileNav";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Files">;
@@ -62,8 +63,19 @@ type Props = NativeStackScreenProps<RootStackParamList, "Files">;
  * baseline, so this is deliberately small.
  */
 const WARM_SURFACES = 2;
-/** The zoom between a tab and its preview, Safari's quick ease-out. */
-const ZOOM = { duration: 380, easing: Easing.bezier(0.2, 0.9, 0.25, 1) };
+/** The zoom between a tab and its preview: iOS's sheet curve, long enough
+ * to be seen. */
+const ZOOM = { duration: 520, easing: Easing.bezier(0.32, 0.72, 0, 1) };
+/** Swiping between tabs (Safari's): the page shrinks into a card this far,
+ * rounded so, beside the next card past this gap; the swipe settles so. */
+const CARD_SCALE = 0.9;
+const CARD_RADIUS = 44;
+const CARD_GAP = 14;
+const CARD_IN = { duration: 220, easing: Easing.out(Easing.cubic) };
+const CARD_SETTLE = { duration: 300, easing: Easing.bezier(0.32, 0.72, 0, 1) };
+/** How far (a fraction of a card) or fast a swipe must go to change tabs. */
+const PAGE_TURN = 0.3;
+const PAGE_FLING = 600;
 /** A tab opened from a row's menu, rising in. */
 const RISE = { duration: 420, easing: Easing.bezier(0.2, 0.9, 0.25, 1) };
 /** The page following a swipe from the edge, and settling. */
@@ -112,9 +124,16 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const active = place === undefined ? undefined : activeTab(place);
   const [overview, setOverview] = React.useState<Overview>({ kind: "closed" });
   const [filter, setFilter] = React.useState<TabFilter>("all");
-  // The tab drawn: the one showing; zooming into a tab, that one (its switch
-  // reaches the store a moment later).
-  const tab = overview.kind === "closing" && place !== undefined ? (place.tabs[overview.tab] ?? active) : active;
+  // A tab swiped to, drawn at once (its switch reaches the store a moment
+  // later); cleared once the store has it.
+  const [swipedTo, setSwipedTo] = React.useState<number | undefined>(undefined);
+  React.useEffect(() => {
+    if (swipedTo !== undefined && place?.active === swipedTo) setSwipedTo(undefined);
+  }, [swipedTo, place?.active]);
+  // The tab drawn: the one showing; zooming into a tab, or swiped to, that
+  // one.
+  const shownIndex = overview.kind === "closing" ? overview.tab : (swipedTo ?? place?.active ?? 0);
+  const tab = place === undefined ? undefined : (place.tabs[shownIndex] ?? active);
   const current = (overview.kind === "closing" ? overview.entry : undefined) ?? (tab === undefined ? undefined : tabEntry(tab)) ?? root;
   const isRoot = current.path === root.path;
 
@@ -216,8 +235,8 @@ export const FilesScreen = (props: Props): React.ReactElement => {
 
   // The page's top and bottom go with the zoom: off as the tab shrinks, back
   // as one grows (the bar, also as a listing scrolls).
-  const topSlide = useAnimatedStyle(() => ({ top: insets.top - zoom.value * (insets.top + HOME_HEADER_HEIGHT + 16) }));
-  const blurFade = useAnimatedStyle(() => ({ opacity: 1 - zoom.value }));
+  const topSlide = useAnimatedStyle(() => ({ top: insets.top - Math.max(zoom.value, paging.value) * (insets.top + HOME_HEADER_HEIGHT + 16) }));
+  const blurFade = useAnimatedStyle(() => ({ opacity: 1 - Math.max(zoom.value, paging.value) }));
   const barDistance = BAR_ROOM + insets.bottom + 10;
   const scrolledAway = barHide.hidden;
   const barHidden = useDerivedValue(() => Math.max(scrolledAway.value, zoom.value * barDistance));
@@ -273,32 +292,113 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       });
   }, [screen.width, drag, tabCanGoForward, back, forward]);
 
-  const pageStyle = useAnimatedStyle(() => ({
-    opacity: rise.value,
-    transform: [{ translateX: drag.value }, { translateY: interpolate(rise.value, [0, 1], [screen.height * 0.18, 0]) }, { scale: interpolate(rise.value, [0, 1], [0.92, 1]) }],
-  }));
+  const pageStyle = useAnimatedStyle(() => {
+    const card = 1 - (1 - CARD_SCALE) * paging.value;
+    return {
+      opacity: rise.value,
+      borderRadius: (paging.value * CARD_RADIUS) / card,
+      transform: [
+        { translateX: drag.value + swipe.value * cardStep },
+        { translateY: interpolate(rise.value, [0, 1], [screen.height * 0.18, 0]) },
+        { scale: interpolate(rise.value, [0, 1], [0.92, 1]) * card },
+      ],
+    };
+  });
+
+  // ── Swiping between tabs on the pill, as Safari's ──
+  // The page shrinks into a card (`paging` 0 to 1) over a soft grey; the cards
+  // follow the finger one for one (`swipe`, a fraction of a card: toward the
+  // previous tab positive, the next negative); let go past a third of a card
+  // (or flung), the next one slides to the middle and grows back to the page.
+  const swipe = useSharedValue(0);
+  const paging = useSharedValue(0);
+  const cardStep = screen.width * CARD_SCALE + CARD_GAP;
+  const previousTab = place?.tabs[shownIndex - 1];
+  const nextTab = place?.tabs[shownIndex + 1];
+  const previous = previousTab === undefined ? undefined : tabEntry(previousTab);
+  const next = nextTab === undefined ? undefined : tabEntry(nextTab);
+  const hasPrevious = previous !== undefined;
+  const hasNext = next !== undefined;
+  const swipeTo = React.useCallback(
+    (by: number): void => {
+      const index = shownIndex + by;
+      selectFileTab(repo, index);
+      setSwipedTo(index);
+    },
+    [repo, shownIndex],
+  );
+  // The tab swiped to is drawn in the middle: the cards start from there and
+  // the page grows back.
+  React.useLayoutEffect(() => {
+    if (swipedTo === undefined) return;
+    swipe.value = 0;
+    paging.value = withTiming(0, CARD_SETTLE);
+  }, [swipedTo, swipe, paging]);
+  // The overview's opener as of the latest render, for the pill's gestures
+  // (built once, not every render).
+  const openTabsLatest = React.useRef(openTabs);
+  React.useEffect(() => {
+    openTabsLatest.current = openTabs;
+  });
+  const pillGesture = React.useMemo(() => {
+    const sideways = Gesture.Pan()
+      .activeOffsetX([-10, 10])
+      .failOffsetY([-12, 12])
+      .onStart(() => {
+        paging.value = withTiming(1, CARD_IN);
+      })
+      .onUpdate((e) => {
+        const moved = e.translationX / cardStep;
+        // Past the first or last tab it gives, resisting.
+        swipe.value = (moved > 0 && !hasPrevious) || (moved < 0 && !hasNext) ? moved * 0.25 : Math.max(-1, Math.min(1, moved));
+      })
+      .onEnd((e) => {
+        const toPrevious = hasPrevious && (swipe.value > PAGE_TURN || e.velocityX > PAGE_FLING);
+        const toNext = hasNext && (swipe.value < -PAGE_TURN || e.velocityX < -PAGE_FLING);
+        if (!toPrevious && !toNext) {
+          swipe.value = withTiming(0, CARD_SETTLE);
+          paging.value = withTiming(0, CARD_SETTLE);
+          return;
+        }
+        swipe.value = withTiming(toPrevious ? 1 : -1, CARD_SETTLE, (finished) => {
+          if (finished === true) runOnJS(swipeTo)(toPrevious ? -1 : 1);
+        });
+      });
+    const up = Gesture.Pan()
+      .activeOffsetY([-12, 12])
+      .failOffsetX([-10, 10])
+      .runOnJS(true)
+      .onEnd((e) => {
+        if (e.translationY < -40 || e.velocityY < -500) openTabsLatest.current();
+      });
+    const tap = Gesture.Tap()
+      .runOnJS(true)
+      .onEnd((_e, success) => {
+        if (success) openTabsLatest.current();
+      });
+    return Gesture.Race(sideways, up, tap);
+  }, [paging, swipe, cardStep, hasPrevious, hasNext, swipeTo]);
+  const gutter = useCardGutter();
 
   // Dubz here is about the repo these files are in.
   const dubzContext = React.useMemo((): DubzContext => ({ surface: "repo", scope: { kind: "repo", repo } }), [repo]);
   const open = React.useCallback((entry: FileNavEntry) => openFileEntry(repo, entry), [repo]);
-  const step = (by: number): void => {
-    if (place === undefined) return;
-    const next = place.active + by;
-    if (next >= 0 && next < place.tabs.length) selectFileTab(repo, next);
-  };
 
   return (
     <View style={styles.root}>
-      {overview.kind === "closed" ? null : (
+      {/* Always mounted, unseen until it opens (so opening it is only the
+        * animation, its previews already drawn and kept up to date). */}
+      {place === undefined ? null : (
         <TabOverview
-          place={place ?? { root: root.path, tabs: [], active: 0, history: [] }}
+          place={place}
           filter={filter}
           onFilter={setFilter}
-          initialScroll={overview.kind === "closing" ? overview.scroll : overview.initialScroll}
+          scrollTarget={overview.kind === "closed" ? 0 : overview.kind === "closing" ? overview.scroll : overview.initialScroll}
+          interactive={overview.kind === "open"}
           onScroll={(y) => {
             scroll.current = y;
           }}
-          hiddenTab={overview.kind === "open" ? undefined : overview.tab}
+          hiddenTab={overview.kind === "open" || overview.kind === "closed" ? undefined : overview.tab}
           onSelect={openTab}
           onClose={(index) => closeFileTab(repo, index)}
           onNew={() => startTab(root)}
@@ -310,11 +410,20 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           pageTop={headerHeight}
         />
       )}
-      {/* The tab showing; over the overview, shrunk into its preview (gone
-        * once there, until a tab is opened). Its page, inside, a fixed size, so
-        * nothing in it is laid out again as the frame shrinks. */}
-      {overview.kind === "open" ? null : (
-        <Reanimated.View style={[styles.tab, { backgroundColor: background }, zoomStyle]} pointerEvents={overview.kind === "closed" ? "auto" : "none"}>
+      {/* The tab showing; over the overview, shrunk into its preview (unseen
+        * while the overview is open, never unmounted). Its page, inside, a
+        * fixed size, so nothing in it is laid out again as the frame shrinks.
+        * Swiping between tabs, it is a card, the tabs beside it cards too. */}
+      <Reanimated.View
+        style={[styles.tab, { backgroundColor: gutter }, zoomStyle, overview.kind === "open" && styles.unseen]}
+        pointerEvents={overview.kind === "closed" ? "auto" : "none"}
+      >
+          {place === undefined ? null : (
+            <>
+              <NeighbourCard entry={previous} side={-1} swipe={swipe} paging={paging} step={cardStep} topInset={headerHeight} />
+              <NeighbourCard entry={next} side={1} swipe={swipe} paging={paging} step={cardStep} topInset={headerHeight} />
+            </>
+          )}
           <GestureDetector gesture={edgeSwipe}>
             <Reanimated.View style={[styles.page, { height: screen.height, backgroundColor: background }, pageStyle]}>
               {current.kind === "directory" ? (
@@ -332,12 +441,12 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               )}
             </Reanimated.View>
           </GestureDetector>
-        </Reanimated.View>
-      )}
-      {/* The page's top and bottom, there until the overview is open: they
-        * slide away as the tab shrinks into the grid and back as a tab grows
-        * out of it, with the zoom (by layout: they are glass). */}
-      {overview.kind === "open" ? null : (
+      </Reanimated.View>
+      {/* The page's top and bottom: they slide away as the tab shrinks into
+        * the grid (and the top as the pages are swiped), and back as a tab
+        * grows out of it, with the zoom (by layout: they are glass). Never
+        * unmounted. */}
+      {
         <>
           <Reanimated.View style={[StyleSheet.absoluteFill, blurFade]} pointerEvents="none">
             <EdgeBlurBars variant="top" />
@@ -350,22 +459,58 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               {isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />}
             </View>
           </Reanimated.View>
-          <FileNavBar
-            name={current.name}
-            kind={current.kind}
-            canGoBack={tabCanGoBack}
-            canGoForward={tabCanGoForward}
-            onBack={back}
-            onForward={forward}
-            onOpenTabs={openTabs}
-            onPreviousTab={() => step(-1)}
-            onNextTab={() => step(1)}
-            dubzContext={dubzContext}
-            hidden={barHidden}
-          />
+          <View style={StyleSheet.absoluteFill} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
+            <FileNavBar
+              name={current.name}
+              kind={current.kind}
+              previous={previous}
+              next={next}
+              pillGesture={pillGesture}
+              swipe={swipe}
+              paging={paging}
+              canGoBack={tabCanGoBack}
+              canGoForward={tabCanGoForward}
+              onBack={back}
+              onForward={forward}
+              dubzContext={dubzContext}
+              hidden={barHidden}
+            />
+          </View>
         </>
-      )}
+      }
     </View>
+  );
+};
+
+/** The grey behind the cards while the pages are swiped. */
+const useCardGutter = (): string => (useColorScheme() === "dark" ? "#1C1C1E" : "#E8E8ED");
+
+/** A tab beside the one showing, while the pages are swiped: its page as a
+ * card (drawn as a preview, at the screen's size), beside the page's card. */
+const NeighbourCard = (props: {
+  readonly entry: FileNavEntry | undefined;
+  /** -1 the tab before (at the left), 1 the one after. */
+  readonly side: -1 | 1;
+  readonly swipe: SharedValue<number>;
+  readonly paging: SharedValue<number>;
+  readonly step: number;
+  readonly topInset: number;
+}): React.ReactElement | null => {
+  const screen = useWindowDimensions();
+  const background = useScreenBackground("plain");
+  const { swipe, paging, step, side } = props;
+  const style = useAnimatedStyle(() => {
+    const card = 1 - (1 - CARD_SCALE) * paging.value;
+    return {
+      borderRadius: (paging.value * CARD_RADIUS) / card,
+      transform: [{ translateX: (swipe.value + side) * step }, { scale: card }],
+    };
+  });
+  if (props.entry === undefined) return null;
+  return (
+    <Reanimated.View style={[styles.card, { height: screen.height, backgroundColor: background }, style]} pointerEvents="none">
+      <TabPreview entry={props.entry} width={screen.width} topInset={props.topInset} aspect={screen.height / screen.width} />
+    </Reanimated.View>
   );
 };
 
@@ -431,5 +576,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+    overflow: "hidden",
+  },
+  unseen: {
+    opacity: 0,
+  },
+  card: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: "hidden",
   },
 });
