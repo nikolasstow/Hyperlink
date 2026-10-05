@@ -49,6 +49,7 @@ import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./the
 import { symbolForIcon } from "./codicons";
 import type { ViewInfo } from "./extensionViewsClient";
 import { ensureWorkspace, reloadWorkspace, useWorkspaceViews } from "./extensionViewsStore";
+import { useFileNav } from "./files/useFileNav";
 import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
 import { getApiAddress } from "./settings";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
@@ -276,6 +277,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   }, [apiBase, dir]);
   const loadExtensionViews = (): void => reloadWorkspace(apiBase, dir);
 
+  const fileTabs = useFileNav(name)?.tabs.length ?? 0;
   const menuEntries: ReadonlyArray<MenuEntry> = [
     ...menu,
     ...(extensionViews.kind === "ready"
@@ -663,6 +665,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
                 color={colors.tint}
               />
               <Text style={styles.menuLabel}>{item.label}</Text>
+              {/* Files: how many tabs are open, as a row's detail (its size
+                * unchanged). */}
+              {item.label === "Files" && fileTabs > 0 ? <Text style={styles.menuDetail}>{fileTabs === 1 ? "1 tab" : `${fileTabs} tabs`}</Text> : null}
               <SystemIcon
                 name="chevron.forward"
                 size={13}
@@ -856,6 +861,10 @@ const makeStyles = (text: TextColors) =>
   menuLabel: {
     flex: 1,
     color: text.label,
+    fontSize: 17,
+  },
+  menuDetail: {
+    color: text.secondaryLabel,
     fontSize: 17,
   },
   innerHeader: {

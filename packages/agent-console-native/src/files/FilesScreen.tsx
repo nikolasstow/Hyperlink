@@ -44,6 +44,9 @@ import { HOME_HEADER_HEIGHT } from "../homeHeader";
 import { SystemIcon } from "../SystemIcon";
 import { useScreenBackground, useTextColors } from "../theme";
 import { GlassView } from "expo-glass-effect";
+import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
+import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
+import { canReload, reloadApp } from "../reload";
 import { WorktreePicker } from "../WorktreePicker";
 import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
@@ -349,16 +352,26 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // the page grows back.
   // It grows only once its page is drawn: mounting the page stalls the
   // frames it takes, and growing through them reads as a snap.
+  // Started by the swipe, not by this render: the store catching up redraws
+  // at once, and the grow must not be cancelled by that (only by leaving).
+  const growFrame = React.useRef<number | undefined>(undefined);
   React.useLayoutEffect(() => {
     if (swipedTo === undefined) return;
     swipe.value = 0;
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
+    if (growFrame.current !== undefined) cancelAnimationFrame(growFrame.current);
+    growFrame.current = requestAnimationFrame(() => {
+      growFrame.current = requestAnimationFrame(() => {
+        growFrame.current = undefined;
         paging.value = withTiming(0, CARD_GROW);
       });
     });
-    return () => cancelAnimationFrame(frame);
   }, [swipedTo, swipe, paging]);
+  React.useEffect(
+    () => () => {
+      if (growFrame.current !== undefined) cancelAnimationFrame(growFrame.current);
+    },
+    [],
+  );
   // The overview's opener as of the latest render, for the pill's gestures
   // (built once, not every render).
   const openTabsLatest = React.useRef(openTabs);
@@ -480,6 +493,8 @@ export const FilesScreen = (props: Props): React.ReactElement => {
             * picker at the root, else what is showing). */}
           <Reanimated.View style={[styles.top, topSlide]} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
             <BackButton onPress={() => navigation.goBack()} />
+            <View style={styles.topSpacer} pointerEvents="none" />
+            <MoreMenu />
             <View style={styles.title} pointerEvents="box-none">
               {isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />}
             </View>
@@ -539,6 +554,44 @@ const NeighbourCard = (props: {
   );
 };
 
+/** The page's 3-dot menu, as every page's: a glass circle opening a native
+ * menu (its label the glass, as the repo page's). */
+const MoreMenu = (): React.ReactElement => {
+  const textColors = useTextColors();
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  return (
+    <Host
+      style={styles.more}
+      // Ignores the safe area: otherwise SwiftUI pads it as it slides under
+      // the status bar, and it stays behind.
+      ignoreSafeArea="all"
+    >
+      <Menu
+        label={
+          <RNHostView matchContents>
+            <View style={styles.backShadow}>
+              <GlassView style={styles.back} glassEffectStyle="regular" colorScheme={scheme}>
+                <View style={styles.backHit}>
+                  <SystemIcon name="ellipsis" size={18} weight="semibold" color={textColors.label} />
+                </View>
+              </GlassView>
+            </View>
+          </RNHostView>
+        }
+        modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
+      >
+        {canReload ? (
+          <Button
+            label="Reload"
+            systemImage="arrow.clockwise"
+            onPress={reloadApp}
+          />
+        ) : null}
+      </Menu>
+    </Host>
+  );
+};
+
 /** The page's back button, as the system's: a glass circle, a chevron. */
 const BackButton = (props: { readonly onPress: () => void }): React.ReactElement => {
   const textColors = useTextColors();
@@ -570,6 +623,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
+  },
+  topSpacer: {
+    flex: 1,
+  },
+  more: {
+    width: HOME_HEADER_HEIGHT,
+    height: HOME_HEADER_HEIGHT,
+    zIndex: 1,
   },
   backShadow: {
     borderRadius: HOME_HEADER_HEIGHT / 2,
