@@ -37,7 +37,7 @@ import { ThemeImportSourceScreen } from "./ThemeImportSourceScreen";
 import { ThemeImportValuesScreen } from "./ThemeImportValuesScreen";
 import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
 import { ThemeTokensScreen } from "./ThemeTokensScreen";
-import { FileExplorerScreen } from "./FileExplorerScreen";
+import { FilesScreen } from "./files/FilesScreen";
 import { ArchivedScreen } from "./ArchivedScreen";
 import { CollectionScreen, type CollectionView } from "./CollectionScreen";
 import { ExtensionViewScreen } from "./ExtensionViewScreen";
@@ -82,7 +82,10 @@ export type RootStackParamList = {
   // context. Pushed again per folder when drilling in.
   // `root` is Files as opened from a repo: it shows the repo's primary
   // worktree and carries the worktree picker; a folder drilled into is fixed.
-  FileExplorer: { repo: string; dir: string; root?: boolean };
+  /** A repo's files (where in them is Files' own: files/FileNav.ts). `dir`
+   * is the folder Files was opened for, while the primary worktree is not
+   * known. */
+  Files: { repo: string; dir: string };
   // A minimal read-only view of the file at `path`; `name` is the nav-bar title.
   // `line` (1-based) scrolls to it, as an extension opening a file asks.
   FileViewer: { path: string; name: string; line?: number };
@@ -351,21 +354,12 @@ export const RootNavigator = (): React.ReactElement => {
           })}
         />
         <Stack.Screen
-          name="FileExplorer"
-          component={FileExplorerScreen}
-          options={({ route }) => ({
-            contentStyle: { backgroundColor: plainBackground },
-            headerShown: true,
-            headerTransparent: true,
-            headerStyle: { backgroundColor: "transparent" },
-            headerShadowVisible: false,
-            headerBackButtonDisplayMode: "minimal",
-            // Hide the native back button — the screen renders its own back +
-            // forward as one paired glass capsule (see unstable_headerLeftItems).
-            headerBackVisible: false,
-            headerTitle: () => <HeaderTitlePill title={route.params.dir.split("/").filter(Boolean).pop() ?? route.params.repo} />,
-            scrollEdgeEffects: { top: "soft", bottom: "soft" },
-          })}
+          name="Files"
+          component={FilesScreen}
+          // The header's back goes to the repo; back and forward within Files
+          // are its bottom bar's. The title is the screen's (worktree picker or
+          // what is showing).
+          options={{ ...pageHeader, contentStyle: { backgroundColor: plainBackground } }}
         />
         <Stack.Screen
           name="FileViewer"

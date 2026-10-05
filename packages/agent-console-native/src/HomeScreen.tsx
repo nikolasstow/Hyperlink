@@ -34,7 +34,6 @@ import { useSessionActivity } from "./useSessionActivity";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
-import { clearForward } from "./fileNavHistory";
 import { Composer } from "./Composer";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -404,8 +403,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
               onOpen={() => props.navigation.navigate("Repo", { name: item.group.repo, dir: repoDir, isRepo: item.group.isKnownRepo })}
               onSelect={(label) => {
                 if (label === "Files") {
-                  clearForward();
-                  props.navigation.navigate("FileExplorer", { repo: item.group.repo, dir: repoDir, root: true });
+                  props.navigation.navigate("Files", { repo: item.group.repo, dir: repoDir });
                 }
               }}
             />

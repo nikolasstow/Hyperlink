@@ -38,7 +38,6 @@ import { AGENT } from "./client";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
-import { clearForward } from "./fileNavHistory";
 import { HomeTargetPickers, sessionDirectory, type SessionTarget, TARGET_PICKERS_HEIGHT } from "./HomeTargetPickers";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import type { ModelOption } from "./models";
@@ -652,8 +651,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               style={styles.menuRow}
               onPress={() => {
                 if (item.label === "Files") {
-                  clearForward();
-                  props.navigation.navigate("FileExplorer", { repo: name, dir, root: true });
+                  props.navigation.navigate("Files", { repo: name, dir });
                 } else if (item.view !== undefined) {
                   const { view } = item;
                   if (view.kind === "sections") props.navigation.navigate("PluginPage", { repo: name, dir, page: view.id, title: view.name });

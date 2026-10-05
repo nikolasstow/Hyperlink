@@ -41,10 +41,10 @@ import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_SEND_CHIP_SIZE } f
 
 // Comfortably under half the field's smallest (idle) rendered height, so the
 // rounded corners never overlap/distort no matter which row arrangement shows.
-const FIELD_RADIUS = 30;
+export const FIELD_RADIUS = 30;
 /** A light wash in the clear glass, so the bar reads over busy content. */
-const FIELD_TINT_LIGHT = "rgba(255,255,255,0.3)";
-const FIELD_TINT_DARK = "rgba(0,0,0,0.3)";
+export const FIELD_TINT_LIGHT = "rgba(255,255,255,0.3)";
+export const FIELD_TINT_DARK = "rgba(0,0,0,0.3)";
 
 export interface BottomBarProps {
   /** Focused or non-empty — the variant computes it; gates touches. */
