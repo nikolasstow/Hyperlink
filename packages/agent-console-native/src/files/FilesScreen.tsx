@@ -169,6 +169,15 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const scroll = React.useRef(0);
   // 0: the tab at full screen; 1: shrunk into its preview.
   const zoom = useSharedValue(0);
+  // Swiping between tabs (below): 0 to 1 as the page shrinks into a card;
+  // `swipe`, how far the cards have moved, a fraction of a card (toward the
+  // previous tab positive, the next negative). Declared here, before the
+  // worklets that read them: a worklet captures what is declared when it is
+  // made, and one declared later is undefined in it.
+  const paging = useSharedValue(0);
+  const swipe = useSharedValue(0);
+  // How far apart the cards are.
+  const cardStep = screen.width * CARD_SCALE + CARD_GAP;
   // Where everything in the grid is (tabLayout.ts); `extra`, a tab about to
   // be added.
   const layoutFor = (among: TabFilter, extra?: FileNavEntry): TabLayout =>
@@ -314,13 +323,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   });
 
   // ── Swiping between tabs on the pill, as Safari's ──
-  // The page shrinks into a card (`paging` 0 to 1) over a soft grey; the cards
-  // follow the finger one for one (`swipe`, a fraction of a card: toward the
-  // previous tab positive, the next negative); let go past a third of a card
-  // (or flung), the next one slides to the middle and grows back to the page.
-  const swipe = useSharedValue(0);
-  const paging = useSharedValue(0);
-  const cardStep = screen.width * CARD_SCALE + CARD_GAP;
+  // The page shrinks into a card (`paging`, declared with the zoom) over a
+  // soft grey; the cards follow the finger one for one (`swipe`); let go past
+  // a third of a card (or flung), the next one slides to the middle and grows
+  // back to the page.
   const previousTab = place?.tabs[shownIndex - 1];
   const nextTab = place?.tabs[shownIndex + 1];
   const previous = previousTab === undefined ? undefined : tabEntry(previousTab);
