@@ -22,9 +22,10 @@ export const colors = {
   cardBackground: PlatformColor("secondarySystemGroupedBackground"),
   fillBackground: PlatformColor("tertiarySystemFill"),
   /** What a glass card looks like while its glass is not drawn (the app
-   * switcher, out of focus): a grey fill, a darker grey edge. */
-  glassStandIn: PlatformColor("systemGray5"),
-  glassStandInEdge: PlatformColor("systemGray3"),
+   * switcher, out of focus), as sampled from it: light, a grey fill with a
+   * darker grey edge; dark, a near-black fill with no edge. */
+  glassStandIn: DynamicColorIOS({ light: "#E4E4E9", dark: "#171717" }),
+  glassStandInEdge: DynamicColorIOS({ light: "#C7C7CC", dark: "transparent" }),
   separator: PlatformColor("separator"),
   /** The stronger, fully-opaque hairline — darker than `separator` (which is
    * translucent). For list rows that want a more defined divider. */

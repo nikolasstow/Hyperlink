@@ -6,7 +6,8 @@
  * layout: "Recent" and a few medium cards.
  *
  * The cards look like glass cards whose glass is not drawn (as in the app
- * switcher): a systemGray5 fill, a systemGray3 edge two pixels wide. They
+ * switcher), as sampled from it (colors.ts): its fill, and in light mode its
+ * edge, two pixels wide. They
  * stay still, as that glass does (a pulse washed them out).
  *
  * @internal
