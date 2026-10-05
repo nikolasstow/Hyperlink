@@ -120,6 +120,11 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const background = useScreenBackground("plain");
   // The root is the repo's primary worktree, following the picker.
   const primary = usePrimaryWorktree(repo, dir);
+  // Paths are shown from Files' root, or the worktree holding them.
+  const pathRoots = React.useMemo(
+    (): ReadonlyArray<string> => [primary.dir, ...primary.worktrees.map((worktree) => worktree.path)],
+    [primary.dir, primary.worktrees],
+  );
   const rootName = lastSegment(primary.dir, repo);
   const root = React.useMemo((): FileNavEntry => ({ path: primary.dir, name: rootName, kind: "directory" }), [primary.dir, rootName]);
   React.useEffect(() => ensureFileRoot(repo, root), [repo, root]);
@@ -446,6 +451,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       {place === undefined ? null : (
         <TabOverview
           place={place}
+          roots={pathRoots}
           filter={filter}
           onFilter={setFilter}
           scrollTarget={overview.kind === "closed" ? 0 : overview.kind === "closing" ? overview.scroll : overview.initialScroll}

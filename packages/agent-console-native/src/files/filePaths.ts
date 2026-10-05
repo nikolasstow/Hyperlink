@@ -39,15 +39,40 @@ export const setFullPaths = (next: boolean): void => {
 
 export const useFullPaths = (): boolean => React.useSyncExternalStore(subscribe, () => full);
 
-/** A path as the setting shows it: in full, or from the root (the root's own
- * name first). A path outside the root is shown in full. */
-export const shownPath = (path: string, root: string, fullPaths: boolean): string => {
-  const base = root.replace(/\/+$/, "");
-  if (fullPaths || !(path === base || path.startsWith(`${base}/`))) return path;
-  const rootName = base.split("/").filter(Boolean).pop() ?? base;
-  return `${rootName}${path.slice(base.length)}`;
+/** A path from the home folder, whichever way it is written: opencode writes
+ * some as `~/…`, others in full (`/Users/me/…`, `/home/me/…`), so two ways of
+ * writing one folder compare equal. No trailing slash. */
+const fromHome = (path: string): string =>
+  path
+    .replace(/\/+$/, "")
+    .replace(/^~(?=\/|$)/, "")
+    .replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "");
+
+/** What of `path` is under `root` (`""` for the root itself, `"/src/x"`
+ * under it), or undefined outside it. */
+const under = (path: string, root: string): string | undefined => {
+  const base = fromHome(root);
+  const at = fromHome(path);
+  return at === base ? "" : at.startsWith(`${base}/`) ? at.slice(base.length) : undefined;
+};
+
+/** A path as the setting shows it: in full, or from its root (the root's own
+ * name first). Its root is whichever of `roots` (Files' root, the repo's other
+ * worktrees) holds it most closely; a path outside them all is shown in
+ * full. */
+export const shownPath = (path: string, roots: ReadonlyArray<string>, fullPaths: boolean): string => {
+  if (fullPaths) return path;
+  const closest = roots
+    .flatMap((root) => {
+      const rest = under(path, root);
+      return rest === undefined ? [] : [{ root: fromHome(root), rest }];
+    })
+    .sort((a, b) => b.root.length - a.root.length)[0];
+  if (closest === undefined) return path;
+  const rootName = closest.root.split("/").filter(Boolean).pop() ?? closest.root;
+  return `${rootName}${closest.rest}`;
 };
 
 /** Whether a path is the root itself (its folder is outside it: nothing to
  * show under its name). */
-export const isRootPath = (path: string, root: string): boolean => path.replace(/\/+$/, "") === root.replace(/\/+$/, "");
+export const isRootPath = (path: string, root: string): boolean => under(path, root) === "";

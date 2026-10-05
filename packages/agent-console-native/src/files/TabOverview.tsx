@@ -55,6 +55,9 @@ const RoundButton = (props: { readonly icon: React.ComponentProps<typeof SystemI
 
 export const TabOverview = (props: {
   readonly place: FilePlace;
+  /** Where paths are shown from: Files' root and the repo's worktrees
+   * (filePaths.ts). */
+  readonly roots: ReadonlyArray<string>;
   readonly filter: TabFilter;
   readonly onFilter: (filter: TabFilter) => void;
   /** Where the grid is scrolled to as it opens (the tab it opened from in
@@ -123,7 +126,7 @@ export const TabOverview = (props: {
             >
               <SystemIcon name="folder" size={13} color={textColors.secondaryLabel} />
               <Text style={styles.headerText} numberOfLines={1} ellipsizeMode="head">
-                {shownPath(header.folder, props.place.root, fullPaths)}
+                {shownPath(header.folder, [props.place.root, ...props.roots], fullPaths)}
               </Text>
             </Reanimated.View>
           ))}
@@ -159,7 +162,7 @@ export const TabOverview = (props: {
                   </Text>
                   {grouped || isRootPath(entry.path, props.place.root) ? null : (
                     <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                      {shownPath(parentOf(entry.path), props.place.root, fullPaths)}
+                      {shownPath(parentOf(entry.path), [props.place.root, ...props.roots], fullPaths)}
                     </Text>
                   )}
                 </View>
@@ -190,6 +193,7 @@ export const TabOverview = (props: {
       <History
         open={historyOpen}
         root={props.place.root}
+        roots={props.roots}
         visits={props.place.history}
         onClose={() => setHistoryOpen(false)}
         onOpen={(entry) => {
@@ -206,6 +210,7 @@ export const TabOverview = (props: {
 const History = (props: {
   readonly open: boolean;
   readonly root: string;
+  readonly roots: ReadonlyArray<string>;
   readonly visits: ReadonlyArray<Visit>;
   readonly onClose: () => void;
   readonly onOpen: (entry: FileNavEntry) => void;
@@ -228,7 +233,7 @@ const History = (props: {
               </Text>
               {isRootPath(item.entry.path, props.root) ? null : (
                 <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                  {shownPath(parentOf(item.entry.path), props.root, fullPaths)}
+                  {shownPath(parentOf(item.entry.path), [props.root, ...props.roots], fullPaths)}
                 </Text>
               )}
             </View>
