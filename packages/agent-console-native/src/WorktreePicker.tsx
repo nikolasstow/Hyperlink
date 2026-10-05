@@ -57,7 +57,12 @@ export const WorktreePicker = (props: {
   const subtitle = name === props.title ? undefined : name;
   const width = Math.min(Math.max(widthFor(props.title, subtitle ?? ""), MIN_WIDTH), Math.round(screenWidth * MAX_WIDTH_RATIO));
   return (
-    <Host style={{ width, height: PILL_HEIGHT }}>
+    <Host
+      style={{ width, height: PILL_HEIGHT }}
+      // Ignores the safe area: otherwise SwiftUI pads it as it moves under the
+      // status bar (Files slides its title up and away), and it stays behind.
+      ignoreSafeArea="all"
+    >
       <Menu
         label={
           <VStack

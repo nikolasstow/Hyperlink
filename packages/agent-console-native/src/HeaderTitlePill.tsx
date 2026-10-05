@@ -36,7 +36,12 @@ export const HeaderTitlePill = (props: {
   const pillWidth = Math.min(Math.max(titlePillWidth(props.title, hasDot), MIN_WIDTH), maxWidth);
 
   return (
-    <Host style={{ width: pillWidth, height: PILL_HEIGHT }}>
+    <Host
+      style={{ width: pillWidth, height: PILL_HEIGHT }}
+      // Ignores the safe area: otherwise SwiftUI pads it as it moves under the
+      // status bar (Files slides its title up and away), and it stays behind.
+      ignoreSafeArea="all"
+    >
       <HStack
         alignment="center"
         spacing={PILL_DOT_GAP}
