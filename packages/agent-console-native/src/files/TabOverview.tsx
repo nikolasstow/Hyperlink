@@ -21,6 +21,9 @@ import Reanimated, { Easing, LayoutAnimationConfig, LinearTransition, type Share
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
 import { colors } from "../colors";
+import { iconForFile } from "../fileIcon";
+import { SetiIcon } from "../SetiIcon";
+import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { type FileNavEntry, type FilePlace, tabEntry, type Visit } from "./FileNav";
@@ -158,13 +161,19 @@ export const TabOverview = (props: {
                   <SystemIcon name="xmark" size={11} weight="bold" color={textColors.label} />
                 </Pressable>
               </View>
-              <Text style={styles.name} numberOfLines={1}>
-                {entry.name}
-              </Text>
-              {/* The path, cut at its start: its end matters most. */}
-              <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                {entry.path}
-              </Text>
+              {/* Its type beside its name and path, as in the address pill; the
+                * path cut at its start (its end matters most). */}
+              <View style={styles.label}>
+                <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={22} />
+                <View style={styles.labelText}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {entry.name}
+                  </Text>
+                  <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
+                    {entry.path}
+                  </Text>
+                </View>
+              </View>
             </Reanimated.View>
           ))}
         </View>
@@ -286,11 +295,19 @@ const makeStyles = (text: TextColors) =>
       justifyContent: "center",
       backgroundColor: colors.glassStandIn,
     },
+    label: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      marginTop: 6,
+    },
+    labelText: {
+      flex: 1,
+    },
     name: {
       color: text.label,
       fontSize: 13,
       fontWeight: "600",
-      marginTop: 4,
     },
     path: {
       color: text.secondaryLabel,
