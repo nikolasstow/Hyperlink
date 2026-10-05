@@ -71,3 +71,11 @@ export const forgetCachedSession = async (id: string): Promise<void> => {
 
 /** A session's title from the list already read this launch, if it is there. */
 export const cachedSessionTitle = (id: string): string | undefined => inMemory?.find((session) => session.id === id)?.title;
+
+/** The session list read back at launch (below), for a screen's first frame;
+ * empty until then. */
+export const cachedSessionsNow = (): ReadonlyArray<SessionSummary> => inMemory ?? [];
+
+/** Read back as the app starts, so screens draw their sessions from their
+ * first frame (the launch waits for it). */
+export const sessionsReadBack: Promise<unknown> = getCachedSessions();

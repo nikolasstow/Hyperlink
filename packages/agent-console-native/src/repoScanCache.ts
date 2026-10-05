@@ -56,8 +56,9 @@ export const getCachedRepos = async (): Promise<ReadonlyArray<ScannedRepo> | und
   }
 };
 
-// Loaded as the app starts, so the repos are in memory before any page asks.
-void getCachedRepos();
+/** Read back as the app starts, so the repos are in memory before any page
+ * draws (the launch waits for it). */
+export const reposReadBack: Promise<unknown> = getCachedRepos();
 
 const subscribe = (listener: () => void): (() => void) => {
   listeners.add(listener);
@@ -109,3 +110,7 @@ export const refreshWorkspace = async (
   backend: string,
   rootDir: string,
 ): Promise<ReadonlyArray<ScannedRepo>> => rescan(backend, rootDir);
+
+/** The scan read back at launch (below), for a screen's first frame; empty
+ * until then. */
+export const cachedReposNow = (): ReadonlyArray<ScannedRepo> => inMemory ?? [];

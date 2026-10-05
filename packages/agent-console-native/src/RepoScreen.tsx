@@ -14,6 +14,7 @@
  *
  * @internal
  */
+import { canReload, reloadApp } from "./reload";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { Agent } from "./opencode/schema/agent";
 import { Model } from "./opencode/schema/model";
@@ -56,10 +57,10 @@ import { useSessionActivity } from "./useSessionActivity";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
-import { readWorkspace, refreshWorkspace } from "./repoScanCache";
+import { cachedReposNow, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import type { RootStackParamList } from "./RootNavigator";
-import { getCachedSessions, setCachedSessions } from "./sessionCache";
+import { cachedSessionsNow, getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
 import { SystemIcon } from "./SystemIcon";
 import { relativeTime } from "./time";
@@ -157,8 +158,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const isFocused = useIsFocused();
   const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
 
-  const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>([]);
-  const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
+  // The kept list (read back at launch), so it draws from its first frame.
+  const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>(cachedSessionsNow);
+  const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>(cachedReposNow);
   const [refreshing, setRefreshing] = React.useState(false);
   const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
   // Sessions older than the app's setup date count as already-read. Default to
@@ -711,7 +713,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           </View>
 
           {/* The 3-dot menu: the native menu, its label the glass button (as
-           * the composer's pickers host theirs). Archived, for now. */}
+           * the composer's pickers host theirs). Archived, and Reload. */}
           <Host style={{ width: GLASS_BUTTON, height: GLASS_BUTTON }}>
             <Menu
               label={
@@ -735,6 +737,13 @@ export const RepoScreen = (props: Props): React.ReactElement => {
                 systemImage="archivebox"
                 onPress={() => props.navigation.navigate("Archived", { repo: name })}
               />
+              {canReload ? (
+                <Button
+                  label="Reload"
+                  systemImage="arrow.clockwise"
+                  onPress={reloadApp}
+                />
+              ) : null}
             </Menu>
           </Host>
         </Animated.View>

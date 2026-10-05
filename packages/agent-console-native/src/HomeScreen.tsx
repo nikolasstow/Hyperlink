@@ -54,10 +54,10 @@ import { prefetchWorkspaces } from "./extensionViewsStore";
 import { refreshPlugins } from "./pluginsStore";
 import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
-import { isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
+import { cachedReposNow, isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { updateScannedRepos } from "./primaryWorktree";
 import { archiveWithUndo, loadArchivedSessions, loadMutedSessions, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
-import { getCachedSessions, setCachedSessions } from "./sessionCache";
+import { cachedSessionsNow, getCachedSessions, setCachedSessions } from "./sessionCache";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -97,8 +97,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // flips a session unread the instant a message lands, without a refresh.
   const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
   const [setupDate, setSetupDate] = React.useState<number>(() => Date.now());
-  const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>([]);
-  const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
+  // The kept list (read back at launch), so it draws from its first frame.
+  const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>(cachedSessionsNow);
+  const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>(cachedReposNow);
   // Worktree pickers and pages read the scan too (primaryWorktree.ts).
   React.useEffect(() => {
     if (scanned.length > 0) updateScannedRepos(scanned);
