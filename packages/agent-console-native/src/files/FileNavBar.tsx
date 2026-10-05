@@ -20,9 +20,9 @@
  *
  * @internal
  */
-import { GlassView } from "expo-glass-effect";
+import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, StyleSheet, TextInput, useColorScheme, useWindowDimensions, View, type ViewStyle } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, useColorScheme, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -62,6 +62,9 @@ const NAME_PAD = 22;
  * ends fading. */
 const NAME_FADE_START = 0.2;
 const NAME_FADE_END = 0.55;
+/** Swiping, how far a pill reaches past its gap, just under the round button
+ * (the glass container blends them where they meet, as Safari's). */
+const PILL_REACH = BAR_GAP + 2;
 /** Room above the pieces. */
 const BAR_TOP = 10;
 
@@ -137,7 +140,7 @@ const TabPill = (props: {
     const half = (screenWidth * (1 - (1 - CARD_SCALE) * paging.value)) / 2;
     const middle = screenWidth / 2 + (offset + swipe.value) * cardStep;
     const left = Math.max(middle - half, boundLeft);
-    const width = Math.max(0, Math.min(middle + half, boundRight) - left);
+    const width = Math.max(0, Math.min(middle + half, boundRight + paging.value * PILL_REACH) - left);
     return { left, width };
   });
   // Toward its card's middle: the room before it and after it share the
@@ -147,7 +150,7 @@ const TabPill = (props: {
     const half = (screenWidth * (1 - (1 - CARD_SCALE) * paging.value)) / 2;
     const middle = screenWidth / 2 + (offset + swipe.value) * cardStep;
     const left = Math.max(middle - half, boundLeft);
-    const right = Math.min(middle + half, boundRight);
+    const right = Math.min(middle + half, boundRight + paging.value * PILL_REACH);
     const at = right > left ? (middle - left) / (right - left) : 0.5;
     return { flexGrow: Math.min(1, Math.max(0, at)) };
   });
@@ -155,7 +158,7 @@ const TabPill = (props: {
     const half = (screenWidth * (1 - (1 - CARD_SCALE) * paging.value)) / 2;
     const middle = screenWidth / 2 + (offset + swipe.value) * cardStep;
     const left = Math.max(middle - half, boundLeft);
-    const right = Math.min(middle + half, boundRight);
+    const right = Math.min(middle + half, boundRight + paging.value * PILL_REACH);
     const at = right > left ? (middle - left) / (right - left) : 0.5;
     return { flexGrow: 1 - Math.min(1, Math.max(0, at)) };
   });
@@ -164,20 +167,21 @@ const TabPill = (props: {
     const half = (screenWidth * (1 - (1 - CARD_SCALE) * paging.value)) / 2;
     const middle = screenWidth / 2 + (offset + swipe.value) * cardStep;
     const left = Math.max(middle - half, boundLeft);
-    const width = Math.max(0, Math.min(middle + half, boundRight) - left);
+    const width = Math.max(0, Math.min(middle + half, boundRight + paging.value * PILL_REACH) - left);
     return { minWidth: (1 - paging.value) * width, maxWidth: width };
   });
-  // Its name fades as its card moves off the middle; its icon, also as the
-  // pages are swiped. The name's room: clear of the icon at rest, its own
-  // padding swiping.
-  const label = useAnimatedStyle(() => {
-    const away = Math.abs(offset + swipe.value);
-    return {
-      opacity: Math.min(1, Math.max(0, (NAME_FADE_END - away) / (NAME_FADE_END - NAME_FADE_START))),
-      marginHorizontal: NAME_ROOM - (NAME_ROOM - NAME_PAD) * paging.value,
-    };
-  });
+  // Its width from its name (an unseen copy, in the flow): clear of the icon
+  // at rest, its own padding swiping. Its contents fade, whole, as its card
+  // moves off the middle; its icon, also as the pages are swiped.
+  const sizing = useAnimatedStyle(() => ({ marginHorizontal: NAME_ROOM - (NAME_ROOM - NAME_PAD) * paging.value }));
   const icon = useAnimatedStyle(() => ({ opacity: 1 - paging.value }));
+  const fade = useAnimatedStyle(() => {
+    const away = Math.abs(offset + swipe.value);
+    return { opacity: Math.min(1, Math.max(0, (NAME_FADE_END - away) / (NAME_FADE_END - NAME_FADE_START))) };
+  });
+  // The name as shown: as wide as it is at rest, clipped by the pill as it
+  // narrows (never cut down a character at a time).
+  const nameWidth = boundRight - boundLeft - NAME_ROOM * 2;
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const { entry } = props;
   return (
@@ -185,12 +189,20 @@ const TabPill = (props: {
       <Reanimated.View style={before} />
       <Reanimated.View style={[styles.shadow, styles.pillFit, fit]}>
         <GlassView style={styles.pillGlass} glassEffectStyle="regular" colorScheme={scheme}>
-          <Reanimated.View style={[styles.pillIcon, icon]}>
-            <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={PILL_ICON} />
-          </Reanimated.View>
-          <Reanimated.Text style={[styles.name, label]} numberOfLines={1}>
+          <Reanimated.Text style={[styles.name, styles.sizing, sizing]} numberOfLines={1} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {entry.name}
           </Reanimated.Text>
+          {/* Clipped inside the glass (never the glass itself). */}
+          <Reanimated.View style={[styles.pillClip, fade]} pointerEvents="none">
+            <Reanimated.View style={[styles.pillIcon, icon]}>
+              <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={PILL_ICON} />
+            </Reanimated.View>
+            <View style={[styles.pillName, { width: nameWidth, marginLeft: -nameWidth / 2 }]}>
+              <Text style={[styles.name, styles.centred]} numberOfLines={1}>
+                {entry.name}
+              </Text>
+            </View>
+          </Reanimated.View>
         </GlassView>
       </Reanimated.View>
       <Reanimated.View style={after} />
@@ -288,7 +300,9 @@ export const FileNavBar = (props: {
   return (
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
       <View style={styles.pages} pointerEvents="box-none">
-        <Reanimated.View style={[styles.bar, barSlide]}>
+        <Reanimated.View style={barSlide}>
+          {/* One glass container: pieces that meet blend, as Safari's. */}
+          <GlassContainer style={styles.bar}>
           {/* The tabs' pills, under the buttons: the one before, this one,
             * the one after (each only while its card is in the bar). */}
           {props.previous === undefined ? null : <TabPill entry={props.previous} offset={-1} swipe={swipe} paging={paging} bounds={bounds} />}
@@ -313,6 +327,7 @@ export const FileNavBar = (props: {
               <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" onPress={toDubz} />
             </Piece>
           ) : null}
+          </GlassContainer>
         </Reanimated.View>
         {withDubz ? (
           <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
@@ -395,7 +410,26 @@ const makeStyles = (text: TextColors) =>
       bottom: 0,
       justifyContent: "center",
     },
-    // Its room at its sides (animated: TabPill).
+    // The unseen copy that sizes the pill.
+    sizing: {
+      opacity: 0,
+    },
+    pillClip: {
+      ...StyleSheet.absoluteFill,
+      overflow: "hidden",
+      borderRadius: NAV_BAR_HEIGHT / 2,
+    },
+    // The name, centred in the pill at its width at rest.
+    pillName: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: "50%",
+      justifyContent: "center",
+    },
+    centred: {
+      textAlign: "center",
+    },
     name: {
       color: text.label,
       fontSize: 15,
