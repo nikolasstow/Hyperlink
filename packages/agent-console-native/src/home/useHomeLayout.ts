@@ -21,6 +21,12 @@ const subscribe = (listener: () => void): (() => void) => {
 };
 
 let started = false;
+let readBack: () => void = () => undefined;
+/** Settles once the kept layout has been read back (the launch screen draws
+ * it, so the app waits for it). */
+export const homeLayoutReadBack = new Promise<void>((resolve) => {
+  readBack = resolve;
+});
 
 /** Reads back the kept layout and mirrors it for React (once). */
 export const startHomeLayout = (): void => {
@@ -31,6 +37,7 @@ export const startHomeLayout = (): void => {
       Stream.runForEach((next) =>
         Effect.sync(() => {
           layout = next;
+          readBack();
           listeners.forEach((listener) => listener());
         }),
       ),

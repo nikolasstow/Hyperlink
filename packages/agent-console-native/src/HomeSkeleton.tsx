@@ -31,7 +31,9 @@ const heightOf = (row: Exclude<HomeRow, { readonly kind: "heading" }>): number =
 export const HomeSkeleton = (): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const kept = useKeptHomeLayout();
-  const layout = kept === undefined || kept.length === 0 ? FIRST_LAUNCH : kept;
+  // Until it is read back (a moment), nothing: drawing the first-launch
+  // cards meanwhile would change under you.
+  const layout = kept === undefined ? [] : kept.length === 0 ? FIRST_LAUNCH : kept;
   const pulse = React.useRef(new Animated.Value(0.5)).current;
 
   React.useEffect(() => {

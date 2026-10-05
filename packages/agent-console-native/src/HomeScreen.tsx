@@ -280,6 +280,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // Its first screenful kept for the launch screen, which draws it before
   // Home is up (home/homeLayout.ts).
   React.useEffect(() => {
+    // Nothing to show yet: the kept layout stays as it was.
+    if (rows.length === 0) return;
     const server = serverAddressOf(address);
     const layout = rows.slice(0, LAYOUT_ROWS).map((row, index): HomeRow => {
       switch (row.kind) {

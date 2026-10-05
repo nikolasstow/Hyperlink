@@ -29,6 +29,12 @@ const subscribe = (listener: () => void): (() => void) => {
 };
 
 let started = false;
+let readBack: () => void = () => undefined;
+/** Settles once what the device kept has been read back (Home's cards are
+ * sized from it, so the app waits for it before showing Home). */
+export const conversationsReadBack = new Promise<void>((resolve) => {
+  readBack = resolve;
+});
 
 /** Reads back what the device kept and mirrors it for React (once). */
 export const startConversations = (): void => {
@@ -39,6 +45,7 @@ export const startConversations = (): void => {
       Stream.runForEach((next) =>
         Effect.sync(() => {
           kept = next;
+          readBack();
           listeners.forEach((listener) => listener());
         }),
       ),

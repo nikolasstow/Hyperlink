@@ -5,6 +5,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider, useAppContext } from "./src/AppContext";
 import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
+import { conversationsReadBack } from "./src/conversations/useConversations";
+import { homeLayoutReadBack } from "./src/home/useHomeLayout";
 import { ConversationPreloader } from "./src/conversations/ConversationPreloader";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
@@ -43,6 +45,9 @@ type Screen =
   | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly address: string; readonly error?: string }
   | { readonly step: "ready"; readonly client: OpencodeClient; readonly address: string; readonly rootDir: string };
 
+/** The longest the launch waits for the device's stores to be read back. */
+const READ_BACK_WAIT_MS = 1000;
+
 const connectToServer = async (address: string): Promise<OpencodeClient> => {
   const client = makeClient(address);
   const { data, error } = await client.session.list();
@@ -66,6 +71,15 @@ const AppInner = (): React.ReactElement => {
     (async () => {
       // Primed before any session can open, so the first permission ask is
       // answered by the user's chosen default rather than the built-in one.
+      // Home's cards are sized from the conversations kept on the device, and
+      // the launch screen draws Home's kept layout: both read back before
+      // Home shows, so its cards are right from their first frame.
+      // Never longer than READ_BACK_WAIT_MS: a store that cannot be read must
+      // not hold the app on the launch screen.
+      const readBack = Promise.race([
+        Promise.all([conversationsReadBack, homeLayoutReadBack]),
+        new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS)),
+      ]);
       primeDefaultPermissionMode(await getDefaultPermissionMode());
       primeSessionPermissionModes(await getSessionPermissionModes());
       const savedAddress = await getServerAddress();
@@ -85,6 +99,7 @@ const AppInner = (): React.ReactElement => {
           setScreen({ step: "root-setup", client, address: savedAddress });
         } else {
           setRootDirInput(savedRootDir);
+          await readBack;
           setScreen({ step: "ready", client, address: savedAddress, rootDir: savedRootDir });
         }
       } catch (err) {
