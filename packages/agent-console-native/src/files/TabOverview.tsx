@@ -17,7 +17,7 @@ import { controlSize, font, pickerStyle, tag } from "@expo/ui/swift-ui/modifiers
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { FlatList, Modal as RNModal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
-import Reanimated, { Easing, LayoutAnimationConfig, LinearTransition, type SharedValue, useAnimatedStyle, ZoomIn, ZoomOut } from "react-native-reanimated";
+import Reanimated, { Easing, FadeIn, FadeOut, LayoutAnimationConfig, LinearTransition, type SharedValue, useAnimatedStyle, ZoomIn, ZoomOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
 import { colors } from "../colors";
@@ -26,64 +26,17 @@ import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
-import { type FileNavEntry, type FilePlace, tabEntry, type Visit } from "./FileNav";
+import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
+import { parentOf, type TabFilter, type TabLayout } from "./tabLayout";
 
 import { TabPreview } from "./TabPreview";
-import { PREVIEW_ASPECT, PREVIEW_RADIUS } from "./tabShape";
+import { PREVIEW_RADIUS } from "./tabShape";
 
-export type TabFilter = "all" | "files" | "folders";
-
-/** The tabs a filter shows, with their places among all tabs. */
-export const filteredTabs = (place: FilePlace, filter: TabFilter): ReadonlyArray<{ readonly index: number; readonly entry: FileNavEntry }> =>
-  place.tabs.flatMap((tab, index) => {
-    const entry = tabEntry(tab);
-    if (entry === undefined) return [];
-    if (filter === "files" && entry.kind !== "file") return [];
-    if (filter === "folders" && entry.kind !== "directory") return [];
-    return [{ index, entry }];
-  });
-
-const SIDE = 16;
 /** The overview bar's pieces (its own: Files' bar is sized apart). */
 const OVERVIEW_BAR_HEIGHT = 50;
 /** Tabs coming, going and gliding in the grid. */
 const GRID_MS = 300;
 const GRID_EASING = Easing.bezier(0.2, 0.9, 0.25, 1);
-
-const GAP = 14;
-
-/** Under each preview: its name and its path. */
-const LABEL_HEIGHT = 40;
-const ROW_GAP = 18;
-
-/** The folder something is in (its name is shown above it already). */
-const parentOf = (path: string): string => {
-  const trimmed = path.replace(/\/+$/, "");
-  const cut = trimmed.lastIndexOf("/");
-  return cut <= 0 ? "/" : trimmed.slice(0, cut);
-};
-
-/** Where the grid's cells are, from the screen's size alone. */
-export const overviewGeometry = (screen: { readonly width: number; readonly height: number }, topInset: number) => {
-  const cellWidth = (screen.width - SIDE * 2 - GAP) / 2;
-  // Safari's shape: 3:4, the page's top (cropped).
-  const previewHeight = cellWidth * PREVIEW_ASPECT;
-  const rowHeight = previewHeight + LABEL_HEIGHT + ROW_GAP;
-  const top = topInset + 12;
-  return {
-    cellWidth,
-    previewHeight,
-    rowHeight,
-    top,
-    /** A cell's preview on the screen, with the grid scrolled `scroll` down. */
-    previewAt: (position: number, scroll: number) => ({
-      x: SIDE + (position % 2) * (cellWidth + GAP),
-      y: top + Math.floor(position / 2) * rowHeight - scroll,
-      width: cellWidth,
-      height: previewHeight,
-    }),
-  };
-};
 
 const RoundButton = (props: { readonly icon: React.ComponentProps<typeof SystemIcon>["name"]; readonly label: string; readonly onPress: () => void }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
@@ -113,6 +66,8 @@ export const TabOverview = (props: {
   readonly onOpenVisit: (entry: FileNavEntry) => void;
   readonly screen: { readonly width: number; readonly height: number };
   readonly topInset: number;
+  /** Where everything in the grid is (tabLayout.ts). */
+  readonly layout: TabLayout;
   /** The zoom (0 a tab at full screen, 1 in the grid): the grid fades in
    * with it, around the zooming tab. */
   readonly reveal: SharedValue<number>;
@@ -123,8 +78,7 @@ export const TabOverview = (props: {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const insets = useSafeAreaInsets();
-  const geometry = overviewGeometry(props.screen, props.topInset);
-  const tabs = filteredTabs(props.place, props.filter);
+  const { layout } = props;
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const { onScroll } = props;
   const reportScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => onScroll(event.nativeEvent.contentOffset.y);
@@ -141,16 +95,31 @@ export const TabOverview = (props: {
         contentOffset={{ x: 0, y: props.initialScroll }}
         onScroll={reportScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingTop: geometry.top, paddingBottom: insets.bottom + OVERVIEW_BAR_HEIGHT + 40, paddingHorizontal: SIDE }}
+        contentContainerStyle={{ height: layout.height + insets.bottom + OVERVIEW_BAR_HEIGHT + 40 }}
       >
         {/* No entering on the grid's first render: opening, it fades in with
           * the zoom; after that, tabs coming in do. */}
         <LayoutAnimationConfig skipEntering>
-        <View style={styles.grid}>
-          {tabs.map(({ index, entry }) => (
+        <View style={StyleSheet.absoluteFill}>
+          {/* A folder's group: its path above its tabs. */}
+          {layout.headers.map((header) => (
+            <Reanimated.View
+              key={`header:${header.folder}`}
+              style={[styles.header, { top: header.y, left: layout.side, right: layout.side, height: layout.headerHeight }]}
+              entering={FadeIn.duration(GRID_MS)}
+              exiting={FadeOut.duration(GRID_MS)}
+              layout={LinearTransition.duration(GRID_MS).easing(GRID_EASING)}
+            >
+              <SystemIcon name="folder" size={13} color={textColors.secondaryLabel} />
+              <Text style={styles.headerText} numberOfLines={1} ellipsizeMode="head">
+                {header.folder}
+              </Text>
+            </Reanimated.View>
+          ))}
+          {layout.tabs.map(({ index, entry, x, y, grouped }) => (
             <Reanimated.View
               key={props.place.tabs[index]?.id ?? index}
-              style={[styles.cell, { width: geometry.cellWidth, height: geometry.rowHeight - ROW_GAP }]}
+              style={[styles.cell, { left: x, top: y, width: layout.cellWidth, height: layout.cellHeight }]}
               // Tabs coming (a new one, a filter) and going (closed, filtered
               // out) fade and scale; the rest glide to their places.
               entering={ZoomIn.duration(GRID_MS).easing(GRID_EASING)}
@@ -159,26 +128,29 @@ export const TabOverview = (props: {
             >
               {/* The preview at its exact size; its outline drawn over it (so it
                 * shifts nothing), the close button in its corner. */}
-              <View style={[styles.preview, { width: geometry.cellWidth, height: geometry.previewHeight }, props.hiddenTab === index && styles.hidden]}>
+              <View style={[styles.preview, { width: layout.cellWidth, height: layout.previewHeight }, props.hiddenTab === index && styles.hidden]}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Open ${entry.name}`} onPress={() => props.onSelect(index)}>
-                  <TabPreview entry={entry} width={geometry.cellWidth} topInset={props.pageTop} />
+                  <TabPreview entry={entry} width={layout.cellWidth} topInset={props.pageTop} />
                 </Pressable>
                 <View style={[styles.outline, index === props.place.active && styles.outlineActive]} pointerEvents="none" />
                 <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel={`Close ${entry.name}`} onPress={() => props.onClose(index)} hitSlop={10}>
                   <SystemIcon name="xmark" size={11} weight="bold" color={textColors.label} />
                 </Pressable>
               </View>
-              {/* Its type beside its name and path, as in the address pill; the
-                * path cut at its start (its end matters most). */}
+              {/* Its type beside its name, as in the address pill; its folder
+                * under it, unless its group's header says it (cut at its start:
+                * its end matters most). */}
               <View style={styles.label}>
                 <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={22} />
                 <View style={styles.labelText}>
                   <Text style={styles.name} numberOfLines={1}>
                     {entry.name}
                   </Text>
-                  <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                    {parentOf(entry.path)}
-                  </Text>
+                  {grouped ? null : (
+                    <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
+                      {parentOf(entry.path)}
+                    </Text>
+                  )}
                 </View>
               </View>
             </Reanimated.View>
@@ -263,14 +235,20 @@ const ModalSheet = (props: { readonly open: boolean; readonly onClose: () => voi
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-    grid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      columnGap: GAP,
-      rowGap: ROW_GAP,
-    },
     cell: {
-      gap: 4,
+      position: "absolute",
+    },
+    header: {
+      position: "absolute",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    headerText: {
+      flex: 1,
+      color: text.secondaryLabel,
+      fontSize: 13,
+      fontWeight: "600",
     },
     preview: {
       borderRadius: PREVIEW_RADIUS,

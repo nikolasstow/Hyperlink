@@ -49,7 +49,8 @@ import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from 
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
-import { filteredTabs, overviewGeometry, TabOverview, type TabFilter } from "./TabOverview";
+import { TabOverview } from "./TabOverview";
+import { type TabFilter, type TabLayout, tabLayout } from "./tabLayout";
 import { PREVIEW_RADIUS } from "./tabShape";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav } from "./useFileNav";
 
@@ -71,6 +72,8 @@ const SLIDE = { duration: 260, easing: Easing.out(Easing.cubic) };
 const EDGE = 28;
 const SWIPE_TURN = 0.33;
 const SWIPE_FLING = 800;
+/** Room under the overview's grid for its bar. */
+const OVERVIEW_ROOM = 90;
 /** Room under a listing for the bar, and how far the bar drops to hide. */
 const BAR_ROOM = NAV_BAR_HEIGHT + 20;
 
@@ -80,8 +83,16 @@ const lastSegment = (path: string, fallback: string): string => path.split("/").
  * (`entry`, a new tab's, drawn at once rather than after the store has it). */
 type Overview =
   | { readonly kind: "closed" }
-  | { readonly kind: "opening" | "open"; readonly tab: number; readonly initialScroll: number }
-  | { readonly kind: "closing"; readonly tab: number; readonly position: number; readonly scroll: number; readonly entry?: FileNavEntry };
+  | { readonly kind: "opening" | "open"; readonly tab: number; readonly initialScroll: number; readonly frame: Frame }
+  | { readonly kind: "closing"; readonly tab: number; readonly scroll: number; readonly frame: Frame; readonly entry?: FileNavEntry };
+
+/** A preview's frame on the screen. */
+interface Frame {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
 
 export const FilesScreen = (props: Props): React.ReactElement => {
   const { repo, dir } = props.route.params;
@@ -128,28 +139,36 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => showBar(), [current.path, showBar]);
 
   // ── The overview, and the zoom in and out of it ──
-  const geometry = overviewGeometry(screen, insets.top);
   const scroll = React.useRef(0);
   // 0: the tab at full screen; 1: shrunk into its preview.
   const zoom = useSharedValue(0);
-  const visibleHeight = screen.height - geometry.top - insets.bottom - BAR_ROOM;
-  const tabCount = (among: TabFilter): number => (place === undefined ? 1 : filteredTabs(place, among).length);
-  // The grid scrolled so a position's row is in view.
-  const scrollFor = (position: number, count: number): number => {
-    const maxScroll = Math.max(0, Math.ceil(count / 2) * geometry.rowHeight - visibleHeight);
-    return Math.min(maxScroll, Math.max(0, Math.floor(position / 2) * geometry.rowHeight - (visibleHeight - geometry.rowHeight) / 2));
+  // Where everything in the grid is (tabLayout.ts); `extra`, a tab about to
+  // be added.
+  const layoutFor = (among: TabFilter, extra?: FileNavEntry): TabLayout =>
+    tabLayout(place ?? { root: root.path, tabs: [], active: 0, history: [] }, among, screen, insets.top, extra);
+  const layout = layoutFor(filter);
+  // A tab's preview on the screen, with the grid scrolled `scrolled` down.
+  const frameOf = (laid: TabLayout, index: number, scrolled: number): Frame => {
+    const found = laid.tabs.find((each) => each.index === index);
+    return { x: found?.x ?? laid.side, y: (found?.y ?? insets.top + 12) - scrolled, width: laid.cellWidth, height: laid.previewHeight };
   };
-  const positionOf = (index: number, among: TabFilter): number =>
-    place === undefined ? 0 : Math.max(0, filteredTabs(place, among).findIndex((each) => each.index === index));
+  // The grid scrolled so a tab is in the middle of the screen, as far as it
+  // goes.
+  const scrollFor = (laid: TabLayout, index: number): number => {
+    const found = laid.tabs.find((each) => each.index === index);
+    const maxScroll = Math.max(0, laid.height + insets.bottom + OVERVIEW_ROOM - screen.height);
+    return Math.min(maxScroll, Math.max(0, (found?.y ?? 0) - (screen.height - laid.cellHeight) / 2));
+  };
 
   const opened = React.useCallback(() => setOverview((now) => (now.kind === "opening" ? { ...now, kind: "open" } : now)), []);
   const openTabs = (): void => {
     if (place === undefined || overview.kind !== "closed") return;
     // Opened onto every tab, scrolled to the one showing.
     setFilter("all");
-    const initialScroll = scrollFor(positionOf(place.active, "all"), tabCount("all"));
+    const laid = layoutFor("all");
+    const initialScroll = scrollFor(laid, place.active);
     scroll.current = initialScroll;
-    setOverview({ kind: "opening", tab: place.active, initialScroll });
+    setOverview({ kind: "opening", tab: place.active, initialScroll, frame: frameOf(laid, place.active, initialScroll) });
     zoom.value = withTiming(1, ZOOM, (finished) => {
       if (finished === true) runOnJS(opened)();
     });
@@ -165,25 +184,20 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const openTab = (index: number): void => {
     if (overview.kind !== "open") return;
     selectFileTab(repo, index);
-    zoomInto({ kind: "closing", tab: index, position: positionOf(index, filter), scroll: scroll.current });
+    zoomInto({ kind: "closing", tab: index, scroll: scroll.current, frame: frameOf(layout, index, scroll.current) });
   };
-  // A new tab from the overview (its +, or history): it grows out of its own
-  // place, after the last of those shown.
+  // A new tab from the overview (its +, or history): it grows out of the
+  // place it takes in the grid.
   const startTab = (entry: FileNavEntry): void => {
     if (place === undefined || overview.kind !== "open") return;
     newFileTab(repo, entry);
-    const shown = filter === "all" || (filter === "files") === (entry.kind === "file");
-    zoomInto({ kind: "closing", tab: place.tabs.length, position: shown ? tabCount(filter) : 0, scroll: scroll.current, entry });
+    const index = place.tabs.length;
+    zoomInto({ kind: "closing", tab: index, scroll: scroll.current, frame: frameOf(layoutFor(filter, entry), index, scroll.current), entry });
   };
 
   // The tab zooming: from full screen to its preview's frame (cropped to its
   // shape as it shrinks), or back.
-  const target =
-    overview.kind === "closed"
-      ? geometry.previewAt(0, 0)
-      : overview.kind === "closing"
-        ? geometry.previewAt(overview.position, overview.scroll)
-        : geometry.previewAt(positionOf(overview.tab, filter), overview.initialScroll);
+  const target: Frame = overview.kind === "closed" ? { x: 0, y: 0, width: screen.width, height: screen.height } : overview.frame;
   const scaleTo = target.width / screen.width;
   const zoomStyle = useAnimatedStyle(() => {
     const scale = interpolate(zoom.value, [0, 1], [1, scaleTo]);
@@ -291,6 +305,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           onOpenVisit={startTab}
           screen={screen}
           topInset={insets.top}
+          layout={layout}
           reveal={zoom}
           pageTop={headerHeight}
         />
