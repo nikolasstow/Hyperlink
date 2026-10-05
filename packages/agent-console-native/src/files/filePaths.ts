@@ -47,3 +47,7 @@ export const shownPath = (path: string, root: string, fullPaths: boolean): strin
   const rootName = base.split("/").filter(Boolean).pop() ?? base;
   return `${rootName}${path.slice(base.length)}`;
 };
+
+/** Whether a path is the root itself (its folder is outside it: nothing to
+ * show under its name). */
+export const isRootPath = (path: string, root: string): boolean => path.replace(/\/+$/, "") === root.replace(/\/+$/, "");

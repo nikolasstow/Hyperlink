@@ -27,7 +27,7 @@ import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
-import { shownPath, useFullPaths } from "./filePaths";
+import { isRootPath, shownPath, useFullPaths } from "./filePaths";
 import { parentOf, type TabFilter, type TabLayout } from "./tabLayout";
 
 import { TabPreview } from "./TabPreview";
@@ -156,7 +156,7 @@ export const TabOverview = (props: {
                   <Text style={styles.name} numberOfLines={1}>
                     {entry.name}
                   </Text>
-                  {grouped ? null : (
+                  {grouped || isRootPath(entry.path, props.place.root) ? null : (
                     <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
                       {shownPath(parentOf(entry.path), props.place.root, fullPaths)}
                     </Text>
@@ -225,9 +225,11 @@ const History = (props: {
               <Text style={styles.name} numberOfLines={1}>
                 {item.entry.name}
               </Text>
-              <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                {shownPath(parentOf(item.entry.path), props.root, fullPaths)}
-              </Text>
+              {isRootPath(item.entry.path, props.root) ? null : (
+                <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
+                  {shownPath(parentOf(item.entry.path), props.root, fullPaths)}
+                </Text>
+              )}
             </View>
           </Pressable>
         )}
