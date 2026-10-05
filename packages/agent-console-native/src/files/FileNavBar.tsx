@@ -43,7 +43,7 @@ import { composerRestingBottom } from "../useKeyboardSlide";
 export const NAV_BAR_HEIGHT = 48;
 const BUTTON_WIDTH = 44;
 /** Back and forward's capsule: both buttons and its padding. */
-const NAV_PAIR_PAD = 6;
+const NAV_PAIR_PAD = 0;
 const NAV_PAIR_WIDTH = BUTTON_WIDTH * 2 + NAV_PAIR_PAD * 2;
 /** The bar's margins: at the sides, and under it (above where it rests). */
 export const NAV_BAR_SIDE = 28;
