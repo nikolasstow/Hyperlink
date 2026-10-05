@@ -9,7 +9,7 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, DynamicColorIOS, LayoutAnimation, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, DynamicColorIOS, LayoutAnimation, type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppContext } from "../AppContext";
 import { colors } from "../colors";
 import { iconForFile } from "../fileIcon";
@@ -95,6 +95,8 @@ export const FileListing = (props: {
   readonly onOpen: (entry: FileNavEntry) => void;
   /** A long press on a row, Open in New Tab. */
   readonly onOpenInNewTab: (entry: FileNavEntry) => void;
+  /** Its scrolling (the bar hides as it scrolls down). */
+  readonly onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -129,7 +131,7 @@ export const FileListing = (props: {
   }
   if (rows.length === 0) return <Text style={[styles.empty, { marginTop: props.topInset + 24 }]}>Empty folder.</Text>;
   return (
-    <ScrollView style={styles.fill} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
+    <ScrollView style={styles.fill} onScroll={props.onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
       {rows.map((row, index) => (
         // A long press: the row's menu (iOS's own, the row lifting).
         <ContextMenuView

@@ -185,3 +185,19 @@ New Tab. Tests: `FileNav.test.ts`.
 Not yet: a new tab (the +, history, Open in New Tab) opens without the zoom; a sideways
 swipe on the pill switches tabs at once (no slide); file previews are plain monospace
 (not coloured); the path pill is display-only.
+
+## 12. Round 2 (owner, 2026-10-05)
+
+- Bar glass as Safari's: regular glass, untinted, each piece rounded on itself with its
+  shadow on an outer wrapper; wider margins (20 at the sides, 10 between).
+- The bar leaves as a listing scrolls down and comes back as it scrolls up, or on a new
+  page (`scrollHide.ts`, shared with the search pill). A file's code surface does its own
+  scrolling and reports none, so the bar stays over files for now.
+- Edge swipes are Files' back and forward (the page follows the finger); with nothing
+  before, the left edge goes out to the repo. The app's swipe-back is off on this route.
+- Previews are 3:4, the page's top (cropped); the zoom crops to that shape as it goes.
+- Overview: no header over it; the close button sits in its preview's corner (the outline
+  is drawn over the preview so it moves nothing); the switcher is the native segmented
+  control at extra-large, All in larger text, Files and Folders as icons.
+- New tabs animate: + and history grow out of the new tab's place in the grid; Open in
+  New Tab rises in from the bar.

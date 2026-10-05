@@ -17,17 +17,17 @@
  */
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, StyleSheet, Text, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, useColorScheme, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Reanimated, { runOnJS, type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAgentButtonVisible } from "../agentButtonSettings";
-import { FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
 import { DubzPage, PAGE_MS, pageEasing, type PageBack } from "../Dubz";
 import type { DubzContext } from "../dubzSuggestions";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
-import { composerRestingBottom, useKeyboardSlide } from "../useKeyboardSlide";
+import { useKeyboardHeightValue } from "../keyboardHeight";
+import { composerRestingBottom } from "../useKeyboardSlide";
 
 /** The pieces' height (Safari's compact bar), and its buttons' width. */
 export const NAV_BAR_HEIGHT = 50;
@@ -40,13 +40,18 @@ const SWIPE_FLING = 600;
 
 const noop = (): void => undefined;
 
-/** A glass piece of the bar, rounded on itself. */
-const Piece = (props: { readonly style: React.ComponentProps<typeof View>["style"]; readonly children: React.ReactNode }): React.ReactElement => {
+/** A glass piece of the bar, as Safari's: regular glass, untinted, rounded on
+ * itself (nothing around it clips or rounds it, which would flatten it), its
+ * small drop shadow on an outer wrapper of the same shape. */
+const Piece = (props: { readonly style: ViewStyle; readonly children: React.ReactNode }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
-    <GlassView style={props.style} glassEffectStyle="clear" tintColor={scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT} colorScheme={scheme}>
-      {props.children}
-    </GlassView>
+    <View style={[styles.shadow, { borderRadius: props.style.borderRadius }]}>
+      <GlassView style={props.style} glassEffectStyle="regular" colorScheme={scheme}>
+        {props.children}
+      </GlassView>
+    </View>
   );
 };
 
@@ -86,10 +91,18 @@ export const FileNavBar = (props: {
   readonly onNextTab: () => void;
   /** Where Dubz is: its suggestions. */
   readonly dubzContext: DubzContext;
+  /** How far it is dropped out of sight as the page scrolls down (0 shown;
+   * scrollHide.ts). */
+  readonly hidden: SharedValue<number>;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
-  const slide = useKeyboardSlide(composerRestingBottom(insets.bottom));
+  // Rests where the composer rests, rides the keyboard, and drops away as the
+  // page scrolls: all one `bottom`, on the UI thread (layout: it is glass).
+  const keyboardHeight = useKeyboardHeightValue();
+  const restingBottom = composerRestingBottom(insets.bottom);
+  const { hidden } = props;
+  const slide = useAnimatedStyle(() => ({ bottom: Math.max(keyboardHeight.value, restingBottom) - hidden.value }));
   const { width: screenW } = useWindowDimensions();
   const withDubz = useAgentButtonVisible(props.dubzContext.surface);
   const [dubzOpen, setDubzOpen] = React.useState(false);
@@ -147,13 +160,13 @@ export const FileNavBar = (props: {
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
       <View style={styles.pages} pointerEvents="box-none">
         <Reanimated.View style={[styles.bar, barSlide]}>
-          <Piece style={styles.navPair}>
+          <Piece style={pieceStyles.navPair}>
             <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
             <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
           </Piece>
           <GestureDetector gesture={pillGesture}>
             <View style={styles.pillSlot} accessibilityRole="button" accessibilityLabel={`${props.name}, tabs`}>
-              <Piece style={styles.pill}>
+              <Piece style={pieceStyles.pill}>
                 <Text style={styles.name} numberOfLines={1}>
                   {props.name}
                 </Text>
@@ -161,7 +174,7 @@ export const FileNavBar = (props: {
             </View>
           </GestureDetector>
           {withDubz ? (
-            <Piece style={styles.round}>
+            <Piece style={pieceStyles.round}>
               <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" enabled onPress={toDubz} />
             </Piece>
           ) : null}
@@ -195,37 +208,23 @@ const makeStyles = (text: TextColors) =>
       top: 0,
       bottom: 0,
     },
-    // The composer's margins (BottomBar), so the bars line up.
+    // Safari's margins: room at the sides and between the pieces.
     bar: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
-      paddingHorizontal: 12,
-      paddingTop: 8,
-      paddingBottom: 8,
+      gap: 10,
+      paddingHorizontal: 20,
+      paddingTop: 10,
+      paddingBottom: 10,
     },
-    navPair: {
-      flexDirection: "row",
-      height: NAV_BAR_HEIGHT,
-      paddingHorizontal: 4,
-      borderRadius: NAV_BAR_HEIGHT / 2,
+    shadow: {
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 6,
     },
     pillSlot: {
       flex: 1,
-    },
-    pill: {
-      height: NAV_BAR_HEIGHT,
-      borderRadius: NAV_BAR_HEIGHT / 2,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 16,
-    },
-    round: {
-      width: NAV_BAR_HEIGHT,
-      height: NAV_BAR_HEIGHT,
-      borderRadius: NAV_BAR_HEIGHT / 2,
-      alignItems: "center",
-      justifyContent: "center",
     },
     button: {
       width: BUTTON_WIDTH,
@@ -239,3 +238,27 @@ const makeStyles = (text: TextColors) =>
       fontWeight: "600",
     },
   });
+
+/** The pieces' shapes (static: Piece reads each one's radius for its shadow). */
+const pieceStyles = StyleSheet.create({
+  navPair: {
+    flexDirection: "row",
+    height: NAV_BAR_HEIGHT,
+    paddingHorizontal: 6,
+    borderRadius: NAV_BAR_HEIGHT / 2,
+  },
+  pill: {
+    height: NAV_BAR_HEIGHT,
+    borderRadius: NAV_BAR_HEIGHT / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  round: {
+    width: NAV_BAR_HEIGHT,
+    height: NAV_BAR_HEIGHT,
+    borderRadius: NAV_BAR_HEIGHT / 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

@@ -21,6 +21,7 @@ import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { type TextColors, useScreenBackground, useThemedStyles } from "../theme";
 import type { FileNavEntry } from "./FileNav";
+import { PREVIEW_ASPECT } from "./tabShape";
 
 /** Rows and lines drawn: more than a screen holds, so it is always full. */
 const ROWS = 24;
@@ -104,7 +105,8 @@ export const TabPreview = (props: {
   const { width: screenW, height: screenH } = useWindowDimensions();
   const scale = props.width / screenW;
   return (
-    <View style={[styles.frame, { width: props.width, height: screenH * scale, backgroundColor: background }]}>
+    // Safari's shape, 3:4: the page's top, the rest cropped.
+    <View style={[styles.frame, { width: props.width, height: props.width * PREVIEW_ASPECT, backgroundColor: background }]}>
       <View
         style={[
           styles.page,

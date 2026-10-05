@@ -12,8 +12,8 @@
  *
  * @internal
  */
-import { Host, Picker, Text as UIText } from "@expo/ui/swift-ui";
-import { pickerStyle, tag } from "@expo/ui/swift-ui/modifiers";
+import { Host, Image as UIImage, Picker, Text as UIText } from "@expo/ui/swift-ui";
+import { controlSize, font, pickerStyle, tag } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { FlatList, Modal as RNModal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
@@ -25,6 +25,7 @@ import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { type FileNavEntry, type FilePlace, tabEntry, type Visit } from "./FileNav";
 import { NAV_BAR_HEIGHT } from "./FileNavBar";
 import { TabPreview } from "./TabPreview";
+import { PREVIEW_ASPECT, PREVIEW_RADIUS } from "./tabShape";
 
 export type TabFilter = "all" | "files" | "folders";
 
@@ -39,7 +40,9 @@ export const filteredTabs = (place: FilePlace, filter: TabFilter): ReadonlyArray
   });
 
 const SIDE = 16;
+
 const GAP = 14;
+
 /** Under each preview: its name and its path. */
 const LABEL_HEIGHT = 40;
 const ROW_GAP = 18;
@@ -47,7 +50,8 @@ const ROW_GAP = 18;
 /** Where the grid's cells are, from the screen's size alone. */
 export const overviewGeometry = (screen: { readonly width: number; readonly height: number }, topInset: number) => {
   const cellWidth = (screen.width - SIDE * 2 - GAP) / 2;
-  const previewHeight = cellWidth * (screen.height / screen.width);
+  // Safari's shape: 3:4, the page's top (cropped).
+  const previewHeight = cellWidth * PREVIEW_ASPECT;
   const rowHeight = previewHeight + LABEL_HEIGHT + ROW_GAP;
   const top = topInset + 12;
   return {
@@ -115,17 +119,17 @@ export const TabOverview = (props: {
         <View style={styles.grid}>
           {tabs.map(({ index, entry }) => (
             <View key={props.place.tabs[index]?.id ?? index} style={[styles.cell, { width: geometry.cellWidth, height: geometry.rowHeight - ROW_GAP }]}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${entry.name}`}
-                onPress={() => props.onSelect(index)}
-                style={[styles.preview, index === props.place.active && styles.previewActive, props.hiddenTab === index && styles.hidden]}
-              >
-                <TabPreview entry={entry} width={geometry.cellWidth} topInset={props.topInset} />
-                <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel={`Close ${entry.name}`} onPress={() => props.onClose(index)} hitSlop={8}>
-                  <SystemIcon name="xmark" size={11} weight="bold" color={textColors.secondaryLabel} />
+              {/* The preview at its exact size; its outline drawn over it (so it
+                * shifts nothing), the close button in its corner. */}
+              <View style={[styles.preview, { width: geometry.cellWidth, height: geometry.previewHeight }, props.hiddenTab === index && styles.hidden]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Open ${entry.name}`} onPress={() => props.onSelect(index)}>
+                  <TabPreview entry={entry} width={geometry.cellWidth} topInset={props.topInset} />
                 </Pressable>
-              </Pressable>
+                <View style={[styles.outline, index === props.place.active && styles.outlineActive]} pointerEvents="none" />
+                <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel={`Close ${entry.name}`} onPress={() => props.onClose(index)} hitSlop={10}>
+                  <SystemIcon name="xmark" size={11} weight="bold" color={textColors.label} />
+                </Pressable>
+              </View>
               <Text style={styles.name} numberOfLines={1}>
                 {entry.name}
               </Text>
@@ -143,11 +147,11 @@ export const TabOverview = (props: {
           <Picker
             selection={props.filter}
             onSelectionChange={(next: TabFilter) => props.onFilter(next)}
-            modifiers={[pickerStyle("segmented")]}
+            modifiers={[pickerStyle("segmented"), controlSize("extraLarge")]}
           >
-            <UIText modifiers={[tag("all")]}>All</UIText>
-            <UIText modifiers={[tag("files")]}>Files</UIText>
-            <UIText modifiers={[tag("folders")]}>Folders</UIText>
+            <UIText modifiers={[tag("all"), font({ size: 17, weight: "semibold" })]}>All</UIText>
+            <UIImage systemName="doc" modifiers={[tag("files")]} />
+            <UIImage systemName="folder" modifiers={[tag("folders")]} />
           </Picker>
         </Host>
         <RoundButton icon="plus" label="New tab" onPress={props.onNew} />
@@ -221,14 +225,19 @@ const makeStyles = (text: TextColors) =>
       gap: 4,
     },
     preview: {
-      borderRadius: 14,
+      borderRadius: PREVIEW_RADIUS,
       borderCurve: "continuous",
       overflow: "hidden",
+    },
+    outline: {
+      ...StyleSheet.absoluteFill,
+      borderRadius: PREVIEW_RADIUS,
+      borderCurve: "continuous",
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.separator,
     },
-    previewActive: {
-      borderWidth: 2,
+    outlineActive: {
+      borderWidth: 2.5,
       borderColor: colors.tint,
     },
     hidden: {
@@ -236,14 +245,14 @@ const makeStyles = (text: TextColors) =>
     },
     close: {
       position: "absolute",
-      top: 6,
-      right: 6,
-      width: 22,
-      height: 22,
-      borderRadius: 11,
+      top: 8,
+      right: 8,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: colors.fillBackground,
+      backgroundColor: colors.glassStandIn,
     },
     name: {
       color: text.label,
@@ -275,8 +284,8 @@ const makeStyles = (text: TextColors) =>
       justifyContent: "center",
     },
     filterHost: {
-      width: 220,
-      height: 32,
+      width: 230,
+      height: NAV_BAR_HEIGHT,
     },
     sheet: {
       flex: 1,

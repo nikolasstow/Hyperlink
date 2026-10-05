@@ -20,19 +20,14 @@
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { StyleSheet, TextInput, useColorScheme, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
-import Reanimated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-  type SharedValue,
-} from "react-native-reanimated";
+import Reanimated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardHeightValue } from "./keyboardHeight";
 import { COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
 import { composerRestingBottom } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
+import { useScrollHide } from "./scrollHide";
 
 /** Height of the pill. Callers add it to their list's bottom inset.
  * Matched to the main composer pill's collapsed height (shared constant). */
@@ -40,11 +35,6 @@ export const SEARCH_PILL_HEIGHT = COMPOSER_PILL_HEIGHT;
 
 /** How far past the bottom edge the pill travels when it hides. */
 const hiddenDistanceFor = (bottomInset: number): number => SEARCH_PILL_HEIGHT + bottomInset + 18;
-
-/** Ignore scroll jitter below this many points, so the pill does not flicker. */
-const DIRECTION_THRESHOLD = 6;
-/** Within this far of the top the pill is always shown. */
-const TOP_ZONE = 4;
 
 export interface SearchPillScroll {
   /** Hand to the scrolling list's `onScroll`. */
@@ -55,43 +45,11 @@ export interface SearchPillScroll {
   readonly listPaddingBottom: number;
 }
 
-/**
- * UIKit has no hook for a custom bottom bar, so the reveal is driven from the
- * scroll direction here into a reanimated shared value, animated on the UI
- * thread so it stays smooth while the list is still settling.
- */
+/** The pill leaves as the list scrolls down and comes back as it scrolls up
+ * (scrollHide.ts). */
 export const useSearchPill = (): SearchPillScroll => {
   const insets = useSafeAreaInsets();
-  const hidden = useSharedValue(0);
-  const lastY = React.useRef(0);
-  const isHidden = React.useRef(false);
-  const hiddenDistance = hiddenDistanceFor(insets.bottom);
-
-  const setHidden = React.useCallback(
-    (next: boolean): void => {
-      if (isHidden.current === next) return;
-      isHidden.current = next;
-      // Curved, not linear: accelerate away on hide, ease back a touch slower.
-      hidden.value = withTiming(next ? hiddenDistance : 0, {
-        duration: next ? 200 : 320,
-        easing: next ? Easing.in(Easing.cubic) : Easing.out(Easing.cubic),
-      });
-    },
-    [hidden, hiddenDistance],
-  );
-
-  const onScroll = React.useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>): void => {
-      const y = event.nativeEvent.contentOffset.y;
-      const dy = y - lastY.current;
-      if (y <= TOP_ZONE) setHidden(false);
-      else if (dy > DIRECTION_THRESHOLD) setHidden(true);
-      else if (dy < -DIRECTION_THRESHOLD) setHidden(false);
-      lastY.current = y;
-    },
-    [setHidden],
-  );
-
+  const { onScroll, hidden } = useScrollHide(hiddenDistanceFor(insets.bottom));
   return {
     onScroll,
     hidden,
