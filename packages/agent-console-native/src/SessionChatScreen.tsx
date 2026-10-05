@@ -394,21 +394,18 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
               {
                 type: "action",
                 label: "Rename",
-                description: "Change this session's name",
                 icon: { type: "sfSymbol", name: "pencil" },
                 onPress: () => renameSession(),
               },
               {
                 type: "action",
                 label: "Refresh",
-                description: "Reconnect and reload this session",
                 icon: { type: "sfSymbol", name: "arrow.clockwise" },
                 onPress: () => refresh(),
               },
               {
                 type: "action",
                 label: "Settings",
-                description: "This session's background and permissions",
                 icon: { type: "sfSymbol", name: "gearshape" },
                 onPress: () => props.navigation.navigate("SessionSettings", { sessionID }),
               },
