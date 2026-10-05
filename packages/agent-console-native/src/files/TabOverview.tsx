@@ -28,6 +28,7 @@ import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
 import { isRootPath, shownPath, useFullPaths } from "./filePaths";
+import { PILL_HEIGHT } from "../titlePillStyle";
 import { NAV_BAR_SIDE } from "./FileNavBar";
 import { parentOf, type TabFilter, type TabLayout } from "./tabLayout";
 
@@ -36,6 +37,9 @@ import { PREVIEW_RADIUS } from "./tabShape";
 
 /** The overview bar's pieces (its own: Files' bar is sized apart). */
 const OVERVIEW_BAR_HEIGHT = 50;
+/** Room at the top for its top button (the title pill's height) and a gap
+ * under it, above the grid. */
+export const OVERVIEW_TOP_ROOM = PILL_HEIGHT + 10;
 /** Tabs coming, going and gliding in the grid. */
 const GRID_MS = 300;
 const GRID_EASING = Easing.bezier(0.2, 0.9, 0.25, 1);
@@ -82,6 +86,9 @@ export const TabOverview = (props: {
   readonly reveal: SharedValue<number>;
   /** The page's top inset, as the previews draw it. */
   readonly pageTop: number;
+  /** Its top: the repo and its worktree, a glass button switching worktree
+   * (the same tabs, there). */
+  readonly top: React.ReactNode;
 
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
@@ -100,6 +107,9 @@ export const TabOverview = (props: {
   const fade = useAnimatedStyle(() => ({ opacity: reveal.value }));
   const barAway = OVERVIEW_BAR_HEIGHT + 24 + insets.bottom;
   const barSlide = useAnimatedStyle(() => ({ bottom: insets.bottom - (1 - reveal.value) * barAway }));
+  // Its top slides down in with it, and away up past the screen's top.
+  const topAway = insets.top * 2 + OVERVIEW_TOP_ROOM * 2;
+  const topSlide = useAnimatedStyle(() => ({ top: insets.top - (1 - reveal.value) * topAway }));
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents={props.interactive ? "box-none" : "none"}>
@@ -172,6 +182,9 @@ export const TabOverview = (props: {
         </View>
         </LayoutAnimationConfig>
       </ScrollView>
+      </Reanimated.View>
+      <Reanimated.View style={[styles.top, topSlide]} pointerEvents="box-none">
+        {props.top}
       </Reanimated.View>
       {/* Its bar slides up in as the grid opens, and away as a tab grows
         * out of it (by layout: it is glass). */}
@@ -318,6 +331,14 @@ const makeStyles = (text: TextColors) =>
     path: {
       color: text.secondaryLabel,
       fontSize: 11,
+    },
+    top: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      height: PILL_HEIGHT,
+      alignItems: "center",
+      justifyContent: "center",
     },
     // In from the sides as Files' own bar is (its side margin).
     bar: {

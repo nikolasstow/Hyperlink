@@ -51,7 +51,7 @@ describe("opened", () => {
 });
 
 describe("FileNav", () => {
-  it("walks back and forward in a tab, keeps each repo's place, and starts over at a new root", async () => {
+  it("walks back and forward in a tab, keeps each repo's place, and keeps its tabs at another root", async () => {
     const storage = deviceStorage();
     const place = await run(
       Effect.gen(function* () {
@@ -76,13 +76,16 @@ describe("FileNav", () => {
         const nav = yield* FileNav;
         const kept = yield* placeOf(nav, "app");
         yield* nav.ensureRoot("app", dir("/other"));
-        const restarted = yield* placeOf(nav, "app");
-        return [kept, restarted];
+        const moved = yield* placeOf(nav, "app");
+        return [kept, moved];
       }),
       storage,
     );
     expect(showing(after[0])).toBe("/r/src");
-    expect(after[1]?.tabs.map((tab) => tabEntry(tab)?.path)).toEqual(["/other"]);
+    // Another worktree: the same tabs and history, at the same files there.
+    expect(after[1]?.root).toBe("/other");
+    expect(after[1]?.tabs.map((tab) => tab.entries.map((entry) => entry.path))).toEqual([["/other", "/other/src", "/other/src/main.ts"]]);
+    expect(after[1]?.history.map((visit) => visit.entry.path)).toEqual(["/other/src/main.ts", "/other/src"]);
   });
 
   it("keeps tabs apart: a new one shows, each has its own history, closing moves to a neighbour", async () => {

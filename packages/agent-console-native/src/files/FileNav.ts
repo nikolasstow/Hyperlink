@@ -71,6 +71,21 @@ export const startedAt = (root: FileNavEntry): FilePlace => ({
   history: [],
 });
 
+/** A place moved to another root (another worktree of the repo): its tabs
+ * and history, the same files there (whatever is outside the old root left
+ * as it is). */
+export const rerooted = (place: FilePlace, root: FileNavEntry): FilePlace => {
+  const old = place.root.replace(/\/+$/, "");
+  const moved = (entry: FileNavEntry): FileNavEntry =>
+    entry.path.replace(/\/+$/, "") === old ? root : entry.path.startsWith(`${old}/`) ? { ...entry, path: `${root.path.replace(/\/+$/, "")}${entry.path.slice(old.length)}` } : entry;
+  return {
+    ...place,
+    root: root.path,
+    tabs: place.tabs.map((tab) => ({ ...tab, entries: tab.entries.map(moved) })),
+    history: place.history.map((visit) => ({ ...visit, entry: moved(visit.entry) })),
+  };
+};
+
 const withActive = (place: FilePlace, f: (tab: FileTab) => FileTab): FilePlace => {
   const tab = activeTab(place);
   if (tab === undefined) return place;
@@ -106,13 +121,15 @@ const make = Effect.gen(function* () {
   return {
     /** Every repo's place, as they change (the current ones first). */
     changes: SubscriptionRef.changes(state),
-    /** Starts a repo at its root, or over at a new root (another worktree); a
-     * repo already at this root keeps its place. */
+    /** Starts a repo at its root; a repo already at this root keeps its
+     * place, and one at another root (another worktree) keeps its tabs, moved
+     * to the same files there. */
     ensureRoot: (repo: string, root: FileNavEntry) =>
       SubscriptionRef.updateAndGet(state, (all) => {
         const place = HashMap.get(all, repo);
-        if (Option.isSome(place) && place.value.root === root.path && place.value.tabs.length > 0) return all;
-        return HashMap.set(all, repo, startedAt(root));
+        if (Option.isNone(place) || place.value.tabs.length === 0) return HashMap.set(all, repo, startedAt(root));
+        if (place.value.root === root.path) return all;
+        return HashMap.set(all, repo, rerooted(place.value, root));
       }).pipe(Effect.flatMap(save)),
     /** Opens an entry in the tab showing. */
     open: (repo: string, entry: FileNavEntry) => update(repo, (place) => visited(withActive(place, (tab) => opened(tab, entry)), entry)),

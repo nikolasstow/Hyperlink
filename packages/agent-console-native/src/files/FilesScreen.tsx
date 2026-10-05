@@ -52,7 +52,7 @@ import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from 
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
-import { TabOverview } from "./TabOverview";
+import { OVERVIEW_TOP_ROOM, TabOverview } from "./TabOverview";
 import { type TabFilter, type TabLayout, tabLayout } from "./tabLayout";
 import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
@@ -197,12 +197,12 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // Where everything in the grid is (tabLayout.ts); `extra`, a tab about to
   // be added.
   const layoutFor = (among: TabFilter, extra?: FileNavEntry): TabLayout =>
-    tabLayout(place ?? { root: root.path, tabs: [], active: 0, history: [] }, among, screen, insets.top, extra);
+    tabLayout(place ?? { root: root.path, tabs: [], active: 0, history: [] }, among, screen, insets.top + OVERVIEW_TOP_ROOM, extra);
   const layout = layoutFor(filter);
   // A tab's preview on the screen, with the grid scrolled `scrolled` down.
   const frameOf = (laid: TabLayout, index: number, scrolled: number): Frame => {
     const found = laid.tabs.find((each) => each.index === index);
-    return { x: found?.x ?? laid.side, y: (found?.y ?? insets.top + 12) - scrolled, width: laid.cellWidth, height: laid.previewHeight };
+    return { x: found?.x ?? laid.side, y: (found?.y ?? insets.top + OVERVIEW_TOP_ROOM + 12) - scrolled, width: laid.cellWidth, height: laid.previewHeight };
   };
   // The grid scrolled so a tab is in the middle of the screen, as far as it
   // goes.
@@ -465,6 +465,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       {place === undefined ? null : (
         <TabOverview
           place={place}
+          top={primary.primary === undefined ? <HeaderTitlePill title={repo} /> : <WorktreePicker repo={repo} fallback={dir} title={repo} />}
           roots={pathRoots}
           filter={filter}
           onFilter={setFilter}
