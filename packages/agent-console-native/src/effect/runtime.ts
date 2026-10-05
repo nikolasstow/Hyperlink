@@ -15,7 +15,8 @@
  * - each session's own chat background (its own prefix);
  * - Home's last layout, for the launch screen (its own prefix);
  * - where Files is, per repo (its own prefix);
- * - the pages open when the app was last used (its own prefix).
+ * - the pages open when the app was last used (its own prefix);
+ * - Home's favorites (their own prefix).
  *
  * No per-server state lives in the layers' construction (servers are passed
  * to each call), so the runtime never needs rebuilding on reconnect.
@@ -25,6 +26,7 @@
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { Conversations } from "../conversations/Conversations";
+import { Favorites } from "../favorites/Favorites";
 import { FileNav } from "../files/FileNav";
 import { HomeLayoutStore } from "../home/HomeLayoutStore";
 import { SessionBackgrounds } from "../sessions/SessionBackgrounds";
@@ -42,6 +44,7 @@ const SESSIONS_STORAGE_PREFIX = "agent-console-native:sessions:";
 const HOME_STORAGE_PREFIX = "agent-console-native:home:";
 const FILES_STORAGE_PREFIX = "agent-console-native:files:";
 const NAV_STORAGE_PREFIX = "agent-console-native:nav:";
+const FAVORITES_STORAGE_PREFIX = "agent-console-native:favorites:";
 
 const platform = Layer.mergeAll(FetchHttpClient.layer, deviceSignalsLayer, foldersLayer);
 
@@ -52,6 +55,7 @@ const AppLayer = Layer.mergeAll(
   HomeLayoutStore.layer.pipe(Layer.provide(asyncStorageLayer(HOME_STORAGE_PREFIX))),
   FileNav.layer.pipe(Layer.provide(asyncStorageLayer(FILES_STORAGE_PREFIX))),
   KeptNav.layer.pipe(Layer.provide(asyncStorageLayer(NAV_STORAGE_PREFIX))),
+  Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
 ).pipe(
   Layer.provideMerge(Reachability.layer),
   Layer.provideMerge(Opencode.layer),

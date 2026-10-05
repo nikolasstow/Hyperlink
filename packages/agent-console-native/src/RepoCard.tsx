@@ -2,14 +2,15 @@
  * A repo/workspace card for Home, rendered with `@expo/ui` SwiftUI primitives so
  * it can carry a native `ContextMenu` — long-press lifts it into a basic-info
  * preview with the repo's action menu (Files · Docs · …) below it, the same menu
- * the repo screen shows in its header (shared via repoMenu). Tap opens the repo.
+ * the repo screen shows in its header (shared via repoMenu), and Favorite
+ * (Home's Favorites). Tap opens the repo.
  *
  * The menu actions are placeholders for now, exactly like the header's — the
  * point is to surface the menu on the card; wiring the sections is future work.
  *
  * @internal
  */
-import { Button, ContextMenu, Host, HStack, Image, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Button, ContextMenu, Host, HStack, Image, Section, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
@@ -17,6 +18,8 @@ import { colors } from "./colors";
 import { useCardTint, useTextColors } from "./theme";
 import { repoMenuFor } from "./repoMenu";
 import { CARD_GAP, REPO_CARD_HEIGHT } from "./home/homeLayout";
+import { favoriteRepo, isFavorite } from "./favorites/model";
+import { toggleFavorite, useFavorites } from "./favorites/useFavorites";
 
 const CARD_GUTTER = 12;
 
@@ -102,6 +105,7 @@ export const RepoCard = (props: RepoCardProps): React.ReactElement => {
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - CARD_GUTTER * 2;
   const menu = repoMenuFor(props.isKnownRepo);
+  const favorite = isFavorite(useFavorites(), favoriteRepo(props.repo));
 
   return (
     <Host
@@ -117,6 +121,9 @@ export const RepoCard = (props: RepoCardProps): React.ReactElement => {
           {menu.map((item) => (
             <Button key={item.label} label={item.label} systemImage={item.icon} onPress={() => props.onSelect?.(item.label)} />
           ))}
+          <Section>
+            <Button label={favorite ? "Unfavorite" : "Favorite"} systemImage={favorite ? "star.slash" : "star"} onPress={() => void toggleFavorite(favoriteRepo(props.repo))} />
+          </Section>
         </ContextMenu.Items>
         <ContextMenu.Preview>
           <Preview width={cardWidth} {...props} />

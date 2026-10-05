@@ -58,6 +58,7 @@ import { cachedReposNow, isStale, readWorkspace, refreshWorkspace } from "./repo
 import { updateScannedRepos } from "./primaryWorktree";
 import { archiveWithUndo, loadArchivedSessions, loadMutedSessions, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { cachedSessionsNow, getCachedSessions, setCachedSessions } from "./sessionCache";
+import { useFavorites } from "./favorites/useFavorites";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -76,10 +77,11 @@ const HOME_DUBZ: DubzContext = {
   scope: { kind: "all" },
 };
 
+/** `favorite`: in Favorites (it may be in Recent or its group too). */
 type Row =
   | { readonly kind: "heading"; readonly title: string }
-  | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined }
-  | { readonly kind: "repo"; readonly group: RepoGroup };
+  | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined; readonly favorite: boolean }
+  | { readonly kind: "repo"; readonly group: RepoGroup; readonly favorite: boolean };
 
 const heading = (title: string): Row => ({ kind: "heading", title });
 
@@ -263,20 +265,32 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     return map;
   }, [groups]);
 
-  const rows = React.useMemo(
-    (): ReadonlyArray<Row> => [
+  const favorites = useFavorites();
+  const rows = React.useMemo((): ReadonlyArray<Row> => {
+    const sessionRow = (session: SessionSummary, favorite: boolean): Row => {
+      const { repo, worktree } = matchSession(session.directory, scanned);
+      return { kind: "session", session, repo, worktree: displayWorktree(worktree), favorite };
+    };
+    // In the order they were added; one archived, deleted or gone from the
+    // scan is left out until it is back.
+    const favoriteRows = favorites.flatMap((favorite): ReadonlyArray<Row> => {
+      if (favorite.kind === "session") {
+        const session = visible.find((each) => each.id === favorite.id);
+        return session === undefined ? [] : [sessionRow(session, true)];
+      }
+      const group = groups.find((each) => each.repo === favorite.name);
+      return group === undefined ? [] : [{ kind: "repo", group, favorite: true }];
+    });
+    return [
+      ...(favoriteRows.length > 0 ? [heading("Favorites"), ...favoriteRows] : []),
       ...(recent.length > 0 ? [heading("Recent")] : []),
-      ...recent.map((session): Row => {
-        const { repo, worktree } = matchSession(session.directory, scanned);
-        return { kind: "session", session, repo, worktree: displayWorktree(worktree) };
-      }),
+      ...recent.map((session) => sessionRow(session, false)),
       ...(knownGroups.length > 0 ? [heading("Repos")] : []),
-      ...knownGroups.map((group): Row => ({ kind: "repo", group })),
+      ...knownGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
       ...(otherGroups.length > 0 ? [heading("Workspaces")] : []),
-      ...otherGroups.map((group): Row => ({ kind: "repo", group })),
-    ],
-    [recent, scanned, knownGroups, otherGroups],
-  );
+      ...otherGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
+    ];
+  }, [favorites, visible, groups, recent, scanned, knownGroups, otherGroups]);
   // Its first screenful kept for the launch screen, which draws it before
   // Home is up (home/homeLayout.ts).
   React.useEffect(() => {
@@ -334,7 +348,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         itemLayoutAnimation={LinearTransition.duration(LAYOUT_MS)}
         style={styles.list}
         data={rows}
-        keyExtractor={(row, i) => (row.kind === "heading" ? `h-${row.title}` : row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`)}
+        keyExtractor={(row, i) =>
+          row.kind === "heading" ? `h-${row.title}` : `${row.favorite ? "f-" : ""}${row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`}`
+        }
         refreshControl={
           // `progressViewOffset` pushes the spinner below the transparent nav
           // bar — without it the spinner renders at content-top, hidden behind

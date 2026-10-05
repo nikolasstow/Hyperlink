@@ -33,6 +33,8 @@ import { takeReturning } from "./sessionArchive";
 import { SystemIcon } from "./SystemIcon";
 import { useCardTint, useTextColors, useTheme } from "./theme";
 import { usePreloadConversation } from "./conversations/usePreloadConversation";
+import { favoriteSession, isFavorite } from "./favorites/model";
+import { toggleFavorite, useFavorites } from "./favorites/useFavorites";
 
 /** Horizontal margin outside the card (matches the list gutter). */
 const CARD_GUTTER = 12;
@@ -215,6 +217,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const { address } = useAppContext();
   const kept = useKeptConversation(serverAddressOf(address), props.sessionId);
   const summary = kept === undefined ? undefined : lastSummary(kept.messages);
+  const favorite = isFavorite(useFavorites(), favoriteSession(props.sessionId));
   const size = sessionCardSize({ title: props.title, pills: props.repo !== undefined || props.worktree !== undefined, summary: summary !== undefined });
 
   // Archiving: the row slides off to the left, then the session leaves the
@@ -280,6 +283,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
           <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
           <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
           <Button label={props.muted ? "Unmute" : "Mute"} systemImage={props.muted ? "bell" : "bell.slash"} onPress={props.onMute} />
+          <Button label={favorite ? "Unfavorite" : "Favorite"} systemImage={favorite ? "star.slash" : "star"} onPress={() => void toggleFavorite(favoriteSession(props.sessionId))} />
           {props.archived === true ? (
             <Button label="Unarchive" systemImage="tray.and.arrow.up" onPress={archive} />
           ) : (
