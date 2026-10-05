@@ -3,6 +3,8 @@
  * row — back · forward in one capsule, the address pill in the middle, a
  * round button at the end.
  *
+ * - Back and forward are there only when the tab has somewhere to go: both, a
+ *   capsule; one, a circle; neither, the pill takes their room.
  * - The address pill shows the current tab's name and is the tab bar: a tap,
  *   or a swipe up, opens the tab overview; a sideways swipe moves between
  *   tabs.
@@ -35,12 +37,20 @@ import { composerRestingBottom } from "../useKeyboardSlide";
 /** The pieces' height (Safari's compact bar), and its buttons' width. */
 export const NAV_BAR_HEIGHT = 48;
 const BUTTON_WIDTH = 44;
+/** Back and forward's capsule: both buttons and its padding. */
+const NAV_PAIR_PAD = 6;
+const NAV_PAIR_WIDTH = BUTTON_WIDTH * 2 + NAV_PAIR_PAD * 2;
 /** The bar's margins: at the sides, and under it (above where it rests). */
 export const NAV_BAR_SIDE = 28;
 const BAR_GAP = 10;
 /** The pill's padding at its sides. */
 const PILL_PAD = 0;
 export const NAV_BAR_BOTTOM = 18;
+/** The tab's type in the pill: its size, where it sits, and the room between
+ * it and the name. */
+const PILL_ICON = 20;
+const PILL_ICON_LEFT = 14;
+const PILL_ICON_GAP = 6;
 
 const noop = (): void => undefined;
 
@@ -59,12 +69,13 @@ const Piece = (props: { readonly style: ViewStyle; readonly children: React.Reac
   );
 };
 
-const NavButton = (props: {
+interface NavButtonProps {
   readonly icon: React.ComponentProps<typeof SystemIcon>["name"];
   readonly label: string;
-  readonly enabled: boolean;
   readonly onPress: () => void;
-}): React.ReactElement => {
+}
+
+const NavButton = (props: NavButtonProps): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   return (
@@ -72,11 +83,9 @@ const NavButton = (props: {
       style={styles.button}
       accessibilityRole="button"
       accessibilityLabel={props.label}
-      accessibilityState={{ disabled: !props.enabled }}
-      disabled={!props.enabled}
       onPress={props.onPress}
     >
-      <SystemIcon name={props.icon} size={19} weight="medium" color={props.enabled ? textColors.label : textColors.tertiaryLabel} />
+      <SystemIcon name={props.icon} size={19} weight="medium" color={textColors.label} />
     </Pressable>
   );
 };
@@ -91,7 +100,7 @@ const PillLabel = (props: { readonly entry: PillEntry | undefined; readonly widt
       {entry === undefined ? null : (
         <>
           <View style={styles.pillIcon}>
-            <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={20} />
+            <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={PILL_ICON} />
           </View>
           <Text style={styles.name} numberOfLines={1}>
             {entry.name}
@@ -160,10 +169,16 @@ export const FileNavBar = (props: {
   // Swiped back from Dubz's bar: this bar again.
   const pageBack = React.useMemo<PageBack>(() => ({ pageX, begin: noop, turn: () => setDubzOpen(false), stay: noop }), [pageX]);
 
+  // Back and forward, each only when it goes somewhere.
+  const back: NavButtonProps = { icon: "chevron.backward", label: "Back", onPress: props.onBack };
+  const forward: NavButtonProps = { icon: "chevron.forward", label: "Forward", onPress: props.onForward };
+  const navButtons = [...(props.canGoBack ? [back] : []), ...(props.canGoForward ? [forward] : [])];
+  // Their piece's width: a capsule for both, a circle for one.
+  const navWidth = navButtons.length === 2 ? NAV_PAIR_WIDTH : navButtons.length === 1 ? NAV_BAR_HEIGHT : 0;
   // The pill's width, worked out (the bar's width less the other pieces), so
   // the names slide a whole pill as the pages move a whole page.
   const pillWidth =
-    screenW - NAV_BAR_SIDE * 2 - (BUTTON_WIDTH * 2 + 12) - (withDubz ? NAV_BAR_HEIGHT + BAR_GAP : 0) - BAR_GAP - PILL_PAD * 2;
+    screenW - NAV_BAR_SIDE * 2 - (navWidth > 0 ? navWidth + BAR_GAP : 0) - (withDubz ? NAV_BAR_HEIGHT + BAR_GAP : 0) - PILL_PAD * 2;
   const { swipe, paging } = props;
   const names = useAnimatedStyle(() => ({ transform: [{ translateX: -pillWidth + swipe.value * pillWidth }] }));
   const dim = useAnimatedStyle(() => ({ opacity: 1 - paging.value * 0.6 }));
@@ -181,13 +196,16 @@ export const FileNavBar = (props: {
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
       <View style={styles.pages} pointerEvents="box-none">
         <Reanimated.View style={[styles.bar, barSlide]}>
-          <Piece style={pieceStyles.navPair}>
-            {/* Dimmed while the pages are swiped (the icons, not the glass). */}
-            <Reanimated.View style={[styles.row, dim]}>
-              <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
-              <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
-            </Reanimated.View>
-          </Piece>
+          {navButtons.length === 0 ? null : (
+            <Piece style={navButtons.length === 2 ? pieceStyles.navPair : pieceStyles.round}>
+              {/* Dimmed while the pages are swiped (the icons, not the glass). */}
+              <Reanimated.View style={[styles.row, dim]}>
+                {navButtons.map((button) => (
+                  <NavButton key={button.label} icon={button.icon} label={button.label} onPress={button.onPress} />
+                ))}
+              </Reanimated.View>
+            </Piece>
+          )}
           <GestureDetector gesture={props.pillGesture}>
             <View style={styles.pillSlot} accessibilityRole="button" accessibilityLabel={`${props.name}, tabs`}>
               <Piece style={pieceStyles.pill}>
@@ -207,7 +225,7 @@ export const FileNavBar = (props: {
           {withDubz ? (
             <Piece style={pieceStyles.round}>
               <Reanimated.View style={dim}>
-                <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" enabled onPress={toDubz} />
+                <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" onPress={toDubz} />
               </Reanimated.View>
             </Piece>
           ) : null}
@@ -284,13 +302,15 @@ const makeStyles = (text: TextColors) =>
     },
     pillIcon: {
       position: "absolute",
-      left: 14,
+      left: PILL_ICON_LEFT,
       top: 0,
       bottom: 0,
       justifyContent: "center",
     },
+    // Clear of the icon on both sides, so a long name stops short of it and a
+    // short one stays centred.
     name: {
-      marginHorizontal: 22,
+      marginHorizontal: PILL_ICON_LEFT + PILL_ICON + PILL_ICON_GAP,
       color: text.label,
       fontSize: 15,
       fontWeight: "600",
@@ -302,7 +322,7 @@ const pieceStyles = StyleSheet.create({
   navPair: {
     flexDirection: "row",
     height: NAV_BAR_HEIGHT,
-    paddingHorizontal: 6,
+    paddingHorizontal: NAV_PAIR_PAD,
     borderRadius: NAV_BAR_HEIGHT / 2,
   },
   pill: {
