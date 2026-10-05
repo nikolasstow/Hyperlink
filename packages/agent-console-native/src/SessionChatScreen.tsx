@@ -68,6 +68,7 @@ import { useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 import { BackgroundOverride, type TextColors, useScreenBackground, useThemedStyles } from "./theme";
 import { useSessionBackground } from "./sessions/useSessionBackground";
+import { repoOfDirectory } from "./primaryWorktree";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -283,7 +284,10 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // Keyboard up: select it for the message (or unselect). Down: open it.
   const onFile = (file: SessionFile): void => {
     if (keyboardHeight === 0) {
-      props.navigation.navigate("FileViewer", { path: file.path, name: file.name });
+      // In its repo's Files, in a new tab (its navigation and tabs with it).
+      const repoDir = directory ?? file.path.slice(0, file.path.lastIndexOf("/"));
+      const repo = repoOfDirectory(repoDir) ?? repoDir.split("/").filter(Boolean).pop() ?? repoDir;
+      props.navigation.navigate("Files", { repo, dir: repoDir, open: { path: file.path, name: file.name } });
       return;
     }
     setSelected((current) => (current.includes(file.path) ? current.filter((path) => path !== file.path) : [file.path, ...current]));

@@ -58,6 +58,11 @@ export const updateScannedRepos = (scan: ReadonlyArray<ScannedRepo>): void => {
   emit();
 };
 
+/** The scanned repo a folder is in (one of its worktrees, or inside one), or
+ * undefined for a folder outside every scanned repo. */
+export const repoOfDirectory = (directory: string): string | undefined =>
+  repos.find((candidate) => candidate.worktrees.some((worktree) => directory === worktree.path || directory.startsWith(`${worktree.path.replace(/\/+$/, "")}/`)))?.repo;
+
 export const worktreesOf = (repo: string): ReadonlyArray<ScannedWorktree> => repos.find((candidate) => candidate.repo === repo)?.worktrees ?? [];
 
 /** A repo's primary worktree: the chosen one while it exists, else the main

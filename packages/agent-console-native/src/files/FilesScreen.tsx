@@ -117,6 +117,14 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const rootName = lastSegment(primary.dir, repo);
   const root = React.useMemo((): FileNavEntry => ({ path: primary.dir, name: rootName, kind: "directory" }), [primary.dir, rootName]);
   React.useEffect(() => ensureFileRoot(repo, root), [repo, root]);
+  // A file to open in a new tab (from a chat): once, then the request is
+  // spent.
+  const openRequest = props.route.params.open;
+  React.useEffect(() => {
+    if (openRequest === undefined) return;
+    newFileTab(repo, { path: openRequest.path, name: openRequest.name, kind: "file" });
+    navigation.setParams({ open: undefined });
+  }, [openRequest, repo, navigation]);
   // This repo's tabs; at its root until the kept place is read back, or when
   // it was at another root.
   const kept = useFileNav(repo);
