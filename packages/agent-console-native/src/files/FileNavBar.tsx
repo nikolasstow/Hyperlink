@@ -3,8 +3,9 @@
  * row — back · forward in one capsule, the address pill in the middle, a
  * round button at the end.
  *
- * - Back and forward are always there, in one capsule, each dimmed when the
- *   tab has nowhere to go that way.
+ * - Back is always there, dimmed when the tab has nowhere back to go; forward
+ *   only when it has somewhere, the two then in one capsule (back alone, a
+ *   circle).
  * - The address pill shows the current tab's name and is the tab bar: a tap,
  *   or a swipe up, opens the tab overview; a sideways swipe moves between
  *   tabs. Swiping, as Safari's, each tab has its own pill, riding its card:
@@ -241,12 +242,12 @@ export const FileNavBar = (props: {
   // as Safari's.
   const bounds = React.useMemo(
     (): PillBounds => ({
-      left: NAV_BAR_SIDE + NAV_PAIR_WIDTH + BAR_GAP,
+      left: NAV_BAR_SIDE + (props.canGoForward ? NAV_PAIR_WIDTH : NAV_BAR_HEIGHT) + BAR_GAP,
       right: screenW - NAV_BAR_SIDE - (withDubz ? NAV_BAR_HEIGHT + BAR_GAP : 0),
       screenWidth: screenW,
       cardStep: screenW * CARD_SCALE + CARD_GAP,
     }),
-    [withDubz, screenW],
+    [props.canGoForward, withDubz, screenW],
   );
   const { swipe, paging } = props;
 
@@ -270,10 +271,10 @@ export const FileNavBar = (props: {
           {props.previous === undefined ? null : <TabPill entry={props.previous} offset={-1} swipe={swipe} paging={paging} bounds={bounds} />}
           <TabPill entry={{ name: props.name, kind: props.kind }} offset={0} swipe={swipe} paging={paging} bounds={bounds} />
           {props.next === undefined ? null : <TabPill entry={props.next} offset={1} swipe={swipe} paging={paging} bounds={bounds} />}
-          <Piece style={pieceStyles.navPair}>
+          <Piece style={props.canGoForward ? pieceStyles.navPair : pieceStyles.round}>
             <View style={styles.row}>
               <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
-              <NavButton icon="chevron.forward" label="Forward" enabled={props.canGoForward} onPress={props.onForward} />
+              {props.canGoForward ? <NavButton icon="chevron.forward" label="Forward" onPress={props.onForward} /> : null}
             </View>
           </Piece>
           {/* Where the pill is at rest: its gestures (the pills are drawn
