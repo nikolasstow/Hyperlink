@@ -5,8 +5,9 @@
  * will be and nothing jumps when Home takes over. Before Home has ever kept a
  * layout: "Recent" and a few medium cards.
  *
- * The cards pulse (opacity, on the native driver; they are plain fills, not
- * glass); the headings stay still.
+ * The cards look like glass cards whose glass is not drawn (as in the app
+ * switcher), and pulse (opacity, on the native driver; they are plain
+ * fills, not glass); the headings stay still.
  *
  * @internal
  */
@@ -77,10 +78,15 @@ const makeStyles = (text: TextColors) =>
     headingFirst: {
       marginTop: 4,
     },
+    // The look of a glass card whose glass is not drawn (out of focus): the
+    // cards it stands in for.
     card: {
       marginHorizontal: CARD_GUTTER,
       marginBottom: CARD_GAP,
       borderRadius: 14,
-      backgroundColor: colors.fillBackground,
+      borderCurve: "continuous",
+      backgroundColor: colors.glassStandIn,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.glassStandInEdge,
     },
   });

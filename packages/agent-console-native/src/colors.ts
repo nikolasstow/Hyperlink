@@ -21,6 +21,10 @@ export const colors = {
   systemBackground: PlatformColor("systemBackground"),
   cardBackground: PlatformColor("secondarySystemGroupedBackground"),
   fillBackground: PlatformColor("tertiarySystemFill"),
+  /** What a glass card looks like while its glass is not drawn (the app
+   * switcher, out of focus): a grey fill, a darker grey edge. */
+  glassStandIn: PlatformColor("systemGray5"),
+  glassStandInEdge: PlatformColor("systemGray3"),
   separator: PlatformColor("separator"),
   /** The stronger, fully-opaque hairline — darker than `separator` (which is
    * translucent). For list rows that want a more defined divider. */
