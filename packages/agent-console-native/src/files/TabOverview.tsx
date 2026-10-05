@@ -56,6 +56,13 @@ const GAP = 14;
 const LABEL_HEIGHT = 40;
 const ROW_GAP = 18;
 
+/** The folder something is in (its name is shown above it already). */
+const parentOf = (path: string): string => {
+  const trimmed = path.replace(/\/+$/, "");
+  const cut = trimmed.lastIndexOf("/");
+  return cut <= 0 ? "/" : trimmed.slice(0, cut);
+};
+
 /** Where the grid's cells are, from the screen's size alone. */
 export const overviewGeometry = (screen: { readonly width: number; readonly height: number }, topInset: number) => {
   const cellWidth = (screen.width - SIDE * 2 - GAP) / 2;
@@ -170,7 +177,7 @@ export const TabOverview = (props: {
                     {entry.name}
                   </Text>
                   <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                    {entry.path}
+                    {parentOf(entry.path)}
                   </Text>
                 </View>
               </View>
