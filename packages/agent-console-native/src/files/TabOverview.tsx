@@ -27,6 +27,7 @@ import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
+import { shownPath, useFullPaths } from "./filePaths";
 import { parentOf, type TabFilter, type TabLayout } from "./tabLayout";
 
 import { TabPreview } from "./TabPreview";
@@ -79,6 +80,7 @@ export const TabOverview = (props: {
   const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   const { layout } = props;
+  const fullPaths = useFullPaths();
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const { onScroll } = props;
   const reportScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => onScroll(event.nativeEvent.contentOffset.y);
@@ -112,7 +114,7 @@ export const TabOverview = (props: {
             >
               <SystemIcon name="folder" size={13} color={textColors.secondaryLabel} />
               <Text style={styles.headerText} numberOfLines={1} ellipsizeMode="head">
-                {header.folder}
+                {shownPath(header.folder, props.place.root, fullPaths)}
               </Text>
             </Reanimated.View>
           ))}
@@ -148,7 +150,7 @@ export const TabOverview = (props: {
                   </Text>
                   {grouped ? null : (
                     <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                      {parentOf(entry.path)}
+                      {shownPath(parentOf(entry.path), props.place.root, fullPaths)}
                     </Text>
                   )}
                 </View>
@@ -178,6 +180,7 @@ export const TabOverview = (props: {
       </Reanimated.View>
       <History
         open={historyOpen}
+        root={props.place.root}
         visits={props.place.history}
         onClose={() => setHistoryOpen(false)}
         onOpen={(entry) => {
@@ -193,10 +196,12 @@ export const TabOverview = (props: {
  * new tab. A native sheet. */
 const History = (props: {
   readonly open: boolean;
+  readonly root: string;
   readonly visits: ReadonlyArray<Visit>;
   readonly onClose: () => void;
   readonly onOpen: (entry: FileNavEntry) => void;
 }): React.ReactElement => {
+  const fullPaths = useFullPaths();
   const styles = useThemedStyles(makeStyles);
   return (
     <ModalSheet open={props.open} onClose={props.onClose}>
@@ -213,7 +218,7 @@ const History = (props: {
                 {item.entry.name}
               </Text>
               <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                {parentOf(item.entry.path)}
+                {shownPath(parentOf(item.entry.path), props.root, fullPaths)}
               </Text>
             </View>
           </Pressable>

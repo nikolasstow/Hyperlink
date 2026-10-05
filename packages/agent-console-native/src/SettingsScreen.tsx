@@ -49,6 +49,7 @@ import {
   setWorktreeTemplate,
   type DefaultWorktreePreference,
 } from "./settings";
+import { setFullPaths, useFullPaths } from "./files/filePaths";
 import { RUN_DELAY_STOPS, setRunCountdownEnabled, setRunCountdownSeconds, useRunCountdownEnabled, useRunCountdownSeconds } from "./runCountdown";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -81,6 +82,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const textColors = useTextColors();
   const runCountdown = useRunCountdownSeconds();
   const runDelayOn = useRunCountdownEnabled();
+  const fullPaths = useFullPaths();
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
@@ -360,6 +362,16 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
               ) : null}
             </TouchableOpacity>
           ))}
+        </View>
+
+        <Text style={styles.sectionLabel}>Files</Text>
+        <View style={styles.card}>
+          <CardGlass />
+          {/* Paths in Files' tabs and history: from the repo's root, or whole. */}
+          <View style={styles.formRow}>
+            <Text style={styles.formLabel}>Full File Paths</Text>
+            <Switch style={styles.switchAlone} value={fullPaths} onValueChange={setFullPaths} />
+          </View>
         </View>
 
         <Text style={styles.sectionLabel}>Scripts</Text>
