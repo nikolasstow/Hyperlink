@@ -21,6 +21,7 @@
  *
  * @internal
  */
+import { reloadMenuItems } from "./reload";
 import * as React from "react";
 import { Alert, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -947,6 +948,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
           },
           onPress: () => setSelection(new Set()),
         },
+        ...reloadMenuItems,
       ],
     },
   };

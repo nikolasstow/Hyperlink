@@ -10,8 +10,8 @@
  *
  * @internal
  */
-import type { NativeStackHeaderItemMenuAction, NativeStackNavigationOptions } from "@react-navigation/native-stack";
-import { DevSettings } from "react-native";
+import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
+import { reloadMenuItems } from "./reload";
 
 /** Height of the transparent nav bar's content (standard portrait bar). Content
  * pads its top by `insets.top + this`. Shared by Home and the launch screen so
@@ -23,15 +23,6 @@ export const HOME_HEADER_HEIGHT = 44;
  * header's blur/scroll-edge effect instead of sitting under it. Shared by Home
  * and the launch skeleton so they stay aligned. */
 export const HOME_CONTENT_TOP_GAP = 14;
-
-/** Reloads the JS bundle (development builds only), as the Expo dev menu's
- * Reload does. */
-const RELOAD: NativeStackHeaderItemMenuAction = {
-  type: "action",
-  label: "Reload",
-  icon: { type: "sfSymbol", name: "arrow.clockwise" },
-  onPress: () => DevSettings.reload(),
-};
 
 export type HomeHeaderHandlers = {
   readonly onSettings: () => void;
@@ -80,7 +71,7 @@ export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavi
             icon: { type: "sfSymbol", name: "archivebox" },
             onPress: handlers.onArchived,
           },
-          ...(__DEV__ ? [RELOAD] : []),
+          ...reloadMenuItems,
         ],
       },
     },

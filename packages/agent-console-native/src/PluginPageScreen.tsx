@@ -14,6 +14,7 @@
  *
  * @internal
  */
+import { reloadMenuItems } from "./reload";
 import * as React from "react";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -48,7 +49,13 @@ type Props = NativeStackScreenProps<RootStackParamList, "PluginPage">;
 type Navigation = Props["navigation"];
 
 /** A header menu of a page's forms, each opening its sheet. */
-const formsMenu = (label: string, icon: SFSymbol, forms: ReadonlyArray<FormSpec>, open: (form: FormSpec) => void): NativeStackHeaderItem => ({
+const formsMenu = (
+  label: string,
+  icon: SFSymbol,
+  forms: ReadonlyArray<FormSpec>,
+  open: (form: FormSpec) => void,
+  extra: ReadonlyArray<NativeStackHeaderItemMenuAction> = [],
+): NativeStackHeaderItem => ({
   type: "menu",
   label,
   icon: {
@@ -56,17 +63,20 @@ const formsMenu = (label: string, icon: SFSymbol, forms: ReadonlyArray<FormSpec>
     name: icon,
   },
   menu: {
-    items: forms.map(
-      (spec): NativeStackHeaderItemMenuAction => ({
-        type: "action",
-        label: spec.title,
-        icon: {
-          type: "sfSymbol",
-          name: symbolForIcon(spec.icon),
-        },
-        onPress: () => open(spec),
-      }),
-    ),
+    items: [
+      ...forms.map(
+        (spec): NativeStackHeaderItemMenuAction => ({
+          type: "action",
+          label: spec.title,
+          icon: {
+            type: "sfSymbol",
+            name: symbolForIcon(spec.icon),
+          },
+          onPress: () => open(spec),
+        }),
+      ),
+      ...extra,
+    ],
   },
 });
 
@@ -367,11 +377,11 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
       // and opens the worktree menu; a page about one package has its title
       // in the glass pill, as every page does.
       headerTitle: showPicker ? () => <WorktreePicker repo={repo} fallback={props.route.params.dir} title={shownTitle} /> : () => <HeaderTitlePill title={shownTitle} />,
-      // The + menu adds (a dependency, a package); the 3-dot menu has the
-      // rest. Each only when the page offers something for it.
+      // The + menu adds (a dependency, a package), only when the page offers
+      // something to add; the 3-dot menu has the rest, and Reload.
       unstable_headerRightItems: () => [
         ...(add.length === 0 ? [] : [addItem(add, setForm)]),
-        ...(menu.length === 0 ? [] : [formsMenu("More", "ellipsis", menu, setForm)]),
+        ...(menu.length === 0 && reloadMenuItems.length === 0 ? [] : [formsMenu("More", "ellipsis", menu, setForm, reloadMenuItems)]),
       ],
     });
   }, [navigation, shownTitle, menu, add, showPicker, repo, props.route.params.dir]);

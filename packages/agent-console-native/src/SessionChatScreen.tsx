@@ -12,6 +12,7 @@
  *
  * @internal
  */
+import { reloadMenuItems } from "./reload";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
@@ -413,6 +414,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
                 icon: { type: "sfSymbol", name: "gearshape" },
                 onPress: () => props.navigation.navigate("SessionSettings", { sessionID }),
               },
+              ...reloadMenuItems,
             ],
           },
         },
