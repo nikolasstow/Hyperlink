@@ -63,8 +63,8 @@ const NAME_FADE_END = 0.55;
 /** Swiping, how far a pill reaches past its gap, just under the round button
  * (the glass container blends them where they meet, as Safari's). */
 const PILL_REACH = BAR_GAP + 2;
-/** Forward's circle overlaps back's, the two one capsule's width; the room
- * it adds, and how it comes and goes. */
+/** The room forward adds to back's circle (the two, one capsule's width), and
+ * how it comes and goes. */
 const FORWARD_EXTRA = NAV_PAIR_WIDTH - NAV_BAR_HEIGHT;
 const FORWARD_MOTION = { duration: 300, easing: Easing.bezier(0.2, 0.8, 0.2, 1) };
 /** Room above the pieces. */
@@ -254,14 +254,13 @@ export const FileNavBar = (props: {
     }),
     [withDubz, screenW],
   );
-  // Forward comes and goes (0 gone, 1 there): its glass materialises natively
-  // (GlassView's animated style), the room it takes opening with it.
+  // Forward comes and goes (0 gone, 1 there): back's circle opens into the
+  // capsule (by layout: it is glass), forward fading in at its end.
   const forwardShown = useSharedValue(props.canGoForward ? 1 : 0);
   React.useEffect(() => {
     forwardShown.value = withTiming(props.canGoForward ? 1 : 0, FORWARD_MOTION);
   }, [props.canGoForward, forwardShown]);
-  // Its room after back (its own gap taken back: the bar's gap is after it).
-  const forwardRoom = useAnimatedStyle(() => ({ width: forwardShown.value * FORWARD_EXTRA, marginLeft: -BAR_GAP }));
+  const navWidth = useAnimatedStyle(() => ({ width: NAV_BAR_HEIGHT + forwardShown.value * FORWARD_EXTRA }));
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const forwardIcon = useAnimatedStyle(() => ({ opacity: forwardShown.value }));
   const { swipe, paging } = props;
@@ -286,24 +285,18 @@ export const FileNavBar = (props: {
           {props.previous === undefined ? null : <TabPill entry={props.previous} offset={-1} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />}
           <TabPill entry={{ name: props.name, kind: props.kind }} offset={0} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />
           {props.next === undefined ? null : <TabPill entry={props.next} offset={1} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />}
-          {/* Back, and forward overlapping it (the container blends the two
-            * into one capsule, as Safari's): forward's glass materialises and
-            * dematerialises natively as it comes and goes. Straight in the
-            * container, with no wrapper, so they blend. */}
-          <GlassView style={pieceStyles.round} glassEffectStyle="regular" colorScheme={scheme}>
-            <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
-          </GlassView>
-          <GlassView
-            style={[pieceStyles.round, styles.forward]}
-            glassEffectStyle={{ style: props.canGoForward ? "regular" : "none", animate: true, animationDuration: FORWARD_MOTION.duration / 1000 }}
-            colorScheme={scheme}
-            pointerEvents={props.canGoForward ? "auto" : "none"}
-          >
-            <Reanimated.View style={forwardIcon}>
-              <NavButton icon="chevron.forward" label="Forward" onPress={props.onForward} />
-            </Reanimated.View>
-          </GlassView>
-          <Reanimated.View style={forwardRoom} />
+          {/* Back and forward: one glass, a circle with back alone, opening
+            * into a capsule as forward comes. */}
+          <Reanimated.View style={[styles.shadow, styles.navFrame, navWidth]}>
+            <GlassView style={styles.navGlass} glassEffectStyle="regular" colorScheme={scheme}>
+              <View style={styles.backAt}>
+                <NavButton icon="chevron.backward" label="Back" enabled={props.canGoBack} onPress={props.onBack} />
+              </View>
+              <Reanimated.View style={[styles.forwardAt, forwardIcon]} pointerEvents={props.canGoForward ? "auto" : "none"}>
+                <NavButton icon="chevron.forward" label="Forward" onPress={props.onForward} />
+              </Reanimated.View>
+            </GlassView>
+          </Reanimated.View>
           {/* Where the pill is at rest: its gestures (the pills are drawn
             * apart, above). */}
           <GestureDetector gesture={props.pillGesture}>
@@ -369,11 +362,25 @@ const makeStyles = (text: TextColors) =>
     row: {
       flexDirection: "row",
     },
-    // Forward's circle: over back's right end.
-    forward: {
+    navFrame: {
+      height: NAV_BAR_HEIGHT,
+      borderRadius: NAV_BAR_HEIGHT / 2,
+    },
+    navGlass: {
+      flex: 1,
+      borderRadius: NAV_BAR_HEIGHT / 2,
+    },
+    // Back at the glass's left, forward at its right, each centred in a
+    // circle's width there.
+    backAt: {
       position: "absolute",
-      left: NAV_BAR_SIDE + FORWARD_EXTRA,
-      top: BAR_TOP,
+      left: (NAV_BAR_HEIGHT - BUTTON_WIDTH) / 2,
+      top: 0,
+    },
+    forwardAt: {
+      position: "absolute",
+      right: (NAV_BAR_HEIGHT - BUTTON_WIDTH) / 2,
+      top: 0,
     },
     pillSlot: {
       flex: 1,
