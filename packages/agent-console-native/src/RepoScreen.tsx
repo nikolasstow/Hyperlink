@@ -865,7 +865,8 @@ const makeStyles = (text: TextColors) =>
   },
   menuDetail: {
     color: text.secondaryLabel,
-    fontSize: 17,
+    fontSize: 15,
+    fontWeight: "300",
   },
   innerHeader: {
     position: "absolute",
