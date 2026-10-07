@@ -251,3 +251,17 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   page parks off-screen when collapsed (`hiddenCollapsed`, a layout style swap) and
   materialises natively as it unparks. No opacity/transform on any GlassView or its
   parents (BarWindow.tsx's rule). Only the SwiftUI icon inside the glass fades by opacity.
+
+## 15. Worktrees per tab (owner, 2026-10-07)
+
+- A tab holds its own worktree now (derived from its current entry's path); opening a
+  tab in a worktree keeps it there. Switching is per tab (`FileNav.rerootTab` /
+  `rerootFileTab`), not a global repo primary — `ensureRoot` is seed-only (no reroot of
+  all tabs), and FilesScreen no longer reroots the place to a primary.
+- File tab: no centre pill (name is in the bottom bar); worktree selector in the 3-dot
+  menu. Folder tab: centre is the worktree dropdown (any folder, `WorktreePicker` with
+  `selected`/`onSelect`), switching that tab alone.
+- TODO (next): tab view — remove the centre repo/worktree selector; add a right-side
+  menu with Filter (repos → open worktrees as sub-items) and Group by (Folder, Worktree,
+  Repo, Last Opened, Last Edited). Last Edited needs file mtimes the listing doesn't
+  carry yet (fs plugin: add mtime to FsEntry).

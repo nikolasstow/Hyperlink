@@ -41,6 +41,8 @@ import type { DubzContext } from "../dubzSuggestions";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { HeaderTitlePill, headerTitlePillWidth } from "../HeaderTitlePill";
 import { primaryWorktreeOf, setPrimaryWorktree, usePrimaryWorktree, worktreesOf } from "../primaryWorktree";
+import type { ScannedWorktree } from "../repoScan";
+import { under } from "./pathForms";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScrollHide } from "../scrollHide";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
@@ -51,7 +53,7 @@ import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
-import { activeTab, canGoBack, canGoForward, type FileNavEntry, rerooted, tabEntry } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
@@ -59,7 +61,7 @@ import { OVERVIEW_TOP_ROOM, TabOverview } from "./TabOverview";
 import { sameTab, type ShownRepo, type TabFilter, type TabLayout, tabLayout, type TabRef } from "./tabLayout";
 import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
-import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
+import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
 import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
 import { TAB_TOP_ACTIONS_WIDTH, TabTopActions } from "./TabTopActions";
@@ -149,7 +151,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // another root (a worktree just switched to), moved there at once, as the
   // store is about to have them, so nothing empties meanwhile.
   const kept = useFileNav(repo);
-  const place = React.useMemo(() => (kept === undefined ? undefined : kept.root === root.path ? kept : rerooted(kept, root)), [kept, root]);
+  // Each tab holds its own worktree now, so a repo's place is used as kept —
+  // not rerooted to a global primary.
+  const place = kept;
   // Every repo's tabs (the overview shows one repo's, or all).
   const places = useFilePlaces();
   // A repo's paths are shown from its Files root, or the worktree holding
@@ -186,7 +190,20 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const shownIndex = overview.kind === "closing" && overview.tab.repo === repo ? overview.tab.index : (swipedTo ?? place?.active ?? 0);
   const tab = place === undefined ? undefined : (place.tabs[shownIndex] ?? active);
   const current = (overview.kind === "closing" ? overview.entry : undefined) ?? (tab === undefined ? undefined : tabEntry(tab)) ?? root;
-  const isRoot = current.path === root.path;
+  // The worktree the shown tab is in (the one whose root most closely holds
+  // its path), and switching it (reroots that tab alone).
+  const currentWt = React.useMemo((): ScannedWorktree | undefined => {
+    const holding = primary.worktrees.filter((worktree) => under(current.path, worktree.path) !== undefined);
+    return [...holding].sort((a, b) => b.path.length - a.path.length)[0];
+  }, [primary.worktrees, current.path]);
+  const switchWorktree = React.useCallback(
+    (path: string): void => {
+      if (currentWt === undefined || place === undefined) return;
+      const worktree = primary.worktrees.find((each) => each.path === path);
+      rerootFileTab(repo, shownIndex, currentWt.path, { path, name: worktree !== undefined ? worktreeName(worktree) : lastSegment(path, repo), kind: "directory" });
+    },
+    [repo, shownIndex, currentWt, place, primary.worktrees],
+  );
 
   // Build the code surfaces now, so the first file opens against a web view
   // that has already parsed Monaco. A build without the native module ignores
@@ -210,7 +227,11 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // A file tab has no centre pill (its name is in the bottom bar; the space is
   // kept for buttons). A folder tab's centre is its worktree/name pill.
   const pageMiddle =
-    current.kind === "file" ? 0 : isRoot && primary.primary !== undefined ? worktreePickerWidth(rootName, worktreeName(primary.primary), screen.width) : headerTitlePillWidth(current.name, false, screen.width);
+    current.kind === "file"
+      ? 0
+      : primary.primary !== undefined
+        ? worktreePickerWidth(current.name, currentWt !== undefined ? worktreeName(currentWt) : "", screen.width)
+        : headerTitlePillWidth(current.name, false, screen.width);
   const topBackMax = (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
   // The tab view's filter is centered, search/history fixed at the right:
   // keep the filter clear of both (symmetric), and back clear of the filter.
@@ -653,9 +674,13 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           <Reanimated.View style={[styles.top, topSlide]} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
             <BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={topBackMax} />
             <View style={styles.topSpacer} pointerEvents="none" />
-            <MoreMenu />
+            <MoreMenu worktrees={current.kind === "file" ? primary.worktrees : []} selected={currentWt?.path} onSelect={switchWorktree} />
             <View style={styles.title} pointerEvents="box-none">
-              {current.kind === "file" ? null : isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />}
+              {current.kind === "file" ? null : primary.primary !== undefined ? (
+                <WorktreePicker repo={repo} fallback={dir} title={current.name} selected={currentWt?.path} onSelect={switchWorktree} />
+              ) : (
+                <HeaderTitlePill title={current.name} />
+              )}
             </View>
           </Reanimated.View>
           <View style={StyleSheet.absoluteFill} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
@@ -714,7 +739,12 @@ const NeighbourCard = (props: {
 
 /** The page's 3-dot menu, as every page's: a glass circle opening a native
  * menu (its label the glass, as the repo page's). */
-const MoreMenu = (): React.ReactElement => {
+const MoreMenu = (props: {
+  /** A file tab's worktree selector (folders use the centre dropdown). */
+  readonly worktrees: ReadonlyArray<ScannedWorktree>;
+  readonly selected: string | undefined;
+  readonly onSelect: (path: string) => void;
+}): React.ReactElement => {
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   return (
@@ -738,6 +768,18 @@ const MoreMenu = (): React.ReactElement => {
         }
         modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
       >
+        {props.worktrees.length > 1 ? (
+          <Menu label="Worktree" systemImage="arrow.triangle.branch">
+            {props.worktrees.map((worktree) => (
+              <Button
+                key={worktree.path}
+                label={worktreeName(worktree)}
+                systemImage={worktree.path === props.selected ? "checkmark" : "arrow.triangle.branch"}
+                onPress={() => props.onSelect(worktree.path)}
+              />
+            ))}
+          </Menu>
+        ) : null}
         {canReload ? (
           <Button
             label="Reload"

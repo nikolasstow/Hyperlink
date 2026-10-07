@@ -61,4 +61,6 @@ export const fileBack = (repo: string): void => run("going back", (nav) => nav.b
 export const fileForward = (repo: string): void => run("going forward", (nav) => nav.forward(repo));
 export const selectFileTab = (repo: string, index: number): void => run("switching tabs", (nav) => nav.select(repo, index));
 export const newFileTab = (repo: string, entry: FileNavEntry): void => run("opening a tab", (nav) => nav.newTab(repo, entry));
+/** Switches one tab's worktree (its entries move from `from` to `to`). */
+export const rerootFileTab = (repo: string, index: number, from: string, to: FileNavEntry): void => run("switching a tab's worktree", (nav) => nav.rerootTab(repo, index, from, to));
 export const closeFileTab = (repo: string, index: number): void => run("closing a tab", (nav) => nav.close(repo, index));

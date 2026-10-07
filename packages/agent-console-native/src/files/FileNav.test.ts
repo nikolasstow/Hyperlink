@@ -1,7 +1,7 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import { KeyValueStore } from "effect/unstable/persistence";
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, rerooted, tabEntry } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, rerooted, tabEntry, tabRerooted } from "./FileNav";
 
 const dir = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "directory" });
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
@@ -51,7 +51,7 @@ describe("opened", () => {
 });
 
 describe("FileNav", () => {
-  it("walks back and forward in a tab, keeps each repo's place, and keeps its tabs at another root", async () => {
+  it("walks back and forward in a tab, keeps each repo's place, and seeds only once (no global reroot)", async () => {
     const storage = deviceStorage();
     const place = await run(
       Effect.gen(function* () {
@@ -74,18 +74,15 @@ describe("FileNav", () => {
     const after = await run(
       Effect.gen(function* () {
         const nav = yield* FileNav;
-        const kept = yield* placeOf(nav, "app");
+        // ensureRoot never reroots a place that has tabs — worktrees are now
+        // per tab (rerootTab); it only seeds an empty repo.
         yield* nav.ensureRoot("app", dir("/other"));
-        const moved = yield* placeOf(nav, "app");
-        return [kept, moved];
+        return yield* placeOf(nav, "app");
       }),
       storage,
     );
-    expect(showing(after[0])).toBe("/r/src");
-    // Another worktree: the same tabs and history, at the same files there.
-    expect(after[1]?.root).toBe("/other");
-    expect(after[1]?.tabs.map((tab) => tab.entries.map((entry) => entry.path))).toEqual([["/other", "/other/src", "/other/src/main.ts"]]);
-    expect(after[1]?.history.map((visit) => visit.entry.path)).toEqual(["/other/src/main.ts", "/other/src"]);
+    expect(after?.root).toBe("/r");
+    expect(after?.tabs.map((tab) => tab.entries.map((entry) => entry.path))).toEqual([["/r", "/r/src", "/r/src/main.ts"]]);
   });
 
   it("keeps tabs apart: a new one shows, each has its own history, closing moves to a neighbour", async () => {
@@ -126,5 +123,19 @@ describe("rerooted", () => {
     expect(moved.tabs.map((tab) => tab.entries.map((entry) => entry.path))).toEqual([["/Users/me/code/wt/feature", "/Users/me/code/wt/feature/src/x.ts"], ["/tmp/notes.md"]]);
     expect(moved.tabs[0]?.entries[0]?.name).toBe("feature");
     expect(moved.history.map((visit) => visit.entry.path)).toEqual(["/Users/me/code/wt/feature/README.md"]);
+  });
+});
+
+describe("tabRerooted", () => {
+  it("moves one tab's entries from its worktree to another, however the paths are written", () => {
+    const tab: FileTab = { id: "a", entries: [dir("/Users/me/app"), dir("/Users/me/app/src"), file("/Users/me/app/src/x.ts")], index: 2 };
+    const moved = tabRerooted(tab, "~/app", dir("/Users/me/app/wt/feat"));
+    expect(moved.entries.map((e) => e.path)).toEqual(["/Users/me/app/wt/feat", "/Users/me/app/wt/feat/src", "/Users/me/app/wt/feat/src/x.ts"]);
+    expect(moved.index).toBe(2);
+  });
+
+  it("leaves an entry outside the worktree alone", () => {
+    const tab: FileTab = { id: "a", entries: [file("/tmp/notes.md")], index: 0 };
+    expect(tabRerooted(tab, "/Users/me/app", dir("/Users/me/app/wt")).entries[0]?.path).toBe("/tmp/notes.md");
   });
 });

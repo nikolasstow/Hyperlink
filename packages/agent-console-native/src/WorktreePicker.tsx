@@ -56,12 +56,19 @@ export const WorktreePicker = (props: {
   readonly fallback: string;
   /** The page's title, above the worktree. */
   readonly title: string;
+  /** The worktree shown and ticked (its path); the repo's primary when
+   * omitted. Set it to drive one tab's worktree instead of the global one. */
+  readonly selected?: string;
+  /** Picking a worktree (its path); switches the global primary when omitted. */
+  readonly onSelect?: (path: string) => void;
 }): React.ReactElement | null => {
   const textColors = useTextColors();
   const { primary, worktrees } = usePrimaryWorktree(props.repo, props.fallback);
   const { width: screenWidth } = useWindowDimensions();
   if (primary === undefined) return null;
-  const name = worktreeName(primary);
+  const selectedPath = props.selected ?? primary.path;
+  const shown = worktrees.find((worktree) => worktree.path === selectedPath) ?? primary;
+  const name = worktreeName(shown);
   const subtitle = name === props.title ? undefined : name;
   const width = worktreePickerWidth(props.title, name, screenWidth);
   return (
@@ -90,9 +97,11 @@ export const WorktreePicker = (props: {
           <Toggle
             key={worktree.path}
             label={worktreeName(worktree)}
-            isOn={worktree.path === primary.path}
+            isOn={worktree.path === selectedPath}
             onIsOnChange={(on) => {
-              if (on) setPrimaryWorktree(props.repo, worktree.path);
+              if (!on) return;
+              if (props.onSelect !== undefined) props.onSelect(worktree.path);
+              else setPrimaryWorktree(props.repo, worktree.path);
             }}
           />
         ))}

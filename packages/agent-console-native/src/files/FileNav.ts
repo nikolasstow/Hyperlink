@@ -89,6 +89,19 @@ export const rerooted = (place: FilePlace, root: FileNavEntry): FilePlace => {
   };
 };
 
+/** One tab moved from worktree `from` to worktree `to`: its entries remapped
+ * (the worktree root itself becomes `to`; a path under it keeps its relative
+ * part there); whatever is outside `from` is left as it is. Used to switch a
+ * single tab's worktree (the others stay). */
+export const tabRerooted = (tab: FileTab, from: string, to: FileNavEntry): FileTab => {
+  const base = to.path.replace(/\/+$/, "");
+  const moved = (entry: FileNavEntry): FileNavEntry => {
+    const rest = under(entry.path, from);
+    return rest === undefined ? entry : rest === "" ? to : { ...entry, path: `${base}${rest}` };
+  };
+  return { ...tab, entries: tab.entries.map(moved) };
+};
+
 const withActive = (place: FilePlace, f: (tab: FileTab) => FileTab): FilePlace => {
   const tab = activeTab(place);
   if (tab === undefined) return place;
@@ -124,16 +137,18 @@ const make = Effect.gen(function* () {
   return {
     /** Every repo's place, as they change (the current ones first). */
     changes: SubscriptionRef.changes(state),
-    /** Starts a repo at its root; a repo already at this root keeps its
-     * place, and one at another root (another worktree) keeps its tabs, moved
-     * to the same files there. */
+    /** Seeds a repo at `root` (its main worktree) when it has no place yet; a
+     * repo that already has tabs keeps them (each tab holds its own worktree,
+     * switched per tab via `rerootTab`). */
     ensureRoot: (repo: string, root: FileNavEntry) =>
       SubscriptionRef.updateAndGet(state, (all) => {
         const place = HashMap.get(all, repo);
-        if (Option.isNone(place) || place.value.tabs.length === 0) return HashMap.set(all, repo, startedAt(root));
-        if (place.value.root === root.path) return all;
-        return HashMap.set(all, repo, rerooted(place.value, root));
+        return Option.isNone(place) || place.value.tabs.length === 0 ? HashMap.set(all, repo, startedAt(root)) : all;
       }).pipe(Effect.flatMap(save)),
+    /** Switches one tab's worktree: its entries move from `from` to `to`, the
+     * other tabs untouched. */
+    rerootTab: (repo: string, index: number, from: string, to: FileNavEntry) =>
+      update(repo, (place) => ({ ...place, tabs: place.tabs.map((tab, each) => (each === index ? tabRerooted(tab, from, to) : tab)) })),
     /** Opens an entry in the tab showing. */
     open: (repo: string, entry: FileNavEntry) => update(repo, (place) => visited(withActive(place, (tab) => opened(tab, entry)), entry)),
     back: (repo: string) => update(repo, (place) => withActive(place, (tab) => (canGoBack(tab) ? { ...tab, index: tab.index - 1 } : tab))),
