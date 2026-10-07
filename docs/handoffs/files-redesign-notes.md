@@ -265,3 +265,22 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   menu with Filter (repos → open worktrees as sub-items) and Group by (Folder, Worktree,
   Repo, Last Opened, Last Edited). Last Edited needs file mtimes the listing doesn't
   carry yet (fs plugin: add mtime to FsEntry).
+
+## 16. Bottom-bar state-machine system (owner, 2026-10-07)
+
+- `src/files/bar/`: a small, modular, pure state-machine system — one machine per
+  concern, each total and invariant-checked, bound to React the same way.
+  - `machine.ts`: the `Machine<Mode,Event,View>` shape + `useMachine` (synchronous
+    useReducer, dev invariants, memoised view) + the shared `Motion` (drag | animate).
+  - `page.ts`: the Tabs↔Dubz page machine (tap/swipe open, swipe back, DubzClosed). The
+    single source of truth — kills the `dubzOpen`/`onDubz`/`morphLit`/pageX-as-state soup
+    that caused the "open then close" bug. Swipe-back that doesn't commit springs to Dubz
+    with no window flicker (tested).
+  - `tabSwipe.ts`: the between-tabs swipe machine; the turn/fling/clamp decision lives
+    here once, totally tested; `view.commit` tells the UI which neighbour to select.
+  - Continuous finger drag stays a Reanimated shared value (UI thread); machines own only
+    discrete state + commit decisions. 27 unit tests (every state×event, totality,
+    thresholds, derived views, invariants).
+- NEXT: wire FileNavBar (page machine) and the pill gesture (tabSwipe) onto `useMachine`,
+  deriving all animation/pointerEvents from the views; BarWindow `open = view.dubzOpen`,
+  its self-close dispatches `DubzClosed`.

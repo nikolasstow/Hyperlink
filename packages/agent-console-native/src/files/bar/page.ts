@@ -19,6 +19,7 @@
  * @internal
  */
 import { Match } from "effect";
+import { Animate, Drag, type Machine, type Motion } from "./machine";
 
 /** How the bar stands. `pageX` runs 0 (the tabs nav) → 1 (Dubz). The modes
  * carry no data, so each is a single value. */
@@ -92,14 +93,11 @@ export const reduce = (mode: BarMode, event: BarEvent): BarMode =>
     }),
   );
 
-/** How `pageX` behaves now: the finger drives it, or it animates to a target. */
-export type PageX = { readonly kind: "drag" } | { readonly kind: "animate"; readonly to: number };
-
 /** Everything the bar's UI needs, DERIVED from the mode — the only place these
  * are decided, so they can never disagree with each other. */
 export interface BarView {
   /** How pageX moves. */
-  readonly pageX: PageX;
+  readonly pageX: Motion;
   /** BarWindow's `open` prop (the window grown to a detent, not the slide). */
   readonly dubzOpen: boolean;
   /** The tabs nav takes touches (only at rest on it). */
@@ -108,18 +106,15 @@ export interface BarView {
   readonly dubzInteractive: boolean;
 }
 
-const animate = (to: number): PageX => ({ kind: "animate", to });
-const dragPageX: PageX = { kind: "drag" };
-
 export const barView = (mode: BarMode): BarView =>
   Match.value(mode).pipe(
     Match.tagsExhaustive({
-      Tabs: (): BarView => ({ pageX: animate(0), dubzOpen: false, barInteractive: true, dubzInteractive: false }),
-      DraggingToDubz: (): BarView => ({ pageX: dragPageX, dubzOpen: false, barInteractive: false, dubzInteractive: false }),
-      Opening: (): BarView => ({ pageX: animate(1), dubzOpen: false, barInteractive: false, dubzInteractive: false }),
-      Dubz: (): BarView => ({ pageX: animate(1), dubzOpen: true, barInteractive: false, dubzInteractive: true }),
-      DraggingToTabs: (): BarView => ({ pageX: dragPageX, dubzOpen: true, barInteractive: false, dubzInteractive: true }),
-      Closing: (): BarView => ({ pageX: animate(0), dubzOpen: false, barInteractive: false, dubzInteractive: false }),
+      Tabs: (): BarView => ({ pageX: Animate(0), dubzOpen: false, barInteractive: true, dubzInteractive: false }),
+      DraggingToDubz: (): BarView => ({ pageX: Drag, dubzOpen: false, barInteractive: false, dubzInteractive: false }),
+      Opening: (): BarView => ({ pageX: Animate(1), dubzOpen: false, barInteractive: false, dubzInteractive: false }),
+      Dubz: (): BarView => ({ pageX: Animate(1), dubzOpen: true, barInteractive: false, dubzInteractive: true }),
+      DraggingToTabs: (): BarView => ({ pageX: Drag, dubzOpen: true, barInteractive: false, dubzInteractive: true }),
+      Closing: (): BarView => ({ pageX: Animate(0), dubzOpen: false, barInteractive: false, dubzInteractive: false }),
     }),
   );
 
@@ -131,4 +126,12 @@ export const checkInvariants = (mode: BarMode): void => {
   if (view.barInteractive && view.dubzInteractive) throw new Error(`[barMachine] bar and Dubz both interactive in ${mode._tag}`);
   const dubzTerritory = mode._tag === "Dubz" || mode._tag === "DraggingToTabs";
   if (view.dubzOpen !== dubzTerritory) throw new Error(`[barMachine] dubzOpen=${view.dubzOpen} but mode is ${mode._tag}`);
+};
+
+/** The page machine, ready to bind (bar/machine.ts). */
+export const page: Machine<BarMode, BarEvent, BarView> = {
+  initial: Tabs,
+  reduce,
+  view: barView,
+  invariants: checkInvariants,
 };

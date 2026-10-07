@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barView, checkInvariants, Closing, Dubz, DraggingToDubz, DraggingToTabs, DragRelease, DragStart, DubzClosed, Opening, reduce, Settled, Tabs, TapDubz, type BarEvent, type BarMode } from "./barMachine";
+import { barView, checkInvariants, Closing, Dubz, DraggingToDubz, DraggingToTabs, DragRelease, DragStart, DubzClosed, Opening, reduce, Settled, Tabs, TapDubz, type BarEvent, type BarMode } from "./page";
 
 const modes: ReadonlyArray<BarMode> = [Tabs, DraggingToDubz, Opening, Dubz, DraggingToTabs, Closing];
 
