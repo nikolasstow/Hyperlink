@@ -28,7 +28,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { Easing, runOnJS, type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAgentButtonVisible } from "../agentButtonSettings";
-import { DubzPage, PAGE_MS, pageEasing, type PageBack } from "../Dubz";
+import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_TURN, pageEasing, type PageBack } from "../Dubz";
 import type { DubzContext } from "../dubzSuggestions";
 import { iconForFile } from "../fileIcon";
 import { SetiIcon } from "../SetiIcon";
@@ -141,8 +141,12 @@ const TabPill = (props: {
   readonly bounds: PillBounds;
   /** Forward coming and going (0 to 1): the bounds start after it. */
   readonly forwardShown: SharedValue<number>;
+  /** The current tab's pill shows a tabs icon at its right (opens the
+   * overview — the pill's own tap, beneath). */
+  readonly showTabs?: boolean;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { swipe, paging, offset, forwardShown } = props;
   const { left: boundLeft, right: boundRight, screenWidth } = props.bounds;
   const frame = useAnimatedStyle(() => {
@@ -181,6 +185,11 @@ const TabPill = (props: {
               {entry.name}
             </Text>
           </View>
+          {props.showTabs === true ? (
+            <Reanimated.View style={[styles.pillTabs, icon]}>
+              <SystemIcon name="square.on.square" size={18} weight="medium" color={textColors.label} />
+            </Reanimated.View>
+          ) : null}
         </Reanimated.View>
       </GlassView>
     </Reanimated.View>
@@ -216,6 +225,7 @@ export const FileNavBar = (props: {
   readonly hidden: SharedValue<number>;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   // Rests where the composer rests, rides the keyboard, and drops away as the
   // page scrolls: all one `bottom`, on the UI thread (layout: it is glass).
@@ -244,6 +254,29 @@ export const FileNavBar = (props: {
   }, [pageX]);
   // Swiped back from Dubz's bar: this bar again.
   const pageBack = React.useMemo<PageBack>(() => ({ pageX, begin: noop, turn: () => setDubzOpen(false), stay: noop }), [pageX]);
+  // Opening by a swipe that STARTS on the chat button (the pill keeps its own
+  // swipe, for tabs): a leftward drag slides Dubz in, finger-tracked; let go
+  // past a third (or flung), it settles open, else back. A tap opens it too.
+  const openSwipe = React.useMemo(() => {
+    const pan = Gesture.Pan()
+      .activeOffsetX([-10, 10])
+      .failOffsetY([-12, 12])
+      .onUpdate((e) => {
+        pageX.value = Math.min(1, Math.max(0, -e.translationX / screenW));
+      })
+      .onEnd((e) => {
+        const open = pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING;
+        pageX.value = withTiming(open ? 1 : 0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+          if (finished === true && open) runOnJS(openDubz)();
+        });
+      });
+    const tap = Gesture.Tap()
+      .runOnJS(true)
+      .onEnd((_e, success) => {
+        if (success) toDubz();
+      });
+    return Gesture.Race(pan, tap);
+  }, [pageX, screenW, openDubz, toDubz]);
 
   // Where the pills can be (worked out, not measured): from after back and
   // forward to the round button; swiping, a pill reaches a little under it,
@@ -285,7 +318,7 @@ export const FileNavBar = (props: {
           {/* The tabs' pills, under the buttons: the one before, this one,
             * the one after (each only while its card is in the bar). */}
           {props.previous === undefined ? null : <TabPill entry={props.previous} offset={-1} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />}
-          <TabPill entry={{ name: props.name, kind: props.kind }} offset={0} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />
+          <TabPill entry={{ name: props.name, kind: props.kind }} offset={0} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} showTabs />
           {props.next === undefined ? null : <TabPill entry={props.next} offset={1} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />}
           {/* Back and forward: one glass, a circle with back alone, opening
             * into a capsule as forward comes. */}
@@ -305,9 +338,13 @@ export const FileNavBar = (props: {
             <View style={styles.pillSlot} accessibilityRole="button" accessibilityLabel={`${props.name}, tabs`} />
           </GestureDetector>
           {withDubz ? (
-            <Piece style={pieceStyles.round}>
-              <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" onPress={toDubz} />
-            </Piece>
+            <GestureDetector gesture={openSwipe}>
+              <Piece style={pieceStyles.round}>
+                <View style={styles.buttonHit} accessibilityRole="button" accessibilityLabel="Dubz">
+                  <SystemIcon name="bubble.left.and.text.bubble.right" size={19} weight="medium" color={textColors.label} />
+                </View>
+              </Piece>
+            </GestureDetector>
           ) : null}
           </GlassContainer>
         </Reanimated.View>
@@ -410,6 +447,14 @@ const makeStyles = (text: TextColors) =>
       bottom: 0,
       justifyContent: "center",
     },
+    // The tabs icon at the pill's right (a tap on the pill opens the overview).
+    pillTabs: {
+      position: "absolute",
+      right: PILL_ICON_LEFT,
+      top: 0,
+      bottom: 0,
+      justifyContent: "center",
+    },
     pillClip: {
       ...StyleSheet.absoluteFill,
       overflow: "hidden",
@@ -425,6 +470,11 @@ const makeStyles = (text: TextColors) =>
     },
     centred: {
       textAlign: "center",
+    },
+    buttonHit: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
     },
     name: {
       color: text.label,
