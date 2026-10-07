@@ -30,14 +30,16 @@ const LINES = 80;
 /** Files' text as last read, so a preview paints at once and then refreshes. */
 const texts = new Map<string, string>();
 
-const useFolder = (path: string): ReadonlyArray<FsEntry> => {
+/** A folder's entries, or `missing` (not there: another worktree without
+ * it, or gone). */
+const useFolder = (path: string): ReadonlyArray<FsEntry> | "missing" => {
   const { backend } = useAppContext();
-  const [entries, setEntries] = React.useState(() => getCachedListing(path) ?? []);
+  const [entries, setEntries] = React.useState<ReadonlyArray<FsEntry> | "missing">(() => getCachedListing(path) ?? []);
   React.useEffect(() => {
     let alive = true;
     loadTree(backend, path)
-      .then(() => {
-        if (alive) setEntries(getCachedListing(path) ?? []);
+      .then((load) => {
+        if (alive) setEntries(load === "missing" ? "missing" : (getCachedListing(path) ?? []));
       })
       .catch((error: unknown) => console.error(`[files] refreshing ${path} for its preview failed`, error));
     return () => {
@@ -47,16 +49,18 @@ const useFolder = (path: string): ReadonlyArray<FsEntry> => {
   return entries;
 };
 
-const useText = (path: string): string => {
+/** A file's text, or `missing` (not there: another worktree without it, or
+ * gone). */
+const useText = (path: string): string | "missing" => {
   const { backend } = useAppContext();
-  const [text, setText] = React.useState(() => texts.get(path) ?? "");
+  const [text, setText] = React.useState<string | "missing">(() => texts.get(path) ?? "");
   React.useEffect(() => {
     let alive = true;
     runFs(fsReadText(backend, path))
       .then((read) => {
-        const next = read ?? "";
-        texts.set(path, next);
-        if (alive) setText(next);
+        if (read === undefined) texts.delete(path);
+        else texts.set(path, read);
+        if (alive) setText(read ?? "missing");
       })
       .catch((error: unknown) => console.error(`[files] reading ${path} for its preview failed`, error));
     return () => {
@@ -66,9 +70,20 @@ const useText = (path: string): string => {
   return text;
 };
 
+/** A tab whose file or folder isn't here (another worktree without it). */
+const Missing = (): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <Text style={styles.missing} numberOfLines={2}>
+      Not in this worktree
+    </Text>
+  );
+};
+
 const FolderPage = (props: { readonly path: string }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const entries = useFolder(props.path);
+  if (entries === "missing") return <Missing />;
   return (
     <>
       {entries.slice(0, ROWS).map((entry) => (
@@ -86,6 +101,7 @@ const FolderPage = (props: { readonly path: string }): React.ReactElement => {
 const FilePage = (props: { readonly path: string }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const text = useText(props.path);
+  if (text === "missing") return <Missing />;
   return (
     <Text style={styles.code} numberOfLines={LINES}>
       {text.split("\n").slice(0, LINES).join("\n")}
@@ -147,6 +163,14 @@ const makeStyles = (text: TextColors) =>
       flex: 1,
       color: text.label,
       fontSize: 15,
+    },
+    // Large, as it is drawn at the screen's size and shrunk.
+    missing: {
+      marginTop: 120,
+      color: text.secondaryLabel,
+      fontSize: 34,
+      fontWeight: "600",
+      textAlign: "center",
     },
     code: {
       color: text.label,

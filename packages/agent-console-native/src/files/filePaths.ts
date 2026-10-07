@@ -8,6 +8,7 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
+import { fromHome, under } from "./pathForms";
 
 const storageKey = "filesFullPaths";
 
@@ -38,23 +39,6 @@ export const setFullPaths = (next: boolean): void => {
 };
 
 export const useFullPaths = (): boolean => React.useSyncExternalStore(subscribe, () => full);
-
-/** A path from the home folder, whichever way it is written: opencode writes
- * some as `~/…`, others in full (`/Users/me/…`, `/home/me/…`), so two ways of
- * writing one folder compare equal. No trailing slash. */
-const fromHome = (path: string): string =>
-  path
-    .replace(/\/+$/, "")
-    .replace(/^~(?=\/|$)/, "")
-    .replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "");
-
-/** What of `path` is under `root` (`""` for the root itself, `"/src/x"`
- * under it), or undefined outside it. */
-const under = (path: string, root: string): string | undefined => {
-  const base = fromHome(root);
-  const at = fromHome(path);
-  return at === base ? "" : at.startsWith(`${base}/`) ? at.slice(base.length) : undefined;
-};
 
 /** A path as the setting shows it: in full, or from its root (the root's own
  * name first). Its root is whichever of `roots` (Files' root, the repo's other

@@ -1,7 +1,7 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import { KeyValueStore } from "effect/unstable/persistence";
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, tabEntry } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, rerooted, tabEntry } from "./FileNav";
 
 const dir = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "directory" });
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
@@ -107,5 +107,24 @@ describe("FileNav", () => {
     expect(showing(place[0])).toBe("/r/README.md");
     expect(place[1]?.tabs.length).toBe(1);
     expect(showing(place[1])).toBe("/r");
+  });
+});
+
+describe("rerooted", () => {
+  it("moves tabs under the old root to the new one, however either is written, and leaves the rest", () => {
+    const place: FilePlace = {
+      root: "~/code/app",
+      tabs: [
+        { id: "a", entries: [dir("/Users/me/code/app"), file("/Users/me/code/app/src/x.ts")], index: 1 },
+        { id: "b", entries: [file("/tmp/notes.md")], index: 0 },
+      ],
+      active: 0,
+      history: [{ entry: file("~/code/app/README.md"), at: 1 }],
+    };
+    const moved = rerooted(place, dir("/Users/me/code/wt/feature"));
+    expect(moved.root).toBe("/Users/me/code/wt/feature");
+    expect(moved.tabs.map((tab) => tab.entries.map((entry) => entry.path))).toEqual([["/Users/me/code/wt/feature", "/Users/me/code/wt/feature/src/x.ts"], ["/tmp/notes.md"]]);
+    expect(moved.tabs[0]?.entries[0]?.name).toBe("feature");
+    expect(moved.history.map((visit) => visit.entry.path)).toEqual(["/Users/me/code/wt/feature/README.md"]);
   });
 });

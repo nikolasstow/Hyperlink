@@ -12,6 +12,7 @@
  *
  * @internal
  */
+import { under } from "./pathForms";
 import { Context, Effect, HashMap, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
 import { KeyValueStore } from "effect/unstable/persistence";
 
@@ -75,9 +76,11 @@ export const startedAt = (root: FileNavEntry): FilePlace => ({
  * and history, the same files there (whatever is outside the old root left
  * as it is). */
 export const rerooted = (place: FilePlace, root: FileNavEntry): FilePlace => {
-  const old = place.root.replace(/\/+$/, "");
-  const moved = (entry: FileNavEntry): FileNavEntry =>
-    entry.path.replace(/\/+$/, "") === old ? root : entry.path.startsWith(`${old}/`) ? { ...entry, path: `${root.path.replace(/\/+$/, "")}${entry.path.slice(old.length)}` } : entry;
+  // Under the old root however either is written (`~/…` or in full).
+  const moved = (entry: FileNavEntry): FileNavEntry => {
+    const rest = under(entry.path, place.root);
+    return rest === undefined ? entry : rest === "" ? root : { ...entry, path: `${root.path.replace(/\/+$/, "")}${rest}` };
+  };
   return {
     ...place,
     root: root.path,

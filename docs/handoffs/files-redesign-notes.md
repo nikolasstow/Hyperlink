@@ -214,3 +214,8 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
 - All Repos shows every repo's tabs, each repo under its name, this repo first. Opening
   another repo's tab takes Files to that repo, at that tab.
 - Each time the tab view opens, it shows this repo's tabs.
+- Switching worktree, handled: tabs move however their paths are written (`~/…` or in
+  full); Files shows them moved at once, before the store saves; a folder the server
+  already sent in another path form is asked for again as a new tree session (it came
+  back empty, so previews and listings went blank); a file or folder not in the new
+  worktree says so in its preview ("Not in this worktree"), and on its page.

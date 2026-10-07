@@ -49,7 +49,7 @@ import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker } from "../WorktreePicker";
-import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, type FileNavEntry, rerooted, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
@@ -133,10 +133,11 @@ export const FilesScreen = (props: Props): React.ReactElement => {
     newFileTab(repo, { path: openRequest.path, name: openRequest.name, kind: "file" });
     navigation.setParams({ open: undefined });
   }, [openRequest, repo, navigation]);
-  // This repo's tabs; at its root until the kept place is read back, or when
-  // it was at another root.
+  // This repo's tabs; at its root until the kept place is read back. At
+  // another root (a worktree just switched to), moved there at once, as the
+  // store is about to have them, so nothing empties meanwhile.
   const kept = useFileNav(repo);
-  const place = kept !== undefined && kept.root === root.path ? kept : undefined;
+  const place = React.useMemo(() => (kept === undefined ? undefined : kept.root === root.path ? kept : rerooted(kept, root)), [kept, root]);
   // Every repo's tabs (the overview shows one repo's, or all).
   const places = useFilePlaces();
   // A repo's paths are shown from its Files root, or the worktree holding

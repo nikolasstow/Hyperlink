@@ -120,11 +120,12 @@ export const useFileTree = (backend: string, rootDir: string): FileTree => {
         // is cheap and a failure leaves the cache in place.
         showChildren(dir, cached);
         void loadTree(backend, dir)
-          .then(() => {
+          .then((load) => {
             const fresh = getCachedListing(dir);
-            if (fresh !== undefined) showChildren(dir, fresh);
+            if (load === "loaded" && fresh !== undefined) showChildren(dir, fresh);
           })
-          .catch(() => undefined);
+          // The cached listing stays; the failed refresh is said, not hidden.
+          .catch((error: unknown) => console.error(`[files] refreshing ${dir} failed`, error));
         return;
       }
       setState((prev) => {
@@ -138,10 +139,15 @@ export const useFileTree = (backend: string, rootDir: string): FileTree => {
       // The bundle warms `dir` and its hot subtree at once, so expanding or
       // drilling into those is instant off the cache with no further request.
       void loadTree(backend, dir)
-        .then(() => {
+        .then((load) => {
           const fresh = getCachedListing(dir);
-          if (fresh !== undefined) showChildren(dir, fresh);
-          else markFailed(dir);
+          if (load === "loaded" && fresh !== undefined) {
+            showChildren(dir, fresh);
+            return;
+          }
+          // Not there (another worktree without it, or gone).
+          if (dir === rootDir) setRootError("This folder isn’t here.");
+          markFailed(dir);
         })
         .catch((error: unknown) => {
           if (dir === rootDir) setRootError(describeError(error));
