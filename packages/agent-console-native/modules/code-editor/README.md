@@ -32,7 +32,7 @@ highlighter), wired through `InternalLanguageModeFactory`.
 ## Plan / status
 
 - [x] Vendor the engine (minus Documentation.docc), MIT notice kept.
-- [ ] `Shiki/` highlighter + mode + token store.
+- [x] `Shiki/` highlighter + mode + token store + factory wiring — COMPILES against the engine for iOS (xcodebuild, verified locally).
 - [ ] Tree-sitter: vendor its C runtime into the pod (Runestone still imports it)
       OR strip the ~26 tree-sitter files. Keeping it is lower-risk for the first
       build; stripping is cleaner once it compiles.

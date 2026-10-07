@@ -5,6 +5,8 @@ enum InternalLanguageModeFactory {
         switch languageMode {
         case is PlainTextLanguageMode:
             return PlainTextInternalLanguageMode()
+        case let languageMode as ShikiLanguageMode:
+            return ShikiInternalLanguageMode(store: languageMode.store)
         case let languageMode as TreeSitterLanguageMode:
             return TreeSitterInternalLanguageMode(
                 language: languageMode.language.internalLanguage,
