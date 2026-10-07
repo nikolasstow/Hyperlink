@@ -133,6 +133,10 @@ export interface BarWindowProps {
   readonly pillLowered?: SharedValue<number>;
   /** Hidden collapsed: the collapse has finished and it is out of sight. */
   readonly onHidden?: () => void;
+  /** Whether opening raises the keyboard (focuses the field). Default true;
+   * false focuses only when the keyboard is already up — Dubz opens to its
+   * suggestions without deploying the keyboard, a tap on the field raises it. */
+  readonly raiseKeyboardOnOpen?: boolean;
 }
 
 const atPillFrac = (frac: number): boolean => frac >= 0.98;
@@ -154,6 +158,7 @@ const pillProgress = (drag: number, maxDrag: number): number => {
 
 export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   const { open, instant, onClose, inputRef, detent, stop } = props;
+  const raiseKeyboardOnOpen = props.raiseKeyboardOnOpen ?? true;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const scheme = useColorScheme();
@@ -280,10 +285,12 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
     // On the next frame: starting mid-mount dropped the first frames.
     const frame = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
-      inputRef.current?.focus();
+      // Raise the keyboard on open only when asked (the composer), or when it
+      // is already up (so Dubz doesn't deploy it unprompted).
+      if (raiseKeyboardOnOpen || Keyboard.isVisible()) inputRef.current?.focus();
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, instant, inputRef, grow, dragY, kbFull, handleT, abovePillNow, maxDragFor, stopDragFor, stop, atStop, detent, hide]);
+  }, [open, instant, inputRef, grow, dragY, kbFull, handleT, abovePillNow, maxDragFor, stopDragFor, stop, atStop, detent, hide, raiseKeyboardOnOpen]);
 
   // Slide the handle to its new spot only after a drag settles.
   React.useEffect(() => {

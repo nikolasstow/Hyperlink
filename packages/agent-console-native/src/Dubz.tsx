@@ -200,6 +200,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // the clear glass some body over bright content.
       tintColor="rgba(0,0,0,0.18)"
       detent={dubzDetent}
+      // Dubz opens to its suggestions without deploying the keyboard; a tap on
+      // the field raises it (only auto-focuses if the keyboard is already up).
+      raiseKeyboardOnOpen={false}
       closeLabel={`Close ${AGENT_NAME}`}
       bodyGesture={paging}
       body={
