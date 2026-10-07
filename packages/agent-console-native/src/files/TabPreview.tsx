@@ -17,6 +17,8 @@ import { runFs } from "../effect/runtime";
 import { iconForFile } from "../fileIcon";
 import { getCachedListing, loadTree } from "../fileListingCache";
 import { type FsEntry, fsReadText } from "../fsClient";
+import { langFromFilename, type HighlightResult, tokenizeCode } from "../shikiHighlighter";
+import { useCodeTheme } from "../useCodeTheme";
 import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { type TextColors, useScreenBackground, useThemedStyles } from "../theme";
@@ -107,14 +109,39 @@ const FolderPage = (props: { readonly path: string }): React.ReactElement => {
  * the digit count (nothing measured). */
 const CODE_GLYPH_WIDTH = CODE_FONT_SIZE * 0.6;
 
-const FilePage = (props: { readonly path: string }): React.ReactElement => {
+/** A file's first lines tokenised by Shiki, cached (shikiHighlighter.ts) — the
+ * same colours the chat blocks and the real viewer resolve. Undefined until
+ * the (async) tokenise lands; the raw text shows meanwhile. */
+const useHighlight = (text: string, name: string): HighlightResult | undefined => {
+  const theme = useCodeTheme();
+  const lang = React.useMemo(() => langFromFilename(name), [name]);
+  const themeName = typeof theme === "string" ? theme : (theme.name ?? "custom");
+  const code = React.useMemo(() => text.split("\n").slice(0, LINES).join("\n"), [text]);
+  const [result, setResult] = React.useState<HighlightResult | undefined>(undefined);
+  React.useEffect(() => {
+    let alive = true;
+    tokenizeCode({ code, lang, theme })
+      .then((next) => {
+        if (alive) setResult(next);
+      })
+      .catch((error: unknown) => console.error(`[files] highlighting ${name} for its preview failed`, error));
+    return () => {
+      alive = false;
+    };
+  }, [code, lang, themeName]); // eslint-disable-line react-hooks/exhaustive-deps -- theme keyed by name
+  return result;
+};
+
+const FilePage = (props: { readonly path: string; readonly name: string }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const text = useText(props.path);
+  const highlight = useHighlight(text === "missing" ? "" : text, props.name);
   if (text === "missing") return <Missing />;
   // A line per line, never wrapped — clipped at the edge as the editor shows
-  // it, not reflowed (which wrapped a long line into several and read wrong) —
-  // each with its number in a gutter, as the editor's.
-  const lines = text.split("\n").slice(0, LINES);
+  // it — each with its number in a gutter, and its tokens coloured once the
+  // highlight lands (the raw line until then).
+  const rawLines = text.split("\n").slice(0, LINES);
+  const lines = highlight?.lines ?? rawLines;
   const gutterWidth = Math.ceil(String(lines.length).length * CODE_GLYPH_WIDTH);
   return (
     <>
@@ -124,7 +151,17 @@ const FilePage = (props: { readonly path: string }): React.ReactElement => {
             {index + 1}
           </Text>
           <Text style={styles.code} numberOfLines={1} ellipsizeMode="clip">
-            {line === "" ? " " : line}
+            {typeof line === "string"
+              ? line === ""
+                ? " "
+                : line
+              : line.length === 0
+                ? " "
+                : line.map((token, tokenIndex) => (
+                    <Text key={tokenIndex} style={{ color: token.color, fontStyle: token.italic === true ? "italic" : "normal", fontWeight: token.bold === true ? "700" : "400" }}>
+                      {token.content}
+                    </Text>
+                  ))}
           </Text>
         </View>
       ))}
@@ -161,7 +198,7 @@ export const TabPreview = (props: {
           },
         ]}
       >
-        {props.entry.kind === "directory" ? <FolderPage path={props.entry.path} /> : <FilePage path={props.entry.path} />}
+        {props.entry.kind === "directory" ? <FolderPage path={props.entry.path} /> : <FilePage path={props.entry.path} name={props.entry.name} />}
       </View>
     </View>
   );
