@@ -37,6 +37,9 @@ export const startFileNav = (): void => {
   );
 };
 
+/** Every repo's place in Files, by repo. */
+export const useFilePlaces = (): HashMap.HashMap<string, FilePlace> => React.useSyncExternalStore(subscribe, () => places);
+
 /** A repo's place in Files (its tabs), or undefined before it has one. */
 export const useFileNav = (repo: string): FilePlace | undefined =>
   React.useSyncExternalStore(subscribe, () => Option.getOrUndefined(HashMap.get(places, repo)));

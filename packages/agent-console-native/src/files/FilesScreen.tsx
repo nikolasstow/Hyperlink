@@ -27,6 +27,7 @@
  * @internal
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { HashMap, Option } from "effect";
 import * as React from "react";
 import { Pressable, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -37,7 +38,7 @@ import { codeSurfaceUri } from "../codeSurfaceAsset";
 import type { DubzContext } from "../dubzSuggestions";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { HeaderTitlePill } from "../HeaderTitlePill";
-import { usePrimaryWorktree } from "../primaryWorktree";
+import { setPrimaryWorktree, usePrimaryWorktree, worktreesOf } from "../primaryWorktree";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScrollHide } from "../scrollHide";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
@@ -53,10 +54,11 @@ import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
 import { OVERVIEW_TOP_ROOM, TabOverview } from "./TabOverview";
-import { type TabFilter, type TabLayout, tabLayout } from "./tabLayout";
+import { sameTab, type ShownRepo, type TabFilter, type TabLayout, tabLayout, type TabRef } from "./tabLayout";
 import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
-import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav } from "./useFileNav";
+import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
+import { type RepoFilter, RepoMenuButton } from "./RepoMenuButton";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Files">;
 
@@ -101,8 +103,8 @@ const lastSegment = (path: string, fallback: string): string => path.split("/").
  * (`entry`, a new tab's, drawn at once rather than after the store has it). */
 type Overview =
   | { readonly kind: "closed" }
-  | { readonly kind: "opening" | "open"; readonly tab: number; readonly initialScroll: number; readonly frame: Frame }
-  | { readonly kind: "closing"; readonly tab: number; readonly scroll: number; readonly frame: Frame; readonly entry?: FileNavEntry };
+  | { readonly kind: "opening" | "open"; readonly tab: TabRef; readonly initialScroll: number; readonly frame: Frame }
+  | { readonly kind: "closing"; readonly tab: TabRef; readonly scroll: number; readonly frame: Frame; readonly entry?: FileNavEntry };
 
 /** A preview's frame on the screen. */
 interface Frame {
@@ -120,11 +122,6 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const background = useScreenBackground("plain");
   // The root is the repo's primary worktree, following the picker.
   const primary = usePrimaryWorktree(repo, dir);
-  // Paths are shown from Files' root, or the worktree holding them.
-  const pathRoots = React.useMemo(
-    (): ReadonlyArray<string> => [primary.dir, ...primary.worktrees.map((worktree) => worktree.path)],
-    [primary.dir, primary.worktrees],
-  );
   const rootName = lastSegment(primary.dir, repo);
   const root = React.useMemo((): FileNavEntry => ({ path: primary.dir, name: rootName, kind: "directory" }), [primary.dir, rootName]);
   React.useEffect(() => ensureFileRoot(repo, root), [repo, root]);
@@ -140,9 +137,30 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // it was at another root.
   const kept = useFileNav(repo);
   const place = kept !== undefined && kept.root === root.path ? kept : undefined;
+  // Every repo's tabs (the overview shows one repo's, or all).
+  const places = useFilePlaces();
+  // A repo's paths are shown from its Files root, or the worktree holding
+  // them.
+  const rootsOf = React.useCallback(
+    (of: string): ReadonlyArray<string> => [
+      ...(of === repo ? [root.path] : Option.match(HashMap.get(places, of), { onNone: () => [], onSome: (each) => [each.root] })),
+      ...worktreesOf(of).map((worktree) => worktree.path),
+    ],
+    [repo, root.path, places],
+  );
   const active = place === undefined ? undefined : activeTab(place);
   const [overview, setOverview] = React.useState<Overview>({ kind: "closed" });
   const [filter, setFilter] = React.useState<TabFilter>("all");
+  // Whose tabs the overview shows: this repo's (each time it opens), or
+  // every repo's, or another's.
+  const [repoFilter, setRepoFilter] = React.useState<RepoFilter>({ kind: "repo", repo });
+  const repoNow = React.useRef(repo);
+  repoNow.current = repo;
+  // The repos with tabs open: this one first, the rest by name.
+  const reposWithTabs = [
+    ...(place === undefined ? [] : [repo]),
+    ...[...HashMap.keys(places)].filter((each) => each !== repo && (Option.getOrUndefined(HashMap.get(places, each))?.tabs.length ?? 0) > 0).sort((a, b) => a.localeCompare(b)),
+  ];
   // A tab swiped to, drawn at once (its switch reaches the store a moment
   // later); cleared once the store has it.
   const [swipedTo, setSwipedTo] = React.useState<number | undefined>(undefined);
@@ -151,7 +169,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   }, [swipedTo, place?.active]);
   // The tab drawn: the one showing; zooming into a tab, or swiped to, that
   // one.
-  const shownIndex = overview.kind === "closing" ? overview.tab : (swipedTo ?? place?.active ?? 0);
+  const shownIndex = overview.kind === "closing" && overview.tab.repo === repo ? overview.tab.index : (swipedTo ?? place?.active ?? 0);
   const tab = place === undefined ? undefined : (place.tabs[shownIndex] ?? active);
   const current = (overview.kind === "closing" ? overview.entry : undefined) ?? (tab === undefined ? undefined : tabEntry(tab)) ?? root;
   const isRoot = current.path === root.path;
@@ -196,18 +214,28 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const cardStep = cardStepAt(screen.width, 1);
   // Where everything in the grid is (tabLayout.ts); `extra`, a tab about to
   // be added.
-  const layoutFor = (among: TabFilter, extra?: FileNavEntry): TabLayout =>
-    tabLayout(place ?? { root: root.path, tabs: [], active: 0, history: [] }, among, screen, insets.top + OVERVIEW_TOP_ROOM, extra);
+  // The repos shown, as the repo filter has it: this one's place as Files has
+  // it (at its root), the others' as kept.
+  const shownRepos = (among: RepoFilter, extra?: FileNavEntry): ReadonlyArray<ShownRepo> => {
+    const thisRepo: ShownRepo = { repo, place: place ?? { root: root.path, tabs: [], active: 0, history: [] }, extra };
+    if (among.kind === "repo" && among.repo === repo) return [thisRepo];
+    const others = (among.kind === "repo" ? [among.repo] : reposWithTabs.filter((each) => each !== repo)).flatMap((each): ReadonlyArray<ShownRepo> =>
+      Option.match(HashMap.get(places, each), { onNone: () => [], onSome: (kept) => [{ repo: each, place: kept }] }),
+    );
+    return among.kind === "all" ? [thisRepo, ...others] : others;
+  };
+  const layoutFor = (among: TabFilter, extra?: FileNavEntry, repos: RepoFilter = repoFilter): TabLayout =>
+    tabLayout(shownRepos(repos, extra), among, screen, insets.top + OVERVIEW_TOP_ROOM);
   const layout = layoutFor(filter);
   // A tab's preview on the screen, with the grid scrolled `scrolled` down.
-  const frameOf = (laid: TabLayout, index: number, scrolled: number): Frame => {
-    const found = laid.tabs.find((each) => each.index === index);
+  const frameOf = (laid: TabLayout, ref: TabRef, scrolled: number): Frame => {
+    const found = laid.tabs.find((each) => sameTab(each, ref));
     return { x: found?.x ?? laid.side, y: (found?.y ?? insets.top + OVERVIEW_TOP_ROOM + 12) - scrolled, width: laid.cellWidth, height: laid.previewHeight };
   };
   // The grid scrolled so a tab is in the middle of the screen, as far as it
   // goes.
-  const scrollFor = (laid: TabLayout, index: number): number => {
-    const found = laid.tabs.find((each) => each.index === index);
+  const scrollFor = (laid: TabLayout, ref: TabRef): number => {
+    const found = laid.tabs.find((each) => sameTab(each, ref));
     const maxScroll = Math.max(0, laid.height + insets.bottom + OVERVIEW_ROOM - screen.height);
     return Math.min(maxScroll, Math.max(0, (found?.y ?? 0) - (screen.height - laid.cellHeight) / 2));
   };
@@ -215,13 +243,16 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const opened = React.useCallback(() => setOverview((now) => (now.kind === "opening" ? { ...now, kind: "open" } : now)), []);
   const openTabs = (): void => {
     if (place === undefined || overview.kind !== "closed") return;
-    // Opened onto every tab, scrolled to the one showing.
+    // Opened onto this repo's tabs, every kind, scrolled to the one showing.
     setFilter("all");
-    const laid = layoutFor("all");
-    const initialScroll = scrollFor(laid, place.active);
+    const thisRepo: RepoFilter = { kind: "repo", repo };
+    setRepoFilter(thisRepo);
+    const laid = layoutFor("all", undefined, thisRepo);
+    const showing: TabRef = { repo, index: place.active };
+    const initialScroll = scrollFor(laid, showing);
     scroll.current = initialScroll;
-    const frame = frameOf(laid, place.active, initialScroll);
-    setOverview({ kind: "opening", tab: place.active, initialScroll, frame });
+    const frame = frameOf(laid, showing, initialScroll);
+    setOverview({ kind: "opening", tab: showing, initialScroll, frame });
     zoomTarget.value = frame;
     zoom.value = withTiming(1, ZOOM, (finished) => {
       if (finished === true) runOnJS(opened)();
@@ -232,9 +263,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const closed = React.useCallback(() => {
     setOverview({ kind: "closed" });
     setFilter("all");
+    setRepoFilter({ kind: "repo", repo: repoNow.current });
   }, []);
   // The grid while closed: scrolled to the tab showing, as it will open.
-  const closedScroll = place === undefined ? 0 : scrollFor(layoutFor("all"), place.active);
+  const closedScroll = place === undefined ? 0 : scrollFor(layoutFor("all", undefined, { kind: "repo", repo }), { repo, index: place.active });
   const zoomInto = (next: Overview): void => {
     setOverview(next);
     if (next.kind !== "closed") zoomTarget.value = next.frame;
@@ -243,18 +275,24 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       if (finished === true) runOnJS(closed)();
     });
   };
-  const openTab = (index: number): void => {
+  // A tab opened from the grid; one of another repo's (All, or its filter)
+  // takes Files to that repo, at that tab.
+  const openTab = (ref: TabRef): void => {
     if (overview.kind !== "open") return;
-    selectFileTab(repo, index);
-    zoomInto({ kind: "closing", tab: index, scroll: scroll.current, frame: frameOf(layout, index, scroll.current) });
+    selectFileTab(ref.repo, ref.index);
+    if (ref.repo !== repo) {
+      const kept = Option.getOrUndefined(HashMap.get(places, ref.repo));
+      navigation.setParams({ repo: ref.repo, dir: kept?.root ?? dir, open: undefined });
+    }
+    zoomInto({ kind: "closing", tab: ref, scroll: scroll.current, frame: frameOf(layout, ref, scroll.current) });
   };
   // A new tab from the overview (its +, or history): it grows out of the
   // place it takes in the grid.
   const startTab = (entry: FileNavEntry): void => {
     if (place === undefined || overview.kind !== "open") return;
     newFileTab(repo, entry);
-    const index = place.tabs.length;
-    zoomInto({ kind: "closing", tab: index, scroll: scroll.current, frame: frameOf(layoutFor(filter, entry), index, scroll.current), entry });
+    const added: TabRef = { repo, index: place.tabs.length };
+    zoomInto({ kind: "closing", tab: added, scroll: scroll.current, frame: frameOf(layoutFor(filter, entry), added, scroll.current), entry });
   };
 
   // The tab zooming: from full screen to its preview's frame (cropped to its
@@ -464,9 +502,19 @@ export const FilesScreen = (props: Props): React.ReactElement => {
         * animation, its previews already drawn and kept up to date). */}
       {place === undefined ? null : (
         <TabOverview
-          place={place}
-          top={primary.primary === undefined ? <HeaderTitlePill title={repo} /> : <WorktreePicker repo={repo} fallback={dir} title={repo} />}
-          roots={pathRoots}
+          current={{ repo, place }}
+          top={
+            <RepoMenuButton
+              filter={repoFilter}
+              repos={reposWithTabs}
+              onFilter={setRepoFilter}
+              onWorktree={(of, path) => {
+                setPrimaryWorktree(of, path);
+                ensureFileRoot(of, { path, name: lastSegment(path, of), kind: "directory" });
+              }}
+            />
+          }
+          rootsOf={rootsOf}
           filter={filter}
           onFilter={setFilter}
           scrollTarget={overview.kind === "closed" ? closedScroll : overview.kind === "closing" ? overview.scroll : overview.initialScroll}
@@ -476,7 +524,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           }}
           hiddenTab={overview.kind === "open" || overview.kind === "closed" ? undefined : overview.tab}
           onSelect={openTab}
-          onClose={(index) => closeFileTab(repo, index)}
+          onClose={(ref) => closeFileTab(ref.repo, ref.index)}
           onNew={() => startTab(root)}
           onOpenVisit={startTab}
           screen={screen}

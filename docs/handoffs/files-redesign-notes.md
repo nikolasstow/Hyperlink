@@ -201,3 +201,14 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   control at extra-large, All in larger text, Files and Folders as icons.
 - New tabs animate: + and history grow out of the new tab's place in the grid; Open in
   New Tab rises in from the bar.
+
+## 13. Repos and worktrees in the tab view (owner, 2026-10-07)
+
+- Each repo has its own tabs. Switching a repo's worktree keeps its tabs: every tab and
+  history entry moves to the same file in the new worktree (FileNav `rerooted`).
+- The tab view's top right: a glass button naming whose tabs are shown (a repo and its
+  worktree, or All Repos). Its menu: All Repos first, then each repo with tabs open.
+  Tapping a repo filters to its tabs; its dropdown (held) switches that repo's worktree.
+- All Repos shows every repo's tabs, each repo under its name, this repo first. Opening
+  another repo's tab takes Files to that repo, at that tab.
+- Each time the tab view opens, it shows this repo's tabs.

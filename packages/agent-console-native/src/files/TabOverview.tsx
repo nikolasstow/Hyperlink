@@ -30,7 +30,7 @@ import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
 import { isRootPath, shownPath, useFullPaths } from "./filePaths";
 import { PILL_HEIGHT } from "../titlePillStyle";
 import { NAV_BAR_SIDE } from "./FileNavBar";
-import { parentOf, type TabFilter, type TabLayout } from "./tabLayout";
+import { parentOf, sameTab, type TabFilter, type TabLayout, type TabRef } from "./tabLayout";
 
 import { TabPreview } from "./TabPreview";
 import { PREVIEW_RADIUS } from "./tabShape";
@@ -58,10 +58,11 @@ const RoundButton = (props: { readonly icon: React.ComponentProps<typeof SystemI
 };
 
 export const TabOverview = (props: {
-  readonly place: FilePlace;
-  /** Where paths are shown from: Files' root and the repo's worktrees
-   * (filePaths.ts). */
-  readonly roots: ReadonlyArray<string>;
+  /** The repo Files is in, and its place: its history, its tab showing. */
+  readonly current: { readonly repo: string; readonly place: FilePlace };
+  /** Where a repo's paths are shown from: its Files root first, then its
+   * worktrees (filePaths.ts). */
+  readonly rootsOf: (repo: string) => ReadonlyArray<string>;
   readonly filter: TabFilter;
   readonly onFilter: (filter: TabFilter) => void;
   /** Where the grid is scrolled to as it opens (the tab it opened from in
@@ -72,9 +73,9 @@ export const TabOverview = (props: {
   readonly interactive: boolean;
   readonly onScroll: (scroll: number) => void;
   /** The tab zooming in or out: its cell stays empty meanwhile. */
-  readonly hiddenTab: number | undefined;
-  readonly onSelect: (index: number) => void;
-  readonly onClose: (index: number) => void;
+  readonly hiddenTab: TabRef | undefined;
+  readonly onSelect: (tab: TabRef) => void;
+  readonly onClose: (tab: TabRef) => void;
   readonly onNew: () => void;
   readonly onOpenVisit: (entry: FileNavEntry) => void;
   readonly screen: { readonly width: number; readonly height: number };
@@ -86,8 +87,8 @@ export const TabOverview = (props: {
   readonly reveal: SharedValue<number>;
   /** The page's top inset, as the previews draw it. */
   readonly pageTop: number;
-  /** Its top: the repo and its worktree, a glass button switching worktree
-   * (the same tabs, there). */
+  /** At its top right: whose tabs it shows, and their worktrees
+   * (RepoMenuButton). */
   readonly top: React.ReactNode;
 
 }): React.ReactElement => {
@@ -125,24 +126,36 @@ export const TabOverview = (props: {
           * the zoom; after that, tabs coming in do. */}
         <LayoutAnimationConfig skipEntering>
         <View style={StyleSheet.absoluteFill}>
-          {/* A folder's group: its path above its tabs. */}
+          {/* A repo's name over its tabs (All); a folder's group: its path
+            * above its tabs. */}
           {layout.headers.map((header) => (
             <Reanimated.View
-              key={`header:${header.folder}`}
+              key={header.kind === "repo" ? `repo:${header.repo}` : `folder:${header.repo}:${header.folder}`}
               style={[styles.header, { top: header.y, left: layout.side, right: layout.side, height: layout.headerHeight }]}
               entering={FadeIn.duration(GRID_MS)}
               exiting={FadeOut.duration(GRID_MS)}
               layout={LinearTransition.duration(GRID_MS).easing(GRID_EASING)}
             >
-              <SystemIcon name="folder" size={13} color={textColors.secondaryLabel} />
-              <Text style={styles.headerText} numberOfLines={1} ellipsizeMode="head">
-                {shownPath(header.folder, [props.place.root, ...props.roots], fullPaths)}
-              </Text>
+              {header.kind === "repo" ? (
+                <>
+                  <SystemIcon name="shippingbox" size={14} color={textColors.label} />
+                  <Text style={styles.repoHeaderText} numberOfLines={1}>
+                    {header.repo}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <SystemIcon name="folder" size={13} color={textColors.secondaryLabel} />
+                  <Text style={styles.headerText} numberOfLines={1} ellipsizeMode="head">
+                    {shownPath(header.folder, props.rootsOf(header.repo), fullPaths)}
+                  </Text>
+                </>
+              )}
             </Reanimated.View>
           ))}
-          {layout.tabs.map(({ index, entry, x, y, grouped }) => (
+          {layout.tabs.map(({ repo, index, id, entry, x, y, grouped }) => (
             <Reanimated.View
-              key={props.place.tabs[index]?.id ?? index}
+              key={`${repo}:${id}`}
               style={[styles.cell, { left: x, top: y, width: layout.cellWidth, height: layout.cellHeight }]}
               // Tabs coming (a new one, a filter) and going (closed, filtered
               // out) fade and scale; the rest glide to their places.
@@ -152,12 +165,13 @@ export const TabOverview = (props: {
             >
               {/* The preview at its exact size; its outline drawn over it (so it
                 * shifts nothing), the close button in its corner. */}
-              <View style={[styles.preview, { width: layout.cellWidth, height: layout.previewHeight }, props.hiddenTab === index && styles.hidden]}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Open ${entry.name}`} onPress={() => props.onSelect(index)}>
+              <View style={[styles.preview, { width: layout.cellWidth, height: layout.previewHeight }, sameTab(props.hiddenTab, { repo, index }) && styles.hidden]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Open ${entry.name}`} onPress={() => props.onSelect({ repo, index })}>
                   <TabPreview entry={entry} width={layout.cellWidth} topInset={props.pageTop} />
                 </Pressable>
-                <View style={[styles.outline, index === props.place.active && styles.outlineActive]} pointerEvents="none" />
-                <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel={`Close ${entry.name}`} onPress={() => props.onClose(index)} hitSlop={10}>
+                {/* The tab showing in Files outlined. */}
+                <View style={[styles.outline, repo === props.current.repo && index === props.current.place.active && styles.outlineActive]} pointerEvents="none" />
+                <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel={`Close ${entry.name}`} onPress={() => props.onClose({ repo, index })} hitSlop={10}>
                   <SystemIcon name="xmark" size={11} weight="bold" color={textColors.label} />
                 </Pressable>
               </View>
@@ -170,9 +184,9 @@ export const TabOverview = (props: {
                   <Text style={styles.name} numberOfLines={1}>
                     {entry.name}
                   </Text>
-                  {grouped || isRootPath(entry.path, props.place.root) ? null : (
+                  {grouped || props.rootsOf(repo).some((root) => isRootPath(entry.path, root)) ? null : (
                     <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                      {shownPath(parentOf(entry.path), [props.place.root, ...props.roots], fullPaths)}
+                      {shownPath(parentOf(entry.path), props.rootsOf(repo), fullPaths)}
                     </Text>
                   )}
                 </View>
@@ -205,9 +219,8 @@ export const TabOverview = (props: {
       </Reanimated.View>
       <History
         open={historyOpen}
-        root={props.place.root}
-        roots={props.roots}
-        visits={props.place.history}
+        roots={props.rootsOf(props.current.repo)}
+        visits={props.current.place.history}
         onClose={() => setHistoryOpen(false)}
         onOpen={(entry) => {
           setHistoryOpen(false);
@@ -222,7 +235,7 @@ export const TabOverview = (props: {
  * new tab. A native sheet. */
 const History = (props: {
   readonly open: boolean;
-  readonly root: string;
+  /** Its repo's Files root first, then its worktrees. */
   readonly roots: ReadonlyArray<string>;
   readonly visits: ReadonlyArray<Visit>;
   readonly onClose: () => void;
@@ -244,9 +257,9 @@ const History = (props: {
               <Text style={styles.name} numberOfLines={1}>
                 {item.entry.name}
               </Text>
-              {isRootPath(item.entry.path, props.root) ? null : (
+              {props.roots.some((root) => isRootPath(item.entry.path, root)) ? null : (
                 <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                  {shownPath(parentOf(item.entry.path), [props.root, ...props.roots], fullPaths)}
+                  {shownPath(parentOf(item.entry.path), props.roots, fullPaths)}
                 </Text>
               )}
             </View>
@@ -277,6 +290,12 @@ const makeStyles = (text: TextColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
+    },
+    repoHeaderText: {
+      flex: 1,
+      color: text.label,
+      fontSize: 15,
+      fontWeight: "700",
     },
     headerText: {
       flex: 1,
@@ -332,12 +351,11 @@ const makeStyles = (text: TextColors) =>
       color: text.secondaryLabel,
       fontSize: 11,
     },
+    // At the top right, in from the side as Files' top bar.
     top: {
       position: "absolute",
-      left: 0,
-      right: 0,
+      right: 16,
       height: PILL_HEIGHT,
-      alignItems: "center",
       justifyContent: "center",
     },
     // In from the sides as Files' own bar is (its side margin).
