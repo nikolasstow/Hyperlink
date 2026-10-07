@@ -12,11 +12,8 @@
  *   it shrinks to its name, follows the card's middle, stays between the
  *   back button and the round one (narrowing as its card leaves), and its
  *   name fades as its card moves off the middle. The buttons stay put.
- * - The round button is Dubz: tapping it stretches the button into Dubz's min
- *   view (the page beside this one), then grows the window to the detent Dubz
- *   was last at; a finger swipe back shrinks it into the button again. The bar
- *   and the page stay in place — only the button morphs and the contents fade
- *   (no bar slide). Opening is tap-only; the swipe only goes back.
+ * - The round button is Dubz: it slides Dubz's bar in (the page beside this
+ *   one, as beside the composer) and opens it; closed, Dubz slides away again.
  *
  * It rides the keyboard and follows the bar's glass rules (BottomBar.tsx): each
  * glass rounds itself, nothing clips it, and it moves by layout only.
@@ -26,10 +23,9 @@
  */
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, StyleSheet, Text, TextInput, useColorScheme, useWindowDimensions, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, useColorScheme, useWindowDimensions, View, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { Easing, Extrapolation, interpolate, runOnJS, type SharedValue, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
+import Reanimated, { Easing, runOnJS, type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAgentButtonVisible } from "../agentButtonSettings";
 import { DubzPage, PAGE_MS, pageEasing, type PageBack } from "../Dubz";
@@ -74,14 +70,22 @@ const FORWARD_MOTION = { duration: 300, easing: Easing.bezier(0.2, 0.8, 0.2, 1) 
 /** Room above the pieces. */
 const BAR_TOP = 10;
 
-/** Dubz's min-view pill (the frame the chat button stretches into): its
- * height, side inset and bottom gap, mirroring DubzPage's BarWindow (MARGIN,
- * BAR_GAP, MIN_HEIGHT) so the stretch lands exactly on it. */
-const DUBZ_PILL_H = COMPOSER_PILL_HEIGHT;
-const DUBZ_PILL_SIDE = 12;
-const DUBZ_PILL_BOTTOM = 8;
-
 const noop = (): void => undefined;
+
+/** A glass piece of the bar, as Safari's: regular glass, untinted, rounded on
+ * itself (nothing around it clips or rounds it, which would flatten it), its
+ * small drop shadow on an outer wrapper of the same shape. */
+const Piece = (props: { readonly style: ViewStyle; readonly children: React.ReactNode }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  return (
+    <View style={[styles.shadow, { borderRadius: props.style.borderRadius }]}>
+      <GlassView style={props.style} glassEffectStyle="regular" colorScheme={scheme}>
+        {props.children}
+      </GlassView>
+    </View>
+  );
+};
 
 const NavButton = (props: {
   readonly icon: React.ComponentProps<typeof SystemIcon>["name"];
@@ -212,7 +216,6 @@ export const FileNavBar = (props: {
   readonly hidden: SharedValue<number>;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
-  const textColors = useTextColors();
   const insets = useSafeAreaInsets();
   // Rests where the composer rests, rides the keyboard, and drops away as the
   // page scrolls: all one `bottom`, on the UI thread (layout: it is glass).
@@ -223,38 +226,23 @@ export const FileNavBar = (props: {
   const { width: screenW } = useWindowDimensions();
   const withDubz = useAgentButtonVisible(props.dubzContext.surface);
   const [dubzOpen, setDubzOpen] = React.useState(false);
-  // On Dubz (transitioning or open): the chat button is hidden and the morph
-  // (and Dubz's page) take its place; off, the bar's button is live again.
-  const [onDubz, setOnDubz] = React.useState(false);
   const dubzInputRef = React.useRef<TextInput>(null);
-  // Where the pages stand: 0 this bar (the chat button), 1 Dubz's (the min
-  // view). The chat button stretches into the min view across it.
+  // Where the pages stand: 0 this bar, 1 Dubz's.
   const pageX = useSharedValue(0);
 
-  // Tap the chat button: it stretches into Dubz's min view (the morph), then
-  // the window grows to the detent Dubz was last used at.
+  // The Dubz button: Dubz's bar slides in, then opens.
   const openDubz = React.useCallback(() => setDubzOpen(true), []);
   const toDubz = React.useCallback(() => {
-    setOnDubz(true);
     pageX.value = withTiming(1, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
       if (finished === true) runOnJS(openDubz)();
     });
   }, [pageX, openDubz]);
-  // Closed, the min view shrinks back into the button.
+  // Closed, it slides away again.
   const closeDubz = React.useCallback(() => {
     setDubzOpen(false);
     pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing });
   }, [pageX]);
-  // Back to the button once the morph is fully undone (not mid-swipe, so the
-  // button doesn't pop in).
-  const restoreButton = React.useCallback(() => setOnDubz(false), []);
-  useAnimatedReaction(
-    () => pageX.value < 0.001,
-    (back, was) => {
-      if (back && was === false) runOnJS(restoreButton)();
-    },
-  );
-  // Swiped back from Dubz's min view (finger-tracked): this bar again.
+  // Swiped back from Dubz's bar: this bar again.
   const pageBack = React.useMemo<PageBack>(() => ({ pageX, begin: noop, turn: () => setDubzOpen(false), stay: noop }), [pageX]);
 
   // Where the pills can be (worked out, not measured): from after back and
@@ -279,41 +267,19 @@ export const FileNavBar = (props: {
   const forwardIcon = useAnimatedStyle(() => ({ opacity: forwardShown.value }));
   const { swipe, paging } = props;
 
-  // The bar (back/forward, the tab pills) slides off to the left as the morph
-  // runs, and back on return — by layout (margin), never opacity: glass.
   const barSlide = useAnimatedStyle(() => ({
     marginLeft: -pageX.value * screenW,
     marginRight: pageX.value * screenW,
   }));
-
-  // The chat button stretching into the min view: its frame from the button's
-  // circle (right of the bar) to the min-view pill (the bar's width), by
-  // LAYOUT ONLY — it is glass, so no opacity/transform. It comes and goes by
-  // the native glass fade (glassEffectStyle, below), and hands off to Dubz's
-  // page (which parks/unparks and fades natively too).
-  const buttonLeft = screenW - NAV_BAR_SIDE - NAV_BAR_HEIGHT;
-  const morphFrame = useAnimatedStyle(() => ({
-    left: interpolate(pageX.value, [0, 1], [buttonLeft, DUBZ_PILL_SIDE]),
-    width: interpolate(pageX.value, [0, 1], [NAV_BAR_HEIGHT, screenW - DUBZ_PILL_SIDE * 2]),
-    height: interpolate(pageX.value, [0, 1], [NAV_BAR_HEIGHT, DUBZ_PILL_H]),
-    bottom: interpolate(pageX.value, [0, 1], [NAV_BAR_BOTTOM, DUBZ_PILL_BOTTOM]),
+  const dubzSlide = useAnimatedStyle(() => ({
+    left: (1 - pageX.value) * screenW,
+    right: -(1 - pageX.value) * screenW,
   }));
-  // The chat icon fades over the first of the stretch (it is a SwiftUI symbol,
-  // not glass, so opacity is fine on it).
-  const morphIcon = useAnimatedStyle(() => ({ opacity: interpolate(pageX.value, [0.1, 0.5], [1, 0], Extrapolation.CLAMP) }));
-  // The morph glass materialises/dematerialises natively (never opacity): on
-  // over the first of the stretch, off over the last, where Dubz's page takes
-  // over (it materialises as it unparks).
-  const [morphLit, setMorphLit] = React.useState(true);
-  useAnimatedReaction(
-    () => pageX.value < 0.82,
-    (lit) => runOnJS(setMorphLit)(lit),
-  );
 
   return (
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
       <View style={styles.pages} pointerEvents="box-none">
-        <Reanimated.View style={barSlide} pointerEvents={onDubz ? "none" : "box-none"}>
+        <Reanimated.View style={barSlide}>
           {/* One glass container: pieces that meet blend, as Safari's. */}
           <GlassContainer style={styles.bar}>
           {/* The tabs' pills, under the buttons: the one before, this one,
@@ -334,31 +300,21 @@ export const FileNavBar = (props: {
             </GlassView>
           </Reanimated.View>
           {/* Where the pill is at rest: its gestures (the pills are drawn
-            * apart, above). The chat button sits in the gap the bounds leave
-            * at the right, drawn as the morph element over the bar. */}
+            * apart, above). */}
           <GestureDetector gesture={props.pillGesture}>
             <View style={styles.pillSlot} accessibilityRole="button" accessibilityLabel={`${props.name}, tabs`} />
           </GestureDetector>
-          {withDubz ? <View style={pieceStyles.round} /> : null}
+          {withDubz ? (
+            <Piece style={pieceStyles.round}>
+              <NavButton icon="bubble.left.and.text.bubble.right" label="Dubz" onPress={toDubz} />
+            </Piece>
+          ) : null}
           </GlassContainer>
         </Reanimated.View>
         {withDubz ? (
-          <>
-            {/* The chat button, stretching into Dubz's min view. A tap target
-              * at rest; untouchable while on Dubz (its page takes over). */}
-            <Reanimated.View style={[styles.morph, styles.shadow, morphFrame]} pointerEvents={onDubz ? "none" : "auto"}>
-              <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Dubz" onPress={toDubz}>
-                <GlassView style={styles.morphGlass} glassEffectStyle={{ style: morphLit ? "regular" : "none", animate: true }} colorScheme={scheme}>
-                  <Reanimated.View style={morphIcon}>
-                    <SystemIcon name="bubble.left.and.text.bubble.right" size={19} weight="medium" color={textColors.label} />
-                  </Reanimated.View>
-                </GlassView>
-              </Pressable>
-            </Reanimated.View>
-            <View style={[styles.dubzPage, styles.dubzInPlace]} pointerEvents={onDubz ? "box-none" : "none"}>
-              <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} hiddenCollapsed />
-            </View>
-          </>
+          <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
+            <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} />
+          </Reanimated.View>
         ) : null}
       </View>
     </Reanimated.View>
@@ -383,25 +339,6 @@ const makeStyles = (text: TextColors) =>
       position: "absolute",
       top: 0,
       bottom: 0,
-    },
-    // Dubz's page, in place (its contents only fade; the morph does the move).
-    dubzInPlace: {
-      left: 0,
-      right: 0,
-    },
-    // The chat button stretching into the min view (its frame is animated).
-    // Its radius is half the pill's height: RN clamps it to half the smaller
-    // side, so it's a circle at the button's size and a capsule at the pill's.
-    morph: {
-      position: "absolute",
-      borderRadius: DUBZ_PILL_H / 2,
-    },
-    morphGlass: {
-      flex: 1,
-      borderRadius: DUBZ_PILL_H / 2,
-      alignItems: "center",
-      justifyContent: "center",
-      overflow: "hidden",
     },
     // Safari's margins: room at the sides and between the pieces.
     bar: {

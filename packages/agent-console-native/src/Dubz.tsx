@@ -143,9 +143,6 @@ export interface DubzPageProps {
   readonly context: DubzContext;
   /** Where the composer is beside it; omitted where Dubz is the only page. */
   readonly pageBack?: PageBack;
-  /** Parked off-screen (by layout) when collapsed, so something else holds its
-   * spot — Files' chat button, which the min view grows from. */
-  readonly hiddenCollapsed?: boolean;
 }
 
 /** Clamp to [0, 1]. */
@@ -157,7 +154,7 @@ const unit = (value: number): number => {
 export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { open, instant, onOpen, onClose, inputRef, context, pageBack, hiddenCollapsed } = props;
+  const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
   const { width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
@@ -203,7 +200,6 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // the clear glass some body over bright content.
       tintColor="rgba(0,0,0,0.18)"
       detent={dubzDetent}
-      hiddenCollapsed={hiddenCollapsed}
       closeLabel={`Close ${AGENT_NAME}`}
       bodyGesture={paging}
       body={
