@@ -55,6 +55,11 @@ import { refreshPlugins } from "./pluginsStore";
 import { getApiAddress } from "./settings";
 import type { ScannedRepo } from "./repoScan";
 import { cachedReposNow, isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
+import { HashMap } from "effect";
+import { useFilePlaces } from "./files/useFileNav";
+import { type RecentTab, recentTabsOf } from "./files/recentTabs";
+import { RecentTabsSection } from "./files/RecentTabsSection";
+import { primaryWorktreeOf } from "./primaryWorktree";
 import { updateScannedRepos } from "./primaryWorktree";
 import { archiveWithUndo, loadArchivedSessions, loadMutedSessions, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { cachedSessionsNow, getCachedSessions, setCachedSessions } from "./sessionCache";
@@ -78,10 +83,14 @@ const HOME_DUBZ: DubzContext = {
 };
 
 /** `favorite`: in Favorites (it may be in Recent or its group too). */
+/** How many recent tabs Home shows (two columns, three rows). */
+const RECENT_TABS = 6;
+
 type Row =
   | { readonly kind: "heading"; readonly title: string }
   | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined; readonly favorite: boolean }
-  | { readonly kind: "repo"; readonly group: RepoGroup; readonly favorite: boolean };
+  | { readonly kind: "repo"; readonly group: RepoGroup; readonly favorite: boolean }
+  | { readonly kind: "recentTabs"; readonly tabs: ReadonlyArray<RecentTab> };
 
 const heading = (title: string): Row => ({ kind: "heading", title });
 
@@ -241,7 +250,11 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   const visible = unarchived(sessions, archivedSet);
 
   const sortedByRecent = [...visible].sort((a, b) => b.time.updated - a.time.updated);
-  const recent = sortedByRecent.slice(0, groupSize);
+  // One fewer recent session, to leave room for the recent tabs grid below.
+  const recent = sortedByRecent.slice(0, Math.max(1, groupSize - 1));
+  // Recent files across every repo's Files (recentTabs.ts), newest first.
+  const filePlaces = useFilePlaces();
+  const recentTabs = React.useMemo(() => recentTabsOf(HashMap.entries(filePlaces), RECENT_TABS), [filePlaces]);
   const groups = groupByRepo(visible, scanned);
   const knownGroups = groups.filter((g) => g.isKnownRepo);
   const otherGroups = groups.filter((g) => !g.isKnownRepo);
@@ -285,34 +298,39 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       ...(favoriteRows.length > 0 ? [heading("Favorites"), ...favoriteRows] : []),
       ...(recent.length > 0 ? [heading("Recent")] : []),
       ...recent.map((session) => sessionRow(session, false)),
+      ...(recentTabs.length > 0 ? [{ kind: "recentTabs", tabs: recentTabs } as Row] : []),
       ...(knownGroups.length > 0 ? [heading("Repos")] : []),
       ...knownGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
       ...(otherGroups.length > 0 ? [heading("Workspaces")] : []),
       ...otherGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
     ];
-  }, [favorites, visible, groups, recent, scanned, knownGroups, otherGroups]);
+  }, [favorites, visible, groups, recent, recentTabs, scanned, knownGroups, otherGroups]);
   // Its first screenful kept for the launch screen, which draws it before
   // Home is up (home/homeLayout.ts).
   React.useEffect(() => {
     // Nothing to show yet: the kept layout stays as it was.
     if (rows.length === 0) return;
     const server = serverAddressOf(address);
-    const layout = rows.slice(0, LAYOUT_ROWS).map((row, index): HomeRow => {
+    const layout = rows.slice(0, LAYOUT_ROWS).flatMap((row, index): ReadonlyArray<HomeRow> => {
       switch (row.kind) {
+        case "recentTabs":
+          return [];
         case "heading":
-          return { kind: "heading", title: row.title, first: index === 0 };
+          return [{ kind: "heading", title: row.title, first: index === 0 }];
         case "session":
-          return {
-            kind: "session",
-            // As the card works its own out (SessionCard.tsx).
-            size: sessionCardSize({
-              title: row.session.title,
-              pills: true,
-              summary: lastSummary(keptConversation(server, row.session.id)?.messages ?? []) !== undefined,
-            }),
-          };
+          return [
+            {
+              kind: "session",
+              // As the card works its own out (SessionCard.tsx).
+              size: sessionCardSize({
+                title: row.session.title,
+                pills: true,
+                summary: lastSummary(keptConversation(server, row.session.id)?.messages ?? []) !== undefined,
+              }),
+            },
+          ];
         case "repo":
-          return { kind: "repo", latest: row.group.sessions[0]?.title !== undefined };
+          return [{ kind: "repo", latest: row.group.sessions[0]?.title !== undefined }];
       }
     });
     keepHomeLayout(layout).catch((error: unknown) => console.error("[home layout] keeping it failed", error));
@@ -349,7 +367,11 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         style={styles.list}
         data={rows}
         keyExtractor={(row, i) =>
-          row.kind === "heading" ? `h-${row.title}` : `${row.favorite ? "f-" : ""}${row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`}`
+          row.kind === "heading"
+            ? `h-${row.title}`
+            : row.kind === "recentTabs"
+              ? "recent-tabs"
+              : `${row.favorite ? "f-" : ""}${row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`}`
         }
         refreshControl={
           // `progressViewOffset` pushes the spinner below the transparent nav
@@ -374,6 +396,14 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         renderItem={({ item, index }) => {
           if (item.kind === "heading") {
             return <Text style={[styles.heading, index === 0 && styles.headingFirst]}>{item.title}</Text>;
+          }
+          if (item.kind === "recentTabs") {
+            return (
+              <RecentTabsSection
+                tabs={item.tabs}
+                onOpen={(tab) => props.navigation.navigate("Files", { repo: tab.repo, dir: primaryWorktreeOf(tab.repo)?.path ?? scanned.find((r) => r.repo === tab.repo)?.worktrees[0]?.path ?? tab.entry.path, open: { path: tab.entry.path, name: tab.entry.name } })}
+              />
+            );
           }
           if (item.kind === "session") {
             return (
