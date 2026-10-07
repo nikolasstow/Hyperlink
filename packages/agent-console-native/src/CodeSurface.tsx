@@ -40,10 +40,11 @@ import { useCodeTheme } from "./useCodeTheme";
 import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 
 /**
- * The surface is editable (an IDE edits files). Sent to the surface as a
- * message, so a read-only context could flip it without swapping engines.
+ * Read-only: the WebView surface can't be a clean editor (an uncontrollable
+ * keyboard accessory, no save path, the web UI). Editing is the native editor
+ * we're building, not this. Kept a clean viewer until then.
  */
-const READ_ONLY = false;
+const READ_ONLY = true;
 
 /** Matches the chat code blocks, so the two surfaces sit at the same scale. */
 const FONT_SIZE = 12.5;
