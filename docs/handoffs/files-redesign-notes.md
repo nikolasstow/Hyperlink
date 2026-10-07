@@ -233,3 +233,15 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
 - The centre glass pills (Files' title, the worktree picker) carry the same drop shadow
   as the glass buttons (SwiftUI's `shadow` modifier: PILL_SHADOW; they are native glass,
   so no RN shadow wrapper).
+
+## 14. Dubz: button morph, not a bar slide (owner, 2026-10-07)
+
+- The Files bar's Dubz still uses the two-page model (pageX, DubzPage beside the bar,
+  finger swipe-back), but the OPEN transition changed: instead of the whole bar sliding
+  off while Dubz's bar slides in, the round chat button stretches into Dubz's min-view
+  pill in place (FileNavBar: a standalone morph glass, frame interpolated by pageX from
+  the button's circle to the pill; the bar fades, Dubz's page fades in over the last of
+  the stretch). Once the morph completes, the window grows to the detent Dubz was last
+  at (unchanged). Finger swipe-back reverses the morph. Open is tap-only.
+- BarWindow internals (detents, memory, suggestions, keyboard) unchanged. Applies to
+  file and folder tabs (FileNavBar is shared).
