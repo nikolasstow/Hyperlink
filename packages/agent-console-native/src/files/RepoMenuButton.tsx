@@ -16,9 +16,10 @@ import { Button, Divider, Host, HStack, Image, Menu, Popover, RNHostView, Spacer
 import { buttonStyle, contentShape, font, foregroundStyle, frame, lineLimit, menuIndicator, menuStyle, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { Pressable, StyleSheet, Text, useColorScheme } from "react-native";
+import { Pressable, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { colors } from "../colors";
 import { primaryWorktreeOf, worktreesOf } from "../primaryWorktree";
+import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { PILL_HEIGHT } from "../titlePillStyle";
 import { worktreeName } from "../WorktreePicker";
@@ -86,14 +87,18 @@ export const RepoMenuButton = (props: {
           <RNHostView matchContents>
             <Pressable style={styles.shadow} accessibilityRole="button" accessibilityLabel="Repos" onPress={() => setOpen(true)}>
               <GlassView style={styles.glass} glassEffectStyle="regular" colorScheme={scheme}>
-                <Text style={styles.title} numberOfLines={1}>
-                  {filter.kind === "all" ? "All Repos" : filter.repo}
-                </Text>
-                {shown === undefined ? null : (
-                  <Text style={styles.worktree} numberOfLines={1}>
-                    {worktreeName(shown)}
+                <View style={styles.names}>
+                  <Text style={styles.title} numberOfLines={1}>
+                    {filter.kind === "all" ? "All Repos" : filter.repo}
                   </Text>
-                )}
+                  {shown === undefined ? null : (
+                    <Text style={styles.worktree} numberOfLines={1}>
+                      {worktreeName(shown)}
+                    </Text>
+                  )}
+                </View>
+                {/* It opens a list. */}
+                <SystemIcon name="chevron.down" size={12} weight="semibold" color={textColors.secondaryLabel} />
               </GlassView>
             </Pressable>
           </RNHostView>
@@ -171,9 +176,14 @@ const makeStyles = (text: TextColors) =>
     glass: {
       height: PILL_HEIGHT,
       borderRadius: PILL_HEIGHT / 2,
-      paddingHorizontal: 18,
+      paddingLeft: 18,
+      paddingRight: 14,
+      flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
+      gap: 8,
+    },
+    names: {
+      alignItems: "center",
     },
     title: {
       color: text.label,
