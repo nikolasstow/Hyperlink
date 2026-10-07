@@ -3,17 +3,17 @@
  * whose tabs are shown (and its worktree), or All Repos. Tapping it opens a
  * native popover listing All Repos, then every repo with tabs open. A repo's
  * row is two controls: its name shows its tabs (a filter); its chevron opens
- * its worktrees beneath it, one tapped switching it (its tabs moving to the
- * same files there). A native menu cannot hold a row that does both, so this
- * is SwiftUI's popover and disclosure group.
+ * its worktrees as a menu of their own, one tapped switching it (its tabs
+ * moving to the same files there). A native menu cannot hold a row that does
+ * both, so the list is SwiftUI's popover.
  *
  * Its label is plain React Native, sized by its own text (nothing measured),
  * hosted in the popover's trigger.
  *
  * @internal
  */
-import { Button, DisclosureGroup, Divider, Host, HStack, Image, Popover, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { buttonStyle, font, foregroundStyle, frame, lineLimit, padding } from "@expo/ui/swift-ui/modifiers";
+import { Button, Divider, Host, HStack, Image, Menu, Popover, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { buttonStyle, font, foregroundStyle, frame, lineLimit, menuIndicator, menuStyle, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, useColorScheme } from "react-native";
@@ -59,9 +59,8 @@ export const RepoMenuButton = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const textColors = useTextColors();
   const [open, setOpen] = React.useState(false);
-  // The repo whose worktrees are open beneath it (one at a time).
-  const [expanded, setExpanded] = React.useState<string | undefined>(undefined);
   const { filter } = props;
   const shown = filter.kind === "repo" ? primaryWorktreeOf(filter.repo) : undefined;
   const choose = (next: RepoFilter): void => {
@@ -77,10 +76,7 @@ export const RepoMenuButton = (props: {
     >
       <Popover
         isPresented={open}
-        onIsPresentedChange={(next) => {
-          setOpen(next);
-          if (!next) setExpanded(undefined);
-        }}
+        onIsPresentedChange={setOpen}
         attachmentAnchor="bottom"
         arrowEdge="top"
       >
@@ -123,35 +119,29 @@ export const RepoMenuButton = (props: {
                 );
               }
               return (
-                <DisclosureGroup
-                  key={repo}
-                  isExpanded={expanded === repo}
-                  onIsExpandedChange={(next) => setExpanded(next ? repo : undefined)}
-                  modifiers={[padding({ horizontal: ROW_PAD_H, vertical: ROW_PAD_V }), frame({ width: ROW_WIDTH, alignment: "leading" })]}
-                >
-                  <DisclosureGroup.Label>
-                    {/* The name: its tabs. (The chevron beside it opens its
-                      * worktrees.) */}
-                    <Button onPress={() => choose({ kind: "repo", repo })} modifiers={[buttonStyle("plain")]}>
-                      {row}
-                    </Button>
-                  </DisclosureGroup.Label>
-                  {worktrees.map((worktree) => {
-                    const current = worktree.path === primary?.path;
-                    return (
+                <HStack key={repo} spacing={0} alignment="center" modifiers={[frame({ width: ROW_WIDTH, alignment: "leading" })]}>
+                  {/* The name: its tabs. */}
+                  <Button onPress={() => choose({ kind: "repo", repo })} modifiers={[buttonStyle("plain"), padding({ leading: ROW_PAD_H, vertical: ROW_PAD_V })]}>
+                    {row}
+                  </Button>
+                  {/* The chevron: its worktrees, a menu of their own. */}
+                  <Menu
+                    label={<Image systemName="chevron.up.chevron.down" size={13} color={textColors.secondaryLabel} />}
+                    modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden"), padding({ horizontal: ROW_PAD_H, vertical: ROW_PAD_V })]}
+                  >
+                    {worktrees.map((worktree) => (
                       <Button
                         key={worktree.path}
+                        label={worktreeName(worktree)}
+                        systemImage={worktree.path === primary?.path ? "checkmark" : "arrow.triangle.branch"}
                         onPress={() => {
                           setOpen(false);
                           props.onWorktree(repo, worktree.path);
                         }}
-                        modifiers={[buttonStyle("plain"), padding({ leading: 12, vertical: 8 })]}
-                      >
-                        <RowContent symbol={current ? "checkmark" : "arrow.triangle.branch"} chosen={current} title={worktreeName(worktree)} />
-                      </Button>
-                    );
-                  })}
-                </DisclosureGroup>
+                      />
+                    ))}
+                  </Menu>
+                </HStack>
               );
             })}
           </VStack>
