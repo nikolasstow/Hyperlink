@@ -769,7 +769,7 @@ const MoreMenu = (props: {
         modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
       >
         {props.worktrees.length > 1 ? (
-          <Menu label="Worktree" systemImage="arrow.triangle.branch">
+          <Menu label={worktreeName(props.worktrees.find((worktree) => worktree.path === props.selected) ?? props.worktrees[0])} systemImage="arrow.triangle.branch">
             {props.worktrees.map((worktree) => (
               <Button
                 key={worktree.path}
