@@ -60,6 +60,7 @@ import { sameTab, type ShownRepo, type TabFilter, type TabLayout, tabLayout, typ
 import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
+import { HistorySheet } from "./HistorySheet";
 import { type RepoFilter, RepoMenuButton } from "./RepoMenuButton";
 import { useMissingPaths } from "./missingPaths";
 
@@ -162,6 +163,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const active = place === undefined ? undefined : activeTab(place);
   const [overview, setOverview] = React.useState<Overview>({ kind: "closed" });
   const [filter, setFilter] = React.useState<TabFilter>("all");
+  const [historyOpen, setHistoryOpen] = React.useState(false);
   // Whose tabs the overview shows: this repo's (each time it opens), or
   // every repo's, or another's.
   const [repoFilter, setRepoFilter] = React.useState<RepoFilter>({ kind: "repo", repo });
@@ -541,6 +543,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           top={
             <RepoMenuButton
               maxWidth={tabsTopMax}
+              // Search: what it searches is not decided yet.
+              onSearch={() => undefined}
+              onHistory={() => setHistoryOpen(true)}
               filter={repoFilter}
               repos={reposWithTabs}
               onFilter={setRepoFilter}
@@ -568,6 +573,20 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           layout={layout}
           reveal={zoom}
           pageTop={headerHeight}
+        />
+      )}
+      {/* Everything opened in this repo's Files; a tap opens it in a new tab
+        * (growing out of the grid). */}
+      {place === undefined ? null : (
+        <HistorySheet
+          open={historyOpen}
+          roots={rootsOf(repo)}
+          visits={place.history}
+          onClose={() => setHistoryOpen(false)}
+          onOpen={(entry) => {
+            setHistoryOpen(false);
+            startTab(entry);
+          }}
         />
       )}
       {/* The tab showing; over the overview, shrunk into its preview (unseen

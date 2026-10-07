@@ -226,3 +226,6 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   white checkmark) at the right, back into the tab showing. No History button.
 - Back buttons (Files' top bar, the tab view's) name the page they go back to, kept
   clear of what is in the middle (the title's width worked out, not measured).
+- The tab view's top right is one glass: search, history, then the repo filter. History
+  opens the History sheet (a tap opens the file in a new tab). What search searches is
+  not decided yet (owner, 2026-10-07): the button does nothing for now.
