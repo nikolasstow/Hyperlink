@@ -1,21 +1,26 @@
 import UIKit
 
 /// Default theme used by Runestone when no other theme has been set.
-public final class DefaultTheme: Runestone.Theme {
+///
+/// The colours are hardcoded (a VS Code "Dark+" palette) so the fork carries no
+/// asset-catalog resources and drops into a CocoaPods target cleanly. At runtime
+/// the editor installs a `ShikiTheme` built from the active VS Code theme, so this
+/// is only the fallback before the first theme arrives.
+public final class DefaultTheme: Theme {
     public let font: UIFont = .monospacedSystemFont(ofSize: 14, weight: .regular)
-    public let textColor = UIColor(themeColorNamed: "foreground")
-    public let gutterBackgroundColor = UIColor(themeColorNamed: "gutter_background")
-    public let gutterHairlineColor = UIColor(themeColorNamed: "gutter_hairline")
-    public let lineNumberColor = UIColor(themeColorNamed: "line_number")
+    public let textColor = DefaultTheme.hex("#D4D4D4")
+    public let gutterBackgroundColor = DefaultTheme.hex("#1E1E1E")
+    public let gutterHairlineColor = DefaultTheme.hex("#333333")
+    public let lineNumberColor = DefaultTheme.hex("#858585")
     public let lineNumberFont: UIFont = .monospacedSystemFont(ofSize: 14, weight: .regular)
-    public let selectedLineBackgroundColor = UIColor(themeColorNamed: "current_line")
-    public let selectedLinesLineNumberColor = UIColor(themeColorNamed: "line_number_current_line")
-    public let selectedLinesGutterBackgroundColor = UIColor(themeColorNamed: "gutter_background")
-    public let invisibleCharactersColor = UIColor(themeColorNamed: "invisible_characters")
-    public let pageGuideHairlineColor = UIColor(themeColorNamed: "page_guide_hairline")
-    public let pageGuideBackgroundColor = UIColor(themeColorNamed: "page_guide_background")
-    public let markedTextBackgroundColor = UIColor(themeColorNamed: "marked_text")
-    public let selectionColor = UIColor(themeColorNamed: "selection")
+    public let selectedLineBackgroundColor = DefaultTheme.hex("#2A2D2E")
+    public let selectedLinesLineNumberColor = DefaultTheme.hex("#C6C6C6")
+    public let selectedLinesGutterBackgroundColor = DefaultTheme.hex("#1E1E1E")
+    public let invisibleCharactersColor = DefaultTheme.hex("#404040")
+    public let pageGuideHairlineColor = DefaultTheme.hex("#333333")
+    public let pageGuideBackgroundColor = DefaultTheme.hex("#1E1E1E")
+    public let markedTextBackgroundColor = DefaultTheme.hex("#264F78")
+    public let selectionColor = DefaultTheme.hex("#264F78")
 
     public init() {}
 
@@ -26,33 +31,33 @@ public final class DefaultTheme: Runestone.Theme {
         }
         switch highlightName {
         case .comment:
-            return UIColor(themeColorNamed: "comment")
+            return DefaultTheme.hex("#6A9955")
         case .constantBuiltin:
-            return UIColor(themeColorNamed: "constant_builtin")
+            return DefaultTheme.hex("#569CD6")
         case .constantCharacter:
-            return UIColor(themeColorNamed: "constant_character")
+            return DefaultTheme.hex("#D7BA7D")
         case .constructor:
-            return UIColor(themeColorNamed: "constructor")
+            return DefaultTheme.hex("#4EC9B0")
         case .function:
-            return UIColor(themeColorNamed: "function")
+            return DefaultTheme.hex("#DCDCAA")
         case .keyword:
-            return UIColor(themeColorNamed: "keyword")
+            return DefaultTheme.hex("#569CD6")
         case .number:
-            return UIColor(themeColorNamed: "number")
+            return DefaultTheme.hex("#B5CEA8")
         case .property:
-            return UIColor(themeColorNamed: "property")
+            return DefaultTheme.hex("#9CDCFE")
         case .string:
-            return UIColor(themeColorNamed: "string")
+            return DefaultTheme.hex("#CE9178")
         case .type:
-            return UIColor(themeColorNamed: "type")
+            return DefaultTheme.hex("#4EC9B0")
         case .variable:
             return nil
         case .variableBuiltin:
-            return UIColor(themeColorNamed: "variable_builtin")
+            return DefaultTheme.hex("#569CD6")
         case .operator:
-            return UIColor(themeColorNamed: "operator")
+            return DefaultTheme.hex("#D4D4D4")
         case .punctuation:
-            return UIColor(themeColorNamed: "punctuation")
+            return DefaultTheme.hex("#D4D4D4")
         }
     }
 
@@ -71,21 +76,17 @@ public final class DefaultTheme: Runestone.Theme {
     public func highlightedRange(forFoundTextRange foundTextRange: NSRange, ofStyle style: UITextSearchFoundTextStyle) -> HighlightedRange? {
         switch style {
         case .found:
-            let color = UIColor(themeColorNamed: "search_match_found")
-            return HighlightedRange(range: foundTextRange, color: color, cornerRadius: 2)
+            return HighlightedRange(range: foundTextRange, color: UIColor.systemYellow.withAlphaComponent(0.2), cornerRadius: 2)
         case .highlighted:
-            let color = UIColor(themeColorNamed: "search_match_highlighted")
-            return HighlightedRange(range: foundTextRange, color: color, cornerRadius: 2)
+            return HighlightedRange(range: foundTextRange, color: UIColor.systemYellow, cornerRadius: 2)
         case .normal:
             return nil
         @unknown default:
             return nil
         }
     }
-}
 
-private extension UIColor {
-    convenience init(themeColorNamed name: String) {
-        self.init(named: "theme_" + name, in: .module, compatibleWith: nil)!
+    private static func hex(_ hex: String) -> UIColor {
+        UIColor(shikiHex: hex) ?? .label
     }
 }

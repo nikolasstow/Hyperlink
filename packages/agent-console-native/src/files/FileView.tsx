@@ -15,12 +15,14 @@
  */
 import * as React from "react";
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { isCodeEditorNative } from "../../modules/code-editor";
 import { useAppContext } from "../AppContext";
 import { CodeSurface } from "../CodeSurface";
 import { runFs } from "../effect/runtime";
 import { fsReadText } from "../fsClient";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
+import { CodeEditor } from "./CodeEditor";
 
 type State =
   | { readonly kind: "loading" }
@@ -71,6 +73,26 @@ export const FileView = (props: {
       </View>
     );
   }
+  // The native editor is the one renderer for viewing and editing; the viewer
+  // is it with `editable={false}`. Cheap to mount natively, so it waits for the
+  // text rather than booting ahead the way the web surface must.
+  if (isCodeEditorNative) {
+    return (
+      <>
+        {state.kind === "text" ? (
+          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset} />
+        ) : (
+          <View style={[styles.surface, { paddingTop: topInset }]} />
+        )}
+        {state.kind === "loading" ? (
+          <View style={[styles.center, styles.overlay, { paddingTop: topInset + 40 }]} pointerEvents="none">
+            <ActivityIndicator color={textColors.secondaryLabel} />
+          </View>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <>
       {/* Mounted before the text arrives on purpose: the surface boots while

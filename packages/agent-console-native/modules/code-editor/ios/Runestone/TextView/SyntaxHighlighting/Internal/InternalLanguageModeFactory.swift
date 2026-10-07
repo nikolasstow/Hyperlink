@@ -7,12 +7,6 @@ enum InternalLanguageModeFactory {
             return PlainTextInternalLanguageMode()
         case let languageMode as ShikiLanguageMode:
             return ShikiInternalLanguageMode(store: languageMode.store)
-        case let languageMode as TreeSitterLanguageMode:
-            return TreeSitterInternalLanguageMode(
-                language: languageMode.language.internalLanguage,
-                languageProvider: languageMode.languageProvider,
-                stringView: stringView,
-                lineManager: lineManager)
         default:
             fatalError("\(languageMode) is not a supported language mode")
         }

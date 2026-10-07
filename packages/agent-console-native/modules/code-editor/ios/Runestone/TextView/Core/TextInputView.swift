@@ -562,9 +562,6 @@ final class TextInputView: UIView, UITextInput {
         didSet {
             if languageMode !== oldValue {
                 indentController.languageMode = languageMode
-                if let treeSitterLanguageMode = languageMode as? TreeSitterInternalLanguageMode {
-                    treeSitterLanguageMode.delegate = self
-                }
             }
         }
     }
@@ -1587,23 +1584,6 @@ extension TextInputView {
 
     private func highlightedRange(for range: NSRange) -> HighlightedRange? {
         highlightedRanges.first { $0.range == range }
-    }
-}
-
-// MARK: - TreeSitterLanguageModeDeleage
-extension TextInputView: TreeSitterLanguageModeDelegate {
-    func treeSitterLanguageMode(_ languageMode: TreeSitterInternalLanguageMode, bytesAt byteIndex: ByteCount) -> TreeSitterTextProviderResult? {
-        guard byteIndex.value >= 0 && byteIndex < stringView.string.byteCount else {
-            return nil
-        }
-        let targetByteCount: ByteCount = 4 * 1_024
-        let endByte = min(byteIndex + targetByteCount, stringView.string.byteCount)
-        let byteRange = ByteRange(from: byteIndex, to: endByte)
-        if let result = stringView.bytes(in: byteRange) {
-            return TreeSitterTextProviderResult(bytes: result.bytes, length: UInt32(result.length.value))
-        } else {
-            return nil
-        }
     }
 }
 

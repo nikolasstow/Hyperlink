@@ -9,12 +9,6 @@ final class LinePosition: Hashable, Equatable {
         self.column = column
     }
 
-    convenience init(_ point: TreeSitterTextPoint) {
-        let row = Int(point.row)
-        let column = Int(point.column / 2)
-        self.init(row: row, column: column)
-    }
-
     static func == (lhs: LinePosition, rhs: LinePosition) -> Bool {
         lhs.row == rhs.row && lhs.column == rhs.column
     }

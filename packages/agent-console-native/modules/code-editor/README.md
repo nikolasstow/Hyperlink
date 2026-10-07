@@ -33,14 +33,31 @@ highlighter), wired through `InternalLanguageModeFactory`.
 
 - [x] Vendor the engine (minus Documentation.docc), MIT notice kept.
 - [x] `Shiki/` highlighter + mode + token store + factory wiring — COMPILES against the engine for iOS (xcodebuild, verified locally).
-- [ ] Tree-sitter: vendor its C runtime into the pod (Runestone still imports it)
-      OR strip the ~26 tree-sitter files. Keeping it is lower-risk for the first
-      build; stripping is cleaner once it compiles.
-- [ ] Expo module: `CodeEditorModule` + `CodeEditorView` wrapping Runestone's
-      `TextView` — props `text`, `editable`, `tokensJson`, theme colours;
-      events `onChangeText`, `onSelectionChange`.
-- [ ] JS `CodeEditor` component: `tokenizeCode` (Shiki) → `tokensJson`.
-- [ ] Replace `FileView`'s WebView with it.
+- [x] Strip Tree-sitter: the fork is **pure Swift, no C dependency** — the
+      `TreeSitter*` dirs/files, the tree-sitter `TextViewState` init, the
+      `TreeSitterLanguageModeDelegate`, and the `LinePosition` tree-sitter init
+      are gone; `InternalLanguageModeFactory` dispatches PlainText / Shiki only.
+      Drops into a CocoaPods pod with no C runtime to vendor.
+- [x] Zero resources: `DefaultTheme` is hardcoded (VS Code Dark+), the
+      `Theme.xcassets` + `Resources/*.lproj` are dropped, and `L10n` falls back
+      to its English literals via `Bundle(for:)` — no `Bundle.module`, so it
+      compiles under CocoaPods (not just SPM).
+- [x] Expo module: `CodeEditorModule` + `CodeEditorView` (`ios/*.swift`)
+      wrapping Runestone's `TextView` — props `text`, `editable`, `lineTokens`,
+      `theme`, `fontSize`, `showLineNumbers`, `wrapLines`; event `onChange`.
+      Installs `ShikiLanguageMode`, keys the store by each line's start offset,
+      repaints visible lines on token/theme change, guards edit echo.
+- [x] JS `CodeEditorNativeView` (`index.tsx`) + app `CodeEditor` (`src/files/`):
+      `useCodeTheme` + `tokenizeCode` (Shiki) → per-line offset tokens + theme
+      colours, debounced re-tokenise while typing.
+- [x] `FileView` renders the native editor when the build carries it
+      (`isCodeEditorNative`), else falls back to the web surface.
+- [ ] A backend write endpoint (`/fs/write`) so editing can persist — none
+      exists yet, so the editor is wired `editable={false}` (the viewer). The
+      renderer is already the editor; flipping the flag is all that's left once
+      saving lands.
+- [ ] Scroll-to-line on the native path (Runestone has `goToLine`; the web
+      surface's `scrollToLine` isn't forwarded yet).
 - [ ] LSP later (diagnostics/hover/completions over opencode), native glass UI.
 
 Needs a dev-client rebuild to compile (new native module); expect a couple of

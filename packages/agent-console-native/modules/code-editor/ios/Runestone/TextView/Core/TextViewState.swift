@@ -25,26 +25,9 @@ public final class TextViewState {
     public private(set) var lengthOfLongestLine: Int?
 
     /// Creates state that can be passed to an instance of ``TextView``.
-    /// - Parameters:
-    ///   - text: The text to display in the text view.
-    ///   - theme: The theme to use when syntax highlighting the text.
-    ///   - language: The language to use when parsing the text.
-    ///   - languageProvider: Object that can provide embedded languages on demand. A strong reference will be stored to the language provider.
-    public init(text: String, theme: Theme = DefaultTheme(), language: TreeSitterLanguage, languageProvider: TreeSitterLanguageProvider? = nil) {
-        self.theme = theme
-        self.stringView = StringView(string: NSMutableString(string: text))
-        self.lineManager = LineManager(stringView: stringView)
-        self.languageMode = TreeSitterInternalLanguageMode(
-            language: language.internalLanguage,
-            languageProvider: languageProvider,
-            stringView: stringView,
-            lineManager: lineManager)
-        prepare(with: text)
-    }
-
-    /// Creates state that can be passed to an instance of ``TextView``.
     ///
-    /// The created theme will use an instance of ``PlainTextLanguageMode``.
+    /// The created state uses a plain-text language mode. Syntax highlighting is
+    /// driven externally (e.g. by setting a ``ShikiLanguageMode`` on the text view).
     /// - Parameters:
     ///   - text: The text to display in the text view.
     ///   - theme: The theme to use when syntax highlighting the text.
