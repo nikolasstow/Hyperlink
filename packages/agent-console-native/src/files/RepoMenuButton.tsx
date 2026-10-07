@@ -1,27 +1,53 @@
 /**
  * The tab view's repo menu, at its top right: a glass button naming the repo
- * whose tabs are shown (and its worktree), or All Repos. Tapping it lists All
- * Repos, then every repo with tabs open: a tap on a repo shows its tabs (a
- * filter); its dropdown (held) switches its worktree, its tabs moving to the
- * same files there.
+ * whose tabs are shown (and its worktree), or All Repos. Tapping it opens a
+ * native popover listing All Repos, then every repo with tabs open. A repo's
+ * row is two controls: its name shows its tabs (a filter); its chevron opens
+ * its worktrees beneath it, one tapped switching it (its tabs moving to the
+ * same files there). A native menu cannot hold a row that does both, so this
+ * is SwiftUI's popover and disclosure group.
  *
  * Its label is plain React Native, sized by its own text (nothing measured),
- * hosted in the native menu (as the repo page's 3-dot menu).
+ * hosted in the popover's trigger.
  *
  * @internal
  */
-import { Button, Divider, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
-import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
+import { Button, DisclosureGroup, Divider, Host, HStack, Image, Popover, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { buttonStyle, font, foregroundStyle, frame, lineLimit, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { StyleSheet, Text, useColorScheme, View } from "react-native";
+import { Pressable, StyleSheet, Text, useColorScheme } from "react-native";
+import { colors } from "../colors";
 import { primaryWorktreeOf, worktreesOf } from "../primaryWorktree";
-import { type TextColors, useThemedStyles } from "../theme";
+import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { PILL_HEIGHT } from "../titlePillStyle";
 import { worktreeName } from "../WorktreePicker";
 
 /** Whose tabs the tab view shows: every repo's, or one's. */
 export type RepoFilter = { readonly kind: "all" } | { readonly kind: "repo"; readonly repo: string };
+
+/** The popover's rows: their width, and their room. */
+const ROW_WIDTH = 260;
+const ROW_PAD_H = 16;
+const ROW_PAD_V = 11;
+
+/** A row: its symbol (a checkmark when chosen), its name, and what is under
+ * it (a repo's worktree). */
+const RowContent = (props: { readonly symbol: React.ComponentProps<typeof Image>["systemName"]; readonly chosen: boolean; readonly title: string; readonly detail?: string }): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
+    <HStack spacing={10} alignment="center">
+      <Image systemName={props.symbol} size={15} color={props.chosen ? colors.tint : textColors.secondaryLabel} />
+      <VStack alignment="leading" spacing={1}>
+        <UIText modifiers={[font({ size: 16, weight: props.chosen ? "semibold" : "regular" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+        {props.detail === undefined ? null : (
+          <UIText modifiers={[font({ size: 12 }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{props.detail}</UIText>
+        )}
+      </VStack>
+      <Spacer />
+    </HStack>
+  );
+};
 
 export const RepoMenuButton = (props: {
   readonly filter: RepoFilter;
@@ -33,8 +59,15 @@ export const RepoMenuButton = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const [open, setOpen] = React.useState(false);
+  // The repo whose worktrees are open beneath it (one at a time).
+  const [expanded, setExpanded] = React.useState<string | undefined>(undefined);
   const { filter } = props;
   const shown = filter.kind === "repo" ? primaryWorktreeOf(filter.repo) : undefined;
+  const choose = (next: RepoFilter): void => {
+    setOpen(false);
+    props.onFilter(next);
+  };
   return (
     <Host
       matchContents
@@ -42,10 +75,18 @@ export const RepoMenuButton = (props: {
       // the status bar, and it stays behind.
       ignoreSafeArea="all"
     >
-      <Menu
-        label={
+      <Popover
+        isPresented={open}
+        onIsPresentedChange={(next) => {
+          setOpen(next);
+          if (!next) setExpanded(undefined);
+        }}
+        attachmentAnchor="bottom"
+        arrowEdge="top"
+      >
+        <Popover.Trigger>
           <RNHostView matchContents>
-            <View style={styles.shadow}>
+            <Pressable style={styles.shadow} accessibilityRole="button" accessibilityLabel="Repos" onPress={() => setOpen(true)}>
               <GlassView style={styles.glass} glassEffectStyle="regular" colorScheme={scheme}>
                 <Text style={styles.title} numberOfLines={1}>
                   {filter.kind === "all" ? "All Repos" : filter.repo}
@@ -56,50 +97,66 @@ export const RepoMenuButton = (props: {
                   </Text>
                 )}
               </GlassView>
-            </View>
+            </Pressable>
           </RNHostView>
-        }
-        modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
-      >
-        <Button
-          label="All Repos"
-          systemImage={filter.kind === "all" ? "checkmark" : "square.stack"}
-          onPress={() => props.onFilter({ kind: "all" })}
-        />
-        <Divider />
-        {props.repos.map((repo) => {
-          const selected = filter.kind === "repo" && filter.repo === repo;
-          const worktrees = worktreesOf(repo);
-          const primary = primaryWorktreeOf(repo);
-          const show = (): void => props.onFilter({ kind: "repo", repo });
-          // Its worktrees, a dropdown (held); a repo that is not a scanned
-          // checkout has none, so it is a plain row.
-          return worktrees.length === 0 ? (
-            <Button
-              key={repo}
-              label={repo}
-              systemImage={selected ? "checkmark" : "folder"}
-              onPress={show}
-            />
-          ) : (
-            <Menu
-              key={repo}
-              label={primary === undefined ? repo : `${repo} · ${worktreeName(primary)}`}
-              systemImage={selected ? "checkmark" : "shippingbox"}
-              onPrimaryAction={show}
-            >
-              {worktrees.map((worktree) => (
-                <Button
-                  key={worktree.path}
-                  label={worktreeName(worktree)}
-                  systemImage={worktree.path === primary?.path ? "checkmark" : "arrow.triangle.branch"}
-                  onPress={() => props.onWorktree(repo, worktree.path)}
-                />
-              ))}
-            </Menu>
-          );
-        })}
-      </Menu>
+        </Popover.Trigger>
+        <Popover.Content>
+          <VStack alignment="leading" spacing={0} modifiers={[padding({ vertical: 6 })]}>
+            <Button onPress={() => choose({ kind: "all" })} modifiers={[buttonStyle("plain"), padding({ horizontal: ROW_PAD_H, vertical: ROW_PAD_V }), frame({ width: ROW_WIDTH, alignment: "leading" })]}>
+              <RowContent symbol={filter.kind === "all" ? "checkmark" : "square.stack"} chosen={filter.kind === "all"} title="All Repos" />
+            </Button>
+            <Divider />
+            {props.repos.map((repo) => {
+              const chosen = filter.kind === "repo" && filter.repo === repo;
+              const worktrees = worktreesOf(repo);
+              const primary = primaryWorktreeOf(repo);
+              const row = (
+                <RowContent symbol={chosen ? "checkmark" : "shippingbox"} chosen={chosen} title={repo} detail={primary === undefined ? undefined : worktreeName(primary)} />
+              );
+              // A repo that is not a scanned checkout has no worktrees: a
+              // plain row.
+              if (worktrees.length === 0) {
+                return (
+                  <Button key={repo} onPress={() => choose({ kind: "repo", repo })} modifiers={[buttonStyle("plain"), padding({ horizontal: ROW_PAD_H, vertical: ROW_PAD_V }), frame({ width: ROW_WIDTH, alignment: "leading" })]}>
+                    {row}
+                  </Button>
+                );
+              }
+              return (
+                <DisclosureGroup
+                  key={repo}
+                  isExpanded={expanded === repo}
+                  onIsExpandedChange={(next) => setExpanded(next ? repo : undefined)}
+                  modifiers={[padding({ horizontal: ROW_PAD_H, vertical: ROW_PAD_V }), frame({ width: ROW_WIDTH, alignment: "leading" })]}
+                >
+                  <DisclosureGroup.Label>
+                    {/* The name: its tabs. (The chevron beside it opens its
+                      * worktrees.) */}
+                    <Button onPress={() => choose({ kind: "repo", repo })} modifiers={[buttonStyle("plain")]}>
+                      {row}
+                    </Button>
+                  </DisclosureGroup.Label>
+                  {worktrees.map((worktree) => {
+                    const current = worktree.path === primary?.path;
+                    return (
+                      <Button
+                        key={worktree.path}
+                        onPress={() => {
+                          setOpen(false);
+                          props.onWorktree(repo, worktree.path);
+                        }}
+                        modifiers={[buttonStyle("plain"), padding({ leading: 12, vertical: 8 })]}
+                      >
+                        <RowContent symbol={current ? "checkmark" : "arrow.triangle.branch"} chosen={current} title={worktreeName(worktree)} />
+                      </Button>
+                    );
+                  })}
+                </DisclosureGroup>
+              );
+            })}
+          </VStack>
+        </Popover.Content>
+      </Popover>
     </Host>
   );
 };
