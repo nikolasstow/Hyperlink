@@ -177,10 +177,10 @@ const makeStyles = (text: TextColors) =>
       height: PILL_HEIGHT,
       borderRadius: PILL_HEIGHT / 2,
       paddingLeft: 18,
-      paddingRight: 14,
+      paddingRight: 18,
       flexDirection: "row",
       alignItems: "center",
-      gap: 8,
+      gap: 12,
     },
     names: {
       alignItems: "center",

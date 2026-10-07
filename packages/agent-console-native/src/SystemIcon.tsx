@@ -56,7 +56,15 @@ export const SystemIcon = (props: {
   readonly color: ColorValue;
   readonly weight?: SymbolWeight;
 }): React.ReactElement => (
-  <Host matchContents style={{ width: props.size, height: props.size }}>
+  <Host
+    matchContents
+    style={{ width: props.size, height: props.size }}
+    // Ignores the safe area: otherwise SwiftUI pads the glyph down (or up)
+    // wherever it is drawn under the status bar or the home indicator (a
+    // button that starts off screen, or slides in past them), and it stays
+    // there, below where it belongs.
+    ignoreSafeArea="all"
+  >
     <Image
       systemName={props.name}
       size={props.size}
