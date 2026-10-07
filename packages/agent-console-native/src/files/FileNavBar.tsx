@@ -28,7 +28,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { Easing, runOnJS, type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAgentButtonVisible } from "../agentButtonSettings";
-import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_TURN, pageEasing, type PageBack } from "../Dubz";
+import { DubzPage, PAGE_MS, pageEasing, type PageBack } from "../Dubz";
 import type { DubzContext } from "../dubzSuggestions";
 import { iconForFile } from "../fileIcon";
 import { SetiIcon } from "../SetiIcon";
@@ -259,13 +259,17 @@ export const FileNavBar = (props: {
   // past a third (or flung), it settles open, else back. A tap opens it too.
   const openSwipe = React.useMemo(() => {
     const pan = Gesture.Pan()
-      .activeOffsetX([-10, 10])
-      .failOffsetY([-12, 12])
+      // Only a clear leftward drag pages (so a tap, or any other direction,
+      // falls through to the tap below).
+      .activeOffsetX(-18)
+      .failOffsetY([-14, 14])
       .onUpdate((e) => {
         pageX.value = Math.min(1, Math.max(0, -e.translationX / screenW));
       })
       .onEnd((e) => {
-        const open = pageX.value > PAGE_TURN || e.velocityX < -PAGE_FLING;
+        // Committed easily (a short drag or a flick), as a trigger — it need
+        // not be dragged the whole way.
+        const open = pageX.value > 0.15 || e.velocityX < -400;
         pageX.value = withTiming(open ? 1 : 0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
           if (finished === true && open) runOnJS(openDubz)();
         });

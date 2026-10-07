@@ -110,7 +110,7 @@ export const RepoMenuButton = (props: {
           <RNHostView matchContents>
             <View style={[styles.shadow, { width: props.width }]}>
               <Pressable style={styles.glass} accessibilityRole="button" accessibilityLabel="Repos" onPress={() => setOpen(true)}>
-                <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
+                <GlassView style={styles.glassFill} glassEffectStyle="regular" colorScheme={scheme} />
                 <View style={styles.names}>
                   <Text style={styles.title} numberOfLines={1}>
                     {filter.kind === "all" ? "All Repos" : filter.repo}
@@ -199,12 +199,16 @@ const makeStyles = (text: TextColors) =>
     },
     glass: {
       height: PILL_HEIGHT,
-      borderRadius: PILL_HEIGHT / 2,
-      overflow: "hidden",
       flexDirection: "row",
       alignItems: "center",
       gap: FILTER_GAP,
       paddingHorizontal: FILTER_PAD_H,
+    },
+    // The glass rounds ITSELF (borderRadius on the GlassView); no overflow on a
+    // parent, which would crop it to a flat fallback.
+    glassFill: {
+      ...StyleSheet.absoluteFill,
+      borderRadius: PILL_HEIGHT / 2,
     },
     names: {
       flexShrink: 1,

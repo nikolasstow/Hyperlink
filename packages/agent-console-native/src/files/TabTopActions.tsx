@@ -25,7 +25,7 @@ export const TabTopActions = (props: { readonly onSearch: () => void; readonly o
   return (
     <View style={styles.shadow}>
       <View style={styles.glass}>
-        <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
+        <GlassView style={styles.glassFill} glassEffectStyle="regular" colorScheme={scheme} />
         <Pressable style={styles.icon} accessibilityRole="button" accessibilityLabel="Search" onPress={props.onSearch}>
           <SystemIcon name="magnifyingglass" size={17} weight="medium" color={textColors.label} />
         </Pressable>
@@ -48,11 +48,14 @@ const styles = StyleSheet.create({
   glass: {
     width: TAB_TOP_ACTIONS_WIDTH,
     height: PILL_HEIGHT,
-    borderRadius: PILL_HEIGHT / 2,
-    overflow: "hidden",
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: PAD,
+  },
+  // The glass rounds itself; no clipping parent (that crops it flat).
+  glassFill: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: PILL_HEIGHT / 2,
   },
   icon: {
     width: ICON_TARGET,
