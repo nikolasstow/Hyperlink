@@ -59,6 +59,9 @@ export const RepoMenuButton = (props: {
   readonly onFilter: (filter: RepoFilter) => void;
   /** A repo's worktree chosen (its path). */
   readonly onWorktree: (repo: string, path: string) => void;
+  /** The widest it may be (the top bar shared with the back button), its
+   * names cut short to stay within it. */
+  readonly maxWidth: number;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -85,7 +88,7 @@ export const RepoMenuButton = (props: {
       >
         <Popover.Trigger>
           <RNHostView matchContents>
-            <Pressable style={styles.shadow} accessibilityRole="button" accessibilityLabel="Repos" onPress={() => setOpen(true)}>
+            <Pressable style={[styles.shadow, { maxWidth: props.maxWidth }]} accessibilityRole="button" accessibilityLabel="Repos" onPress={() => setOpen(true)}>
               <GlassView style={styles.glass} glassEffectStyle="regular" colorScheme={scheme}>
                 <View style={styles.names}>
                   <Text style={styles.title} numberOfLines={1}>
@@ -183,6 +186,7 @@ const makeStyles = (text: TextColors) =>
       gap: 12,
     },
     names: {
+      flexShrink: 1,
       alignItems: "center",
     },
     title: {

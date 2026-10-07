@@ -27,9 +27,11 @@
  * @internal
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { HashMap, Option } from "effect";
+import { HashMap, Option, Predicate } from "effect";
 import * as React from "react";
-import { Pressable, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
+import type { NavigationRoute } from "@react-navigation/native";
+import { Pressable, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
+import { cachedSessionTitle } from "../sessionCache";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { Easing, interpolate, runOnJS, type SharedValue, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,7 +39,7 @@ import { warmCodeSurfaces } from "../../modules/code-surface";
 import { codeSurfaceUri } from "../codeSurfaceAsset";
 import type { DubzContext } from "../dubzSuggestions";
 import { EdgeBlurBars } from "../EdgeBlurBars";
-import { HeaderTitlePill } from "../HeaderTitlePill";
+import { HeaderTitlePill, headerTitlePillWidth } from "../HeaderTitlePill";
 import { setPrimaryWorktree, usePrimaryWorktree, worktreesOf } from "../primaryWorktree";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScrollHide } from "../scrollHide";
@@ -48,7 +50,7 @@ import { GlassView } from "expo-glass-effect";
 import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
-import { WorktreePicker } from "../WorktreePicker";
+import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
 import { activeTab, canGoBack, canGoForward, type FileNavEntry, rerooted, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
@@ -97,6 +99,13 @@ const SWIPE_FLING = 800;
 const OVERVIEW_ROOM = 90;
 /** Room under a listing for the bar, and how far the bar drops to hide. */
 const BAR_ROOM = NAV_BAR_HEIGHT + 20;
+
+/** The top bar's side margin, and the least room between its pieces. */
+const TOP_SIDE = 16;
+const TOP_GAP = 8;
+/** The narrowest a back button with a name is drawn (else just the
+ * chevron). */
+const BACK_MIN_NAMED = HOME_HEADER_HEIGHT + 40;
 
 const lastSegment = (path: string, fallback: string): string => path.split("/").filter(Boolean).pop() ?? fallback;
 
@@ -190,6 +199,15 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // The page's top: Files draws its own (no native header), so it goes and
   // comes in step with the overview.
   const headerHeight = insets.top + HOME_HEADER_HEIGHT;
+  // Its back button names the page before (the repo, mostly), as wide as it
+  // can be and stay clear of the title in the middle (whose width is worked
+  // out as it draws it); in the tab view, of the repo menu (each half).
+  const navState = navigation.getState();
+  const backLabel = backLabelOf(navState.routes[navState.index - 1]);
+  const middleWidth =
+    isRoot && primary.primary !== undefined ? worktreePickerWidth(rootName, worktreeName(primary.primary), screen.width) : headerTitlePillWidth(current.name, false, screen.width);
+  const topBackMax = (screen.width - middleWidth) / 2 - TOP_SIDE - TOP_GAP;
+  const tabsTopMax = (screen.width - TOP_SIDE * 2 - TOP_GAP) / 2;
 
   // The bar drops away as a listing scrolls down; a new page brings it back.
   const barHide = useScrollHide(BAR_ROOM + insets.bottom + 10);
@@ -520,8 +538,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       {place === undefined ? null : (
         <TabOverview
           current={{ repo, place }}
+          back={<BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={tabsTopMax} />}
           top={
             <RepoMenuButton
+              maxWidth={tabsTopMax}
               filter={repoFilter}
               repos={reposWithTabs}
               onFilter={setRepoFilter}
@@ -600,7 +620,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           {/* The page's top: back to the repo, and its title (the worktree
             * picker at the root, else what is showing). */}
           <Reanimated.View style={[styles.top, topSlide]} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
-            <BackButton onPress={() => navigation.goBack()} />
+            <BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={topBackMax} />
             <View style={styles.topSpacer} pointerEvents="none" />
             <MoreMenu />
             <View style={styles.title} pointerEvents="box-none">
@@ -699,19 +719,52 @@ const MoreMenu = (): React.ReactElement => {
   );
 };
 
-/** The page's back button, as the system's: a glass circle, a chevron. */
-const BackButton = (props: { readonly onPress: () => void }): React.ReactElement => {
+/** The page's back button, as the system's: a glass capsule, a chevron and
+ * the name of the page it goes back to (cut short to stay within `maxWidth`:
+ * clear of what is in the middle; just the chevron, a circle, without room
+ * for a name). */
+const BackButton = (props: { readonly onPress: () => void; readonly label: string | undefined; readonly maxWidth: number }): React.ReactElement => {
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const named = props.label !== undefined && props.maxWidth >= BACK_MIN_NAMED;
   return (
-    <View style={styles.backShadow}>
-      <GlassView style={styles.back} glassEffectStyle="regular" colorScheme={scheme}>
-        <Pressable style={styles.backHit} accessibilityRole="button" accessibilityLabel="Back" onPress={props.onPress}>
+    <View style={[styles.backShadow, { maxWidth: Math.max(HOME_HEADER_HEIGHT, props.maxWidth) }]}>
+      <GlassView style={named ? styles.backNamed : styles.back} glassEffectStyle="regular" colorScheme={scheme}>
+        <Pressable style={named ? styles.backNamedHit : styles.backHit} accessibilityRole="button" accessibilityLabel={props.label === undefined ? "Back" : `Back to ${props.label}`} onPress={props.onPress}>
           <SystemIcon name="chevron.backward" size={18} weight="semibold" color={textColors.label} />
+          {named ? (
+            <Text style={[styles.backLabel, { color: textColors.label }]} numberOfLines={1}>
+              {props.label}
+            </Text>
+          ) : null}
         </Pressable>
       </GlassView>
     </View>
   );
+};
+
+/** The name of the page before this one, for the back button. */
+const backLabelOf = (route: NavigationRoute<RootStackParamList, keyof RootStackParamList> | undefined): string | undefined => {
+  if (route === undefined) return undefined;
+  // Its params as given (the route's type does not narrow them by name).
+  const params: unknown = route.params;
+  const param = (key: string): string | undefined => (Predicate.hasProperty(params, key) && Predicate.isString(params[key]) ? params[key] : undefined);
+  switch (route.name) {
+    case "Home":
+      return "Home";
+    case "Repo":
+      return param("name") ?? "Repo";
+    case "Chat": {
+      const session = param("sessionID");
+      return (session === undefined ? undefined : cachedSessionTitle(session)) ?? "Chat";
+    }
+    case "SessionList":
+      return param("title") ?? "Sessions";
+    case "Files":
+      return param("repo") ?? "Files";
+    default:
+      return route.name;
+  }
 };
 
 const styles = StyleSheet.create({
@@ -720,8 +773,8 @@ const styles = StyleSheet.create({
   },
   top: {
     position: "absolute",
-    left: 16,
-    right: 16,
+    left: TOP_SIDE,
+    right: TOP_SIDE,
     height: HOME_HEADER_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
@@ -756,6 +809,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  backNamed: {
+    height: HOME_HEADER_HEIGHT,
+    borderRadius: HOME_HEADER_HEIGHT / 2,
+  },
+  backNamedHit: {
+    height: HOME_HEADER_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingLeft: 12,
+    paddingRight: 16,
+  },
+  backLabel: {
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: "500",
   },
   tab: {
     position: "absolute",

@@ -42,6 +42,14 @@ const widthFor = (title: string, subtitle: string): number => {
   return Math.max(titleWidth, subtitleWidth) + PILL_PAD_H * 2;
 };
 
+/** The picker's width for a title and its worktree (as drawn below; no
+ * worktree line when it is the title), so a page can keep its other pieces
+ * clear of it without measuring. */
+export const worktreePickerWidth = (title: string, worktree: string, screenWidth: number): number => {
+  const subtitle = worktree === title ? "" : worktree;
+  return Math.min(Math.max(widthFor(title, subtitle), MIN_WIDTH), Math.round(screenWidth * MAX_WIDTH_RATIO));
+};
+
 export const WorktreePicker = (props: {
   readonly repo: string;
   /** The folder to name while the repo is not known as a scanned repo. */
@@ -55,7 +63,7 @@ export const WorktreePicker = (props: {
   if (primary === undefined) return null;
   const name = worktreeName(primary);
   const subtitle = name === props.title ? undefined : name;
-  const width = Math.min(Math.max(widthFor(props.title, subtitle ?? ""), MIN_WIDTH), Math.round(screenWidth * MAX_WIDTH_RATIO));
+  const width = worktreePickerWidth(props.title, name, screenWidth);
   return (
     <Host
       style={{ width, height: PILL_HEIGHT }}

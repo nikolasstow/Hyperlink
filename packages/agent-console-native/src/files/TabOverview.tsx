@@ -88,6 +88,8 @@ export const TabOverview = (props: {
   readonly reveal: SharedValue<number>;
   /** The page's top inset, as the previews draw it. */
   readonly pageTop: number;
+  /** At its top left: back out of Files (FilesScreen's back button). */
+  readonly back: React.ReactNode;
   /** At its top right: whose tabs it shows, and their worktrees
    * (RepoMenuButton). */
   readonly top: React.ReactNode;
@@ -212,6 +214,7 @@ export const TabOverview = (props: {
       </ScrollView>
       </Reanimated.View>
       <Reanimated.View style={[styles.top, topSlide]} pointerEvents="box-none">
+        {props.back}
         {props.top}
       </Reanimated.View>
       {/* Its bar slides up in as the grid opens, and away as a tab grows
@@ -364,12 +367,16 @@ const makeStyles = (text: TextColors) =>
       color: text.secondaryLabel,
       fontSize: 11,
     },
-    // At the top right, in from the side as Files' top bar.
+    // Back at the top left, the repo menu at the top right, in from the
+    // sides as Files' top bar.
     top: {
       position: "absolute",
+      left: 16,
       right: 16,
       height: PILL_HEIGHT,
-      justifyContent: "center",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
     },
     // In from the sides as Files' own bar is (its side margin).
     bar: {

@@ -24,6 +24,11 @@ import { useTextColors } from "./theme";
 const MIN_WIDTH = 56;
 const MAX_WIDTH_RATIO = 0.6;
 
+/** The pill's width for a title (as drawn below), so a page can keep its
+ * other pieces clear of it without measuring. */
+export const headerTitlePillWidth = (title: string, hasDot: boolean, screenWidth: number): number =>
+  Math.min(Math.max(titlePillWidth(title, hasDot), MIN_WIDTH), Math.round(screenWidth * MAX_WIDTH_RATIO));
+
 export const HeaderTitlePill = (props: {
   readonly title: string;
   /** Trailing status dot: omit for no dot. */
@@ -32,8 +37,7 @@ export const HeaderTitlePill = (props: {
   const textColors = useTextColors();
   const { width: screenWidth } = useWindowDimensions();
   const hasDot = props.dot !== undefined;
-  const maxWidth = Math.round(screenWidth * MAX_WIDTH_RATIO);
-  const pillWidth = Math.min(Math.max(titlePillWidth(props.title, hasDot), MIN_WIDTH), maxWidth);
+  const pillWidth = headerTitlePillWidth(props.title, hasDot, screenWidth);
 
   return (
     <Host
