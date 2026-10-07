@@ -13,7 +13,7 @@
  * @internal
  */
 import { Button, Divider, Host, HStack, Image, Menu, Popover, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { buttonStyle, font, foregroundStyle, frame, lineLimit, menuIndicator, menuStyle, padding } from "@expo/ui/swift-ui/modifiers";
+import { buttonStyle, contentShape, font, foregroundStyle, frame, lineLimit, menuIndicator, menuStyle, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, useColorScheme } from "react-native";
@@ -30,6 +30,8 @@ export type RepoFilter = { readonly kind: "all" } | { readonly kind: "repo"; rea
 const ROW_WIDTH = 260;
 const ROW_PAD_H = 16;
 const ROW_PAD_V = 11;
+/** The chevron's tap target: a row's height, square. */
+const CHEVRON_TARGET = 52;
 
 /** A row: its symbol (a checkmark when chosen), its name, and what is under
  * it (a repo's worktree). */
@@ -126,8 +128,14 @@ export const RepoMenuButton = (props: {
                   </Button>
                   {/* The chevron: its worktrees, a menu of their own. */}
                   <Menu
-                    label={<Image systemName="chevron.up.chevron.down" size={13} color={textColors.secondaryLabel} />}
-                    modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden"), padding({ horizontal: ROW_PAD_H, vertical: ROW_PAD_V })]}
+                    label={
+                      // A full row's height, and as wide: the whole of it
+                      // takes the tap, not only the glyph.
+                      <VStack modifiers={[frame({ width: CHEVRON_TARGET, height: CHEVRON_TARGET }), contentShape(shapes.rectangle())]}>
+                        <Image systemName="chevron.up.chevron.down" size={13} color={textColors.secondaryLabel} />
+                      </VStack>
+                    }
+                    modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden"), padding({ trailing: 4 })]}
                   >
                     {worktrees.map((worktree) => (
                       <Button
