@@ -27,6 +27,8 @@ import { PREVIEW_ASPECT } from "./tabShape";
 /** Rows and lines drawn: more than a screen holds, so it is always full. */
 const ROWS = 24;
 const LINES = 80;
+/** The code font size, shared by the gutter and the lines. */
+const CODE_FONT_SIZE = 12;
 
 /** Files' text as last read, so a preview paints at once and then refreshes. */
 const texts = new Map<string, string>();
@@ -101,18 +103,30 @@ const FolderPage = (props: { readonly path: string }): React.ReactElement => {
   );
 };
 
+/** Menlo's advance at the code font size, to size the line-number gutter from
+ * the digit count (nothing measured). */
+const CODE_GLYPH_WIDTH = CODE_FONT_SIZE * 0.6;
+
 const FilePage = (props: { readonly path: string }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const text = useText(props.path);
   if (text === "missing") return <Missing />;
   // A line per line, never wrapped — clipped at the edge as the editor shows
-  // it, not reflowed (which wrapped a long line into several and read wrong).
+  // it, not reflowed (which wrapped a long line into several and read wrong) —
+  // each with its number in a gutter, as the editor's.
+  const lines = text.split("\n").slice(0, LINES);
+  const gutterWidth = Math.ceil(String(lines.length).length * CODE_GLYPH_WIDTH);
   return (
     <>
-      {text.split("\n").slice(0, LINES).map((line, index) => (
-        <Text key={index} style={styles.code} numberOfLines={1} ellipsizeMode="clip">
-          {line === "" ? " " : line}
-        </Text>
+      {lines.map((line, index) => (
+        <View key={index} style={styles.codeLine}>
+          <Text style={[styles.gutter, { width: gutterWidth }]} numberOfLines={1}>
+            {index + 1}
+          </Text>
+          <Text style={styles.code} numberOfLines={1} ellipsizeMode="clip">
+            {line === "" ? " " : line}
+          </Text>
+        </View>
       ))}
     </>
   );
@@ -181,10 +195,23 @@ const makeStyles = (text: TextColors) =>
       fontWeight: "600",
       textAlign: "center",
     },
+    codeLine: {
+      flexDirection: "row",
+    },
+    // The line number, right-aligned in its gutter, dim as the editor's.
+    gutter: {
+      color: text.tertiaryLabel,
+      fontFamily: "Menlo",
+      fontSize: CODE_FONT_SIZE,
+      lineHeight: 17,
+      textAlign: "right",
+      marginRight: 10,
+    },
     code: {
+      flex: 1,
       color: text.label,
       fontFamily: "Menlo",
-      fontSize: 12,
+      fontSize: CODE_FONT_SIZE,
       lineHeight: 17,
     },
   });
