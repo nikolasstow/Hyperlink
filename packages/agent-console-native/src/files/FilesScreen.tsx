@@ -207,8 +207,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // out, not measured): the page's title, or the tab view's repo filter.
   const navState = navigation.getState();
   const backLabel = backLabelOf(navState.routes[navState.index - 1]);
+  // A file tab has no centre pill (its name is in the bottom bar; the space is
+  // kept for buttons). A folder tab's centre is its worktree/name pill.
   const pageMiddle =
-    isRoot && primary.primary !== undefined ? worktreePickerWidth(rootName, worktreeName(primary.primary), screen.width) : headerTitlePillWidth(current.name, false, screen.width);
+    current.kind === "file" ? 0 : isRoot && primary.primary !== undefined ? worktreePickerWidth(rootName, worktreeName(primary.primary), screen.width) : headerTitlePillWidth(current.name, false, screen.width);
   const topBackMax = (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
   // The tab view's filter is centered, search/history fixed at the right:
   // keep the filter clear of both (symmetric), and back clear of the filter.
@@ -653,7 +655,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
             <View style={styles.topSpacer} pointerEvents="none" />
             <MoreMenu />
             <View style={styles.title} pointerEvents="box-none">
-              {isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />}
+              {current.kind === "file" ? null : isRoot && primary.primary !== undefined ? <WorktreePicker repo={repo} fallback={dir} title={rootName} /> : <HeaderTitlePill title={current.name} />}
             </View>
           </Reanimated.View>
           <View style={StyleSheet.absoluteFill} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
