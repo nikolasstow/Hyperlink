@@ -40,10 +40,10 @@ import { useCodeTheme } from "./useCodeTheme";
 import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 
 /**
- * Phase 1 is this constant becoming `false`. It is sent to the surface as a
- * message rather than compiled in, so the switch is genuinely one value.
+ * The surface is editable (an IDE edits files). Sent to the surface as a
+ * message, so a read-only context could flip it without swapping engines.
  */
-const READ_ONLY = true;
+const READ_ONLY = false;
 
 /** Matches the chat code blocks, so the two surfaces sit at the same scale. */
 const FONT_SIZE = 12.5;
