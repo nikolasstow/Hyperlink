@@ -105,10 +105,16 @@ const FilePage = (props: { readonly path: string }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const text = useText(props.path);
   if (text === "missing") return <Missing />;
+  // A line per line, never wrapped — clipped at the edge as the editor shows
+  // it, not reflowed (which wrapped a long line into several and read wrong).
   return (
-    <Text style={styles.code} numberOfLines={LINES}>
-      {text.split("\n").slice(0, LINES).join("\n")}
-    </Text>
+    <>
+      {text.split("\n").slice(0, LINES).map((line, index) => (
+        <Text key={index} style={styles.code} numberOfLines={1} ellipsizeMode="clip">
+          {line === "" ? " " : line}
+        </Text>
+      ))}
+    </>
   );
 };
 
