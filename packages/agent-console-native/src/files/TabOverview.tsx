@@ -28,6 +28,7 @@ import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
 import { isRootPath, shownPath, useFullPaths } from "./filePaths";
+import { useMissingPaths } from "./missingPaths";
 import { PILL_HEIGHT } from "../titlePillStyle";
 import { NAV_BAR_SIDE } from "./FileNavBar";
 import { parentOf, sameTab, type TabFilter, type TabLayout, type TabRef } from "./tabLayout";
@@ -101,6 +102,8 @@ export const TabOverview = (props: {
     scrollRef.current?.scrollTo({ y: scrollTarget, animated: false });
   }, [scrollTarget]);
   const fullPaths = useFullPaths();
+  // Tabs whose file or folder isn't in the worktree: disabled until it is.
+  const missing = useMissingPaths();
   const [historyOpen, setHistoryOpen] = React.useState(false);
   const { onScroll } = props;
   const reportScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => onScroll(event.nativeEvent.contentOffset.y);
@@ -153,7 +156,9 @@ export const TabOverview = (props: {
               )}
             </Reanimated.View>
           ))}
-          {layout.tabs.map(({ repo, index, id, entry, x, y, grouped }) => (
+          {layout.tabs.map(({ repo, index, id, entry, x, y, grouped }) => {
+            const disabled = missing.has(entry.path);
+            return (
             <Reanimated.View
               key={`${repo}:${id}`}
               style={[styles.cell, { left: x, top: y, width: layout.cellWidth, height: layout.cellHeight }]}
@@ -166,11 +171,19 @@ export const TabOverview = (props: {
               {/* The preview at its exact size; its outline drawn over it (so it
                 * shifts nothing), the close button in its corner. */}
               <View style={[styles.preview, { width: layout.cellWidth, height: layout.previewHeight }, sameTab(props.hiddenTab, { repo, index }) && styles.hidden]}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Open ${entry.name}`} onPress={() => props.onSelect({ repo, index })}>
+                {/* Not in this worktree: dimmed, and it doesn't open (it can
+                  * still be closed). */}
+                <Pressable
+                  style={disabled && styles.disabled}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${entry.name}`}
+                  accessibilityState={{ disabled }}
+                  disabled={disabled}
+                  onPress={() => props.onSelect({ repo, index })}
+                >
                   <TabPreview entry={entry} width={layout.cellWidth} topInset={props.pageTop} />
                 </Pressable>
-                {/* The tab showing in Files outlined. */}
-                <View style={[styles.outline, repo === props.current.repo && index === props.current.place.active && styles.outlineActive]} pointerEvents="none" />
+                <View style={styles.outline} pointerEvents="none" />
                 <Pressable style={styles.close} accessibilityRole="button" accessibilityLabel={`Close ${entry.name}`} onPress={() => props.onClose({ repo, index })} hitSlop={10}>
                   <SystemIcon name="xmark" size={11} weight="bold" color={textColors.label} />
                 </Pressable>
@@ -178,7 +191,7 @@ export const TabOverview = (props: {
               {/* Its type beside its name, as in the address pill; its folder
                 * under it, unless its group's header says it (cut at its start:
                 * its end matters most). */}
-              <View style={styles.label}>
+              <View style={[styles.label, disabled && styles.disabled]}>
                 <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={22} />
                 <View style={styles.labelText}>
                   <Text style={styles.name} numberOfLines={1}>
@@ -192,7 +205,8 @@ export const TabOverview = (props: {
                 </View>
               </View>
             </Reanimated.View>
-          ))}
+            );
+          })}
         </View>
         </LayoutAnimationConfig>
       </ScrollView>
@@ -315,12 +329,11 @@ const makeStyles = (text: TextColors) =>
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.separator,
     },
-    outlineActive: {
-      borderWidth: 2.5,
-      borderColor: colors.tint,
-    },
     hidden: {
       opacity: 0,
+    },
+    disabled: {
+      opacity: 0.4,
     },
     close: {
       position: "absolute",

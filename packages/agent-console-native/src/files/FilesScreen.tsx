@@ -59,6 +59,7 @@ import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { type RepoFilter, RepoMenuButton } from "./RepoMenuButton";
+import { useMissingPaths } from "./missingPaths";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Files">;
 
@@ -395,8 +396,22 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // soft grey; the cards follow the finger one for one (`swipe`); let go past
   // a third of a card (or flung), the next one slides to the middle and grows
   // back to the page.
-  const previousTab = place?.tabs[shownIndex - 1];
-  const nextTab = place?.tabs[shownIndex + 1];
+  // The tabs beside this one, skipping any not in this worktree (disabled
+  // until a worktree has them).
+  const missing = useMissingPaths();
+  const neighbourOf = (step: -1 | 1): number | undefined => {
+    if (place === undefined) return undefined;
+    for (let at = shownIndex + step; at >= 0 && at < place.tabs.length; at += step) {
+      const each = place.tabs[at];
+      const entry = each === undefined ? undefined : tabEntry(each);
+      if (entry !== undefined && !missing.has(entry.path)) return at;
+    }
+    return undefined;
+  };
+  const previousIndex = neighbourOf(-1);
+  const nextIndex = neighbourOf(1);
+  const previousTab = previousIndex === undefined ? undefined : place?.tabs[previousIndex];
+  const nextTab = nextIndex === undefined ? undefined : place?.tabs[nextIndex];
   const previous = previousTab === undefined ? undefined : tabEntry(previousTab);
   const next = nextTab === undefined ? undefined : tabEntry(nextTab);
   const hasPrevious = previous !== undefined;
@@ -409,7 +424,8 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const coverShown = useSharedValue(0);
   const swipeTo = React.useCallback(
     (by: number): void => {
-      const index = shownIndex + by;
+      const index = by < 0 ? previousIndex : nextIndex;
+      if (index === undefined) return;
       const swiped = place?.tabs[index];
       const entry = swiped === undefined ? undefined : tabEntry(swiped);
       if (entry !== undefined) {
@@ -419,7 +435,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       selectFileTab(repo, index);
       setSwipedTo(index);
     },
-    [repo, shownIndex, place, coverShown],
+    [repo, previousIndex, nextIndex, place, coverShown],
   );
   const clearCover = React.useCallback((id: number) => setCover((now) => (now?.id === id ? undefined : now)), []);
   const coverId = cover?.id;

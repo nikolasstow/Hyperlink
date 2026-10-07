@@ -21,6 +21,7 @@ import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { type TextColors, useScreenBackground, useThemedStyles } from "../theme";
 import type { FileNavEntry } from "./FileNav";
+import { notePath } from "./missingPaths";
 import { PREVIEW_ASPECT } from "./tabShape";
 
 /** Rows and lines drawn: more than a screen holds, so it is always full. */
@@ -39,6 +40,7 @@ const useFolder = (path: string): ReadonlyArray<FsEntry> | "missing" => {
     let alive = true;
     loadTree(backend, path)
       .then((load) => {
+        notePath(path, load !== "missing");
         if (alive) setEntries(load === "missing" ? "missing" : (getCachedListing(path) ?? []));
       })
       .catch((error: unknown) => console.error(`[files] refreshing ${path} for its preview failed`, error));
@@ -60,6 +62,7 @@ const useText = (path: string): string | "missing" => {
       .then((read) => {
         if (read === undefined) texts.delete(path);
         else texts.set(path, read);
+        notePath(path, read !== undefined);
         if (alive) setText(read ?? "missing");
       })
       .catch((error: unknown) => console.error(`[files] reading ${path} for its preview failed`, error));

@@ -219,3 +219,6 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   already sent in another path form is asked for again as a new tree session (it came
   back empty, so previews and listings went blank); a file or folder not in the new
   worktree says so in its preview ("Not in this worktree"), and on its page.
+- A tab whose file or folder isn't in the worktree is disabled (dimmed, doesn't open,
+  can still close; swiping skips it) until a worktree that has it is switched to.
+- No outline on the last-opened tab in the tab view.
