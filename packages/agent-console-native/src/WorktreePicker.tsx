@@ -17,12 +17,12 @@
  * @internal
  */
 import { Host, Menu, Text as UIText, Toggle, VStack } from "@expo/ui/swift-ui";
-import { buttonStyle, font, foregroundStyle, frame, glassEffect, lineLimit, menuIndicator, menuStyle, padding, truncationMode } from "@expo/ui/swift-ui/modifiers";
+import { buttonStyle, font, foregroundStyle, frame, glassEffect, lineLimit, menuIndicator, menuStyle, padding, shadow, truncationMode } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { setPrimaryWorktree, usePrimaryWorktree } from "./primaryWorktree";
 import type { ScannedWorktree } from "./repoScan";
-import { PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H, titlePillWidth } from "./titlePillStyle";
+import { PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H, PILL_SHADOW, titlePillWidth } from "./titlePillStyle";
 import { useTextColors } from "./theme";
 
 /** What a worktree is called: the main checkout is "main". */
@@ -76,7 +76,7 @@ export const WorktreePicker = (props: {
           <VStack
             alignment="center"
             spacing={0}
-            modifiers={[frame({ width, height: PILL_HEIGHT }), padding({ horizontal: PILL_PAD_H }), glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" })]}
+            modifiers={[frame({ width, height: PILL_HEIGHT }), padding({ horizontal: PILL_PAD_H }), glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }), shadow(PILL_SHADOW)]}
           >
             <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1), truncationMode("tail")]}>{props.title}</UIText>
             {subtitle === undefined ? null : (

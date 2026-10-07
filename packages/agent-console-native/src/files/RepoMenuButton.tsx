@@ -1,8 +1,8 @@
 /**
- * The tab view's repo menu, at its top right: one glass holding search,
- * history, and a button naming the repo whose tabs are shown (and its
- * worktree), or All Repos. Tapping it opens a
- * native popover listing All Repos, then every repo with tabs open. A repo's
+ * The tab view's repo filter, its own glass in the middle of the top bar:
+ * the repo whose tabs are shown (and its worktree), or All Repos, with a
+ * chevron. Tapping it opens a native popover listing All Repos, then every
+ * repo with tabs open. A repo's
  * row is two controls: its name shows its tabs (a filter); its chevron opens
  * its worktrees as a menu of their own, one tapped switching it (its tabs
  * moving to the same files there). A native menu cannot hold a row that does
@@ -32,8 +32,26 @@ export type RepoFilter = { readonly kind: "all" } | { readonly kind: "repo"; rea
 const ROW_WIDTH = 260;
 const ROW_PAD_H = 16;
 const ROW_PAD_V = 11;
-/** Search and history's tap targets in the button: their width. */
-const ICON_TARGET = 40;
+/** The filter's room: at its sides, between its names and its chevron, and
+ * its chevron's size. */
+const FILTER_PAD_H = 18;
+const FILTER_GAP = 12;
+const FILTER_CHEVRON = 12;
+/** Its title's and worktree's font sizes, and the average glyph advance as a
+ * fraction of font size (semibold system font), to work its width out from
+ * (nothing measured; generous, so a name never truncates early). */
+const FILTER_TITLE_SIZE = 15;
+const FILTER_WORKTREE_SIZE = 12;
+const AVG_GLYPH_RATIO = 0.62;
+
+/** The filter's width for its title and worktree (as drawn below), so the
+ * top bar places it and the back button without measuring. */
+export const repoFilterWidth = (title: string, worktree: string | undefined): number => {
+  const titleW = Math.ceil(title.length * FILTER_TITLE_SIZE * AVG_GLYPH_RATIO);
+  const worktreeW = worktree === undefined ? 0 : Math.ceil(worktree.length * FILTER_WORKTREE_SIZE * AVG_GLYPH_RATIO);
+  return Math.max(titleW, worktreeW) + FILTER_PAD_H * 2 + FILTER_GAP + FILTER_CHEVRON;
+};
+
 /** The chevron's tap target: a row's height, square. */
 const CHEVRON_TARGET = 52;
 
@@ -62,13 +80,8 @@ export const RepoMenuButton = (props: {
   readonly onFilter: (filter: RepoFilter) => void;
   /** A repo's worktree chosen (its path). */
   readonly onWorktree: (repo: string, path: string) => void;
-  /** Search (what it searches: not decided yet). */
-  readonly onSearch: () => void;
-  /** History: everything opened in this repo's Files. */
-  readonly onHistory: () => void;
-  /** The widest it may be (the top bar shared with the back button), its
-   * names cut short to stay within it. */
-  readonly maxWidth: number;
+  /** Its width (worked out, repoFilterWidth): its names cut short to it. */
+  readonly width: number;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -95,30 +108,22 @@ export const RepoMenuButton = (props: {
       >
         <Popover.Trigger>
           <RNHostView matchContents>
-            {/* One glass: search and history, then the repo filter. */}
-            <View style={[styles.shadow, { maxWidth: props.maxWidth }]}>
-              <GlassView style={styles.glass} glassEffectStyle="regular" colorScheme={scheme}>
-                <Pressable style={styles.icon} accessibilityRole="button" accessibilityLabel="Search" onPress={props.onSearch}>
-                  <SystemIcon name="magnifyingglass" size={17} weight="medium" color={textColors.label} />
-                </Pressable>
-                <Pressable style={styles.icon} accessibilityRole="button" accessibilityLabel="History" onPress={props.onHistory}>
-                  <SystemIcon name="clock" size={17} weight="medium" color={textColors.label} />
-                </Pressable>
-                <Pressable style={styles.filter} accessibilityRole="button" accessibilityLabel="Repos" onPress={() => setOpen(true)}>
-                  <View style={styles.names}>
-                    <Text style={styles.title} numberOfLines={1}>
-                      {filter.kind === "all" ? "All Repos" : filter.repo}
+            <View style={[styles.shadow, { width: props.width }]}>
+              <Pressable style={styles.glass} accessibilityRole="button" accessibilityLabel="Repos" onPress={() => setOpen(true)}>
+                <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
+                <View style={styles.names}>
+                  <Text style={styles.title} numberOfLines={1}>
+                    {filter.kind === "all" ? "All Repos" : filter.repo}
+                  </Text>
+                  {shown === undefined ? null : (
+                    <Text style={styles.worktree} numberOfLines={1}>
+                      {worktreeName(shown)}
                     </Text>
-                    {shown === undefined ? null : (
-                      <Text style={styles.worktree} numberOfLines={1}>
-                        {worktreeName(shown)}
-                      </Text>
-                    )}
-                  </View>
-                  {/* It opens a list. */}
-                  <SystemIcon name="chevron.down" size={12} weight="semibold" color={textColors.secondaryLabel} />
-                </Pressable>
-              </GlassView>
+                  )}
+                </View>
+                {/* It opens a list. */}
+                <SystemIcon name="chevron.down" size={12} weight="semibold" color={textColors.secondaryLabel} />
+              </Pressable>
             </View>
           </RNHostView>
         </Popover.Trigger>
@@ -195,25 +200,11 @@ const makeStyles = (text: TextColors) =>
     glass: {
       height: PILL_HEIGHT,
       borderRadius: PILL_HEIGHT / 2,
-      paddingLeft: 4,
+      overflow: "hidden",
       flexDirection: "row",
       alignItems: "center",
-    },
-    // Search and history: a circle's width each, the bar's height.
-    icon: {
-      width: ICON_TARGET,
-      height: PILL_HEIGHT,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    filter: {
-      flexShrink: 1,
-      height: PILL_HEIGHT,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      paddingLeft: 8,
-      paddingRight: 18,
+      gap: FILTER_GAP,
+      paddingHorizontal: FILTER_PAD_H,
     },
     names: {
       flexShrink: 1,

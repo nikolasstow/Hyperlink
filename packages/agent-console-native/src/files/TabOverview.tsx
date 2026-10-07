@@ -101,8 +101,9 @@ export const TabOverview = (props: {
   readonly pageTop: number;
   /** At its top left: back out of Files (FilesScreen's back button). */
   readonly back: React.ReactNode;
-  /** At its top right: whose tabs it shows, and their worktrees
-   * (RepoMenuButton). */
+  /** In the middle of its top: the repo filter (RepoMenuButton). */
+  readonly center: React.ReactNode;
+  /** At its top right: search and history (TabTopActions). */
   readonly top: React.ReactNode;
 
 }): React.ReactElement => {
@@ -226,6 +227,11 @@ export const TabOverview = (props: {
       <Reanimated.View style={[styles.top, topSlide]} pointerEvents="box-none">
         {props.back}
         {props.top}
+        {/* The filter in the middle, over the row (its width keeps it clear
+          * of the sides: FilesScreen works it out). */}
+        <View style={styles.center} pointerEvents="box-none">
+          {props.center}
+        </View>
       </Reanimated.View>
       {/* Its bar slides up in as the grid opens, and away as a tab grows
         * out of it (by layout: it is glass). */}
@@ -319,8 +325,8 @@ const makeStyles = (text: TextColors) =>
       color: text.secondaryLabel,
       fontSize: 11,
     },
-    // Back at the top left, the repo menu at the top right, in from the
-    // sides as Files' top bar.
+    // Back at the top left, search and history at the top right, in from the
+    // sides as Files' top bar; the filter centered over it.
     top: {
       position: "absolute",
       left: 16,
@@ -329,6 +335,11 @@ const makeStyles = (text: TextColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+    },
+    center: {
+      ...StyleSheet.absoluteFill,
+      alignItems: "center",
+      justifyContent: "center",
     },
     // In from the sides as Files' own bar is (its side margin).
     bar: {

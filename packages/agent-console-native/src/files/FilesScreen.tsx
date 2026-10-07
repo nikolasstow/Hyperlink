@@ -40,7 +40,7 @@ import { codeSurfaceUri } from "../codeSurfaceAsset";
 import type { DubzContext } from "../dubzSuggestions";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { HeaderTitlePill, headerTitlePillWidth } from "../HeaderTitlePill";
-import { setPrimaryWorktree, usePrimaryWorktree, worktreesOf } from "../primaryWorktree";
+import { primaryWorktreeOf, setPrimaryWorktree, usePrimaryWorktree, worktreesOf } from "../primaryWorktree";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScrollHide } from "../scrollHide";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
@@ -61,7 +61,8 @@ import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
-import { type RepoFilter, RepoMenuButton } from "./RepoMenuButton";
+import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
+import { TAB_TOP_ACTIONS_WIDTH, TabTopActions } from "./TabTopActions";
 import { useMissingPaths } from "./missingPaths";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Files">;
@@ -202,14 +203,20 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // comes in step with the overview.
   const headerHeight = insets.top + HOME_HEADER_HEIGHT;
   // Its back button names the page before (the repo, mostly), as wide as it
-  // can be and stay clear of the title in the middle (whose width is worked
-  // out as it draws it); in the tab view, of the repo menu (each half).
+  // can be and stay clear of the piece in the middle (whose width is worked
+  // out, not measured): the page's title, or the tab view's repo filter.
   const navState = navigation.getState();
   const backLabel = backLabelOf(navState.routes[navState.index - 1]);
-  const middleWidth =
+  const pageMiddle =
     isRoot && primary.primary !== undefined ? worktreePickerWidth(rootName, worktreeName(primary.primary), screen.width) : headerTitlePillWidth(current.name, false, screen.width);
-  const topBackMax = (screen.width - middleWidth) / 2 - TOP_SIDE - TOP_GAP;
-  const tabsTopMax = (screen.width - TOP_SIDE * 2 - TOP_GAP) / 2;
+  const topBackMax = (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
+  // The tab view's filter is centered, search/history fixed at the right:
+  // keep the filter clear of both (symmetric), and back clear of the filter.
+  const filterLabel = repoFilter.kind === "all" ? "All Repos" : repoFilter.repo;
+  const filterWorktree = repoFilter.kind === "repo" ? primaryWorktreeOf(repoFilter.repo) : undefined;
+  const filterMax = screen.width - TOP_SIDE * 2 - (TAB_TOP_ACTIONS_WIDTH + TOP_GAP) * 2;
+  const filterWidth = Math.min(repoFilterWidth(filterLabel, filterWorktree === undefined ? undefined : worktreeName(filterWorktree)), filterMax);
+  const tabsBackMax = (screen.width - filterWidth) / 2 - TOP_SIDE - TOP_GAP;
 
   // The bar drops away as a listing scrolls down; a new page brings it back.
   const barHide = useScrollHide(BAR_ROOM + insets.bottom + 10);
@@ -539,13 +546,17 @@ export const FilesScreen = (props: Props): React.ReactElement => {
         * animation, its previews already drawn and kept up to date). */}
       {place === undefined ? null : (
         <TabOverview
-          back={<BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={tabsTopMax} />}
+          back={<BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={tabsBackMax} />}
           top={
-            <RepoMenuButton
-              maxWidth={tabsTopMax}
+            <TabTopActions
               // Search: what it searches is not decided yet.
               onSearch={() => undefined}
               onHistory={() => setHistoryOpen(true)}
+            />
+          }
+          center={
+            <RepoMenuButton
+              width={filterWidth}
               filter={repoFilter}
               repos={reposWithTabs}
               onFilter={setRepoFilter}

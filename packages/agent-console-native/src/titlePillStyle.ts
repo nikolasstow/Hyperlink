@@ -37,3 +37,7 @@ export const titlePillWidth = (title: string, hasDot: boolean): number => {
   return text + PILL_PAD_H * 2 + dot;
 };
 
+
+/** The capsule's drop shadow (SwiftUI's `shadow` modifier), matching the
+ * glass buttons' (the pill is native glass, so no RN shadow wrapper). */
+export const PILL_SHADOW = { radius: 6, y: 2, color: "rgba(0,0,0,0.12)" };

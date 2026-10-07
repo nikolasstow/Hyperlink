@@ -14,11 +14,11 @@
  * @internal
  */
 import { HStack, Host, Image, Text as UIText } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, frame, glassEffect, lineLimit, padding } from "@expo/ui/swift-ui/modifiers";
+import { font, foregroundStyle, frame, glassEffect, lineLimit, padding, shadow } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
-import { PILL_DOT_GAP, PILL_DOT_SIZE, PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H, titlePillWidth } from "./titlePillStyle";
+import { PILL_DOT_GAP, PILL_DOT_SIZE, PILL_FONT_SIZE, PILL_HEIGHT, PILL_PAD_H, PILL_SHADOW, titlePillWidth } from "./titlePillStyle";
 import { useTextColors } from "./theme";
 
 const MIN_WIDTH = 56;
@@ -53,6 +53,7 @@ export const HeaderTitlePill = (props: {
           frame({ width: pillWidth, height: PILL_HEIGHT }),
           padding({ horizontal: PILL_PAD_H }),
           glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+          shadow(PILL_SHADOW),
         ]}
       >
         <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>

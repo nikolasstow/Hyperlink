@@ -226,6 +226,10 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   white checkmark) at the right, back into the tab showing. No History button.
 - Back buttons (Files' top bar, the tab view's) name the page they go back to, kept
   clear of what is in the middle (the title's width worked out, not measured).
-- The tab view's top right is one glass: search, history, then the repo filter. History
-  opens the History sheet (a tap opens the file in a new tab). What search searches is
-  not decided yet (owner, 2026-10-07): the button does nothing for now.
+- The tab view's top bar: back at the left, the repo filter its own glass in the middle
+  (its width worked out, so back stays clear of it), search and history their own glass
+  at the right. History opens the History sheet (a tap opens the file in a new tab).
+  What search searches is not decided yet (owner, 2026-10-07): the button does nothing.
+- The centre glass pills (Files' title, the worktree picker) carry the same drop shadow
+  as the glass buttons (SwiftUI's `shadow` modifier: PILL_SHADOW; they are native glass,
+  so no RN shadow wrapper).
