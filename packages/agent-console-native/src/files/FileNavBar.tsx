@@ -279,32 +279,41 @@ export const FileNavBar = (props: {
   const forwardIcon = useAnimatedStyle(() => ({ opacity: forwardShown.value }));
   const { swipe, paging } = props;
 
-  // The bar (back/forward, the tab pills) fades out as the morph starts, and
-  // back in as it returns; in place, never slid off.
-  const barFade = useAnimatedStyle(() => ({ opacity: interpolate(pageX.value, [0, 0.5], [1, 0], Extrapolation.CLAMP) }));
-  // Dubz's page sits in place; its contents fade in over the last of the
-  // stretch, where the morph is already the min view's shape, so the chat
-  // button reads as becoming it.
-  const dubzFade = useAnimatedStyle(() => ({ opacity: interpolate(pageX.value, [0.8, 1], [0, 1], Extrapolation.CLAMP) }));
+  // The bar (back/forward, the tab pills) slides off to the left as the morph
+  // runs, and back on return — by layout (margin), never opacity: glass.
+  const barSlide = useAnimatedStyle(() => ({
+    marginLeft: -pageX.value * screenW,
+    marginRight: pageX.value * screenW,
+  }));
 
   // The chat button stretching into the min view: its frame from the button's
   // circle (right of the bar) to the min-view pill (the bar's width), by
-  // layout — it is glass. Its glass and icon fade out over the last of the
-  // stretch, as Dubz's page fades in on top.
+  // LAYOUT ONLY — it is glass, so no opacity/transform. It comes and goes by
+  // the native glass fade (glassEffectStyle, below), and hands off to Dubz's
+  // page (which parks/unparks and fades natively too).
   const buttonLeft = screenW - NAV_BAR_SIDE - NAV_BAR_HEIGHT;
   const morphFrame = useAnimatedStyle(() => ({
     left: interpolate(pageX.value, [0, 1], [buttonLeft, DUBZ_PILL_SIDE]),
     width: interpolate(pageX.value, [0, 1], [NAV_BAR_HEIGHT, screenW - DUBZ_PILL_SIDE * 2]),
     height: interpolate(pageX.value, [0, 1], [NAV_BAR_HEIGHT, DUBZ_PILL_H]),
     bottom: interpolate(pageX.value, [0, 1], [NAV_BAR_BOTTOM, DUBZ_PILL_BOTTOM]),
-    opacity: interpolate(pageX.value, [0.8, 1], [1, 0], Extrapolation.CLAMP),
   }));
+  // The chat icon fades over the first of the stretch (it is a SwiftUI symbol,
+  // not glass, so opacity is fine on it).
   const morphIcon = useAnimatedStyle(() => ({ opacity: interpolate(pageX.value, [0.1, 0.5], [1, 0], Extrapolation.CLAMP) }));
+  // The morph glass materialises/dematerialises natively (never opacity): on
+  // over the first of the stretch, off over the last, where Dubz's page takes
+  // over (it materialises as it unparks).
+  const [morphLit, setMorphLit] = React.useState(true);
+  useAnimatedReaction(
+    () => pageX.value < 0.82,
+    (lit) => runOnJS(setMorphLit)(lit),
+  );
 
   return (
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
       <View style={styles.pages} pointerEvents="box-none">
-        <Reanimated.View style={barFade} pointerEvents={onDubz ? "none" : "box-none"}>
+        <Reanimated.View style={barSlide} pointerEvents={onDubz ? "none" : "box-none"}>
           {/* One glass container: pieces that meet blend, as Safari's. */}
           <GlassContainer style={styles.bar}>
           {/* The tabs' pills, under the buttons: the one before, this one,
@@ -339,16 +348,16 @@ export const FileNavBar = (props: {
               * at rest; untouchable while on Dubz (its page takes over). */}
             <Reanimated.View style={[styles.morph, styles.shadow, morphFrame]} pointerEvents={onDubz ? "none" : "auto"}>
               <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Dubz" onPress={toDubz}>
-                <GlassView style={styles.morphGlass} glassEffectStyle="regular" colorScheme={scheme}>
+                <GlassView style={styles.morphGlass} glassEffectStyle={{ style: morphLit ? "regular" : "none", animate: true }} colorScheme={scheme}>
                   <Reanimated.View style={morphIcon}>
                     <SystemIcon name="bubble.left.and.text.bubble.right" size={19} weight="medium" color={textColors.label} />
                   </Reanimated.View>
                 </GlassView>
               </Pressable>
             </Reanimated.View>
-            <Reanimated.View style={[styles.dubzPage, styles.dubzInPlace, dubzFade]} pointerEvents={onDubz ? "box-none" : "none"}>
-              <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} />
-            </Reanimated.View>
+            <View style={[styles.dubzPage, styles.dubzInPlace]} pointerEvents={onDubz ? "box-none" : "none"}>
+              <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} hiddenCollapsed />
+            </View>
           </>
         ) : null}
       </View>

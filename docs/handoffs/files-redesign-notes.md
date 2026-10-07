@@ -245,3 +245,9 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   at (unchanged). Finger swipe-back reverses the morph. Open is tap-only.
 - BarWindow internals (detents, memory, suggestions, keyboard) unchanged. Applies to
   file and folder tabs (FileNavBar is shared).
+- Glass-safe (fixed 2026-10-07): the morph breaks no glass rule. The bar leaves by
+  margin slide (layout), the morph resizes by layout only, and the morph's glass
+  comes/goes by the native `glassEffectStyle` fade (regular↔none), not opacity; Dubz's
+  page parks off-screen when collapsed (`hiddenCollapsed`, a layout style swap) and
+  materialises natively as it unparks. No opacity/transform on any GlassView or its
+  parents (BarWindow.tsx's rule). Only the SwiftUI icon inside the glass fades by opacity.
