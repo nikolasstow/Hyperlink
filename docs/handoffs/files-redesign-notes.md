@@ -222,3 +222,7 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
 - A tab whose file or folder isn't in the worktree is disabled (dimmed, doesn't open,
   can still close; swiping skips it) until a worktree that has it is switched to.
 - No outline on the last-opened tab in the tab view.
+- The tab view's bottom bar: + at the left, the switcher in the middle, Done (blue, a
+  white checkmark) at the right, back into the tab showing. No History button.
+- Back buttons (Files' top bar, the tab view's) name the page they go back to, kept
+  clear of what is in the middle (the title's width worked out, not measured).

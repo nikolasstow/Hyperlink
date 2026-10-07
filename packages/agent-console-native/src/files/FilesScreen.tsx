@@ -537,7 +537,6 @@ export const FilesScreen = (props: Props): React.ReactElement => {
         * animation, its previews already drawn and kept up to date). */}
       {place === undefined ? null : (
         <TabOverview
-          current={{ repo, place }}
           back={<BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={tabsTopMax} />}
           top={
             <RepoMenuButton
@@ -563,7 +562,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           onSelect={openTab}
           onClose={(ref) => closeFileTab(ref.repo, ref.index)}
           onNew={() => startTab(root)}
-          onOpenVisit={startTab}
+          onDone={() => openTab({ repo, index: place.active })}
           screen={screen}
           topInset={insets.top}
           layout={layout}

@@ -2,9 +2,9 @@
  * Files' tab overview, as Safari's: every tab as a preview in a two-column
  * grid, its name under it and as much of its path as fits, cut at the start
  * (the end matters most). Tapping a preview opens that tab (FilesScreen zooms
- * it out to full); its corner button closes it. The bottom bar: history at the
- * left, All · Files · Folders in the middle (a native segmented control), a +
- * at the right for a new tab.
+ * it out to full); its corner button closes it. The bottom bar: a + at the
+ * left for a new tab, All · Files · Folders in the middle (a native segmented
+ * control), Done at the right (blue: back into the tab showing).
  *
  * Its geometry is fixed (`overviewGeometry`), so FilesScreen knows where each
  * preview sits on the screen without measuring, for the zoom in and out.
@@ -16,7 +16,7 @@ import { Host, Image as UIImage, Picker, Text as UIText } from "@expo/ui/swift-u
 import { controlSize, font, pickerStyle, tag } from "@expo/ui/swift-ui/modifiers";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { FlatList, Modal as RNModal, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
 import Reanimated, { Easing, FadeIn, FadeOut, LayoutAnimationConfig, LinearTransition, type SharedValue, useAnimatedStyle, ZoomIn, ZoomOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FIELD_TINT_DARK, FIELD_TINT_LIGHT } from "../BottomBar";
@@ -26,7 +26,7 @@ import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
-import type { FileNavEntry, FilePlace, Visit } from "./FileNav";
+
 import { isRootPath, shownPath, useFullPaths } from "./filePaths";
 import { useMissingPaths } from "./missingPaths";
 import { PILL_HEIGHT } from "../titlePillStyle";
@@ -45,22 +45,32 @@ export const OVERVIEW_TOP_ROOM = PILL_HEIGHT + 10;
 const GRID_MS = 300;
 const GRID_EASING = Easing.bezier(0.2, 0.9, 0.25, 1);
 
-const RoundButton = (props: { readonly icon: React.ComponentProps<typeof SystemIcon>["name"]; readonly label: string; readonly onPress: () => void }): React.ReactElement => {
+/** The system's blue in each mode (systemBlue), as glass takes a tint. */
+const BLUE_LIGHT = "#007AFF";
+const BLUE_DARK = "#0A84FF";
+
+/** A round glass button; `prominent`, blue with a white icon (Done). */
+const RoundButton = (props: {
+  readonly icon: React.ComponentProps<typeof SystemIcon>["name"];
+  readonly label: string;
+  readonly onPress: () => void;
+  readonly prominent?: boolean;
+}): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const prominent = props.prominent === true;
+  const tint = prominent ? (scheme === "dark" ? BLUE_DARK : BLUE_LIGHT) : scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT;
   return (
-    <GlassView style={styles.round} glassEffectStyle="clear" tintColor={scheme === "dark" ? FIELD_TINT_DARK : FIELD_TINT_LIGHT} colorScheme={scheme}>
+    <GlassView style={styles.round} glassEffectStyle={prominent ? "regular" : "clear"} tintColor={tint} colorScheme={scheme}>
       <Pressable style={styles.roundHit} accessibilityRole="button" accessibilityLabel={props.label} onPress={props.onPress}>
-        <SystemIcon name={props.icon} size={20} weight="medium" color={textColors.label} />
+        <SystemIcon name={props.icon} size={20} weight={prominent ? "semibold" : "medium"} color={prominent ? "#FFFFFF" : textColors.label} />
       </Pressable>
     </GlassView>
   );
 };
 
 export const TabOverview = (props: {
-  /** The repo Files is in, and its place: its history, its tab showing. */
-  readonly current: { readonly repo: string; readonly place: FilePlace };
   /** Where a repo's paths are shown from: its Files root first, then its
    * worktrees (filePaths.ts). */
   readonly rootsOf: (repo: string) => ReadonlyArray<string>;
@@ -78,7 +88,8 @@ export const TabOverview = (props: {
   readonly onSelect: (tab: TabRef) => void;
   readonly onClose: (tab: TabRef) => void;
   readonly onNew: () => void;
-  readonly onOpenVisit: (entry: FileNavEntry) => void;
+  /** Done: back into the tab showing. */
+  readonly onDone: () => void;
   readonly screen: { readonly width: number; readonly height: number };
   readonly topInset: number;
   /** Where everything in the grid is (tabLayout.ts). */
@@ -106,7 +117,6 @@ export const TabOverview = (props: {
   const fullPaths = useFullPaths();
   // Tabs whose file or folder isn't in the worktree: disabled until it is.
   const missing = useMissingPaths();
-  const [historyOpen, setHistoryOpen] = React.useState(false);
   const { onScroll } = props;
   const reportScroll = (event: NativeSyntheticEvent<NativeScrollEvent>): void => onScroll(event.nativeEvent.contentOffset.y);
   const { reveal } = props;
@@ -220,7 +230,7 @@ export const TabOverview = (props: {
       {/* Its bar slides up in as the grid opens, and away as a tab grows
         * out of it (by layout: it is glass). */}
       <Reanimated.View style={[styles.bar, barSlide]} pointerEvents="box-none">
-        <RoundButton icon="clock" label="History" onPress={() => setHistoryOpen(true)} />
+        <RoundButton icon="plus" label="New tab" onPress={props.onNew} />
         <Host style={styles.filterHost}>
           <Picker
             selection={props.filter}
@@ -232,68 +242,10 @@ export const TabOverview = (props: {
             <UIImage systemName="folder" modifiers={[tag("folders")]} />
           </Picker>
         </Host>
-        <RoundButton icon="plus" label="New tab" onPress={props.onNew} />
+        {/* Done: back into the tab showing. */}
+        <RoundButton icon="checkmark" label="Done" onPress={props.onDone} prominent />
       </Reanimated.View>
-      <History
-        open={historyOpen}
-        roots={props.rootsOf(props.current.repo)}
-        visits={props.current.place.history}
-        onClose={() => setHistoryOpen(false)}
-        onOpen={(entry) => {
-          setHistoryOpen(false);
-          props.onOpenVisit(entry);
-        }}
-      />
     </View>
-  );
-};
-
-/** Everything opened in this repo's Files, newest first; a tap opens it in a
- * new tab. A native sheet. */
-const History = (props: {
-  readonly open: boolean;
-  /** Its repo's Files root first, then its worktrees. */
-  readonly roots: ReadonlyArray<string>;
-  readonly visits: ReadonlyArray<Visit>;
-  readonly onClose: () => void;
-  readonly onOpen: (entry: FileNavEntry) => void;
-}): React.ReactElement => {
-  const fullPaths = useFullPaths();
-  const styles = useThemedStyles(makeStyles);
-  return (
-    <ModalSheet open={props.open} onClose={props.onClose}>
-      <Text style={styles.sheetTitle}>History</Text>
-      <FlatList
-        data={props.visits}
-        keyExtractor={(visit) => visit.entry.path}
-        ListEmptyComponent={<Text style={styles.empty}>Nothing opened yet.</Text>}
-        renderItem={({ item }) => (
-          <Pressable style={styles.visit} onPress={() => props.onOpen(item.entry)}>
-            <SystemIcon name={item.entry.kind === "directory" ? "folder" : "doc.text"} size={16} color={colors.tint} />
-            <View style={styles.visitText}>
-              <Text style={styles.name} numberOfLines={1}>
-                {item.entry.name}
-              </Text>
-              {props.roots.some((root) => isRootPath(item.entry.path, root)) ? null : (
-                <Text style={styles.path} numberOfLines={1} ellipsizeMode="head">
-                  {shownPath(parentOf(item.entry.path), props.roots, fullPaths)}
-                </Text>
-              )}
-            </View>
-          </Pressable>
-        )}
-      />
-    </ModalSheet>
-  );
-};
-
-/** iOS's own page sheet. */
-const ModalSheet = (props: { readonly open: boolean; readonly onClose: () => void; readonly children: React.ReactNode }): React.ReactElement => {
-  const styles = useThemedStyles(makeStyles);
-  return (
-    <RNModal visible={props.open} presentationStyle="pageSheet" animationType="slide" onRequestClose={props.onClose}>
-      <View style={styles.sheet}>{props.children}</View>
-    </RNModal>
   );
 };
 
@@ -401,31 +353,5 @@ const makeStyles = (text: TextColors) =>
     filterHost: {
       width: 230,
       height: OVERVIEW_BAR_HEIGHT,
-    },
-    sheet: {
-      flex: 1,
-      paddingTop: 20,
-    },
-    sheetTitle: {
-      color: text.label,
-      fontSize: 17,
-      fontWeight: "600",
-      textAlign: "center",
-      marginBottom: 12,
-    },
-    empty: {
-      color: text.secondaryLabel,
-      textAlign: "center",
-      marginTop: 40,
-    },
-    visit: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-    },
-    visitText: {
-      flex: 1,
     },
   });
