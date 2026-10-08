@@ -215,7 +215,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.insertionPointColor = caret
         textView.selectionBarColor = caret
         textView.selectionHighlightColor = selection.withAlphaComponent(0.35)
-        sticky.style(background: background)
+        sticky.style(
+            background: background,
+            gutterBackground: gutterBackground,
+            lineNumberColor: gutterForeground,
+            lineNumberFont: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        )
         rebuildHighlights()
     }
 
@@ -301,11 +306,21 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         if shownHeaders != [scope.header] {
             shownHeaders = [scope.header]
             let firstLine = scope.header - rowCount + 1
-            let rows = (0..<rowCount).map { offset -> NSAttributedString in
-                attributedLine(at: firstLine + offset)
+            let rows = (0..<rowCount).map { offset -> StickyScrollOverlay.Row in
+                let lineIndex = firstLine + offset
+                return StickyScrollOverlay.Row(
+                    number: lineIndex >= 0 ? lineIndex + 1 : nil,
+                    code: attributedLine(at: lineIndex)
+                )
             }
-            sticky.leadingInset = textView.gutterWidth + textView.textContainerInset.left
-            sticky.setRows(rows, rowHeight: rowHeight, headerLine: scope.header) { [weak self] target in
+            sticky.setRows(
+                rows,
+                rowHeight: rowHeight,
+                gutterWidth: textView.gutterWidth,
+                gutterTrailingPadding: textView.gutterTrailingPadding,
+                textLeftInset: textView.textContainerInset.left,
+                headerLine: scope.header
+            ) { [weak self] target in
                 _ = self?.textView.goToLine(target)
             }
             onStickyDebug([
@@ -320,6 +335,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             ])
         }
         sticky.frame = CGRect(x: 0, y: 0, width: bounds.width, height: sticky.preferredHeight)
+        // Track horizontal scroll so the frozen code lines up with the editor.
+        sticky.setHorizontalOffset(textView.contentOffset.x)
     }
 
     /// The source line's text, coloured with its own Shiki tokens, so a frozen
