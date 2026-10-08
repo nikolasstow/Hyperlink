@@ -85,9 +85,11 @@ export const CodeEditor = (props: {
         .catch(() => undefined);
       void stickyRanges(text, lang)
         .then((ranges) => {
-          if (alive) setStickyJson(JSON.stringify(ranges));
+          if (!alive) return;
+          console.log(`[sticky] ${lang}: ${ranges.length} ranges`);
+          setStickyJson(JSON.stringify(ranges));
         })
-        .catch(() => undefined);
+        .catch((error: unknown) => console.warn(`[sticky] ${lang} structure failed`, error));
     }, RETOKENIZE_MS);
     return () => {
       alive = false;
@@ -97,7 +99,7 @@ export const CodeEditor = (props: {
 
   if (CodeEditorNativeView === undefined) return null;
   return (
-    <View style={[styles.fill, { paddingTop: props.topInset, paddingBottom: props.bottomInset }]}>
+    <View style={[styles.fill, { paddingTop: props.topInset }]}>
       <CodeEditorNativeView
         style={styles.fill}
         text={props.text}
