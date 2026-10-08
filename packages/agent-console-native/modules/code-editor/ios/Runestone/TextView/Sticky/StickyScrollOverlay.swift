@@ -24,6 +24,13 @@ final class StickyScrollOverlay: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = true
+        // Real Liquid Glass on iOS 26; the thin-material blur set on the property
+        // is the fallback for older systems.
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect()
+            glass.isInteractive = true
+            pill.effect = glass
+        }
         pill.clipsToBounds = true
         pill.layer.cornerCurve = .continuous
         pill.layer.cornerRadius = pillHeight / 2

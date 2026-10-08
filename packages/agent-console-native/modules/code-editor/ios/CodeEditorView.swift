@@ -47,6 +47,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // them (so they blur it) but insets this far so the first/last lines clear.
     private var topInset: CGFloat = 0
     private var bottomInset: CGFloat = 0
+    /// Where the sticky pill floats — just under the header, above the content's
+    /// extra top margin (so it sits higher than the first line).
+    private var pillTop: CGFloat = 0
 
     // Theme inputs, held so any one changing rebuilds the whole theme.
     private var fontSize: CGFloat = 14
@@ -139,6 +142,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     func setBottomInset(_ value: Double) {
         bottomInset = CGFloat(value)
         applyInsets()
+    }
+
+    func setPillTop(_ value: Double) {
+        pillTop = CGFloat(value)
+        updateSticky()
     }
 
     func setFontSize(_ size: Double) {
@@ -295,7 +303,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
                 "topInset": Double(topInset)
             ])
         }
-        sticky.frame = CGRect(x: 0, y: topInset, width: bounds.width, height: sticky.preferredHeight)
+        sticky.frame = CGRect(x: 0, y: pillTop, width: bounds.width, height: sticky.preferredHeight)
     }
 
     override func layoutSubviews() {

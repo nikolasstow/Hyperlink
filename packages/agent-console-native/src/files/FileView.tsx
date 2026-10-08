@@ -85,7 +85,7 @@ export const FileView = (props: {
     return (
       <>
         {state.kind === "text" ? (
-          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset + EDITOR_TOP_MARGIN} bottomInset={bottomInset} />
+          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset + EDITOR_TOP_MARGIN} bottomInset={bottomInset} pillTop={topInset} />
         ) : (
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}
