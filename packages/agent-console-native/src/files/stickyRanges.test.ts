@@ -7,8 +7,15 @@ describe("stickyRanges — TypeScript", () => {
     const ranges = await stickyRanges(code, "typescript");
     const cls = ranges.find((r) => r.header === 0);
     const method = ranges.find((r) => r.header === 1);
-    expect(cls).toMatchObject({ start: 0, end: 5, depth: 0 });
-    expect(method).toMatchObject({ start: 1, end: 4, depth: 1 });
+    expect(cls).toMatchObject({ start: 0, end: 5, depth: 0, label: "class A" });
+    expect(method).toMatchObject({ start: 1, end: 4, depth: 1, label: "run" });
+  });
+
+  it("labels a named arrow from its variable, and leaves bare blocks unlabelled", async () => {
+    const code = ["const go = () => {", "  if (x) {", "    y();", "  }", "};"].join("\n");
+    const ranges = await stickyRanges(code, "typescript");
+    expect(ranges.find((r) => r.header === 0)?.label).toBe("func go");
+    expect(ranges.find((r) => r.header === 1)?.label).toBeUndefined();
   });
 
   it("captures a multi-line if block", async () => {

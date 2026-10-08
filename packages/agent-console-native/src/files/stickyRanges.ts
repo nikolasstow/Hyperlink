@@ -26,6 +26,10 @@ export interface StickyRange {
   readonly start: number;
   readonly end: number;
   readonly depth: number;
+  /** A concise signature for the glass pill (`func doSomething`, `class Foo`, a
+   * heading's text). Absent for anonymous scopes (bare `if`/`for`/object
+   * literals), which don't earn a pill. */
+  readonly label?: string;
 }
 
 /** `langFromFilename` hands us the raw extension (`ts`, `md`, …); map it to a
@@ -88,6 +92,29 @@ const isContainer = (ts: typeof TS, node: TS.Node): boolean => {
   }
 };
 
+/** A short pill label for a scope — kind + name — or undefined for anonymous
+ * scopes that shouldn't get a pill. Uses `ts.isX` guards (no casts). */
+const labelFor = (ts: typeof TS, node: TS.Node): string | undefined => {
+  const named = (name: TS.Node | undefined): string | undefined =>
+    name !== undefined && ts.isIdentifier(name) ? name.text : undefined;
+  if (ts.isFunctionDeclaration(node)) return named(node.name) === undefined ? undefined : `func ${named(node.name)}`;
+  if (ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) return named(node.name);
+  if (ts.isConstructorDeclaration(node)) return "constructor";
+  if (ts.isGetAccessorDeclaration(node)) return named(node.name) === undefined ? undefined : `get ${named(node.name)}`;
+  if (ts.isSetAccessorDeclaration(node)) return named(node.name) === undefined ? undefined : `set ${named(node.name)}`;
+  if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return named(node.name) === undefined ? undefined : `class ${named(node.name)}`;
+  if (ts.isInterfaceDeclaration(node)) return `interface ${node.name.text}`;
+  if (ts.isEnumDeclaration(node)) return `enum ${node.name.text}`;
+  if (ts.isModuleDeclaration(node)) return `namespace ${node.name.getText()}`;
+  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+    const parent = node.parent;
+    if (parent !== undefined && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return `func ${parent.name.text}`;
+    if (parent !== undefined && ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) return `func ${parent.name.text}`;
+    return undefined;
+  }
+  return undefined;
+};
+
 const tsRanges = (ts: typeof TS, text: string, scriptKind: TS.ScriptKind): ReadonlyArray<StickyRange> => {
   const sourceFile = ts.createSourceFile("sticky", text, ts.ScriptTarget.Latest, true, scriptKind);
   const out: Array<StickyRange> = [];
@@ -98,7 +125,8 @@ const tsRanges = (ts: typeof TS, text: string, scriptKind: TS.ScriptKind): Reado
       const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line;
       // Only multi-line scopes are worth pinning.
       if (end > start) {
-        out.push({ header: start, start, end, depth });
+        const label = labelFor(ts, node);
+        out.push(label === undefined ? { header: start, start, end, depth } : { header: start, start, end, depth, label });
         childDepth = depth + 1;
       }
     }
@@ -134,7 +162,10 @@ const markdownRanges = (text: string): ReadonlyArray<StickyRange> => {
         break;
       }
     }
-    if (end > here.line) out.push({ header: here.line, start: here.line, end, depth: here.level - 1 });
+    if (end > here.line) {
+      const label = lines[here.line].replace(/^#{1,6}\s+/, "").trim();
+      out.push({ header: here.line, start: here.line, end, depth: here.level - 1, label });
+    }
   }
   return out;
 };
