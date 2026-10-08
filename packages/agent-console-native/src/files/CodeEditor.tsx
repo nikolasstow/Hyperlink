@@ -65,7 +65,7 @@ export const CodeEditor = (props: {
 }): React.ReactElement | null => {
   const theme = useCodeTheme();
   const lang = React.useMemo(() => langFromFilename(props.name), [props.name]);
-  const [tokens, setTokens] = React.useState<ReadonlyArray<ReadonlyArray<LineToken>>>([]);
+  const [tokensJson, setTokensJson] = React.useState<string>("[]");
   const [editorTheme, setEditorTheme] = React.useState<EditorTheme>({});
   const { text } = props;
 
@@ -75,7 +75,7 @@ export const CodeEditor = (props: {
       void tokenizeCode({ code: text, lang, theme })
         .then((highlight) => {
           if (!alive) return;
-          setTokens(toLineTokens(highlight));
+          setTokensJson(JSON.stringify(toLineTokens(highlight)));
           setEditorTheme(editorThemeOf(theme, highlight));
         })
         .catch(() => undefined);
@@ -93,7 +93,7 @@ export const CodeEditor = (props: {
         style={styles.fill}
         text={props.text}
         editable={props.editable}
-        lineTokens={tokens}
+        tokensJson={tokensJson}
         theme={editorTheme}
         fontSize={FONT_SIZE}
         showLineNumbers

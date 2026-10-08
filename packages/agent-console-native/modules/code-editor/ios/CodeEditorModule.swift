@@ -1,17 +1,5 @@
 import ExpoModulesCore
 
-/// One Shiki token on a line: a range (UTF-16, relative to the line's start) and
-/// the colour/weight to paint it. Mirrors the JS `CodeToken` turned into ranges.
-struct TokenRecord: Record {
-    @Field var start: Int = 0
-    @Field var length: Int = 0
-    @Field var color: String?
-    @Field var bold: Bool?
-    @Field var italic: Bool?
-
-    init() {}
-}
-
 /// The editor's base colours, derived on the JS side from the active VS Code
 /// theme. Any subset may be sent; missing fields keep their current value.
 struct ThemeRecord: Record {
@@ -39,8 +27,8 @@ public final class CodeEditorModule: Module {
             Prop("editable") { (view: CodeEditorView, value: Bool) in
                 view.setEditable(value)
             }
-            Prop("lineTokens") { (view: CodeEditorView, value: [[TokenRecord]]) in
-                view.setLineTokens(value)
+            Prop("tokensJson") { (view: CodeEditorView, value: String) in
+                view.setTokensJson(value)
             }
             Prop("theme") { (view: CodeEditorView, value: ThemeRecord) in
                 view.setTheme(value)

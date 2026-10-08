@@ -14,9 +14,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
     /// callback never echoes a prop back up as an edit.
     private var isApplyingText = false
 
-    // The latest tokens from JS, reapplied whenever the text changes so the two
-    // can arrive in any order without losing the highlight.
-    private var pendingLineTokens: [[TokenRecord]] = []
+    // The latest tokens from JS (decoded from the tokens-JSON prop), reapplied
+    // whenever the text changes so the two can arrive in any order without
+    // losing the highlight.
+    private var pendingLineTokens: [[ShikiToken]] = []
 
     // Theme inputs, held so any one changing rebuilds the whole theme.
     private var fontSize: CGFloat = 14
@@ -65,9 +66,20 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
         textView.isSelectable = true
     }
 
-    func setLineTokens(_ lineTokens: [[TokenRecord]]) {
-        pendingLineTokens = lineTokens
-        rebuildHighlights()
+    /// Tokens as JSON: `[[{start,length,color?,bold?,italic?}]]`, one inner array
+    /// per line. Decoded straight into `ShikiToken` (a string prop + JSONDecoder,
+    /// rather than bridging nested records). On a malformed payload we keep the
+    /// current tokens and log, rather than blanking the highlight.
+    func setTokensJson(_ json: String) {
+        guard let data = json.data(using: .utf8) else {
+            return
+        }
+        do {
+            pendingLineTokens = try JSONDecoder().decode([[ShikiToken]].self, from: data)
+            rebuildHighlights()
+        } catch {
+            NSLog("[CodeEditor] token JSON decode failed: \(error)")
+        }
     }
 
     func setFontSize(_ size: Double) {
@@ -140,9 +152,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
         let starts = lineStartOffsets(textView.text as NSString)
         var map: [Int: [ShikiToken]] = [:]
         for (index, tokens) in pendingLineTokens.enumerated() where index < starts.count {
-            map[starts[index]] = tokens.map {
-                ShikiToken(start: $0.start, length: $0.length, color: $0.color, bold: $0.bold, italic: $0.italic)
-            }
+            map[starts[index]] = tokens
         }
         tokenStore.set(map)
         textView.redisplayVisibleLines()

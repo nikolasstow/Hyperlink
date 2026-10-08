@@ -39,8 +39,12 @@ export interface EditorTheme {
 export interface CodeEditorNativeProps extends ViewProps {
   readonly text: string;
   readonly editable: boolean;
-  /** Tokens per line, indexed by line number (0-based). */
-  readonly lineTokens: ReadonlyArray<ReadonlyArray<LineToken>>;
+  /**
+   * Tokens as JSON — `[[LineToken]]`, one inner array per line (0-based). A
+   * string, not a nested-array prop: it decodes straight into the native
+   * `ShikiToken` and avoids bridging arrays of records.
+   */
+  readonly tokensJson: string;
   readonly theme: EditorTheme;
   readonly fontSize: number;
   readonly showLineNumbers: boolean;
