@@ -46,6 +46,17 @@ describe("stickyRanges — markdown", () => {
   });
 });
 
+describe("stickyRanges — extension aliases (what langFromFilename emits)", () => {
+  it("treats `ts` like typescript", async () => {
+    const code = ["function f() {", "  return 1;", "}"].join("\n");
+    expect((await stickyRanges(code, "ts")).some((r) => r.header === 0)).toBe(true);
+  });
+  it("treats `md` like markdown", async () => {
+    const md = ["# A", "body", "text"].join("\n");
+    expect((await stickyRanges(md, "md")).some((r) => r.header === 0)).toBe(true);
+  });
+});
+
 describe("stickyRanges — unsupported", () => {
   it("returns nothing for a language without an on-device parser", async () => {
     expect(await stickyRanges("package main\nfunc main() {}\n", "go")).toEqual([]);

@@ -28,7 +28,28 @@ export interface StickyRange {
   readonly depth: number;
 }
 
-const TS_LANGS = new Set(["typescript", "tsx", "javascript", "jsx", "json", "json5", "jsonc"]);
+/** `langFromFilename` hands us the raw extension (`ts`, `md`, …); map it to a
+ * canonical id the way the highlighter aliases do, so `.ts`/`.md` aren't missed. */
+const CANONICAL: Record<string, string> = {
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  typescript: "typescript",
+  tsx: "tsx",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  javascript: "javascript",
+  jsx: "jsx",
+  json: "json",
+  jsonc: "json",
+  json5: "json",
+  md: "markdown",
+  mdx: "markdown",
+  markdown: "markdown",
+};
+
+const TS_CANON = new Set(["typescript", "tsx", "javascript", "jsx", "json"]);
 
 let tsModule: typeof TS | undefined;
 const loadTs = async (): Promise<typeof TS> => {
@@ -67,8 +88,8 @@ const isContainer = (ts: typeof TS, node: TS.Node): boolean => {
   }
 };
 
-const tsRanges = (ts: typeof TS, text: string, tsx: boolean): ReadonlyArray<StickyRange> => {
-  const sourceFile = ts.createSourceFile("sticky.tsx", text, ts.ScriptTarget.Latest, true, tsx ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+const tsRanges = (ts: typeof TS, text: string, scriptKind: TS.ScriptKind): ReadonlyArray<StickyRange> => {
+  const sourceFile = ts.createSourceFile("sticky", text, ts.ScriptTarget.Latest, true, scriptKind);
   const out: Array<StickyRange> = [];
   const visit = (node: TS.Node, depth: number): void => {
     let childDepth = depth;
@@ -121,9 +142,19 @@ const markdownRanges = (text: string): ReadonlyArray<StickyRange> => {
 /** Sticky ranges for `text` in `lang` (the id from `langFromFilename`). Empty
  * for languages without an on-device parser yet. */
 export const stickyRanges = async (text: string, lang: string): Promise<ReadonlyArray<StickyRange>> => {
-  if (lang === "markdown") return markdownRanges(text);
-  if (!TS_LANGS.has(lang)) return [];
+  const canonical = CANONICAL[lang] ?? lang;
+  if (canonical === "markdown") return markdownRanges(text);
+  if (!TS_CANON.has(canonical)) return [];
   const ts = await loadTs();
-  const tsx = lang === "tsx" || lang === "jsx" || lang === "javascript";
-  return tsRanges(ts, text, tsx);
+  const scriptKind =
+    canonical === "tsx"
+      ? ts.ScriptKind.TSX
+      : canonical === "jsx"
+        ? ts.ScriptKind.JSX
+        : canonical === "javascript"
+          ? ts.ScriptKind.JS
+          : canonical === "json"
+            ? ts.ScriptKind.JSON
+            : ts.ScriptKind.TS;
+  return tsRanges(ts, text, scriptKind);
 };
