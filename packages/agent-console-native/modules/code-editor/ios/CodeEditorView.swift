@@ -23,6 +23,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     private let tokenStore = ShikiTokenStore()
     private let sticky = StickyScrollOverlay()
     let onTextChange = EventDispatcher()
+    /// Reports native sticky-scroll decisions to JS so they surface in Metro logs
+    /// (NSLog only reaches the device console, which we can't read remotely).
+    let onStickyDebug = EventDispatcher()
 
     /// At most this many nested headers pinned at once.
     private let maxStickyDepth = 5
@@ -41,6 +44,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     private var stickyRanges: [StickyRangeNative] = []
     private var lineStarts: [Int] = [0]
     private var shownHeaders: [Int] = []
+
+    // Room for the translucent bars above and below: the content scrolls UNDER
+    // them (so they blur it) but insets this far so the first/last lines clear.
+    private var topInset: CGFloat = 0
+    private var bottomInset: CGFloat = 0
 
     // Theme inputs, held so any one changing rebuilds the whole theme.
     private var fontSize: CGFloat = 14
@@ -121,7 +129,18 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             stickyRanges = []
         }
         shownHeaders = []
+        onStickyDebug(["event": "ranges", "ranges": stickyRanges.count])
         updateSticky()
+    }
+
+    func setTopInset(_ value: Double) {
+        topInset = CGFloat(value)
+        applyInsets()
+    }
+
+    func setBottomInset(_ value: Double) {
+        bottomInset = CGFloat(value)
+        applyInsets()
     }
 
     func setFontSize(_ size: Double) {
@@ -163,6 +182,16 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     }
 
     // MARK: - Internals
+
+    /// The content runs full-bleed under the bars; inset it so the first line
+    /// clears the header and the last clears the bottom bar, while mid-scroll
+    /// lines still pass under the translucent glass.
+    private func applyInsets() {
+        let insets = UIEdgeInsets(top: topInset, left: 0, bottom: bottomInset, right: 0)
+        textView.contentInset = insets
+        textView.verticalScrollIndicatorInsets = insets
+        updateSticky()
+    }
 
     private func applyTheme() {
         let theme = ShikiTheme(
@@ -225,14 +254,18 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     }
 
     /// The document line at the top of the viewport, under the sticky header.
+    /// Line-height arithmetic rather than hit-testing: wrapping is off and the
+    /// font is uniform, so every line is one fragment of the same height — this
+    /// is exact and can't get stuck the way `closestPosition` can return nil.
     private func topVisibleLine() -> Int {
-        let x = textView.gutterWidth + 4
-        let y = textView.contentOffset.y + textView.textContainerInset.top + 1
-        guard let position = textView.closestPosition(to: CGPoint(x: x, y: y)) else {
+        let lineHeight = stickyRowHeight()
+        guard lineHeight > 0 else {
             return 0
         }
-        let offset = textView.offset(from: textView.beginningOfDocument, to: position)
-        return textView.textLocation(at: offset)?.lineNumber ?? 0
+        // The header occludes the top `topInset`; the first line sits at
+        // content-y `textContainerInset.top`.
+        let contentTop = textView.contentOffset.y + topInset - textView.textContainerInset.top
+        return max(0, Int((contentTop / lineHeight).rounded(.down)))
     }
 
     private func updateSticky() {
@@ -256,8 +289,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             sticky.setRows(rows, rowHeight: stickyRowHeight()) { [weak self] target in
                 _ = self?.textView.goToLine(target)
             }
+            onStickyDebug(["event": "update", "line": line, "count": headers.count, "height": Double(sticky.preferredHeight)])
         }
-        sticky.frame = CGRect(x: 0, y: 0, width: bounds.width, height: sticky.preferredHeight)
+        sticky.frame = CGRect(x: 0, y: topInset, width: bounds.width, height: sticky.preferredHeight)
     }
 
     /// The header line's text, coloured with its own Shiki tokens, so a pinned

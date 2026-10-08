@@ -51,10 +51,16 @@ export interface CodeEditorNativeProps extends ViewProps {
    */
   readonly stickyRangesJson: string;
   readonly theme: EditorTheme;
+  /** Room for the translucent bars; applied as the scroll view's content inset so
+   * content scrolls under them but the first/last lines clear them. */
+  readonly topInset: number;
+  readonly bottomInset: number;
   readonly fontSize: number;
   readonly showLineNumbers: boolean;
   readonly wrapLines: boolean;
   readonly onTextChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
+  /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
+  readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
 }
 
 // Gate on the native API version, not mere presence: the first build shipped an

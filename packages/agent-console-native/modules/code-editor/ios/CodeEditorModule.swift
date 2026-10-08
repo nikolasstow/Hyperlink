@@ -24,11 +24,11 @@ public final class CodeEditorModule: Module {
         // crashes on render; JS treats a binary without `apiVersion >= 2` as
         // absent and falls back to the web surface.
         Constants([
-            "apiVersion": 3,
+            "apiVersion": 4,
         ])
 
         View(CodeEditorView.self) {
-            Events("onTextChange")
+            Events("onTextChange", "onStickyDebug")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)
@@ -44,6 +44,12 @@ public final class CodeEditorModule: Module {
             }
             Prop("theme") { (view: CodeEditorView, value: ThemeRecord) in
                 view.setTheme(value)
+            }
+            Prop("topInset") { (view: CodeEditorView, value: Double) in
+                view.setTopInset(value)
+            }
+            Prop("bottomInset") { (view: CodeEditorView, value: Double) in
+                view.setBottomInset(value)
             }
             Prop("fontSize") { (view: CodeEditorView, value: Double) in
                 view.setFontSize(value)

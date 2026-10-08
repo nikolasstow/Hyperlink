@@ -99,7 +99,7 @@ export const CodeEditor = (props: {
 
   if (CodeEditorNativeView === undefined) return null;
   return (
-    <View style={[styles.fill, { paddingTop: props.topInset }]}>
+    <View style={styles.fill}>
       <CodeEditorNativeView
         style={styles.fill}
         text={props.text}
@@ -107,9 +107,12 @@ export const CodeEditor = (props: {
         tokensJson={tokensJson}
         stickyRangesJson={stickyJson}
         theme={editorTheme}
+        topInset={props.topInset}
+        bottomInset={props.bottomInset}
         fontSize={FONT_SIZE}
         showLineNumbers
         wrapLines={false}
+        onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}
         {...(props.onChangeText === undefined ? {} : { onTextChange: (event) => props.onChangeText?.(event.nativeEvent.text) })}
       />
     </View>
