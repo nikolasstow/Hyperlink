@@ -770,6 +770,14 @@ open class TextView: UIScrollView {
         return line.location + textLocation.column
     }
 
+    /// The zero-based index of the line at a vertical position in content
+    /// coordinates (the same space as `contentOffset`). Reads the line tree
+    /// directly — always populated, unlike the lazily laid-out line fragments —
+    /// so it never misses the way hit-testing can. Used to drive sticky scroll.
+    public func lineIndex(atContentY y: CGFloat) -> Int {
+        textInputView.lineIndex(atContentY: y)
+    }
+
     /// Sets the language mode on a background thread.
     ///
     /// - Parameters:

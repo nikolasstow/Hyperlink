@@ -260,20 +260,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// behind the line it should pin. Falls back to arithmetic if the hit-test
     /// misses.
     private func topVisibleLine() -> Int {
-        let targetY = textView.contentOffset.y + topInset + 1
-        let point = CGPoint(x: textView.gutterWidth + 8, y: targetY)
-        if let position = textView.closestPosition(to: point) {
-            let offset = textView.offset(from: textView.beginningOfDocument, to: position)
-            if let location = textView.textLocation(at: offset) {
-                return location.lineNumber
-            }
-        }
-        let lineHeight = stickyRowHeight()
-        guard lineHeight > 0 else {
-            return 0
-        }
-        let contentTop = targetY - textView.textContainerInset.top
-        return max(0, Int((contentTop / lineHeight).rounded(.down)))
+        textView.lineIndex(atContentY: textView.contentOffset.y + topInset + 1)
     }
 
     private func updateSticky() {
@@ -297,7 +284,14 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             sticky.setRows(rows, rowHeight: stickyRowHeight()) { [weak self] target in
                 _ = self?.textView.goToLine(target)
             }
-            onStickyDebug(["event": "update", "line": line, "count": headers.count, "height": Double(sticky.preferredHeight)])
+            onStickyDebug([
+                "event": "update",
+                "line": line,
+                "count": headers.count,
+                "headers": headers.map(String.init).joined(separator: ","),
+                "contentOffsetY": Double(textView.contentOffset.y),
+                "topInset": Double(topInset)
+            ])
         }
         sticky.frame = CGRect(x: 0, y: topInset, width: bounds.width, height: sticky.preferredHeight)
     }
