@@ -30,6 +30,9 @@ type State =
   | { readonly kind: "missing" }
   | { readonly kind: "error" };
 
+/** Extra breathing room between the top bar and the first line of code. */
+const EDITOR_TOP_MARGIN = 24;
+
 /** Only a link someone could have meant to open leaves the app. */
 const openLink = (url: string): void => {
   if (!/^https?:\/\//i.test(url)) return;
@@ -82,7 +85,7 @@ export const FileView = (props: {
     return (
       <>
         {state.kind === "text" ? (
-          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset} bottomInset={bottomInset} />
+          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset + EDITOR_TOP_MARGIN} bottomInset={bottomInset} />
         ) : (
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}

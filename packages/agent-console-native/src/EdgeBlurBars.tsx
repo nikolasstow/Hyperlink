@@ -15,10 +15,14 @@ import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
 import { VariableBlur } from "../modules/variable-blur";
 import { useKeyboardHeightValue } from "./keyboardHeight";
 
-const TOP_BLUR_RADIUS = 5;
+const TOP_BLUR_RADIUS = 2;
 const BOTTOM_BLUR_RADIUS = 3;
-const TOP_BLUR_HEIGHT = 120;
+const TOP_BLUR_HEIGHT = 56;
 const BOTTOM_BLUR_HEIGHT = 80;
+
+/** The top wash, dimmed on its own (not via the shared stops the bottom feather
+ * reuses) so the top gradient reads much lighter. */
+const TOP_WASH_OPACITY = 0.5;
 
 const EDGE_LIGHT_STOPS = [
   DynamicColorIOS({ light: "rgba(255,255,255,0.55)", dark: "rgba(0,0,0,0.5)" }),
@@ -86,7 +90,7 @@ export const EdgeBlurBars = (props: {
           locations={[...EDGE_LOCATIONS]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, { opacity: TOP_WASH_OPACITY }]}
         />
       </View>
       )}
