@@ -1,84 +1,76 @@
 import UIKit
 
-/// The sticky-scroll header: the enclosing scope lines (the `function foo() {` /
-/// `class A {` / `## Heading` lines) pinned at the top of the editor as you
-/// scroll into a block, so you keep context in a long body.
+/// The sticky-scroll breadcrumb: a little glass pill at the top of the editor
+/// naming the scope you're currently inside (`func doSomething`, `class Foo`, a
+/// markdown heading) as you scroll its body. A tap jumps to that line.
 ///
-/// Pure UIKit and deliberately dumb: it is handed ready-to-draw rows — an
-/// attributed string (already coloured with the line's Shiki tokens) plus the
-/// line each maps to — and reports the height it wants. `CodeEditorView` decides
-/// *which* scopes to show, from the structure ranges and the scroll offset, and
-/// lays this on top of the text view. A tap jumps to that line.
+/// Pure UIKit and deliberately dumb: it's handed a label + the line it maps to,
+/// and reports the height it wants. `CodeEditorView` decides *which* scope from
+/// the structure ranges and the scroll offset, and lays this on top of the text
+/// view.
 final class StickyScrollOverlay: UIView {
-    private var labels: [UILabel] = []
-    private var lines: [Int] = []
-    private var rowHeight: CGFloat = 0
-    private let hairline = UIView()
+    private let pill = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+    private let label = UILabel()
+    private var line = 0
     private var onTap: ((Int) -> Void)?
 
-    /// Left padding so the sticky text lines up with the gutter'd code.
+    private let pillHeight: CGFloat = 30
+    private let topMargin: CGFloat = 6
+    private let hPadding: CGFloat = 13
+
+    /// Left offset so the pill lines up past the gutter.
     var leadingInset: CGFloat = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = true
-        layer.shadowColor = UIColor.black.cgColor
-        layer.shadowOpacity = 0.12
-        layer.shadowOffset = CGSize(width: 0, height: 1)
-        layer.shadowRadius = 3
-        hairline.isUserInteractionEnabled = false
-        addSubview(hairline)
+        pill.clipsToBounds = true
+        pill.layer.cornerCurve = .continuous
+        pill.layer.cornerRadius = pillHeight / 2
+        pill.layer.borderWidth = 0.5
+        label.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
+        label.lineBreakMode = .byTruncatingMiddle
+        pill.contentView.addSubview(label)
+        pill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+        addSubview(pill)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func style(background: UIColor, hairlineColor: UIColor) {
-        backgroundColor = background
-        hairline.backgroundColor = hairlineColor
+    func style(textColor: UIColor, borderColor: UIColor) {
+        label.textColor = textColor
+        pill.layer.borderColor = borderColor.cgColor
     }
 
-    /// Replace the pinned rows, outermost scope first.
-    func setRows(_ rows: [(text: NSAttributedString, line: Int)], rowHeight: CGFloat, onTap: @escaping (Int) -> Void) {
+    /// Set (or clear) the pill. A nil label hides it.
+    func setPill(label text: String?, line: Int, onTap: @escaping (Int) -> Void) {
         self.onTap = onTap
-        self.rowHeight = rowHeight
-        lines = rows.map { $0.line }
-        while labels.count < rows.count {
-            let label = UILabel()
-            label.isUserInteractionEnabled = true
-            label.lineBreakMode = .byClipping
-            label.tag = labels.count
-            label.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(rowTapped(_:))))
-            addSubview(label)
-            labels.append(label)
+        self.line = line
+        if let text {
+            label.text = text
+            isHidden = false
+        } else {
+            isHidden = true
         }
-        while labels.count > rows.count {
-            labels.removeLast().removeFromSuperview()
-        }
-        for (index, row) in rows.enumerated() {
-            labels[index].attributedText = row.text
-        }
-        isHidden = rows.isEmpty
         setNeedsLayout()
     }
 
     var preferredHeight: CGFloat {
-        isHidden ? 0 : CGFloat(labels.count) * rowHeight
+        isHidden ? 0 : pillHeight + topMargin * 2
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        for (index, label) in labels.enumerated() {
-            label.frame = CGRect(x: leadingInset, y: CGFloat(index) * rowHeight, width: max(0, bounds.width - leadingInset - 8), height: rowHeight)
-        }
-        hairline.frame = CGRect(x: 0, y: bounds.height - 0.5, width: bounds.width, height: 0.5)
+        label.sizeToFit()
+        let available = max(0, bounds.width - leadingInset - 16)
+        let width = min(available, label.bounds.width + hPadding * 2)
+        pill.frame = CGRect(x: leadingInset, y: topMargin, width: width, height: pillHeight)
+        label.frame = CGRect(x: hPadding, y: 0, width: max(0, pill.bounds.width - hPadding * 2), height: pillHeight)
     }
 
-    @objc private func rowTapped(_ recognizer: UITapGestureRecognizer) {
-        guard let tag = recognizer.view?.tag, tag < lines.count else {
-            return
-        }
-        onTap?(lines[tag])
+    @objc private func tapped() {
+        onTap?(line)
     }
 }

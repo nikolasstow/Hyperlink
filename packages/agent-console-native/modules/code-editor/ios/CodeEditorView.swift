@@ -8,6 +8,7 @@ private struct StickyRangeNative: Decodable {
     let start: Int
     let end: Int
     let depth: Int
+    let label: String?
 }
 
 /// The native code editor surface: a forked Runestone `TextView` driven entirely
@@ -26,9 +27,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// Reports native sticky-scroll decisions to JS so they surface in Metro logs
     /// (NSLog only reaches the device console, which we can't read remotely).
     let onStickyDebug = EventDispatcher()
-
-    /// At most this many nested headers pinned at once.
-    private let maxStickyDepth = 5
 
     /// True while we set `text` programmatically, so the delegate's change
     /// callback never echoes a prop back up as an edit.
@@ -208,7 +206,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.insertionPointColor = caret
         textView.selectionBarColor = caret
         textView.selectionHighlightColor = selection.withAlphaComponent(0.35)
-        sticky.style(background: background, hairlineColor: gutterForeground.withAlphaComponent(0.25))
+        sticky.style(textColor: foreground, borderColor: gutterForeground.withAlphaComponent(0.3))
         rebuildHighlights()
     }
 
@@ -260,7 +258,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// behind the line it should pin. Falls back to arithmetic if the hit-test
     /// misses.
     private func topVisibleLine() -> Int {
-        textView.lineIndex(atContentY: textView.contentOffset.y + topInset + 1)
+        // Sample half a line into the visible area so scroll jitter at a line
+        // boundary can't flip the detected line back and forth.
+        let bias = stickyRowHeight() * 0.5
+        return textView.lineIndex(atContentY: textView.contentOffset.y + topInset + bias)
     }
 
     private func updateSticky() {
@@ -272,69 +273,29 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             return
         }
         let line = topVisibleLine()
-        let shown = stickyRanges
-            .filter { $0.start <= line && line <= $0.end && $0.header < line }
-            .sorted { $0.start < $1.start }
-            .prefix(maxStickyDepth)
-        let headers = shown.map { $0.header }
-        if headers != shownHeaders {
-            shownHeaders = headers
-            let rows = headers.map { (text: attributedLine(at: $0), line: $0) }
+        // The innermost LABELLED scope you're inside — a breadcrumb, shown the
+        // whole time `line` is within [start, end] (not gated on the header
+        // scrolling off), so there's no on/off flip at the header boundary.
+        let innermost = stickyRanges
+            .filter { $0.label != nil && $0.start <= line && line <= $0.end }
+            .max { $0.start < $1.start }
+        let headerLine = innermost?.header ?? -1
+        if shownHeaders != [headerLine] {
+            shownHeaders = [headerLine]
             sticky.leadingInset = textView.gutterWidth + 4
-            sticky.setRows(rows, rowHeight: stickyRowHeight()) { [weak self] target in
+            sticky.setPill(label: innermost?.label, line: headerLine) { [weak self] target in
                 _ = self?.textView.goToLine(target)
             }
             onStickyDebug([
                 "event": "update",
                 "line": line,
-                "count": headers.count,
-                "headers": headers.map(String.init).joined(separator: ","),
+                "label": innermost?.label ?? "",
+                "header": headerLine,
                 "contentOffsetY": Double(textView.contentOffset.y),
                 "topInset": Double(topInset)
             ])
         }
         sticky.frame = CGRect(x: 0, y: topInset, width: bounds.width, height: sticky.preferredHeight)
-    }
-
-    /// The header line's text, coloured with its own Shiki tokens, so a pinned
-    /// row is indistinguishable from the code it mirrors.
-    private func attributedLine(at lineIndex: Int) -> NSAttributedString {
-        let string = textView.text as NSString
-        guard lineIndex >= 0, lineIndex < lineStarts.count else {
-            return NSAttributedString()
-        }
-        let start = lineStarts[lineIndex]
-        var end = (lineIndex + 1 < lineStarts.count) ? lineStarts[lineIndex + 1] : string.length
-        if end > start, string.character(at: end - 1) == 0x000A {
-            end -= 1
-        }
-        if end > start, string.character(at: end - 1) == 0x000D {
-            end -= 1
-        }
-        let lineText = string.substring(with: NSRange(location: start, length: max(0, end - start)))
-        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-        let attributed = NSMutableAttributedString(string: lineText, attributes: [.font: font, .foregroundColor: foreground])
-        let fullLength = attributed.length
-        for token in tokenStore.tokens(forLineStartingAt: start) {
-            guard token.length > 0, token.start >= 0, token.start + token.length <= fullLength else {
-                continue
-            }
-            let range = NSRange(location: token.start, length: token.length)
-            if let hex = token.color, let color = UIColor(shikiHex: hex) {
-                attributed.addAttribute(.foregroundColor, value: color, range: range)
-            }
-            var traits: UIFontDescriptor.SymbolicTraits = []
-            if token.bold == true {
-                traits.insert(.traitBold)
-            }
-            if token.italic == true {
-                traits.insert(.traitItalic)
-            }
-            if !traits.isEmpty, let descriptor = font.fontDescriptor.withSymbolicTraits(traits) {
-                attributed.addAttribute(.font, value: UIFont(descriptor: descriptor, size: fontSize), range: range)
-            }
-        }
-        return attributed
     }
 
     override func layoutSubviews() {
