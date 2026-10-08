@@ -790,6 +790,13 @@ final class TextInputView: UIView, UITextInput {
         return adjusted <= 0 ? 0 : max(0, lineManager.lineCount - 1)
     }
 
+    func contentY(ofLine index: Int) -> CGFloat {
+        guard index >= 0 && index < lineManager.lineCount else {
+            return 0
+        }
+        return textContainerInset.top + lineManager.line(atRow: index).yPosition
+    }
+
     func setState(_ state: TextViewState, addUndoAction: Bool = false) {
         let oldText = stringView.string
         let newText = state.stringView.string

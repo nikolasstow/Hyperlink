@@ -778,6 +778,13 @@ open class TextView: UIScrollView {
         textInputView.lineIndex(atContentY: y)
     }
 
+    /// The y of a line's top in content coordinates (same space as
+    /// `contentOffset`), read from the line tree. Drives the sticky-scroll
+    /// push-off: the block slides up as the scope's last line reaches it.
+    public func contentY(ofLine index: Int) -> CGFloat {
+        textInputView.contentY(ofLine: index)
+    }
+
     /// Sets the language mode on a background thread.
     ///
     /// - Parameters:

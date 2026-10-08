@@ -334,7 +334,13 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
                 "topInset": Double(topInset)
             ])
         }
-        sticky.frame = CGRect(x: 0, y: 0, width: bounds.width, height: sticky.preferredHeight)
+        // Push-off: the block is pinned at the top, but once the scope's last
+        // line rises to the block's bottom it rides the scroll up and off — like
+        // it's part of the content — instead of vanishing. y tracks the end line.
+        let stickyHeight = sticky.preferredHeight
+        let endTopViewY = textView.contentY(ofLine: scope.end) - textView.contentOffset.y
+        let pushY = min(0, endTopViewY - stickyHeight)
+        sticky.frame = CGRect(x: 0, y: pushY, width: bounds.width, height: stickyHeight)
         // Track horizontal scroll so the frozen code lines up with the editor.
         sticky.setHorizontalOffset(textView.contentOffset.x)
     }
