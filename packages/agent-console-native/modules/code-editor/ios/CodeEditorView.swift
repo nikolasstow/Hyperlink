@@ -42,6 +42,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     private var stickyRanges: [StickyRangeNative] = []
     private var lineStarts: [Int] = [0]
     private var shownHeaders: [Int] = []
+    // The scope currently on screen, kept while it rides up off the top even
+    // after the viewport has scrolled past its end, so the push-off completes.
+    private var displayedHeader = -1
+    private var displayedEnd = -1
 
     // Room for the translucent bars above and below: the content scrolls UNDER
     // them (so they blur it) but insets this far so the first/last lines clear.
@@ -131,6 +135,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             stickyRanges = []
         }
         shownHeaders = []
+        displayedHeader = -1
+        displayedEnd = -1
         onStickyDebug(["event": "ranges", "ranges": stickyRanges.count])
         updateSticky()
     }
@@ -233,6 +239,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             tokenStore.set([:])
             textView.redisplayVisibleLines()
             shownHeaders = []
+            displayedHeader = -1
+            displayedEnd = -1
             updateSticky()
             return
         }
@@ -243,6 +251,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         tokenStore.set(map)
         textView.redisplayVisibleLines()
         shownHeaders = []
+        displayedHeader = -1
+        displayedEnd = -1
         updateSticky()
     }
 
@@ -278,34 +288,49 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         return textView.lineIndex(atContentY: textView.contentOffset.y + topInset + bias)
     }
 
+    private func hideSticky() {
+        if !sticky.isHidden {
+            sticky.isHidden = true
+            shownHeaders = []
+        }
+        displayedHeader = -1
+        displayedEnd = -1
+    }
+
     private func updateSticky() {
         guard !stickyRanges.isEmpty else {
-            if !sticky.isHidden {
-                sticky.isHidden = true
-                shownHeaders = []
-            }
+            hideSticky()
             return
         }
         let line = topVisibleLine()
         // The innermost scope whose header has scrolled off the top — that's the
         // context we freeze. (The chain/breadcrumb is a separate bottom pill.)
-        let scope = stickyRanges
+        let enclosing = stickyRanges
             .filter { $0.start <= line && line <= $0.end && $0.header < line }
             .max { $0.start < $1.start }
-        guard let scope else {
-            if !sticky.isHidden {
-                sticky.isHidden = true
-                shownHeaders = []
-            }
+        let header: Int
+        let end: Int
+        if let enclosing {
+            header = enclosing.header
+            end = enclosing.end
+        } else if displayedHeader >= 0, textView.contentY(ofLine: displayedEnd) - textView.contentOffset.y > 0 {
+            // No enclosing scope, but the last one hasn't finished sliding off —
+            // keep it so it rides all the way up through the top space.
+            header = displayedHeader
+            end = displayedEnd
+        } else {
+            hideSticky()
             return
         }
+        displayedHeader = header
+        displayedEnd = end
         let rowHeight = stickyRowHeight()
         // Enough rows to fill from the header up through the status bar.
         let rowCount = max(1, Int((stickyFill / rowHeight).rounded(.up)))
         // Rows top->bottom: [header - rowCount + 1 ... header], header last.
-        if shownHeaders != [scope.header] {
-            shownHeaders = [scope.header]
-            let firstLine = scope.header - rowCount + 1
+        if shownHeaders != [header] {
+            shownHeaders = [header]
+            let firstLine = header - rowCount + 1
             let rows = (0..<rowCount).map { offset -> StickyScrollOverlay.Row in
                 let lineIndex = firstLine + offset
                 return StickyScrollOverlay.Row(
@@ -319,14 +344,14 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
                 gutterWidth: textView.gutterWidth,
                 gutterTrailingPadding: textView.gutterTrailingPadding,
                 textLeftInset: textView.textContainerInset.left,
-                headerLine: scope.header
+                headerLine: header
             ) { [weak self] target in
                 _ = self?.textView.goToLine(target)
             }
             onStickyDebug([
                 "event": "update",
                 "line": line,
-                "header": scope.header,
+                "header": header,
                 "rows": rowCount,
                 "rowHeight": Double(rowHeight),
                 "stickyFill": Double(stickyFill),
@@ -338,7 +363,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         // line rises to the block's bottom it rides the scroll up and off — like
         // it's part of the content — instead of vanishing. y tracks the end line.
         let stickyHeight = sticky.preferredHeight
-        let endTopViewY = textView.contentY(ofLine: scope.end) - textView.contentOffset.y
+        let endTopViewY = textView.contentY(ofLine: end) - textView.contentOffset.y
         let pushY = min(0, endTopViewY - stickyHeight)
         sticky.frame = CGRect(x: 0, y: pushY, width: bounds.width, height: stickyHeight)
         // Track horizontal scroll so the frozen code lines up with the editor.
