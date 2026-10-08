@@ -79,10 +79,52 @@ change — editor behaviour, `editable`, highlighting, theme, new screens, the
 only for Swift/native-module changes. Keep Metro alive in tmux so the installed
 app always has a server.
 
+## Decision (2026-10-08)
+
+EAS for now (it works; native changes are rare since JS rides Metro). Set up
+local builds **the weekend of 2026-10-11/12**. The patch route is OFF the table —
+`RuntimeScheduler` carries an atomic refcount, so dropping `SWIFT_RETURNS_RETAINED`
+risks a double-free, and a `pnpm patch` would ride into EAS/production too. The
+safe route is matching EAS's Xcode locally. Confirmed this weekend needs two
+one-time manual gates (not automatable): `sudo` (admin password — `sudo -n`
+fails) and an Apple ID for `xcodes` to download Xcode. Disk is fine (1.4 TB free).
+
+## Weekend runbook
+
+1. **Find EAS's Xcode.** The build JSON doesn't carry it and the logs are an
+   opaque binary encoding. Read it off the EAS dashboard build page ("Image"
+   field, human-readable), e.g.
+   `https://expo.dev/accounts/nikolasstow/projects/agent-console-native/builds/<id>`.
+   If unavailable, go empirically: the failing local Xcode is 26.3 (Swift
+   6.2.4); try **26.2** first (the local SDK is already 26.2), then 26.1, then
+   16.4 — stop at the first that compiles the unmodified `expo-modules-jsi`
+   header.
+2. **Install it** (owner runs, via the `!` prompt so creds stay in-session):
+   `! xcodes install <version> --experimental-unxip` (prompts Apple ID), then
+   `! sudo xcode-select -s /Applications/Xcode-<version>.app` (admin password).
+   Keep 26.3 installed; just point `xcode-select` at the older one for builds.
+3. **Compile check:** `xcodebuild -project ios/Pods/Pods.xcodeproj -target
+   CodeEditor -sdk iphonesimulator -arch arm64 ONLY_ACTIVE_ARCH=YES
+   SYMROOT=/tmp/ce build` — the `RuntimeScheduler.h` error must be gone. (This is
+   the same probe that failed on 26.3.)
+3. **Build the `.ipa`:** `eas build --local -p ios --profile development
+   --non-interactive --output /tmp/agent-console-native-dev.ipa` (uses the stored
+   cert + ad-hoc profile; no cloud compute, no credits).
+4. **Distribute OTA:** generate an `itms-services` manifest `.plist` pointing at
+   the hosted `.ipa`, serve both from a Tailscale-reachable path (a small route
+   on the `:5195` DoubleAgent server is simplest), push
+   `itms-services://?action=download-manifest&url=<manifest>` to the phone via
+   notify-phone.
+5. **Wrap as `pnpm build:local`** (new `scripts/build-local.ts`): run steps 3–4,
+   push the install link on success, push the error on failure — same no-touch
+   contract as the cloud path, but free.
+
 ## Status
 
-- [x] Short-term: EAS `development` build shipped + install link delivered.
-- [ ] `pnpm patch` the jsi header (answer the runtime-safety question first).
-- [ ] Prove `eas build --local` compiles end-to-end with the patch.
-- [ ] Self-hosted `.ipa` + `itms-services` manifest + phone push.
-- [ ] Wrap as `pnpm build:local`.
+- [x] Short-term: EAS `development` builds shipping + install links delivered
+      (builds #1 crashed on `onChange`; #2 fixed, apiVersion 2).
+- [x] Root-caused the local blocker: Xcode 26.3 strictness, not our code.
+- [ ] (weekend) Confirm EAS Xcode, install matching Xcode (owner: Apple ID + sudo).
+- [ ] (weekend) `eas build --local` end-to-end → signed `.ipa`.
+- [ ] (weekend) Self-hosted `.ipa` + `itms-services` manifest + phone push.
+- [ ] (weekend) `pnpm build:local`.
