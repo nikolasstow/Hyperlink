@@ -45,6 +45,11 @@ export interface CodeEditorNativeProps extends ViewProps {
    * `ShikiToken` and avoids bridging arrays of records.
    */
   readonly tokensJson: string;
+  /**
+   * Scope ranges as JSON — `[{header,start,end,depth}]` (0-based lines) from the
+   * structure provider, for sticky scroll. A string, like `tokensJson`.
+   */
+  readonly stickyRangesJson: string;
   readonly theme: EditorTheme;
   readonly fontSize: number;
   readonly showLineNumbers: boolean;

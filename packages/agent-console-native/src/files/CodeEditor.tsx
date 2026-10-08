@@ -15,6 +15,7 @@ import * as React from "react";
 import { StyleSheet, View } from "react-native";
 import { CodeEditorNativeView, type EditorTheme, type LineToken } from "../../modules/code-editor";
 import { type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
+import { stickyRanges } from "./stickyRanges";
 import { useCodeTheme } from "../useCodeTheme";
 
 /** Matches the chat code blocks and the file previews, so every surface scales alike. */
@@ -68,6 +69,7 @@ export const CodeEditor = (props: {
   const theme = useCodeTheme();
   const lang = React.useMemo(() => langFromFilename(props.name), [props.name]);
   const [tokensJson, setTokensJson] = React.useState<string>("[]");
+  const [stickyJson, setStickyJson] = React.useState<string>("[]");
   const [editorTheme, setEditorTheme] = React.useState<EditorTheme>({});
   const { text } = props;
 
@@ -79,6 +81,11 @@ export const CodeEditor = (props: {
           if (!alive) return;
           setTokensJson(JSON.stringify(toLineTokens(highlight)));
           setEditorTheme(editorThemeOf(theme, highlight));
+        })
+        .catch(() => undefined);
+      void stickyRanges(text, lang)
+        .then((ranges) => {
+          if (alive) setStickyJson(JSON.stringify(ranges));
         })
         .catch(() => undefined);
     }, RETOKENIZE_MS);
@@ -96,6 +103,7 @@ export const CodeEditor = (props: {
         text={props.text}
         editable={props.editable}
         tokensJson={tokensJson}
+        stickyRangesJson={stickyJson}
         theme={editorTheme}
         fontSize={FONT_SIZE}
         showLineNumbers

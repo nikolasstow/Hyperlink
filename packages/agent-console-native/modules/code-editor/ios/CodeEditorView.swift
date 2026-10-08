@@ -1,14 +1,31 @@
 import ExpoModulesCore
 import UIKit
 
+/// One scope span for sticky scroll, from the JS structure provider
+/// (`stickyRanges.ts`): the header line, the lines it covers, and its depth.
+private struct StickyRangeNative: Decodable {
+    let header: Int
+    let start: Int
+    let end: Int
+    let depth: Int
+}
+
 /// The native code editor surface: a forked Runestone `TextView` driven entirely
 /// by props. Text and per-line Shiki tokens come down from JS; edits go back up
-/// through `onChange`. Highlighting is the vendored Shiki layer, so colours match
-/// the previews and chat blocks exactly. Read-only is just `editable = false`.
-final class CodeEditorView: ExpoView, TextViewDelegate {
+/// through `onTextChange`. Highlighting is the vendored Shiki layer, so colours
+/// match the previews and chat blocks exactly. Read-only is just `editable = false`.
+///
+/// Sticky scroll: the enclosing scope headers (from `stickyRangesJson`) pin to the
+/// top as you scroll into a block. We render them from the same text + Shiki
+/// tokens so they look identical to the code, and a tap jumps to the line.
+final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     private let textView = TextView()
     private let tokenStore = ShikiTokenStore()
+    private let sticky = StickyScrollOverlay()
     let onTextChange = EventDispatcher()
+
+    /// At most this many nested headers pinned at once.
+    private let maxStickyDepth = 5
 
     /// True while we set `text` programmatically, so the delegate's change
     /// callback never echoes a prop back up as an edit.
@@ -18,6 +35,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
     // whenever the text changes so the two can arrive in any order without
     // losing the highlight.
     private var pendingLineTokens: [[ShikiToken]] = []
+
+    // Scope ranges for sticky scroll, and the UTF-16 start offset of each line in
+    // the current text (so we can slice a header line's text + look up its tokens).
+    private var stickyRanges: [StickyRangeNative] = []
+    private var lineStarts: [Int] = [0]
+    private var shownHeaders: [Int] = []
 
     // Theme inputs, held so any one changing rebuilds the whole theme.
     private var fontSize: CGFloat = 14
@@ -34,6 +57,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
         clipsToBounds = true
         textView.translatesAutoresizingMaskIntoConstraints = false
         textView.editorDelegate = self
+        textView.delegate = self
         textView.showLineNumbers = true
         textView.isLineWrappingEnabled = false
         textView.alwaysBounceVertical = true
@@ -46,6 +70,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
             textView.trailingAnchor.constraint(equalTo: trailingAnchor),
             textView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+        sticky.isHidden = true
+        addSubview(sticky)
         applyTheme()
     }
 
@@ -80,6 +106,22 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
         } catch {
             NSLog("[CodeEditor] token JSON decode failed: \(error)")
         }
+    }
+
+    /// Scope ranges as JSON: `[{header,start,end,depth}]` (0-based lines) from the
+    /// structure provider. Drives sticky scroll.
+    func setStickyRangesJson(_ json: String) {
+        guard let data = json.data(using: .utf8) else {
+            return
+        }
+        do {
+            stickyRanges = try JSONDecoder().decode([StickyRangeNative].self, from: data)
+        } catch {
+            NSLog("[CodeEditor] sticky ranges decode failed: \(error)")
+            stickyRanges = []
+        }
+        shownHeaders = []
+        updateSticky()
     }
 
     func setFontSize(_ size: Double) {
@@ -137,6 +179,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
         textView.insertionPointColor = caret
         textView.selectionBarColor = caret
         textView.selectionHighlightColor = selection.withAlphaComponent(0.35)
+        sticky.style(background: background, hairlineColor: gutterForeground.withAlphaComponent(0.25))
         rebuildHighlights()
     }
 
@@ -144,18 +187,22 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
     /// repaint the visible lines. Line starts are the UTF-16 offsets just after
     /// each `\n`, matching Runestone's line ranges and the Shiki per-line split.
     private func rebuildHighlights() {
+        lineStarts = lineStartOffsets(textView.text as NSString)
         guard !pendingLineTokens.isEmpty else {
             tokenStore.set([:])
             textView.redisplayVisibleLines()
+            shownHeaders = []
+            updateSticky()
             return
         }
-        let starts = lineStartOffsets(textView.text as NSString)
         var map: [Int: [ShikiToken]] = [:]
-        for (index, tokens) in pendingLineTokens.enumerated() where index < starts.count {
-            map[starts[index]] = tokens
+        for (index, tokens) in pendingLineTokens.enumerated() where index < lineStarts.count {
+            map[lineStarts[index]] = tokens
         }
         tokenStore.set(map)
         textView.redisplayVisibleLines()
+        shownHeaders = []
+        updateSticky()
     }
 
     private func lineStartOffsets(_ string: NSString) -> [Int] {
@@ -169,6 +216,100 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
             index += 1
         }
         return starts
+    }
+
+    // MARK: - Sticky scroll
+
+    private func stickyRowHeight() -> CGFloat {
+        UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular).totalLineHeight * textView.lineHeightMultiplier
+    }
+
+    /// The document line at the top of the viewport, under the sticky header.
+    private func topVisibleLine() -> Int {
+        let x = textView.gutterWidth + 4
+        let y = textView.contentOffset.y + textView.textContainerInset.top + 1
+        guard let position = textView.closestPosition(to: CGPoint(x: x, y: y)) else {
+            return 0
+        }
+        let offset = textView.offset(from: textView.beginningOfDocument, to: position)
+        return textView.textLocation(at: offset)?.lineNumber ?? 0
+    }
+
+    private func updateSticky() {
+        guard !stickyRanges.isEmpty else {
+            if !sticky.isHidden {
+                sticky.isHidden = true
+                shownHeaders = []
+            }
+            return
+        }
+        let line = topVisibleLine()
+        let shown = stickyRanges
+            .filter { $0.start <= line && line <= $0.end && $0.header < line }
+            .sorted { $0.start < $1.start }
+            .prefix(maxStickyDepth)
+        let headers = shown.map { $0.header }
+        if headers != shownHeaders {
+            shownHeaders = headers
+            let rows = headers.map { (text: attributedLine(at: $0), line: $0) }
+            sticky.leadingInset = textView.gutterWidth + 4
+            sticky.setRows(rows, rowHeight: stickyRowHeight()) { [weak self] target in
+                _ = self?.textView.goToLine(target)
+            }
+        }
+        sticky.frame = CGRect(x: 0, y: 0, width: bounds.width, height: sticky.preferredHeight)
+    }
+
+    /// The header line's text, coloured with its own Shiki tokens, so a pinned
+    /// row is indistinguishable from the code it mirrors.
+    private func attributedLine(at lineIndex: Int) -> NSAttributedString {
+        let string = textView.text as NSString
+        guard lineIndex >= 0, lineIndex < lineStarts.count else {
+            return NSAttributedString()
+        }
+        let start = lineStarts[lineIndex]
+        var end = (lineIndex + 1 < lineStarts.count) ? lineStarts[lineIndex + 1] : string.length
+        if end > start, string.character(at: end - 1) == 0x000A {
+            end -= 1
+        }
+        if end > start, string.character(at: end - 1) == 0x000D {
+            end -= 1
+        }
+        let lineText = string.substring(with: NSRange(location: start, length: max(0, end - start)))
+        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let attributed = NSMutableAttributedString(string: lineText, attributes: [.font: font, .foregroundColor: foreground])
+        let fullLength = attributed.length
+        for token in tokenStore.tokens(forLineStartingAt: start) {
+            guard token.length > 0, token.start >= 0, token.start + token.length <= fullLength else {
+                continue
+            }
+            let range = NSRange(location: token.start, length: token.length)
+            if let hex = token.color, let color = UIColor(shikiHex: hex) {
+                attributed.addAttribute(.foregroundColor, value: color, range: range)
+            }
+            var traits: UIFontDescriptor.SymbolicTraits = []
+            if token.bold == true {
+                traits.insert(.traitBold)
+            }
+            if token.italic == true {
+                traits.insert(.traitItalic)
+            }
+            if !traits.isEmpty, let descriptor = font.fontDescriptor.withSymbolicTraits(traits) {
+                attributed.addAttribute(.font, value: UIFont(descriptor: descriptor, size: fontSize), range: range)
+            }
+        }
+        return attributed
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateSticky()
+    }
+
+    // MARK: - UIScrollViewDelegate
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateSticky()
     }
 
     // MARK: - TextViewDelegate

@@ -24,7 +24,7 @@ public final class CodeEditorModule: Module {
         // crashes on render; JS treats a binary without `apiVersion >= 2` as
         // absent and falls back to the web surface.
         Constants([
-            "apiVersion": 2,
+            "apiVersion": 3,
         ])
 
         View(CodeEditorView.self) {
@@ -38,6 +38,9 @@ public final class CodeEditorModule: Module {
             }
             Prop("tokensJson") { (view: CodeEditorView, value: String) in
                 view.setTokensJson(value)
+            }
+            Prop("stickyRangesJson") { (view: CodeEditorView, value: String) in
+                view.setStickyRangesJson(value)
             }
             Prop("theme") { (view: CodeEditorView, value: ThemeRecord) in
                 view.setTheme(value)
