@@ -115,7 +115,12 @@ const getHighlighter = (): Promise<HighlighterCore> => {
     singleton = createHighlighterCore({
       themes: [githubDark, githubLight],
       langs: [],
-      engine: createJavaScriptRegexEngine(),
+      // `forgiving` skips Oniguruma patterns the JS engine can't translate
+      // instead of throwing. Some grammars (markdown and the languages it embeds
+      // in fenced blocks) carry such patterns; without this, tokenizing them
+      // throws `Cannot read property '$skip' of undefined` from oniguruma-to-es.
+      // The affected patterns just don't match — the rest still highlights.
+      engine: createJavaScriptRegexEngine({ forgiving: true }),
     });
   }
   return singleton;
