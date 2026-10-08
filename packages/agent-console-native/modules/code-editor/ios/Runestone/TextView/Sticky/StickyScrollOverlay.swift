@@ -1,83 +1,73 @@
 import UIKit
 
-/// The sticky-scroll breadcrumb: a little glass pill at the top of the editor
-/// naming the scope you're currently inside (`func doSomething`, `class Foo`, a
-/// markdown heading) as you scroll its body. A tap jumps to that line.
+/// The top sticky block: the enclosing header line plus the real source lines
+/// above it, frozen to fill from the header up through the status bar, so the
+/// context doesn't vanish behind the top bar as you scroll its body.
 ///
-/// Pure UIKit and deliberately dumb: it's handed a label + the line it maps to,
-/// and reports the height it wants. `CodeEditorView` decides *which* scope from
-/// the structure ranges and the scroll offset, and lays this on top of the text
-/// view.
+/// Rendered as Shiki-coloured code rows that match the editor exactly (same
+/// font, line height, x) and sit on an opaque editor-background panel, so the
+/// hand-off is seamless — the frozen rows land where the real lines already
+/// were. Pure UIKit; `CodeEditorView` supplies the rows and the geometry.
 final class StickyScrollOverlay: UIView {
-    private let pill = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
-    private let label = UILabel()
-    private var line = 0
+    private var labels: [UILabel] = []
+    private var rowHeight: CGFloat = 0
+    private var headerLine = -1
     private var onTap: ((Int) -> Void)?
 
-    private let pillHeight: CGFloat = 30
-    private let topMargin: CGFloat = 6
-    private let hPadding: CGFloat = 13
-
-    /// Left offset so the pill lines up past the gutter.
+    /// Left offset so the rows line up with the gutter'd code.
     var leadingInset: CGFloat = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = true
-        // Real Liquid Glass on iOS 26; the thin-material blur set on the property
-        // is the fallback for older systems.
-        if #available(iOS 26.0, *) {
-            let glass = UIGlassEffect()
-            glass.isInteractive = true
-            pill.effect = glass
-        }
-        pill.clipsToBounds = true
-        pill.layer.cornerCurve = .continuous
-        pill.layer.cornerRadius = pillHeight / 2
-        pill.layer.borderWidth = 0.5
-        label.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
-        label.lineBreakMode = .byTruncatingMiddle
-        pill.contentView.addSubview(label)
-        pill.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
-        addSubview(pill)
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func style(textColor: UIColor, borderColor: UIColor) {
-        label.textColor = textColor
-        pill.layer.borderColor = borderColor.cgColor
+    func style(background: UIColor) {
+        backgroundColor = background
     }
 
-    /// Set (or clear) the pill. A nil label hides it.
-    func setPill(label text: String?, line: Int, onTap: @escaping (Int) -> Void) {
+    /// Rows top-to-bottom (the topmost source line first, the header last), each
+    /// `rowHeight` tall. A tap jumps to `headerLine`.
+    func setRows(_ rows: [NSAttributedString], rowHeight: CGFloat, headerLine: Int, onTap: @escaping (Int) -> Void) {
         self.onTap = onTap
-        self.line = line
-        if let text {
-            label.text = text
-            isHidden = false
-        } else {
-            isHidden = true
+        self.rowHeight = rowHeight
+        self.headerLine = headerLine
+        while labels.count < rows.count {
+            let row = UILabel()
+            row.lineBreakMode = .byClipping
+            addSubview(row)
+            labels.append(row)
         }
+        while labels.count > rows.count {
+            labels.removeLast().removeFromSuperview()
+        }
+        for (index, row) in rows.enumerated() {
+            labels[index].attributedText = row
+        }
+        isHidden = rows.isEmpty
         setNeedsLayout()
     }
 
     var preferredHeight: CGFloat {
-        isHidden ? 0 : pillHeight + topMargin * 2
+        isHidden ? 0 : CGFloat(labels.count) * rowHeight
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        label.sizeToFit()
-        let available = max(0, bounds.width - leadingInset - 16)
-        let width = min(available, label.bounds.width + hPadding * 2)
-        pill.frame = CGRect(x: leadingInset, y: topMargin, width: width, height: pillHeight)
-        label.frame = CGRect(x: hPadding, y: 0, width: max(0, pill.bounds.width - hPadding * 2), height: pillHeight)
+        let width = max(0, bounds.width - leadingInset - 8)
+        for (index, row) in labels.enumerated() {
+            row.frame = CGRect(x: leadingInset, y: CGFloat(index) * rowHeight, width: width, height: rowHeight)
+        }
     }
 
     @objc private func tapped() {
-        onTap?(line)
+        if headerLine >= 0 {
+            onTap?(headerLine)
+        }
     }
 }

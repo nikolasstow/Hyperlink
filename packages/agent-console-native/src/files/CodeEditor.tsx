@@ -65,8 +65,9 @@ export const CodeEditor = (props: {
   readonly topInset: number;
   /** Room below it (the bottom bar + safe area), so the last lines aren't hidden under it. */
   readonly bottomInset: number;
-  /** Where the sticky pill floats — the header bottom, above the content's top margin. */
-  readonly pillTop: number;
+  /** How far down the top sticky block fills (header rests here; lines above fill
+   * up through the status bar). */
+  readonly stickyFill: number;
 }): React.ReactElement | null => {
   const theme = useCodeTheme();
   const lang = React.useMemo(() => langFromFilename(props.name), [props.name]);
@@ -111,7 +112,7 @@ export const CodeEditor = (props: {
         theme={editorTheme}
         topInset={props.topInset}
         bottomInset={props.bottomInset}
-        pillTop={props.pillTop}
+        stickyFill={props.stickyFill}
         fontSize={FONT_SIZE}
         showLineNumbers
         wrapLines={false}

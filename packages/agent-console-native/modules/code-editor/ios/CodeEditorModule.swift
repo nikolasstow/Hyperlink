@@ -51,8 +51,8 @@ public final class CodeEditorModule: Module {
             Prop("bottomInset") { (view: CodeEditorView, value: Double) in
                 view.setBottomInset(value)
             }
-            Prop("pillTop") { (view: CodeEditorView, value: Double) in
-                view.setPillTop(value)
+            Prop("stickyFill") { (view: CodeEditorView, value: Double) in
+                view.setStickyFill(value)
             }
             Prop("fontSize") { (view: CodeEditorView, value: Double) in
                 view.setFontSize(value)

@@ -55,8 +55,9 @@ export interface CodeEditorNativeProps extends ViewProps {
    * content scrolls under them but the first/last lines clear them. */
   readonly topInset: number;
   readonly bottomInset: number;
-  /** Where the sticky pill floats (just under the header), above the content's margin. */
-  readonly pillTop: number;
+  /** How far down the top sticky block fills (header rests here; real lines above
+   * fill up through the status bar). Tunable for alignment. */
+  readonly stickyFill: number;
   readonly fontSize: number;
   readonly showLineNumbers: boolean;
   readonly wrapLines: boolean;

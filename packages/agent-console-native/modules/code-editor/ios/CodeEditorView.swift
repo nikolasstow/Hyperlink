@@ -47,9 +47,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // them (so they blur it) but insets this far so the first/last lines clear.
     private var topInset: CGFloat = 0
     private var bottomInset: CGFloat = 0
-    /// Where the sticky pill floats — just under the header, above the content's
-    /// extra top margin (so it sits higher than the first line).
-    private var pillTop: CGFloat = 0
+    /// How far down the sticky block fills (the header line rests at this y, and
+    /// the real lines above it fill from here up through the status bar). A prop
+    /// so the fill/snap can be tuned over Metro without a rebuild.
+    private var stickyFill: CGFloat = 0
 
     // Theme inputs, held so any one changing rebuilds the whole theme.
     private var fontSize: CGFloat = 14
@@ -144,8 +145,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         applyInsets()
     }
 
-    func setPillTop(_ value: Double) {
-        pillTop = CGFloat(value)
+    func setStickyFill(_ value: Double) {
+        stickyFill = CGFloat(value)
         updateSticky()
     }
 
@@ -214,7 +215,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.insertionPointColor = caret
         textView.selectionBarColor = caret
         textView.selectionHighlightColor = selection.withAlphaComponent(0.35)
-        sticky.style(textColor: foreground, borderColor: gutterForeground.withAlphaComponent(0.3))
+        sticky.style(background: background)
         rebuildHighlights()
     }
 
@@ -281,29 +282,86 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             return
         }
         let line = topVisibleLine()
-        // The innermost LABELLED scope you're inside — a breadcrumb, shown the
-        // whole time `line` is within [start, end] (not gated on the header
-        // scrolling off), so there's no on/off flip at the header boundary.
-        let innermost = stickyRanges
-            .filter { $0.label != nil && $0.start <= line && line <= $0.end }
+        // The innermost scope whose header has scrolled off the top — that's the
+        // context we freeze. (The chain/breadcrumb is a separate bottom pill.)
+        let scope = stickyRanges
+            .filter { $0.start <= line && line <= $0.end && $0.header < line }
             .max { $0.start < $1.start }
-        let headerLine = innermost?.header ?? -1
-        if shownHeaders != [headerLine] {
-            shownHeaders = [headerLine]
-            sticky.leadingInset = textView.gutterWidth + 4
-            sticky.setPill(label: innermost?.label, line: headerLine) { [weak self] target in
+        guard let scope else {
+            if !sticky.isHidden {
+                sticky.isHidden = true
+                shownHeaders = []
+            }
+            return
+        }
+        let rowHeight = stickyRowHeight()
+        // Enough rows to fill from the header up through the status bar.
+        let rowCount = max(1, Int((stickyFill / rowHeight).rounded(.up)))
+        // Rows top->bottom: [header - rowCount + 1 ... header], header last.
+        if shownHeaders != [scope.header] {
+            shownHeaders = [scope.header]
+            let firstLine = scope.header - rowCount + 1
+            let rows = (0..<rowCount).map { offset -> NSAttributedString in
+                attributedLine(at: firstLine + offset)
+            }
+            sticky.leadingInset = textView.gutterWidth + textView.textContainerInset.left
+            sticky.setRows(rows, rowHeight: rowHeight, headerLine: scope.header) { [weak self] target in
                 _ = self?.textView.goToLine(target)
             }
             onStickyDebug([
                 "event": "update",
                 "line": line,
-                "label": innermost?.label ?? "",
-                "header": headerLine,
+                "header": scope.header,
+                "rows": rowCount,
+                "rowHeight": Double(rowHeight),
+                "stickyFill": Double(stickyFill),
                 "contentOffsetY": Double(textView.contentOffset.y),
                 "topInset": Double(topInset)
             ])
         }
-        sticky.frame = CGRect(x: 0, y: pillTop, width: bounds.width, height: sticky.preferredHeight)
+        sticky.frame = CGRect(x: 0, y: 0, width: bounds.width, height: sticky.preferredHeight)
+    }
+
+    /// The source line's text, coloured with its own Shiki tokens, so a frozen
+    /// row is indistinguishable from the code it mirrors. An out-of-range line
+    /// (above the file start) renders blank — filler up through the status bar.
+    private func attributedLine(at lineIndex: Int) -> NSAttributedString {
+        let string = textView.text as NSString
+        guard lineIndex >= 0, lineIndex < lineStarts.count else {
+            return NSAttributedString()
+        }
+        let start = lineStarts[lineIndex]
+        var end = (lineIndex + 1 < lineStarts.count) ? lineStarts[lineIndex + 1] : string.length
+        if end > start, string.character(at: end - 1) == 0x000A {
+            end -= 1
+        }
+        if end > start, string.character(at: end - 1) == 0x000D {
+            end -= 1
+        }
+        let lineText = string.substring(with: NSRange(location: start, length: max(0, end - start)))
+        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let attributed = NSMutableAttributedString(string: lineText, attributes: [.font: font, .foregroundColor: foreground])
+        let fullLength = attributed.length
+        for token in tokenStore.tokens(forLineStartingAt: start) {
+            guard token.length > 0, token.start >= 0, token.start + token.length <= fullLength else {
+                continue
+            }
+            let range = NSRange(location: token.start, length: token.length)
+            if let hex = token.color, let color = UIColor(shikiHex: hex) {
+                attributed.addAttribute(.foregroundColor, value: color, range: range)
+            }
+            var traits: UIFontDescriptor.SymbolicTraits = []
+            if token.bold == true {
+                traits.insert(.traitBold)
+            }
+            if token.italic == true {
+                traits.insert(.traitItalic)
+            }
+            if !traits.isEmpty, let descriptor = font.fontDescriptor.withSymbolicTraits(traits) {
+                attributed.addAttribute(.font, value: UIFont(descriptor: descriptor, size: fontSize), range: range)
+            }
+        }
+        return attributed
     }
 
     override func layoutSubviews() {
