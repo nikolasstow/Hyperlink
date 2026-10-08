@@ -6,6 +6,7 @@
  */
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -16,10 +17,11 @@ type Props = NativeStackScreenProps<RootStackParamList, "FileViewer">;
 
 export const FileViewerScreen = (props: Props): React.ReactElement => {
   const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
   const { path, name, line } = props.route.params;
   return (
     <View style={styles.root}>
-      <FileView path={path} name={name} {...(line === undefined ? {} : { line })} topInset={headerHeight} />
+      <FileView path={path} name={name} {...(line === undefined ? {} : { line })} topInset={headerHeight} bottomInset={insets.bottom} />
       <EdgeBlurBars variant="top" />
     </View>
   );

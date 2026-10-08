@@ -42,10 +42,12 @@ export const FileView = (props: {
   readonly line?: number;
   /** Room above it (the transparent header). */
   readonly topInset: number;
+  /** Room below it (the bottom bar + safe area), so the last lines clear it. */
+  readonly bottomInset: number;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { path, name, line, topInset } = props;
+  const { path, name, line, topInset, bottomInset } = props;
   const { backend } = useAppContext();
   const [state, setState] = React.useState<State>({ kind: "loading" });
   const lang = React.useMemo(() => langFromFilename(name), [name]);
@@ -80,7 +82,7 @@ export const FileView = (props: {
     return (
       <>
         {state.kind === "text" ? (
-          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset} />
+          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset} bottomInset={bottomInset} />
         ) : (
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}

@@ -650,7 +650,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   onScroll={barHide.onScroll}
                 />
               ) : (
-                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} topInset={headerHeight} />
+                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} topInset={headerHeight} bottomInset={insets.bottom + BAR_ROOM + 20} />
               )}
               {cover === undefined ? null : (
                 <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">

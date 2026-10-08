@@ -62,6 +62,8 @@ export const CodeEditor = (props: {
   readonly onChangeText?: (text: string) => void;
   /** Room above it (the transparent header). */
   readonly topInset: number;
+  /** Room below it (the bottom bar + safe area), so the last lines aren't hidden under it. */
+  readonly bottomInset: number;
 }): React.ReactElement | null => {
   const theme = useCodeTheme();
   const lang = React.useMemo(() => langFromFilename(props.name), [props.name]);
@@ -88,7 +90,7 @@ export const CodeEditor = (props: {
 
   if (CodeEditorNativeView === undefined) return null;
   return (
-    <View style={[styles.fill, { paddingTop: props.topInset }]}>
+    <View style={[styles.fill, { paddingTop: props.topInset, paddingBottom: props.bottomInset }]}>
       <CodeEditorNativeView
         style={styles.fill}
         text={props.text}
