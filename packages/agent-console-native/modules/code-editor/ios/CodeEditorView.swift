@@ -253,18 +253,26 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular).totalLineHeight * textView.lineHeightMultiplier
     }
 
-    /// The document line at the top of the viewport, under the sticky header.
-    /// Line-height arithmetic rather than hit-testing: wrapping is off and the
-    /// font is uniform, so every line is one fragment of the same height — this
-    /// is exact and can't get stuck the way `closestPosition` can return nil.
+    /// The document line at the top edge of the visible code (just below the
+    /// header). Ask Runestone's real layout via hit-testing rather than
+    /// estimating from a uniform line height — a tiny per-line error in the
+    /// estimate compounds as you scroll and makes the sticky header lag well
+    /// behind the line it should pin. Falls back to arithmetic if the hit-test
+    /// misses.
     private func topVisibleLine() -> Int {
+        let targetY = textView.contentOffset.y + topInset + 1
+        let point = CGPoint(x: textView.gutterWidth + 8, y: targetY)
+        if let position = textView.closestPosition(to: point) {
+            let offset = textView.offset(from: textView.beginningOfDocument, to: position)
+            if let location = textView.textLocation(at: offset) {
+                return location.lineNumber
+            }
+        }
         let lineHeight = stickyRowHeight()
         guard lineHeight > 0 else {
             return 0
         }
-        // The header occludes the top `topInset`; the first line sits at
-        // content-y `textContainerInset.top`.
-        let contentTop = textView.contentOffset.y + topInset - textView.textContainerInset.top
+        let contentTop = targetY - textView.textContainerInset.top
         return max(0, Int((contentTop / lineHeight).rounded(.down)))
     }
 
