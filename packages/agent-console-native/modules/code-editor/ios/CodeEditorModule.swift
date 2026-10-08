@@ -18,8 +18,17 @@ public final class CodeEditorModule: Module {
     public func definition() -> ModuleDefinition {
         Name("CodeEditor")
 
+        // A version the JS side gates on, so it only mounts the native view on a
+        // binary whose event names are safe. The first build shipped an `onChange`
+        // event, which collides with React Native's reserved `topChange` and
+        // crashes on render; JS treats a binary without `apiVersion >= 2` as
+        // absent and falls back to the web surface.
+        Constants([
+            "apiVersion": 2,
+        ])
+
         View(CodeEditorView.self) {
-            Events("onChange")
+            Events("onTextChange")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)

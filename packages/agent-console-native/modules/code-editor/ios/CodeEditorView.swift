@@ -8,7 +8,7 @@ import UIKit
 final class CodeEditorView: ExpoView, TextViewDelegate {
     private let textView = TextView()
     private let tokenStore = ShikiTokenStore()
-    let onChange = EventDispatcher()
+    let onTextChange = EventDispatcher()
 
     /// True while we set `text` programmatically, so the delegate's change
     /// callback never echoes a prop back up as an edit.
@@ -177,6 +177,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate {
         guard !isApplyingText else {
             return
         }
-        onChange(["text": textView.text])
+        onTextChange(["text": textView.text])
     }
 }

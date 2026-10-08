@@ -49,15 +49,23 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly fontSize: number;
   readonly showLineNumbers: boolean;
   readonly wrapLines: boolean;
-  readonly onChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
+  readonly onTextChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
 }
 
-const available = Platform.OS === "ios" && requireOptionalNativeModule("CodeEditor") !== null;
+// Gate on the native API version, not mere presence: the first build shipped an
+// `onChange` event that collides with React Native's reserved `topChange` and
+// crashes the instant the view config is read. That binary reports no
+// `apiVersion`, so we treat it as absent and fall back to the web surface —
+// which is why this fix takes effect over Metro, before a rebuild. `apiVersion`
+// 2 (the renamed `onTextChange` build) is the first that's safe to mount.
+const nativeModule = Platform.OS === "ios" ? requireOptionalNativeModule<{ readonly apiVersion?: number }>("CodeEditor") : null;
+const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.apiVersion : 0;
+const available = apiVersion >= 2;
 
-/** The native editor view, or undefined where this build has none. */
+/** The native editor view, or undefined where this build has none (or too old). */
 export const CodeEditorNativeView: React.ComponentType<CodeEditorNativeProps> | undefined = available
   ? requireNativeView<CodeEditorNativeProps>("CodeEditor")
   : undefined;
 
-/** Whether this build carries the native editor. */
+/** Whether this build carries a safe-to-mount native editor. */
 export const isCodeEditorNative = available;

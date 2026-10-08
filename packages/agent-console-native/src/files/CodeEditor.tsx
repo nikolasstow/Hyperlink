@@ -98,7 +98,7 @@ export const CodeEditor = (props: {
         fontSize={FONT_SIZE}
         showLineNumbers
         wrapLines={false}
-        {...(props.onChangeText === undefined ? {} : { onChange: (event) => props.onChangeText?.(event.nativeEvent.text) })}
+        {...(props.onChangeText === undefined ? {} : { onTextChange: (event) => props.onChangeText?.(event.nativeEvent.text) })}
       />
     </View>
   );
