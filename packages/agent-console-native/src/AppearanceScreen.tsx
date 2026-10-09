@@ -554,7 +554,6 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             single={singlePreview}
             light={lightPreview}
             dark={darkPreview}
-            activeSlot={slot}
             onPickSlot={setActiveSlot}
           />
           <View style={styles.rowSeparator} />
@@ -669,7 +668,6 @@ const ThemePreview = (props: {
   readonly single: string | ThemeRegistrationRaw;
   readonly light: string | ThemeRegistrationRaw;
   readonly dark: string | ThemeRegistrationRaw;
-  readonly activeSlot: Slot;
   readonly onPickSlot: (slot: Slot) => void;
 }): React.ReactElement => {
   if (!props.dual) {
@@ -689,10 +687,10 @@ const ThemePreview = (props: {
       </View>
       {/* The seam. */}
       <View style={[previewStyles.seam, { left: half }]} pointerEvents="none" />
-      {/* Half labels — the active half's is tinted (the selection target). */}
+      {/* Half labels, along the bottom — both a quiet transparent gray. */}
       <View style={previewStyles.labelRow} pointerEvents="none">
-        <Text style={[previewStyles.label, props.activeSlot === "light" ? previewStyles.labelActive : undefined]}>Light</Text>
-        <Text style={[previewStyles.label, props.activeSlot === "dark" ? previewStyles.labelActive : undefined]}>Dark</Text>
+        <Text style={previewStyles.label}>Light</Text>
+        <Text style={previewStyles.label}>Dark</Text>
       </View>
       {/* Tap targets — a half each. */}
       <TouchableOpacity style={[previewStyles.tap, { left: 0, width: half }]} activeOpacity={0.8} onPress={() => props.onPickSlot("light")} />
@@ -721,7 +719,7 @@ const previewStyles = StyleSheet.create({
   },
   labelRow: {
     position: "absolute",
-    top: 8,
+    bottom: 8,
     left: 10,
     right: 10,
     flexDirection: "row",
@@ -730,11 +728,8 @@ const previewStyles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: "600",
-    color: "rgba(160,160,160,0.9)",
+    color: "rgba(142,142,147,0.9)",
     overflow: "hidden",
-  },
-  labelActive: {
-    color: colors.tint,
   },
   tap: {
     position: "absolute",
