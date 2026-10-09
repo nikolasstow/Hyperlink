@@ -14,6 +14,20 @@ as an Expo module, highlighting driven by **Shiki** (our VS Code themes). Props:
 `ios/CodeEditorView.swift`, `ShikiTheme.swift`. File text via backend `/fs/read`
 (`filesPlugin.ts`); no `/fs/write` yet.
 
+## Instant opens — DONE
+
+Files open instantly and already coloured, never a flash of plain text:
+- **Synchronous token peek** — `codeCache.getCachedTokensSync` /
+  `shikiHighlighter.cachedHighlightSync`; `CodeEditor` seeds `tokensJson` + base
+  theme from the in-memory cache on the first frame, and the first tokenise is
+  immediate (not behind the 150 ms typing debounce).
+- **File-text cache** (`fileTextCache.ts`, memory + AsyncStorage): `FileView`
+  mounts from the cached text at once and revalidates in the background
+  (stale-while-revalidate); saves update it.
+- **Preload** (`preloadFile.ts`): Home warms text + tokens for recent files, so a
+  tap only renders. (Sync peeks hit memory only — preload/open warms it; so
+  first-ever opens still tokenise, later ones are instant.)
+
 ## 1. Themes — WORKING
 
 Themes apply correctly (syntax colors match the selected VS Code theme). The one
