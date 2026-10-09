@@ -13,6 +13,9 @@
  *
  * @internal
  */
+import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
+import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
+import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 import { isCodeEditorNative } from "../../modules/code-editor";
@@ -21,10 +24,14 @@ import { CodeSurface } from "../CodeSurface";
 import { runFs } from "../effect/runtime";
 import { fsReadText, fsWrite } from "../fsClient";
 import { langFromFilename } from "../shikiHighlighter";
+import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
+import { useCodeTheme } from "../useCodeTheme";
 import { CodeEditor } from "./CodeEditor";
 import { clearFileEdit, getFileEditSync, setFileEdit } from "./fileEdits";
+import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
 import { getFileTextSync, setFileText } from "./fileTextCache";
+import { preloadFile } from "./preloadFile";
 import { useSaveLight } from "./saveLight";
 import { StatusLight } from "./StatusLight";
 
@@ -124,6 +131,19 @@ export const FileView = (props: {
     [flash, saveCloud, path],
   );
 
+  // The file's 3-dot menu: a manual (permanent) Save, and Keep On Device.
+  const kept = useKeptPaths();
+  const isKept = kept.has(path);
+  const theme = useCodeTheme();
+  const toggleKeep = React.useCallback((): void => {
+    if (isKept) {
+      removeFromDevice(path);
+    } else {
+      keepOnDevice(path);
+      void preloadFile(backend, path, name, theme);
+    }
+  }, [isKept, path, name, backend, theme]);
+
   React.useEffect(() => {
     let alive = true;
     // New file (or path change). Offline-first: a pending local edit is the
@@ -191,7 +211,26 @@ export const FileView = (props: {
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}
         {state.kind === "text" ? (
-          <View style={[styles.light, { top: topInset + 10 }]} pointerEvents="none">
+          <View style={[styles.topRight, { top: topInset + 6 }]}>
+            <Host style={styles.menuHost}>
+              <Menu
+                label={
+                  <RNHostView matchContents>
+                    <GlassView style={styles.menuButton} isInteractive>
+                      <SystemIcon name="ellipsis" size={17} color={textColors.label} />
+                    </GlassView>
+                  </RNHostView>
+                }
+                modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
+              >
+                <Button label="Save" systemImage="square.and.arrow.down" onPress={() => saveCloud()} />
+                <Button
+                  label={isKept ? "Remove from Device" : "Keep On Device"}
+                  systemImage={isKept ? "trash" : "arrow.down.circle"}
+                  onPress={toggleKeep}
+                />
+              </Menu>
+            </Host>
             <StatusLight current={lightCurrent} />
           </View>
         ) : null}
@@ -242,9 +281,23 @@ const makeStyles = (text: TextColors) =>
       right: 0,
       bottom: 0,
     },
-    light: {
+    topRight: {
       position: "absolute",
-      right: 14,
+      right: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    menuHost: {
+      width: 34,
+      height: 34,
+    },
+    menuButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
     },
     message: {
       color: text.secondaryLabel,
