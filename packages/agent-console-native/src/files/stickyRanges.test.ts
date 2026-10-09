@@ -16,6 +16,20 @@ describe("stickyRanges — TypeScript", () => {
     const ranges = await stickyRanges(code, "typescript");
     expect(ranges.find((r) => r.header === 0)?.label).toBe("func go");
     expect(ranges.find((r) => r.header === 1)?.label).toBeUndefined();
+    // The arrow owns the sticky; the variable statement doesn't double up.
+    expect(ranges.filter((r) => r.header === 0)).toHaveLength(1);
+  });
+
+  it("makes a const with a multi-line type/value its own sticky scope", async () => {
+    const code = ["export const validate: {", "  (a: number): void", "  (a: string): void", "} = internal.validate;"].join("\n");
+    const ranges = await stickyRanges(code, "typescript");
+    expect(ranges.find((r) => r.header === 0)).toMatchObject({ start: 0, end: 3, depth: 0, label: "const validate" });
+  });
+
+  it("captures a type alias", async () => {
+    const code = ["type Big = {", "  a: number", "  b: string", "};"].join("\n");
+    const ranges = await stickyRanges(code, "typescript");
+    expect(ranges.find((r) => r.header === 0)).toMatchObject({ label: "type Big", depth: 0 });
   });
 
   it("captures a multi-line if block", async () => {

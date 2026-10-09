@@ -61,8 +61,17 @@ const loadTs = async (): Promise<typeof TS> => {
   return tsModule;
 };
 
-/** Node kinds that get a sticky header — declarations and multi-line control
- * blocks, the things you lose the top of when scrolling through a big body. */
+/** A `const`/`let`/`var` statement whose value is itself a function or class gets
+ * its sticky from that inner node (labelled `func foo`/`class Foo`), so the
+ * statement itself shouldn't double up. Everything else (`const x = { … }`,
+ * `const x: { … } = …`, a long call, etc.) does earn one. */
+const initializerIsOwnScope = (ts: typeof TS, node: TS.VariableStatement): boolean => {
+  const init = node.declarationList.declarations[0]?.initializer;
+  return init !== undefined && (ts.isArrowFunction(init) || ts.isFunctionExpression(init) || ts.isClassExpression(init));
+};
+
+/** Node kinds that get a sticky header — declarations and multi-line blocks, the
+ * things you lose the top of when scrolling through a big body. */
 const isContainer = (ts: typeof TS, node: TS.Node): boolean => {
   switch (node.kind) {
     case ts.SyntaxKind.FunctionDeclaration:
@@ -77,6 +86,7 @@ const isContainer = (ts: typeof TS, node: TS.Node): boolean => {
     case ts.SyntaxKind.InterfaceDeclaration:
     case ts.SyntaxKind.EnumDeclaration:
     case ts.SyntaxKind.ModuleDeclaration:
+    case ts.SyntaxKind.TypeAliasDeclaration:
     case ts.SyntaxKind.IfStatement:
     case ts.SyntaxKind.ForStatement:
     case ts.SyntaxKind.ForInStatement:
@@ -87,6 +97,8 @@ const isContainer = (ts: typeof TS, node: TS.Node): boolean => {
     case ts.SyntaxKind.TryStatement:
     case ts.SyntaxKind.ObjectLiteralExpression:
       return true;
+    case ts.SyntaxKind.VariableStatement:
+      return ts.isVariableStatement(node) && !initializerIsOwnScope(ts, node);
     default:
       return false;
   }
@@ -106,6 +118,12 @@ const labelFor = (ts: typeof TS, node: TS.Node): string | undefined => {
   if (ts.isInterfaceDeclaration(node)) return `interface ${node.name.text}`;
   if (ts.isEnumDeclaration(node)) return `enum ${node.name.text}`;
   if (ts.isModuleDeclaration(node)) return `namespace ${node.name.getText()}`;
+  if (ts.isTypeAliasDeclaration(node)) return `type ${node.name.text}`;
+  if (ts.isVariableStatement(node)) {
+    const decl = node.declarationList.declarations[0];
+    const keyword = (node.declarationList.flags & ts.NodeFlags.Const) !== 0 ? "const" : (node.declarationList.flags & ts.NodeFlags.Let) !== 0 ? "let" : "var";
+    return decl !== undefined && ts.isIdentifier(decl.name) ? `${keyword} ${decl.name.text}` : undefined;
+  }
   if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
     const parent = node.parent;
     if (parent !== undefined && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return `func ${parent.name.text}`;

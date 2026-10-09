@@ -303,13 +303,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             return
         }
         let line = topVisibleLine()
-        // The enclosing scope stack, outermost → innermost (closest parent last).
-        // We freeze the closest parent at the block's bottom with its ancestors
-        // stacked above it, so you always see the scope chain you're inside.
-        let stack = stickyRanges
+        // The innermost scope whose header has scrolled off the top — the closest
+        // parent you're inside. (Which declarations count as scopes is
+        // stickyRanges.ts; broaden that, not this.)
+        let enclosing = stickyRanges
             .filter { $0.start <= line && line <= $0.end && $0.header < line }
-            .sorted { $0.start < $1.start }
-        let enclosing = stack.last
+            .max { $0.start < $1.start }
         let header: Int
         let end: Int
         if let enclosing {
