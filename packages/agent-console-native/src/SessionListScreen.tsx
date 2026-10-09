@@ -27,6 +27,8 @@ import { getCachedSessions, setCachedSessions } from "./sessionCache";
 import { getSetupDate, loadReads } from "./sessionReads";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { LAYOUT_MS, SessionCard } from "./SessionCard";
+import { repoScope } from "./favorites/model";
+import { FavoriteScopeProvider } from "./favorites/useFavorites";
 import { relativeTime } from "./time";
 import { useSessionActivity } from "./useSessionActivity";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -37,6 +39,9 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { repo, worktree } = props.route.params;
+  // Favoriting a session from this repo's list pins to the repo's scope (shown
+  // on its repo page), not Home.
+  const favScope = React.useMemo(() => repoScope(repo), [repo]);
   const { client, address } = useAppContext();
   const headerHeight = useHeaderHeight();
   const isFocused = useIsFocused();
@@ -97,6 +102,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   const listed = worktree === null ? (group?.sessions ?? []) : (group?.worktrees.get(worktree) ?? []);
 
   return (
+    <FavoriteScopeProvider value={favScope}>
     <View style={styles.root}>
     <ScrollViewMarker
       style={styles.fill}
@@ -135,6 +141,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
     </ScrollViewMarker>
       <EdgeBlurBars variant="top" />
     </View>
+    </FavoriteScopeProvider>
   );
 };
 

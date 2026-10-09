@@ -54,6 +54,8 @@ import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
 import { getApiAddress } from "./settings";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
+import { repoScope } from "./favorites/model";
+import { FavoriteScopeProvider, useBoard } from "./favorites/useFavorites";
 import { useSessionActivity } from "./useSessionActivity";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
@@ -265,6 +267,22 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const repoSessions = group?.sessions ?? [];
   const worktreeCount = group?.worktrees.size ?? 0;
   const menu = repoMenuFor(isRepo);
+
+  // Favorites pinned to THIS repo/workspace (its scope): cards inside this
+  // screen favorite here (FavoriteScopeProvider below), not to Home. Only
+  // sessions are favoritable on this page for now; resolved against the loaded
+  // list, newest kept in favorite order, missing ones (gone/other repo) skipped.
+  const favScope = React.useMemo(() => repoScope(name), [name]);
+  const favBoard = useBoard(favScope);
+  const favoriteSessions = React.useMemo(
+    () =>
+      favBoard.flatMap((target) => {
+        if (target.page !== "session") return [];
+        const session = sessions.find((each) => each.id === target.id);
+        return session === undefined ? [] : [session];
+      }),
+    [favBoard, sessions],
+  );
 
   // Views the backend's extension host offers for this folder (npm's scripts,
   // where there is a package.json). Home prefetched them, so they are normally
@@ -566,7 +584,14 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           paddingBottom: COMPOSER_BAR_HEIGHT + keyboardHeight + 24,
         }}
       >
+        <FavoriteScopeProvider value={favScope}>
         <Animated.View style={overshootStyle}>
+        {favoriteSessions.length > 0 ? (
+          <>
+            {sectionHeader("Favorites")}
+            {favoriteSessions.map((session) => sessionCard(session, true, "fav"))}
+          </>
+        ) : null}
         {repoSessions.length === 0 ? (
           <Text style={styles.empty}>No sessions in this {isRepo ? "repo" : "workspace"} yet.</Text>
         ) : (
@@ -603,6 +628,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           </>
         )}
         </Animated.View>
+        </FavoriteScopeProvider>
       </Animated.ScrollView>
 
       {/* Top blur feather over the scrolling content, behind the glass header. */}
