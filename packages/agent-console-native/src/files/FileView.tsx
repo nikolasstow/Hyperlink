@@ -23,6 +23,7 @@ import { fsReadText, fsWrite } from "../fsClient";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor } from "./CodeEditor";
+import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
 import { clearFileEdit, getFileEditSync, setFileEdit } from "./fileEdits";
 import { registerSave, unregisterSave } from "./fileSave";
 import { getFileTextSync, setFileText } from "./fileTextCache";
@@ -55,6 +56,8 @@ export const FileView = (props: {
   readonly path: string;
   readonly name: string;
   readonly line?: number;
+  /** The repo/workspace the file is in, for scope-based settings (autosave). */
+  readonly repo?: string;
   /** Room above it (the transparent header). */
   readonly topInset: number;
   /** Room below it (the bottom bar + safe area), so the last lines clear it. */
@@ -62,7 +65,7 @@ export const FileView = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { path, name, line, topInset, bottomInset } = props;
+  const { path, name, line, repo, topInset, bottomInset } = props;
   const { backend } = useAppContext();
   // Start from what we have, offline-first: a pending local edit wins over the
   // cached disk text, so the editor mounts instantly with your latest work (even
@@ -117,12 +120,14 @@ export const FileView = (props: {
         }
       }, LOCAL_DELAY_MS);
       // Cloud (disk) autosave — debounced, with a max-wait flush so a steady
-      // typist still saves every few seconds.
+      // typist still saves every few seconds — but only when autosave is on for
+      // this file's scope (manual Save still writes regardless).
+      if (!resolveAutosave(autosaveSettingsNow(), { path, repo })) return;
       if (cloudTimer.current !== undefined) clearTimeout(cloudTimer.current);
       cloudTimer.current = setTimeout(saveCloud, CLOUD_DELAY_MS);
       if (cloudMaxTimer.current === undefined) cloudMaxTimer.current = setTimeout(saveCloud, CLOUD_MAX_WAIT_MS);
     },
-    [flash, saveCloud, path],
+    [flash, saveCloud, path, repo],
   );
 
   // Expose a manual save for the file's menu (in the screen's 3-dot), keyed by

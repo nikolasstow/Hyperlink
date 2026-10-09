@@ -10,6 +10,7 @@ import { startHomeLayout } from "./src/home/useHomeLayout";
 import { startFileNav } from "./src/files/useFileNav";
 import { startKeptNav } from "./src/navigation/useKeptNav";
 import { startFavorites } from "./src/favorites/useFavorites";
+import { loadAutosaveSettings } from "./src/files/autosaveSettings";
 import { loadDirtyEdits } from "./src/files/fileEdits";
 import { loadKept } from "./src/files/fileKeep";
 import { startOutbox } from "./src/outbox/useOutbox";
@@ -43,6 +44,7 @@ startFavorites();
 // view's local-changes indicator; and which are kept on device for offline.
 void loadDirtyEdits();
 void loadKept();
+void loadAutosaveSettings();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,

@@ -69,6 +69,7 @@ import { useCodeTheme } from "../useCodeTheme";
 import { saveFileNow } from "./fileSave";
 import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
 import { preloadFile } from "./preloadFile";
+import { resolveAutosave, setAutosave, useAutosaveSettings } from "./autosaveSettings";
 import { TAB_TOP_ACTIONS_WIDTH, TabTopActions } from "./TabTopActions";
 import { useMissingPaths } from "./missingPaths";
 
@@ -667,7 +668,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   onScroll={barHide.onScroll}
                 />
               ) : (
-                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} topInset={headerHeight} bottomInset={insets.bottom + BAR_ROOM + 20} />
+                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={insets.bottom + BAR_ROOM + 20} />
               )}
               {cover === undefined ? null : (
                 <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">
@@ -695,6 +696,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               worktrees={current.kind === "file" ? primary.worktrees : []}
               selected={currentWt?.path}
               onSelect={switchWorktree}
+              repo={repo}
               file={current.kind === "file" ? { path: current.path, name: current.name } : undefined}
             />
             <View style={styles.title} pointerEvents="box-none">
@@ -766,6 +768,8 @@ const MoreMenu = (props: {
   readonly worktrees: ReadonlyArray<ScannedWorktree>;
   readonly selected: string | undefined;
   readonly onSelect: (path: string) => void;
+  /** The repo/workspace, for scope-based settings (autosave). */
+  readonly repo: string;
   /** The open file (undefined for a folder tab) — adds Save / Keep On Device. */
   readonly file: { readonly path: string; readonly name: string } | undefined;
 }): React.ReactElement => {
@@ -774,8 +778,10 @@ const MoreMenu = (props: {
   const { backend } = useAppContext();
   const theme = useCodeTheme();
   const kept = useKeptPaths();
+  const autosaveSettings = useAutosaveSettings();
   const file = props.file;
   const isKept = file !== undefined && kept.has(file.path);
+  const autosaveOn = file !== undefined && resolveAutosave(autosaveSettings, { path: file.path, repo: props.repo });
   return (
     <Host
       style={styles.more}
@@ -798,6 +804,14 @@ const MoreMenu = (props: {
         modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
       >
         {file === undefined ? null : <Button key="save" label="Save" systemImage="square.and.arrow.down" onPress={() => saveFileNow(file.path)} />}
+        {file === undefined ? null : (
+          <Button
+            key="autosave"
+            label={autosaveOn ? "Autosave: On" : "Autosave: Off"}
+            systemImage={autosaveOn ? "checkmark.circle" : "circle"}
+            onPress={() => setAutosave({ kind: "file", path: file.path }, !autosaveOn)}
+          />
+        )}
         {file === undefined ? null : (
           <Button
             key="keep"
