@@ -48,20 +48,28 @@ Turn on editing with a save flow. Decisions:
   offline / temp vs permanent / dirty / syncing / error) — **simple, clean,
   immediately legible.** One small consistent symbol language.
 
+**Save-status design (DECIDED):** an **indicator light that flashes a colour** —
+**blue = local (device) save, green = cloud (disk) save.** Rate-limited (min
+flash duration) and **queued so concurrent local+cloud never overlap/flicker**;
+dedupe is **consecutive-colour, in the queue only** (two of a colour in a row is
+fine when not queued). In **folder view**, per-file **blue download / green
+upload** icons for transfer state. Autosave is **ON app-wide** by default.
+Prototype first, then tweak.
+
 Build order:
 - **E1 — DONE:** backend `POST /fs/write` (`fs.ts` `writeTextFile`, within-root +
   size-capped, existing files only) + native `fsClient.fsWrite`.
-- **E2:** enable editing + an **offline store of open-tab edits** (temporary
-  saves) — onChangeText persists locally per repo+path, survives restart, no
-  network. Effect store like conversations/favorites.
-- **E3:** **permanent save** (manual, via 3-dot + hard-press menu) → `fsWrite`;
-  the temp vs permanent distinction.
-- **E4:** **debounced autosave** (pause-to-save, with a max cap that flushes) →
-  permanent save, gated by the scoped autosave setting.
+- **E2 — PROTO DONE:** editing on (`FileView` `editable`); `onChangeText` →
+  debounced **local flash (blue)** + debounced disk **autosave (green)** with a
+  max-wait flush; `StatusLight` (flash queue `saveLight.ts`, tested) top-right;
+  writes guarded to changed text. ⚠️ writes real files — validate editor text
+  fidelity on a throwaway file first.
+- **E3:** **offline-persist store** of open-tab edits (survive restart, true
+  offline-first) — the real "local/temporary save"; + **manual/permanent save**
+  (3-dot + hard-press menu) and the temp vs permanent distinction.
+- **E4:** **folder-view transfer icons** (blue download / green upload).
 - **E5:** **scoped autosave setting** (file/folder/repo/workspace/server/app;
-  nearest scope wins) + its UI.
-- Throughout: the **save-status indicator** (icons for dirty / temp-saved /
-  permanently-saved / syncing / error) and conflict/reload handling.
+  nearest scope wins) + its UI; error state; conflict/reload handling.
 
 ## 3. Copilot-style inline completions (DECIDED model: configurable — build last)
 
