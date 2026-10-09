@@ -43,7 +43,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // A scope must span at least this fraction of the visible lines (rounded
     // down) to pin — short blocks that fit on screen don't sticky, and a shorter
     // screen lowers the bar. Tweak freely.
-    private let stickyMinFraction: Double = 0.1
+    private let stickyMinFraction: Double = 0.05
     private var lineStarts: [Int] = [0]
     private var shownHeaders: [Int] = []
     // The scope currently on screen, kept while it rides up off the top even
