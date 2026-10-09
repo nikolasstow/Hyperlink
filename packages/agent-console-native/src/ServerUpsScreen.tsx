@@ -231,7 +231,11 @@ export const ServerUpsScreen = (props: Props): React.ReactElement => {
   const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const [mins, setMins] = React.useState<number>(60);
-  const baseUrl = `http://${props.route.params.serverAddress}:${UPS_PORT}`;
+  // `?.` guards a nav state restored before this screen took params (an older
+  // ServerUps route persisted with none): no address → empty base → the fetch
+  // just fails into the offline state rather than throwing.
+  const serverAddress = props.route.params?.serverAddress;
+  const baseUrl = serverAddress === undefined ? "" : `http://${serverAddress}:${UPS_PORT}`;
   const { data, error } = useUps(baseUrl, mins);
 
   const now = data?.now;
