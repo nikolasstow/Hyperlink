@@ -642,6 +642,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               {current.kind === "directory" ? (
                 <FileListing
                   key={`${tab?.id ?? "root"}:${current.path}`}
+                  repo={repo}
                   dir={current.path}
                   topInset={headerHeight}
                   bottomInset={insets.bottom + BAR_ROOM + 20}

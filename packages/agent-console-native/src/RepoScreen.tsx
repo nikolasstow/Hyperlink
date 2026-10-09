@@ -54,7 +54,7 @@ import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
 import { getApiAddress } from "./settings";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
-import { repoScope } from "./favorites/model";
+import { type FavoriteTarget, repoScope } from "./favorites/model";
 import { FavoriteScopeProvider, useBoard } from "./favorites/useFavorites";
 import { useSessionActivity } from "./useSessionActivity";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -283,6 +283,11 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       }),
     [favBoard, sessions],
   );
+  // Files/folders favorited in this repo's Files (locations, not pages).
+  const favoriteLocations = React.useMemo(
+    () => favBoard.filter((target): target is Extract<FavoriteTarget, { readonly page: "file" | "folder" }> => target.page === "file" || target.page === "folder"),
+    [favBoard],
+  );
 
   // Views the backend's extension host offers for this folder (npm's scripts,
   // where there is a package.json). Home prefetched them, so they are normally
@@ -367,6 +372,26 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         size={13}
         color={textColors.secondaryLabel}
       />
+    </TouchableOpacity>
+  );
+
+  // A favorited file/folder (a location) as a row that opens it in Files.
+  const locationRow = (target: Extract<FavoriteTarget, { readonly page: "file" | "folder" }>): React.ReactElement => (
+    <TouchableOpacity
+      key={`favloc-${target.path}`}
+      style={styles.favLoc}
+      activeOpacity={0.6}
+      onPress={() =>
+        target.page === "folder"
+          ? props.navigation.navigate("Files", { repo: name, dir: target.path })
+          : props.navigation.navigate("Files", { repo: name, dir, open: { path: target.path, name: target.name } })
+      }
+    >
+      <SystemIcon name={target.page === "folder" ? "folder" : "doc.text"} size={18} color={colors.tint} />
+      <Text style={styles.favLocName} numberOfLines={1}>
+        {target.name}
+      </Text>
+      <SystemIcon name="chevron.forward" size={13} color={textColors.secondaryLabel} />
     </TouchableOpacity>
   );
 
@@ -586,10 +611,11 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       >
         <FavoriteScopeProvider value={favScope}>
         <Animated.View style={overshootStyle}>
-        {favoriteSessions.length > 0 ? (
+        {favoriteSessions.length > 0 || favoriteLocations.length > 0 ? (
           <>
             {sectionHeader("Favorites")}
             {favoriteSessions.map((session) => sessionCard(session, true, "fav"))}
+            {favoriteLocations.map(locationRow)}
           </>
         ) : null}
         {repoSessions.length === 0 ? (
@@ -973,6 +999,18 @@ const makeStyles = (text: TextColors) =>
     marginTop: 2,
     marginBottom: 6,
     paddingVertical: 9,
+  },
+  favLoc: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: 16,
+    paddingVertical: 12,
+  },
+  favLocName: {
+    flex: 1,
+    color: text.label,
+    fontSize: 16,
   },
   seeAllText: {
     color: text.secondaryLabel,

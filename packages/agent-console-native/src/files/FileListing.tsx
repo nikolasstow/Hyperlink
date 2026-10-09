@@ -20,9 +20,8 @@ import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import type { FileNavEntry } from "./FileNav";
 import { ContextMenuView, type MenuAction } from "../../modules/context-menu";
-
-/** A row's long-press menu. */
-const ROW_MENU: ReadonlyArray<MenuAction> = [{ id: "newTab", title: "Open in New Tab", systemImage: "plus.square.on.square" }];
+import { fileTarget, folderTarget, repoScope, sameTarget } from "../favorites/model";
+import { toggleFavorite, useBoard } from "../favorites/useFavorites";
 
 /** Left screen inset, indentation per level, and the leading chevron column.
  * Tuned to the Files reference: a small chevron with generous room around it,
@@ -88,6 +87,9 @@ const Row = (props: {
 };
 
 export const FileListing = (props: {
+  /** The repo/workspace this listing belongs to — the page a file/folder
+   * favorite is pinned to (files and folders are locations, not pages). */
+  readonly repo: string;
   readonly dir: string;
   /** Room above it (the transparent header) and below it (the bottom bar). */
   readonly topInset: number;
@@ -103,7 +105,10 @@ export const FileListing = (props: {
   const { backend } = useAppContext();
   const tree = useFileTree(backend, props.dir);
   const { rows } = tree;
-  const { onOpen, onOpenInNewTab } = props;
+  const { repo, onOpen, onOpenInNewTab } = props;
+  // A file/folder favorites to this repo/workspace's scope.
+  const favScope = React.useMemo(() => repoScope(repo), [repo]);
+  const favBoard = useBoard(favScope);
 
   const onToggle = (row: FileRow): void => {
     LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
@@ -132,19 +137,28 @@ export const FileListing = (props: {
   if (rows.length === 0) return <Text style={[styles.empty, { marginTop: props.topInset + 24 }]}>Empty folder.</Text>;
   return (
     <ScrollView style={styles.fill} onScroll={props.onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
-      {rows.map((row, index) => (
-        // A long press: the row's menu (iOS's own, the row lifting).
-        <ContextMenuView
-          key={row.path}
-          actions={ROW_MENU}
-          previewCornerRadius={10}
-          onAction={(id) => {
-            if (id === "newTab") onOpenInNewTab({ path: row.path, name: row.name, kind: row.type });
-          }}
-        >
-          <Row row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={open} />
-        </ContextMenuView>
-      ))}
+      {rows.map((row, index) => {
+        const target = row.type === "directory" ? folderTarget(repo, row.path, row.name) : fileTarget(repo, row.path, row.name);
+        const isFav = favBoard.some((each) => sameTarget(each, target));
+        const actions: ReadonlyArray<MenuAction> = [
+          { id: "newTab", title: "Open in New Tab", systemImage: "plus.square.on.square" },
+          { id: "favorite", title: isFav ? "Unfavorite" : "Favorite", systemImage: isFav ? "star.slash" : "star" },
+        ];
+        return (
+          // A long press: the row's menu (iOS's own, the row lifting).
+          <ContextMenuView
+            key={row.path}
+            actions={actions}
+            previewCornerRadius={10}
+            onAction={(id) => {
+              if (id === "newTab") onOpenInNewTab({ path: row.path, name: row.name, kind: row.type });
+              else if (id === "favorite") void toggleFavorite(favScope, target);
+            }}
+          >
+            <Row row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={open} />
+          </ContextMenuView>
+        );
+      })}
     </ScrollView>
   );
 };
