@@ -560,9 +560,9 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
           <View style={styles.rowSeparator} />
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
-              <Text style={styles.toggleTitle}>Match system appearance</Text>
+              <Text style={styles.toggleTitle}>Separate light &amp; dark themes</Text>
               <Text style={styles.toggleSubtitle} numberOfLines={2}>
-                Separate light and dark themes that follow iOS.
+                Set a code theme for each appearance; the editor follows iOS automatically.
               </Text>
             </View>
             <Switch value={dual} onValueChange={setDual} />
@@ -689,12 +689,7 @@ const ThemePreview = (props: {
       </View>
       {/* The seam. */}
       <View style={[previewStyles.seam, { left: half }]} pointerEvents="none" />
-      {/* The ring on the active half. */}
-      <View
-        style={[previewStyles.activeRing, props.activeSlot === "dark" ? { left: half, right: 0 } : { left: 0, right: half }]}
-        pointerEvents="none"
-      />
-      {/* Half labels. */}
+      {/* Half labels — the active half's is tinted (the selection target). */}
       <View style={previewStyles.labelRow} pointerEvents="none">
         <Text style={[previewStyles.label, props.activeSlot === "light" ? previewStyles.labelActive : undefined]}>Light</Text>
         <Text style={[previewStyles.label, props.activeSlot === "dark" ? previewStyles.labelActive : undefined]}>Dark</Text>
@@ -723,15 +718,6 @@ const previewStyles = StyleSheet.create({
     bottom: 0,
     width: StyleSheet.hairlineWidth,
     backgroundColor: "rgba(128,128,128,0.6)",
-  },
-  activeRing: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    borderWidth: 2,
-    borderColor: colors.tint,
-    borderRadius: 10,
-    borderCurve: "continuous",
   },
   labelRow: {
     position: "absolute",
