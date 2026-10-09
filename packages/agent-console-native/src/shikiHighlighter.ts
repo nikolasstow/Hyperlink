@@ -98,6 +98,12 @@ export const resolveThemeColors = (theme: string | ThemeRegistrationRaw): { read
   };
 };
 
+/** The bundled default theme's full document for a scheme (the fallback used
+ * when no theme is enabled) — so the theme editor can import values from the
+ * default, not only from installed themes. Shaped like any VS Code theme
+ * (colors + tokenColors), ready for `parseVsCodeTheme`. */
+export const defaultThemeDocument = (scheme: "light" | "dark"): unknown => (scheme === "light" ? githubLight : githubDark);
+
 /**
  * A device-created theme shaped for Shiki, the same way `getThemeJson` shapes a
  * server one — so a created theme can highlight with no server file to fetch.

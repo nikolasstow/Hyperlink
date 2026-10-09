@@ -21,6 +21,7 @@ import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getCreatedTheme } from "./createdThemes";
 import { getThemeJson } from "./extensionsClient";
+import { defaultThemeDocument } from "./shikiHighlighter";
 import { getApiAddress } from "./settings";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
@@ -66,8 +67,17 @@ export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
-      // `created:<id>` reads a theme this app owns; anything else is a file in
-      // the server's extension store.
+      // `default:<scheme>` is the bundled fallback theme; `created:<id>` reads a
+      // theme this app owns; anything else is a file in the extension store.
+      if (file.startsWith("default:")) {
+        const scheme = file.slice("default:".length) === "light" ? "light" : "dark";
+        const parsed = parseVsCodeTheme(defaultThemeDocument(scheme), label);
+        if (!cancelled) {
+          if (parsed === undefined) setError("The default theme could not be read.");
+          else setSource(parsed);
+        }
+        return;
+      }
       if (file.startsWith("created:")) {
         const created = await getCreatedTheme(file.slice("created:".length));
         if (cancelled) return;

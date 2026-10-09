@@ -22,6 +22,7 @@ import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { listCreatedThemes, type CreatedTheme } from "./createdThemes";
 import { listExtensions, type ThemeContribution } from "./extensionsClient";
+import { resolveThemeColors } from "./shikiHighlighter";
 import { getApiAddress } from "./settings";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
@@ -36,6 +37,13 @@ interface InstalledSource {
   readonly file: string;
   readonly swatch: string | undefined;
 }
+
+/** The bundled defaults, offered as import sources (file `default:<scheme>`,
+ * resolved in ThemeImportValues). The swatch is the theme's editor background. */
+const DEFAULT_SOURCES: ReadonlyArray<{ readonly file: string; readonly label: string; readonly swatch: string | undefined }> = [
+  { file: "default:dark", label: "Default (Dark)", swatch: resolveThemeColors("github-dark").colors["editor.background"] },
+  { file: "default:light", label: "Default (Light)", swatch: resolveThemeColors("github-light").colors["editor.background"] },
+];
 
 export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
@@ -88,6 +96,27 @@ export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
     >
       {error === undefined ? null : <Text style={styles.errorText}>{error}</Text>}
+
+      {/* The bundled default — importable like any other theme, so a new theme
+          can start from the default's colours and token rules. */}
+      <Text style={styles.sectionLabel}>Built in</Text>
+      <View style={styles.card}>
+        <CardGlass />
+        {DEFAULT_SOURCES.map((source, index) => (
+          <TouchableOpacity
+            key={source.file}
+            style={[styles.row, index > 0 && styles.rowBorder]}
+            activeOpacity={0.6}
+            onPress={() => openValues(source.file, source.label)}
+          >
+            <View style={[styles.swatch, { backgroundColor: source.swatch }]} />
+            <Text style={styles.rowTitle} numberOfLines={1}>
+              {source.label}
+            </Text>
+            <SystemIcon name="chevron.right" size={13} color={textColors.tertiaryLabel} />
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <Text style={styles.sectionLabel}>Installed</Text>
       <View style={styles.card}>
