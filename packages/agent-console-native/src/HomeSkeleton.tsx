@@ -15,7 +15,7 @@
 import * as React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors } from "./colors";
-import { CARD_GAP, CARD_GUTTER, type HomeLayout, type HomeRow, REPO_CARD_HEIGHT, SESSION_CARD_HEIGHT } from "./home/homeLayout";
+import { CARD_GAP, CARD_GUTTER, type HomeLayout, type HomeRow, REPO_CARD_HEIGHT, SERVER_CARD_HEIGHT, SESSION_CARD_HEIGHT } from "./home/homeLayout";
 import { useKeptHomeLayout } from "./home/useHomeLayout";
 import { type TextColors, useThemedStyles } from "./theme";
 
@@ -28,7 +28,7 @@ const FIRST_LAUNCH: HomeLayout = [
 ];
 
 const heightOf = (row: Exclude<HomeRow, { readonly kind: "heading" }>): number =>
-  row.kind === "session" ? SESSION_CARD_HEIGHT[row.size] : row.latest ? REPO_CARD_HEIGHT.latest : REPO_CARD_HEIGHT.plain;
+  row.kind === "session" ? SESSION_CARD_HEIGHT[row.size] : row.kind === "server" ? SERVER_CARD_HEIGHT : row.latest ? REPO_CARD_HEIGHT.latest : REPO_CARD_HEIGHT.plain;
 
 export const HomeSkeleton = (): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);

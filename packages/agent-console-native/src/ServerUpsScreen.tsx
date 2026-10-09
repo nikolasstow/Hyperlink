@@ -14,16 +14,19 @@
  * @internal
  */
 import { GlassView } from "expo-glass-effect";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop, Text as RNSvgText } from "react-native-svg";
+import type { RootStackParamList } from "./RootNavigator";
 import { type TextColors, useScreenBackground, useThemedStyles } from "./theme";
 
-/** The UPS dashboard server (Mac mini, over Tailscale). Configurable later once
- * servers are first-class. */
-const UPS_URL = "http://100.67.32.32:5196";
+/** The UPS dashboard runs on each server at :5196 (~/ups-monitor/server.js).
+ * The server's address is passed in by route, never hardcoded, so the same
+ * page serves any server. */
+const UPS_PORT = 5196;
 const POLL_MS = 4000;
 
 const ACCENT = "#0a84ff";
@@ -76,13 +79,13 @@ const RANGES = [
   { label: "24h", mins: 1440 },
 ] as const;
 
-const useUps = (mins: number): { readonly data: UpsData | undefined; readonly error: boolean } => {
+const useUps = (baseUrl: string, mins: number): { readonly data: UpsData | undefined; readonly error: boolean } => {
   const [data, setData] = React.useState<UpsData | undefined>(undefined);
   const [error, setError] = React.useState(false);
   React.useEffect(() => {
     let alive = true;
     const tick = (): void => {
-      void fetch(`${UPS_URL}/api/ups?mins=${mins}`, { cache: "no-store" })
+      void fetch(`${baseUrl}/api/ups?mins=${mins}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((d: UpsData) => {
           if (!alive) return;
@@ -99,7 +102,7 @@ const useUps = (mins: number): { readonly data: UpsData | undefined; readonly er
       alive = false;
       clearInterval(id);
     };
-  }, [mins]);
+  }, [baseUrl, mins]);
   return { data, error };
 };
 
@@ -218,7 +221,9 @@ const Timeline = (props: { readonly outages: ReadonlyArray<Outage>; readonly wid
   );
 };
 
-export const ServerUpsScreen = (): React.ReactElement => {
+type Props = NativeStackScreenProps<RootStackParamList, "ServerUps">;
+
+export const ServerUpsScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const background = useScreenBackground("grouped");
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -226,7 +231,8 @@ export const ServerUpsScreen = (): React.ReactElement => {
   const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const [mins, setMins] = React.useState<number>(60);
-  const { data, error } = useUps(mins);
+  const baseUrl = `http://${props.route.params.serverAddress}:${UPS_PORT}`;
+  const { data, error } = useUps(baseUrl, mins);
 
   const now = data?.now;
   const ringColor = now?.onBattery ? RED : now?.lowBattery || (now?.charge ?? 100) < 30 ? AMBER : GREEN;

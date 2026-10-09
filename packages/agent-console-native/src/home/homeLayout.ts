@@ -18,6 +18,7 @@ export const HomeRow = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("heading"), title: Schema.String, first: Schema.Boolean }),
   Schema.Struct({ kind: Schema.Literal("session"), size: CardSize }),
   Schema.Struct({ kind: Schema.Literal("repo"), latest: Schema.Boolean }),
+  Schema.Struct({ kind: Schema.Literal("server") }),
 ]);
 export type HomeRow = typeof HomeRow.Type;
 
@@ -40,6 +41,9 @@ export const SESSION_CARD_HEIGHT: Readonly<Record<CardSize, number>> = {
 
 /** A repo card's height, with or without its latest session's title. */
 export const REPO_CARD_HEIGHT = { latest: 92, plain: 68 };
+
+/** A server card's height (name line + address line, padding). */
+export const SERVER_CARD_HEIGHT = 72;
 
 /** The gap under each card, and the cards' side margin (Home's). */
 export const CARD_GAP = 10;

@@ -29,6 +29,8 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { getSetupDate, loadReads } from "./sessionReads";
 import { RepoCard } from "./RepoCard";
+import { ServerCard } from "./ServerCard";
+import { type Server, useServers } from "./servers";
 import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { useSessionActivity } from "./useSessionActivity";
 import { HomeSkeleton } from "./HomeSkeleton";
@@ -90,6 +92,7 @@ type Row =
   | { readonly kind: "heading"; readonly title: string }
   | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined; readonly favorite: boolean }
   | { readonly kind: "repo"; readonly group: RepoGroup; readonly favorite: boolean }
+  | { readonly kind: "server"; readonly server: Server }
   | { readonly kind: "recentTabs"; readonly tabs: ReadonlyArray<RecentTab> };
 
 const heading = (title: string): Row => ({ kind: "heading", title });
@@ -279,6 +282,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   }, [groups]);
 
   const favorites = useFavorites();
+  const servers = useServers();
   const rows = React.useMemo((): ReadonlyArray<Row> => {
     const sessionRow = (session: SessionSummary, favorite: boolean): Row => {
       const { repo, worktree } = matchSession(session.directory, scanned);
@@ -295,6 +299,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       return group === undefined ? [] : [{ kind: "repo", group, favorite: true }];
     });
     return [
+      ...(servers.length > 0 ? [heading("Servers"), ...servers.map((server): Row => ({ kind: "server", server }))] : []),
       ...(favoriteRows.length > 0 ? [heading("Favorites"), ...favoriteRows] : []),
       ...(recent.length > 0 ? [heading("Recent")] : []),
       ...recent.map((session) => sessionRow(session, false)),
@@ -304,7 +309,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       ...(otherGroups.length > 0 ? [heading("Workspaces")] : []),
       ...otherGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
     ];
-  }, [favorites, visible, groups, recent, recentTabs, scanned, knownGroups, otherGroups]);
+  }, [servers, favorites, visible, groups, recent, recentTabs, scanned, knownGroups, otherGroups]);
   // Its first screenful kept for the launch screen, which draws it before
   // Home is up (home/homeLayout.ts).
   React.useEffect(() => {
@@ -331,6 +336,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           ];
         case "repo":
           return [{ kind: "repo", latest: row.group.sessions[0]?.title !== undefined }];
+        case "server":
+          return [{ kind: "server" }];
       }
     });
     keepHomeLayout(layout).catch((error: unknown) => console.error("[home layout] keeping it failed", error));
@@ -371,7 +378,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             ? `h-${row.title}`
             : row.kind === "recentTabs"
               ? "recent-tabs"
-              : `${row.favorite ? "f-" : ""}${row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`}`
+              : row.kind === "server"
+                ? `s-${row.server.id}`
+                : `${row.favorite ? "f-" : ""}${row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`}`
         }
         refreshControl={
           // `progressViewOffset` pushes the spinner below the transparent nav
@@ -425,6 +434,15 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 onArchive={() => archiveWithUndo(getApiAddress(address), item.session.id)}
                 muted={mutedSet.has(item.session.id)}
                 onMute={() => toggleMute(getApiAddress(address), item.session.id)}
+              />
+            );
+          }
+          if (item.kind === "server") {
+            return (
+              <ServerCard
+                name={item.server.name}
+                address={item.server.address}
+                onOpen={() => props.navigation.navigate("Server", { serverId: item.server.id })}
               />
             );
           }
