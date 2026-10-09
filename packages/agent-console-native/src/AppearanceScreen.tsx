@@ -15,7 +15,7 @@ import * as React from "react";
 import { Alert, LayoutAnimation, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Slider, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
 import { CodeBlock } from "./CodeBlock";
@@ -682,7 +682,7 @@ const ThemeList = (props: ThemeListProps): React.ReactElement => {
       <CardGlass />
       <View>
         <Host style={{ width: rowWidth }} matchContents={{ vertical: true, horizontal: false }}>
-          <VStack modifiers={[onTapGesture(props.onSelectDefault)]}>
+          <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(props.onSelectDefault)]}>
             <ThemeRow width={rowWidth} dot={DEFAULT_THEME.primary} label="Default" active={enabled === undefined} />
           </VStack>
         </Host>
@@ -705,7 +705,7 @@ const ThemeList = (props: ThemeListProps): React.ReactElement => {
                 <ThemeRowPreview width={contentWidth} dot={dotOf(t.primary)} label={t.label} subtitle={t.extName} />
               </ContextMenu.Preview>
               <ContextMenu.Trigger>
-                <VStack modifiers={[onTapGesture(() => props.onSelectExtension(t))]}>
+                <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(() => props.onSelectExtension(t))]}>
                   <ThemeRow width={rowWidth} dot={dotOf(t.primary)} label={t.label} active={enabled?.createdId === undefined && enabled?.file === t.file} />
                 </VStack>
               </ContextMenu.Trigger>
@@ -731,7 +731,7 @@ const ThemeList = (props: ThemeListProps): React.ReactElement => {
                 <ThemeRowPreview width={contentWidth} dot={dotOf(mine.theme.colors["editor.background"])} label={mine.theme.name} subtitle="Created on this device" />
               </ContextMenu.Preview>
               <ContextMenu.Trigger>
-                <VStack modifiers={[onTapGesture(() => props.onSelectCreated(mine))]}>
+                <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(() => props.onSelectCreated(mine))]}>
                   <ThemeRow width={rowWidth} dot={dotOf(mine.theme.colors["editor.background"])} label={mine.theme.name} active={enabled?.createdId === mine.id} />
                 </VStack>
               </ContextMenu.Trigger>

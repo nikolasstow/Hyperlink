@@ -11,7 +11,7 @@
  * @internal
  */
 import { Host, HStack, Image, ScrollView, Text } from "@expo/ui/swift-ui";
-import { Animation, animation, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, scrollIndicators } from "@expo/ui/swift-ui/modifiers";
+import { Animation, animation, contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, scrollIndicators, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import type { SessionFile } from "./sessionFiles";
 import { useCardTint, useTextColors, useTheme } from "./theme";
@@ -50,6 +50,7 @@ export const FileChips = (props: {
                   padding({ horizontal: 12 }),
                   frame({ height: CHIP_HEIGHT }),
                   glassEffect({ glass: { variant: "regular", interactive: true, tint: selected ? themeColors.bubbleGlassTint : tint }, shape: "capsule" }),
+                  contentShape(shapes.rectangle()),
                   onTapGesture(() => props.onPress(file)),
                 ]}
               >

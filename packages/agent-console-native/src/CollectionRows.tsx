@@ -12,7 +12,7 @@
  */
 import * as React from "react";
 import { Button, ContextMenu, Host, HStack, Image, ProgressView, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import { DynamicColorIOS, Pressable, StyleSheet, Text, View } from "react-native";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { colors } from "./colors";
@@ -100,6 +100,7 @@ export const ItemRow = (props: {
         padding({ leading: 12 + props.depth * INDENT, trailing: 16, top: 10, bottom: 10 }),
         frame({ width: props.width, alignment: "leading" }),
         background(colors.systemBackground),
+        contentShape(shapes.rectangle()),
         onTapGesture(props.selecting ? props.onSelect : counting ? cancel : props.onRun),
       ]}
     >
@@ -165,6 +166,7 @@ export const NodeRow = (props: {
         padding({ leading: 12 + props.depth * INDENT, trailing: 16, top: 11, bottom: 11 }),
         frame({ width: props.width, alignment: "leading" }),
         background(colors.systemBackground),
+        contentShape(shapes.rectangle()),
         onTapGesture(props.onOpen),
       ]}
     >
@@ -222,6 +224,7 @@ export const Tile = (props: {
         padding({ all: 12 }),
         frame({ width: props.width, height: 80, alignment: "topLeading" }),
         glassEffect({ glass: { variant: "regular", tint }, shape: "roundedRectangle", cornerRadius: 14 }),
+        contentShape(shapes.rectangle()),
         onTapGesture(props.countdownMs !== undefined && props.onCancel !== undefined ? props.onCancel : props.onPress),
       ]}
     >

@@ -7,7 +7,7 @@
  * @internal
  */
 import { Button, ContextMenu, Host, HStack, Image, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { serverTarget } from "./favorites/model";
@@ -73,7 +73,7 @@ export const ServerCard = (props: ServerCardProps): React.ReactElement => {
           <Face width={cardWidth} id={props.id} name={props.name} address={props.address} />
         </ContextMenu.Preview>
         <ContextMenu.Trigger>
-          <VStack modifiers={[onTapGesture(props.onOpen)]}>
+          <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(props.onOpen)]}>
             <Face width={cardWidth} id={props.id} name={props.name} address={props.address} />
           </VStack>
         </ContextMenu.Trigger>

@@ -17,7 +17,7 @@
  */
 import * as React from "react";
 import { Button, ContextMenu, Host, HStack, Image, ProgressView, RNHostView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { background, font, foregroundStyle, frame, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { background, contentShape, font, foregroundStyle, frame, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import { Alert, DynamicColorIOS, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -124,6 +124,7 @@ const Row = (props: {
         padding({ leading: 12 + depth * INDENT, trailing: 16, top: 10, bottom: 10 }),
         frame({ width: props.width, alignment: "leading" }),
         background(colors.systemBackground),
+        contentShape(shapes.rectangle()),
         onTapGesture(node.collapsible ? props.onToggle : props.onOpen),
       ]}
     >

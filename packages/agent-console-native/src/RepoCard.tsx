@@ -11,7 +11,7 @@
  * @internal
  */
 import { Button, ContextMenu, Host, HStack, Image, Section, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding } from "@expo/ui/swift-ui/modifiers";
+import { contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { colors } from "./colors";
@@ -130,7 +130,7 @@ export const RepoCard = (props: RepoCardProps): React.ReactElement => {
           <Preview width={cardWidth} {...props} />
         </ContextMenu.Preview>
         <ContextMenu.Trigger>
-          <VStack modifiers={[onTapGesture(props.onOpen)]}>
+          <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(props.onOpen)]}>
             <Face width={cardWidth} {...props} />
           </VStack>
         </ContextMenu.Trigger>
