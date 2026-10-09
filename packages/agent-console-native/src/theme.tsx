@@ -18,7 +18,23 @@
 import * as React from "react";
 import { useColorScheme, type ColorValue } from "react-native";
 import { colors } from "./colors";
-import { DEFAULT_THEME, getStoredTheme, setStoredTheme, type Theme } from "./settings";
+import { DEFAULT_THEME, getStoredTheme, setStoredTheme, THEME_BACKGROUND, type Theme } from "./settings";
+import { resolveThemeColors } from "./shikiHighlighter";
+import { effectiveCode, useResolvedCodeTheme } from "./useCodeTheme";
+import { toOpaqueHex } from "./vscodeTheme";
+
+type Mode = "light" | "dark";
+
+/** The custom background for a mode, resolving the {@link THEME_BACKGROUND}
+ * sentinel to the enabled theme's editor background (so it tracks the theme),
+ * passing a hex through, and leaving undefined (the system's) as is. A hook: it
+ * resolves the code theme the same way the editor does. */
+export const useCustomBackground = (theme: Theme, mode: Mode): string | undefined => {
+  const resolved = useResolvedCodeTheme(effectiveCode(theme, mode), mode);
+  const stored = mode === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  if (stored === THEME_BACKGROUND) return toOpaqueHex(resolveThemeColors(resolved).colors["editor.background"]);
+  return stored;
+};
 
 /** Derived colours computed from a theme's `primary`/`secondary`. */
 export interface ThemeColors {
@@ -154,7 +170,8 @@ export const useTheme = (): ThemeContextValue => {
  * once. */
 export const useScreenBackground = (kind: "grouped" | "plain" = "grouped"): ColorValue => {
   const { theme } = useTheme();
-  const custom = useColorScheme() === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  const mode: Mode = useColorScheme() === "dark" ? "dark" : "light";
+  const custom = useCustomBackground(theme, mode);
   return custom ?? (kind === "plain" ? colors.systemBackground : colors.background);
 };
 
@@ -292,8 +309,8 @@ const SYSTEM_BACKGROUND_HEX = {
  * background, iOS's own colours. */
 export const useTextColors = (): TextColors => {
   const { theme } = useTheme();
-  const mode = useColorScheme() === "dark" ? "dark" : "light";
-  const custom = mode === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  const mode: Mode = useColorScheme() === "dark" ? "dark" : "light";
+  const custom = useCustomBackground(theme, mode);
   const contrast = theme.contrast?.[mode] ?? 0;
   // One object per background and contrast, so styles built from it are
   // rebuilt only when those change. iOS's own colours while neither is set.

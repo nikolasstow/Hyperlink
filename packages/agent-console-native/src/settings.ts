@@ -310,9 +310,12 @@ export type Theme = {
    * dark mode, switching with the OS. Off, `code` is used in both. */
   readonly codeDual?: boolean;
   readonly codeFont: string;
-  /** The screens' background in light mode, when not the system's. */
+  /** The screens' background in light mode, when not the system's. A hex colour,
+   * or the sentinel {@link THEME_BACKGROUND} to track the enabled theme's
+   * background live (so changing the theme updates it). */
   readonly backgroundLight?: string;
-  /** The screens' background in dark mode, when not the system's. */
+  /** The screens' background in dark mode, when not the system's. Hex or
+   * {@link THEME_BACKGROUND}. */
   readonly backgroundDark?: string;
   /** Increase Contrast: how much the glass cards are brightened in each mode,
    * 0 to 1; unset, off. */
@@ -321,6 +324,11 @@ export type Theme = {
     readonly dark: number;
   };
 };
+
+/** A background stored as "track the enabled theme": instead of a frozen hex,
+ * it resolves to the theme's editor background for the mode, so changing the
+ * theme updates the background. Not a hex, so it never collides with one. */
+export const THEME_BACKGROUND = "theme";
 
 /** Default code font — a guaranteed-present iOS monospace. */
 export const DEFAULT_CODE_FONT = "Menlo";

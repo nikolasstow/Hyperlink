@@ -21,6 +21,7 @@ import { colors } from "./colors";
 import type { RootStackParamList } from "./RootNavigator";
 import { getPermissionMode, type PermissionMode, setPermissionMode } from "./sessionPermissions";
 import { SystemIcon } from "./SystemIcon";
+import { THEME_BACKGROUND } from "./settings";
 import type { BackgroundMode } from "./sessions/SessionBackgrounds";
 import { setSessionBackground, useSessionBackground } from "./sessions/useSessionBackground";
 import { resolveThemeColors } from "./shikiHighlighter";
@@ -79,13 +80,14 @@ const BackgroundRow = (props: {
       >
         <SystemIcon name="arrow.down.left.circle" size={13} color={colors.secondaryLabel} />
       </TouchableOpacity>
-      {/* Theme — the enabled theme's background for this mode. */}
+      {/* Theme — the enabled theme's background for this mode. Stored as a
+          reference (THEME_BACKGROUND) so it tracks the theme as it changes. */}
       {props.themeColor === undefined ? null : (
         <TouchableOpacity
           accessibilityLabel={`${props.label} background: Theme`}
-          accessibilityState={{ selected: selected !== undefined && eq(selected, props.themeColor) }}
-          onPress={() => props.themeColor !== undefined && props.onChange(props.themeColor)}
-          style={[styles.swatch, { backgroundColor: props.themeColor }, selected !== undefined && eq(selected, props.themeColor) ? styles.swatchSelected : null]}
+          accessibilityState={{ selected: selected === THEME_BACKGROUND }}
+          onPress={() => props.onChange(THEME_BACKGROUND)}
+          style={[styles.swatch, { backgroundColor: props.themeColor }, selected === THEME_BACKGROUND ? styles.swatchSelected : null]}
         >
           <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
         </TouchableOpacity>
@@ -94,7 +96,7 @@ const BackgroundRow = (props: {
       <Host style={styles.pickerSwatch}>
         <ColorPicker
           label=""
-          selection={props.value ?? props.inherited}
+          selection={selected === undefined ? props.inherited : selected === THEME_BACKGROUND ? (props.themeColor ?? props.inherited) : selected}
           onSelectionChange={(next) => {
             const hex = next.length >= 7 ? next.slice(0, 7) : next;
             if (isHex(hex)) props.onChange(hex.toUpperCase());
@@ -159,7 +161,7 @@ export const SessionSettingsScreen = (props: Props): React.ReactElement => {
         <BackgroundRow
           label="Light"
           value={background?.light}
-          inherited={theme.backgroundLight ?? SYSTEM_BACKGROUND.light}
+          inherited={(theme.backgroundLight === THEME_BACKGROUND ? lightThemeBg : theme.backgroundLight) ?? SYSTEM_BACKGROUND.light}
           systemColor={SYSTEM_BACKGROUND.light}
           themeColor={lightThemeBg}
           onChange={setBackground("light")}
@@ -168,7 +170,7 @@ export const SessionSettingsScreen = (props: Props): React.ReactElement => {
         <BackgroundRow
           label="Dark"
           value={background?.dark}
-          inherited={theme.backgroundDark ?? SYSTEM_BACKGROUND.dark}
+          inherited={(theme.backgroundDark === THEME_BACKGROUND ? darkThemeBg : theme.backgroundDark) ?? SYSTEM_BACKGROUND.dark}
           systemColor={SYSTEM_BACKGROUND.dark}
           themeColor={darkThemeBg}
           onChange={setBackground("dark")}

@@ -25,7 +25,7 @@ import { colors } from "./colors";
 import { getThemeJson, listExtensions, removeExtension } from "./extensionsClient";
 import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
-import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
+import { DEFAULT_THEME, getApiAddress, THEME_BACKGROUND, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { CONTRAST_START, type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 import { resolveThemeColors } from "./shikiHighlighter";
@@ -149,9 +149,14 @@ const withBackground = (theme: Theme, key: "backgroundLight" | "backgroundDark",
 };
 
 /** The theme with a chosen colour theme's background pre-selected for the
- * mode that theme is made for; unchanged when the theme has none. */
-const withThemeBackground = (theme: Theme, background: string | undefined, dark: boolean): Theme =>
-  background === undefined ? theme : withBackground(theme, dark ? "backgroundDark" : "backgroundLight", background);
+ * mode that theme is made for; unchanged when the theme has none, or when that
+ * mode already tracks the theme (THEME_BACKGROUND) — the sentinel keeps up on
+ * its own, so it must not be frozen to this theme's concrete colour. */
+const withThemeBackground = (theme: Theme, background: string | undefined, dark: boolean): Theme => {
+  const key = dark ? "backgroundDark" : "backgroundLight";
+  if (theme[key] === THEME_BACKGROUND || background === undefined) return theme;
+  return withBackground(theme, key, background);
+};
 
 /** Which code-theme slot a selection targets: the only slot in single mode, or
  * one of the two in dual mode. */
@@ -257,12 +262,13 @@ const BackgroundRow = (props: {
       onPress={() => props.onChange(undefined)}
       style={[styles.swatch, { backgroundColor: props.systemColor }, props.value === undefined ? styles.swatchSelected : null]}
     />
-    {/* Theme background, when the enabled theme has one for this mode. */}
+    {/* Theme background, when the enabled theme has one for this mode. Stored as
+        a reference (THEME_BACKGROUND), so it tracks the theme as it changes. */}
     {props.themeColor === undefined ? null : (
       <TouchableOpacity
         accessibilityLabel={`${props.label} background: Theme`}
-        onPress={() => props.onChange(props.themeColor)}
-        style={[styles.swatch, { backgroundColor: props.themeColor }, props.value !== undefined && eq(props.value, props.themeColor) ? styles.swatchSelected : null]}
+        onPress={() => props.onChange(THEME_BACKGROUND)}
+        style={[styles.swatch, { backgroundColor: props.themeColor }, props.value === THEME_BACKGROUND ? styles.swatchSelected : null]}
       >
         <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
       </TouchableOpacity>
@@ -271,7 +277,7 @@ const BackgroundRow = (props: {
     <Host style={styles.pickerSwatch} matchContents>
       <ColorPicker
         label=""
-        selection={props.value ?? props.systemColor}
+        selection={props.value === undefined ? props.systemColor : props.value === THEME_BACKGROUND ? (props.themeColor ?? props.systemColor) : props.value}
         onSelectionChange={(next) => {
           const hex = next.length >= 7 ? next.slice(0, 7) : next;
           if (isHex(hex)) props.onChange(hex.toUpperCase());

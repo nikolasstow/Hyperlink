@@ -16,7 +16,7 @@ import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenS
 import { useAppContext } from "./AppContext";
 import { PerfMonitor, setPerfScreen } from "./perfMonitor";
 import { AGENT, normalizeServerAddress } from "./client";
-import { useScreenBackground, useTheme } from "./theme";
+import { useCustomBackground, useScreenBackground, useTheme } from "./theme";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
@@ -147,7 +147,7 @@ export const RootNavigator = (): React.ReactElement => {
   const background = useScreenBackground();
   const plainBackground = useScreenBackground("plain");
   const { theme } = useTheme();
-  const customBackground = scheme === "dark" ? theme.backgroundDark : theme.backgroundLight;
+  const customBackground = useCustomBackground(theme, scheme === "dark" ? "dark" : "light");
   const baseTheme = scheme === "dark" ? DARK_THEME : LIGHT_THEME;
   const navigationTheme =
     customBackground === undefined ? baseTheme : { ...baseTheme, colors: { ...baseTheme.colors, background: customBackground } };
