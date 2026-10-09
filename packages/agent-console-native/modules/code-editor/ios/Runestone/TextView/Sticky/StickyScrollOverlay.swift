@@ -18,6 +18,9 @@ final class StickyScrollOverlay: UIView {
 
     private let codeClip = UIView()
     private let gutter = UIView()
+    // A light, transparent-gray hairline along the block's bottom edge, so the
+    // frozen block reads as separate from the code scrolling under it.
+    private let bottomBorder = UIView()
     private var codeLabels: [UILabel] = []
     private var numberLabels: [UILabel] = []
 
@@ -37,6 +40,9 @@ final class StickyScrollOverlay: UIView {
         codeClip.clipsToBounds = true
         addSubview(codeClip)
         addSubview(gutter) // on top, so code scrolling left is clipped behind it
+        bottomBorder.backgroundColor = UIColor(white: 0.5, alpha: 0.25)
+        bottomBorder.isUserInteractionEnabled = false
+        addSubview(bottomBorder)
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
     }
 
@@ -112,6 +118,8 @@ final class StickyScrollOverlay: UIView {
         super.layoutSubviews()
         gutter.frame = CGRect(x: 0, y: 0, width: gutterWidth, height: bounds.height)
         codeClip.frame = CGRect(x: gutterWidth, y: 0, width: max(0, bounds.width - gutterWidth), height: bounds.height)
+        let hairline = 1.0 / (window?.screen.scale ?? 2.0)
+        bottomBorder.frame = CGRect(x: 0, y: bounds.height - hairline, width: bounds.width, height: hairline)
         for (index, number) in numberLabels.enumerated() {
             number.frame = CGRect(x: 0, y: CGFloat(index) * rowHeight, width: max(0, gutterWidth - gutterTrailingPadding), height: rowHeight)
         }
