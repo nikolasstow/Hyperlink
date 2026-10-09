@@ -708,18 +708,19 @@ const ThemePreview = (props: {
   readonly dark: string | ThemeRegistrationRaw;
 }): React.ReactElement => {
   if (!props.dual) {
-    return <CodeBlock code={props.code} lang="typescript" theme={props.single} fontFamily={props.fontFamily} />;
+    return <CodeBlock code={props.code} lang="typescript" theme={props.single} fontFamily={props.fontFamily} scrollEnabled={false} />;
   }
   const half = props.width / 2;
   return (
     // The left (light) block sets the height; the right (dark) block overlays it,
     // shifted so its code aligns across the seam, and is clipped to the right
     // half. Both render the same code, so the split lands mid-glyph-row cleanly.
+    // Neither scrolls — a preview is fixed, and two scrollers would desync.
     <View style={previewStyles.split}>
-      <CodeBlock code={props.code} lang="typescript" theme={props.light} fontFamily={props.fontFamily} />
+      <CodeBlock code={props.code} lang="typescript" theme={props.light} fontFamily={props.fontFamily} scrollEnabled={false} />
       <View style={[StyleSheet.absoluteFill, previewStyles.rightClip, { left: half }]} pointerEvents="none">
         <View style={{ width: props.width, marginLeft: -half }}>
-          <CodeBlock code={props.code} lang="typescript" theme={props.dark} fontFamily={props.fontFamily} />
+          <CodeBlock code={props.code} lang="typescript" theme={props.dark} fontFamily={props.fontFamily} scrollEnabled={false} />
         </View>
       </View>
       {/* The seam. */}

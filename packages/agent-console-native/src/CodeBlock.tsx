@@ -23,6 +23,9 @@ export const CodeBlock = (props: {
   readonly theme: string | ThemeRegistrationRaw;
   /** Monospace family for the code (defaults to Menlo). */
   readonly fontFamily?: string;
+  /** Whether long lines scroll horizontally. Off for a fixed preview (where two
+   * blocks are overlaid and independent scrolling would desync them). */
+  readonly scrollEnabled?: boolean;
 }): React.ReactElement => {
   const textColors = useTextColors();
   const [result, setResult] = React.useState<HighlightResult | undefined>(undefined);
@@ -50,7 +53,7 @@ export const CodeBlock = (props: {
 
   return (
     <View style={[styles.wrap, { backgroundColor: background }]}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView horizontal scrollEnabled={props.scrollEnabled ?? true} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View>
           {result === undefined ? (
             <Text style={[styles.line, { color: foreground, fontFamily }]}>{props.code}</Text>
