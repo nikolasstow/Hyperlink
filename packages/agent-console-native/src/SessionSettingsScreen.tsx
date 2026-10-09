@@ -23,7 +23,10 @@ import { getPermissionMode, type PermissionMode, setPermissionMode } from "./ses
 import { SystemIcon } from "./SystemIcon";
 import type { BackgroundMode } from "./sessions/SessionBackgrounds";
 import { setSessionBackground, useSessionBackground } from "./sessions/useSessionBackground";
+import { resolveThemeColors } from "./shikiHighlighter";
 import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
+import { useResolvedCodeTheme } from "./useCodeTheme";
+import { toOpaqueHex } from "./vscodeTheme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SessionSettings">;
 
@@ -37,25 +40,57 @@ interface ModeOption {
 const SYSTEM_BACKGROUND: Readonly<Record<BackgroundMode, string>> = { light: "#F2F2F7", dark: "#000000" };
 
 const isHex = (value: string): boolean => /^#[0-9a-fA-F]{6}$/.test(value);
+const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
-/** One mode's background: the inherited colour (selected while the session
- * has none of its own), then Apple's picker. */
+/** One mode's session background, as an ordered set of swatches: Default (the
+ * blackish/whitish system background), Inherit (follow the app — selected while
+ * the session has none of its own), Theme (the enabled theme's background for
+ * this mode), then Apple's picker for anything custom. */
 const BackgroundRow = (props: {
   readonly label: string;
   readonly value: string | undefined;
+  /** The colour the session inherits from the app (its Appearance background,
+   * or the system's) — shown on the Inherit swatch. */
   readonly inherited: string;
+  /** The blackish/whitish system background for this mode. */
+  readonly systemColor: string;
+  /** The enabled theme's background for this mode, when it resolves to one. */
+  readonly themeColor: string | undefined;
   readonly onChange: (color: string | undefined) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
+  const selected = props.value;
   return (
     <View style={styles.backgroundRow}>
       <Text style={styles.backgroundLabel}>{props.label}</Text>
+      {/* Default — blackish in dark, whitish in light. */}
       <TouchableOpacity
-        accessibilityLabel={`${props.label} background: the app's`}
-        accessibilityState={{ selected: props.value === undefined }}
-        onPress={() => props.onChange(undefined)}
-        style={[styles.swatch, { backgroundColor: props.inherited }, props.value === undefined ? styles.swatchSelected : null]}
+        accessibilityLabel={`${props.label} background: Default`}
+        accessibilityState={{ selected: selected !== undefined && eq(selected, props.systemColor) }}
+        onPress={() => props.onChange(props.systemColor)}
+        style={[styles.swatch, { backgroundColor: props.systemColor }, selected !== undefined && eq(selected, props.systemColor) ? styles.swatchSelected : null]}
       />
+      {/* Inherit — follow the app; no session override. */}
+      <TouchableOpacity
+        accessibilityLabel={`${props.label} background: Inherit`}
+        accessibilityState={{ selected: selected === undefined }}
+        onPress={() => props.onChange(undefined)}
+        style={[styles.swatch, { backgroundColor: props.inherited }, selected === undefined ? styles.swatchSelected : null]}
+      >
+        <SystemIcon name="arrow.down.left.circle" size={13} color={colors.secondaryLabel} />
+      </TouchableOpacity>
+      {/* Theme — the enabled theme's background for this mode. */}
+      {props.themeColor === undefined ? null : (
+        <TouchableOpacity
+          accessibilityLabel={`${props.label} background: Theme`}
+          accessibilityState={{ selected: selected !== undefined && eq(selected, props.themeColor) }}
+          onPress={() => props.themeColor !== undefined && props.onChange(props.themeColor)}
+          style={[styles.swatch, { backgroundColor: props.themeColor }, selected !== undefined && eq(selected, props.themeColor) ? styles.swatchSelected : null]}
+        >
+          <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+      {/* Custom — Apple's colour picker. */}
       <Host style={styles.pickerSwatch}>
         <ColorPicker
           label=""
@@ -82,6 +117,10 @@ export const SessionSettingsScreen = (props: Props): React.ReactElement => {
   const { sessionID } = props.route.params;
   const [mode, setMode] = React.useState<PermissionMode>(() => getPermissionMode(sessionID));
   const { theme } = useTheme();
+  // The enabled theme's actual background per mode (resolved, so it is present
+  // even for the bundled fallback) — the Theme swatch.
+  const lightThemeBg = toOpaqueHex(resolveThemeColors(useResolvedCodeTheme(theme.code, "light")).colors["editor.background"]);
+  const darkThemeBg = toOpaqueHex(resolveThemeColors(useResolvedCodeTheme(theme.codeDark ?? theme.code, "dark")).colors["editor.background"]);
   const background = useSessionBackground(sessionID);
   const setBackground = (backgroundMode: BackgroundMode) => (color: string | undefined) => {
     setSessionBackground(sessionID, backgroundMode, color).catch((error: unknown) => console.error("[session settings] saving the background failed", error));
@@ -117,9 +156,23 @@ export const SessionSettingsScreen = (props: Props): React.ReactElement => {
       <Text style={styles.sectionLabel}>Background</Text>
       <View style={styles.card}>
         <CardGlass />
-        <BackgroundRow label="Light" value={background?.light} inherited={theme.backgroundLight ?? SYSTEM_BACKGROUND.light} onChange={setBackground("light")} />
+        <BackgroundRow
+          label="Light"
+          value={background?.light}
+          inherited={theme.backgroundLight ?? SYSTEM_BACKGROUND.light}
+          systemColor={SYSTEM_BACKGROUND.light}
+          themeColor={lightThemeBg}
+          onChange={setBackground("light")}
+        />
         <View style={styles.rowBorder} />
-        <BackgroundRow label="Dark" value={background?.dark} inherited={theme.backgroundDark ?? SYSTEM_BACKGROUND.dark} onChange={setBackground("dark")} />
+        <BackgroundRow
+          label="Dark"
+          value={background?.dark}
+          inherited={theme.backgroundDark ?? SYSTEM_BACKGROUND.dark}
+          systemColor={SYSTEM_BACKGROUND.dark}
+          themeColor={darkThemeBg}
+          onChange={setBackground("dark")}
+        />
       </View>
 
       <Text style={[styles.sectionLabel, styles.sectionGap]}>Permissions</Text>
@@ -207,6 +260,8 @@ const makeStyles = (text: TextColors) =>
       borderRadius: 16,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.separator,
+      alignItems: "center",
+      justifyContent: "center",
     },
     swatchSelected: {
       borderWidth: 3,
