@@ -274,3 +274,12 @@ Both reuse the APNs path we proved (external watcher → `exp.host` → APNs →
   generalize, one code path.)
 - **Widget size/layout:** fixed grid cells (per feedback: no measure-after-render)
   — one or two column, `size` picks the span.
+
+## Future plugin ideas
+
+- **VPN plugin** — show VPN status/info (connected, server, IP) and **toggle a
+  VPN** (e.g. Proton, which the owner has installed). Device-side (a device/app
+  plugin, not server-scoped): on iOS, toggling means a configured
+  NetworkExtension/`NEVPNManager` profile, the VPN app's URL scheme/Shortcuts, or
+  surfacing its status. A good fit for a widget (status at a glance) that opens a
+  full page (details + toggle). Reuses the plugin/widget model; `locus: device`.

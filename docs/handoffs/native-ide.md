@@ -78,12 +78,30 @@ Build order:
   max-wait flush; `StatusLight` (flash queue `saveLight.ts`, tested) top-right;
   writes guarded to changed text. ⚠️ writes real files — validate editor text
   fidelity on a throwaway file first.
-- **E3:** **offline-persist store** of open-tab edits (survive restart, true
-  offline-first) — the real "local/temporary save"; + **manual/permanent save**
-  (3-dot + hard-press menu) and the temp vs permanent distinction.
-- **E4:** **folder-view transfer icons** (blue download / green upload).
-- **E5:** **scoped autosave setting** (file/folder/repo/workspace/server/app;
-  nearest scope wins) + its UI; error state; conflict/reload handling.
+- **E3 — DONE (offline-persist):** `fileEdits.ts` persists pending edits on
+  device (memory + AsyncStorage), shown offline-first (pending edit wins over the
+  disk cache); the blue flash is now a real write; a cloud save / disk-match
+  clears the pending edit. Reactive dirty set (`useDirtyPaths`, loaded at launch).
+- **E4 — DONE (green upload):** the folder listing shows a green upload glyph on
+  files with unsaved local changes. (Blue download reserved for a pull/refresh
+  state.)
+- **Keep On Device — DONE:** file hard-press menu pins a file for offline
+  (downloads + warms it; `fileKeep.ts`, persisted, read back at launch).
+- **PENDING — file 3-dot menu:** the open-file toolbar/3-dot (doesn't exist yet)
+  should host **manual/permanent Save** and **Keep On Device**; plus the
+  temp-vs-permanent + error save states.
+- **PENDING — scoped autosave setting** (file/folder/repo/workspace/server/app;
+  nearest wins) + UI; conflict/reload handling.
+
+## Instant opens — also fixed
+Theme resolves once (process-wide cache; no default-then-correct flash on every
+open); text + token sync caches + preload (deferred so it doesn't block taps).
+
+## Sticky scroll — closest parent
+`CodeEditorView.swift` sticky now fills with the **enclosing scope stack**
+(closest parent at the bottom, ancestors above) instead of the physical lines
+above the header. Native — needs a build to verify; may need a push-off tweak as
+the innermost scope ends.
 
 ## 3. Copilot-style inline completions (DECIDED model: configurable — build last)
 
