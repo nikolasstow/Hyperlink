@@ -19,10 +19,19 @@ import { isCodeEditorNative } from "../../modules/code-editor";
 import { useAppContext } from "../AppContext";
 import { CodeSurface } from "../CodeSurface";
 import { runFs } from "../effect/runtime";
-import { fsReadText } from "../fsClient";
+import { fsReadText, fsWrite } from "../fsClient";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor } from "./CodeEditor";
+import { useSaveLight } from "./saveLight";
+import { StatusLight } from "./StatusLight";
+
+/** Autosave timing (prototype): a local (device) flash after a short pause, a
+ * cloud (disk) write after a longer pause — debounced, but flushed at the max
+ * wait so a steady typist still saves every few seconds. */
+const LOCAL_DELAY_MS = 400;
+const CLOUD_DELAY_MS = 1200;
+const CLOUD_MAX_WAIT_MS = 5000;
 
 type State =
   | { readonly kind: "loading" }
@@ -55,12 +64,56 @@ export const FileView = (props: {
   const [state, setState] = React.useState<State>({ kind: "loading" });
   const lang = React.useMemo(() => langFromFilename(name), [name]);
 
+  // Editing + autosave. The native editor owns the text after mount; we read its
+  // changes (onChangeText) and save them — a local (device) checkpoint after a
+  // short pause, a cloud (disk) write after a longer pause, flushed at a max
+  // wait. Autosave is on app-wide for now (scoped setting to come).
+  const { current: lightCurrent, flash } = useSaveLight();
+  const editedRef = React.useRef<string | null>(null);
+  const diskRef = React.useRef<string>("");
+  const localTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cloudTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cloudMaxTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const saveCloud = React.useCallback((): void => {
+    if (cloudTimer.current !== undefined) clearTimeout(cloudTimer.current);
+    if (cloudMaxTimer.current !== undefined) clearTimeout(cloudMaxTimer.current);
+    cloudTimer.current = undefined;
+    cloudMaxTimer.current = undefined;
+    const next = editedRef.current;
+    if (next === null || next === diskRef.current) return;
+    void runFs(fsWrite(backend, path, next))
+      .then(() => {
+        diskRef.current = next;
+        flash("cloud");
+      })
+      .catch(() => undefined);
+  }, [backend, path, flash]);
+
+  const onChangeText = React.useCallback(
+    (next: string): void => {
+      editedRef.current = next;
+      // Local (device) checkpoint — debounced short.
+      if (localTimer.current !== undefined) clearTimeout(localTimer.current);
+      localTimer.current = setTimeout(() => flash("local"), LOCAL_DELAY_MS);
+      // Cloud (disk) autosave — debounced, with a max-wait flush so a steady
+      // typist still saves every few seconds.
+      if (cloudTimer.current !== undefined) clearTimeout(cloudTimer.current);
+      cloudTimer.current = setTimeout(saveCloud, CLOUD_DELAY_MS);
+      if (cloudMaxTimer.current === undefined) cloudMaxTimer.current = setTimeout(saveCloud, CLOUD_MAX_WAIT_MS);
+    },
+    [flash, saveCloud],
+  );
+
   React.useEffect(() => {
     let alive = true;
     setState({ kind: "loading" });
     void runFs(fsReadText(backend, path))
       .then((text) => {
         if (!alive) return;
+        // A fresh file: the loaded text is what's on disk; forget prior edits.
+        diskRef.current = text ?? "";
+        editedRef.current = null;
         setState(text === undefined ? { kind: "missing" } : { kind: "text", text });
       })
       .catch(() => {
@@ -70,6 +123,16 @@ export const FileView = (props: {
       alive = false;
     };
   }, [backend, path]);
+
+  // Drop pending saves when the file (or the view) goes away.
+  React.useEffect(
+    () => () => {
+      if (localTimer.current !== undefined) clearTimeout(localTimer.current);
+      if (cloudTimer.current !== undefined) clearTimeout(cloudTimer.current);
+      if (cloudMaxTimer.current !== undefined) clearTimeout(cloudMaxTimer.current);
+    },
+    [],
+  );
 
   if (state.kind === "missing" || state.kind === "error") {
     return (
@@ -85,10 +148,15 @@ export const FileView = (props: {
     return (
       <>
         {state.kind === "text" ? (
-          <CodeEditor path={path} name={name} text={state.text} editable={false} topInset={topInset + EDITOR_TOP_MARGIN} bottomInset={bottomInset} stickyFill={topInset + EDITOR_TOP_MARGIN} />
+          <CodeEditor path={path} name={name} text={state.text} editable onChangeText={onChangeText} topInset={topInset + EDITOR_TOP_MARGIN} bottomInset={bottomInset} stickyFill={topInset + EDITOR_TOP_MARGIN} />
         ) : (
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}
+        {state.kind === "text" ? (
+          <View style={[styles.light, { top: topInset + 10 }]} pointerEvents="none">
+            <StatusLight current={lightCurrent} />
+          </View>
+        ) : null}
         {state.kind === "loading" ? (
           <View style={[styles.center, styles.overlay, { paddingTop: topInset + 40 }]} pointerEvents="none">
             <ActivityIndicator color={textColors.secondaryLabel} />
@@ -135,6 +203,10 @@ const makeStyles = (text: TextColors) =>
       left: 0,
       right: 0,
       bottom: 0,
+    },
+    light: {
+      position: "absolute",
+      right: 14,
     },
     message: {
       color: text.secondaryLabel,
