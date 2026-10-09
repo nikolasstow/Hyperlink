@@ -62,7 +62,7 @@ import { OVERVIEW_TOP_ROOM, TabOverview } from "./TabOverview";
 import { sameTab, type ShownRepo, type TabFilter, type TabLayout, tabLayout, type TabRef } from "./tabLayout";
 import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
-import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
+import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, openOrSelectFileTab, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
 import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
 import { useAppContext } from "../AppContext";
@@ -146,12 +146,13 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const rootName = lastSegment(primary.dir, repo);
   const root = React.useMemo((): FileNavEntry => ({ path: primary.dir, name: rootName, kind: "directory" }), [primary.dir, rootName]);
   React.useEffect(() => ensureFileRoot(repo, root), [repo, root]);
-  // A file to open in a new tab (from a chat): once, then the request is
-  // spent.
+  // An address to open (from a chat, or a recent on Home): once, then the
+  // request is spent. The browser reuses the tab already on that address, or
+  // opens a new one — no duplicate tabs.
   const openRequest = props.route.params.open;
   React.useEffect(() => {
     if (openRequest === undefined) return;
-    newFileTab(repo, { path: openRequest.path, name: openRequest.name, kind: openRequest.kind });
+    openOrSelectFileTab(repo, { path: openRequest.path, name: openRequest.name, kind: openRequest.kind });
     navigation.setParams({ open: undefined });
   }, [openRequest, repo, navigation]);
   // This repo's tabs; at its root until the kept place is read back. At

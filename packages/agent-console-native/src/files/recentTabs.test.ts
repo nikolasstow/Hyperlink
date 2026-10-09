@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FileNavEntry, FilePlace } from "./FileNav";
-import { recentTabsOf } from "./recentTabs";
+import { recentSubtitlesOf, recentTabsOf, type RecentTab, type WorktreeRef } from "./recentTabs";
 
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
 const place = (visits: ReadonlyArray<readonly [string, number]>): FilePlace => ({
@@ -32,5 +32,34 @@ describe("recentTabsOf", () => {
 
   it("is empty with no history", () => {
     expect(recentTabsOf([["app", place([])]], 6)).toEqual([]);
+  });
+});
+
+describe("recentSubtitlesOf", () => {
+  const recent = (repo: string, path: string): RecentTab => ({ repo, entry: file(path), at: 0 });
+  const worktrees: ReadonlyMap<string, ReadonlyArray<WorktreeRef>> = new Map([
+    ["app", [{ name: "main", path: "/app/main" }, { name: "feature", path: "/app/worktrees/feature" }]],
+  ]);
+
+  it("shows the parent folder relative to the worktree", () => {
+    expect(recentSubtitlesOf([recent("app", "/app/main/src/files/x.ts")], worktrees)).toEqual(["src/files"]);
+  });
+
+  it("falls back to the worktree name at the worktree root", () => {
+    expect(recentSubtitlesOf([recent("app", "/app/main/x.ts")], worktrees)).toEqual(["main"]);
+  });
+
+  it("uses the worktree name when the same relative path is in two worktrees", () => {
+    const tabs = [recent("app", "/app/main/src/x.ts"), recent("app", "/app/worktrees/feature/src/x.ts")];
+    expect(recentSubtitlesOf(tabs, worktrees)).toEqual(["main", "feature"]);
+  });
+
+  it("keeps the relative parent when two entries differ in it", () => {
+    const tabs = [recent("app", "/app/main/src/a/x.ts"), recent("app", "/app/main/src/b/x.ts")];
+    expect(recentSubtitlesOf(tabs, worktrees)).toEqual(["src/a", "src/b"]);
+  });
+
+  it("uses the whole parent path when outside every worktree", () => {
+    expect(recentSubtitlesOf([recent("app", "/elsewhere/deep/x.ts")], worktrees)).toEqual(["/elsewhere/deep"]);
   });
 });

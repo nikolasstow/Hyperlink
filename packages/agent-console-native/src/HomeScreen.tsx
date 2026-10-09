@@ -266,6 +266,12 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // Recent files across every repo's Files (recentTabs.ts), newest first.
   const filePlaces = useFilePlaces();
   const recentTabs = React.useMemo(() => recentTabsOf(HashMap.entries(filePlaces), RECENT_TABS), [filePlaces]);
+  // Each repo's worktrees, so a recent's subtitle reads relative to its worktree
+  // (and falls back to the worktree name when two share a relative path).
+  const worktreesByRepo = React.useMemo(
+    () => new Map(scanned.map((repo) => [repo.repo, repo.worktrees.map((worktree) => ({ name: worktree.name, path: worktree.path }))] as const)),
+    [scanned],
+  );
   // Warm the text + token caches so opening a file is instant and already
   // coloured — preload here, the tap only renders. Covers every OPEN tab (across
   // all repos) and the recent files, deduped by path.
@@ -477,6 +483,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             return (
               <RecentTabsSection
                 tabs={item.tabs}
+                worktreesByRepo={worktreesByRepo}
                 onOpen={(tab) => props.navigation.navigate("Files", { repo: tab.repo, dir: primaryWorktreeOf(tab.repo)?.path ?? scanned.find((r) => r.repo === tab.repo)?.worktrees[0]?.path ?? tab.entry.path, open: { path: tab.entry.path, name: tab.entry.name, kind: tab.entry.kind } })}
               />
             );

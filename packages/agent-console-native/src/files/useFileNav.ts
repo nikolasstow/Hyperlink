@@ -57,6 +57,10 @@ const run = (name: string, f: (nav: FileNav["Service"]) => Effect.Effect<void>):
 export const ensureFileRoot = (repo: string, root: FileNavEntry): void => run("starting at the root", (nav) => nav.ensureRoot(repo, root));
 /** Opens a folder or a file in the tab showing, dropping what was ahead. */
 export const openFileEntry = (repo: string, entry: FileNavEntry): void => run("opening", (nav) => nav.open(repo, entry));
+/** Opens an address the browser way: reuse the tab already on it, else a new
+ * tab. Used when opening from outside a tab (recents, a chat), so the same
+ * address never spawns a duplicate tab. */
+export const openOrSelectFileTab = (repo: string, entry: FileNavEntry): void => run("opening", (nav) => nav.openOrSelect(repo, entry));
 export const fileBack = (repo: string): void => run("going back", (nav) => nav.back(repo));
 export const fileForward = (repo: string): void => run("going forward", (nav) => nav.forward(repo));
 export const selectFileTab = (repo: string, index: number): void => run("switching tabs", (nav) => nav.select(repo, index));

@@ -13,8 +13,7 @@ import { iconForFile } from "../fileIcon";
 import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { type TextColors, useThemedStyles } from "../theme";
-import { parentOf } from "./tabLayout";
-import type { RecentTab } from "./recentTabs";
+import { recentSubtitlesOf, type RecentTab, type WorktreeRef } from "./recentTabs";
 import { ContextMenuView } from "../../modules/context-menu";
 import { fileTarget, folderTarget, sameTarget } from "../favorites/model";
 import { toggleFavorite, useBoard, useFavoriteScope } from "../favorites/useFavorites";
@@ -23,7 +22,13 @@ const GUTTER = 12;
 const GAP = 10;
 const CELL_HEIGHT = 56;
 
-export const RecentTabsSection = (props: { readonly tabs: ReadonlyArray<RecentTab>; readonly onOpen: (tab: RecentTab) => void }): React.ReactElement => {
+export const RecentTabsSection = (props: {
+  readonly tabs: ReadonlyArray<RecentTab>;
+  /** Each repo's worktrees, for the subtitle (a path relative to a worktree,
+   * or the worktree name when two recents share a relative path). */
+  readonly worktreesByRepo: ReadonlyMap<string, ReadonlyArray<WorktreeRef>>;
+  readonly onOpen: (tab: RecentTab) => void;
+}): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const { width } = useWindowDimensions();
@@ -31,10 +36,11 @@ export const RecentTabsSection = (props: { readonly tabs: ReadonlyArray<RecentTa
   // A hard press favorites a recent file/folder to the surface's scope (Home).
   const scope = useFavoriteScope();
   const board = useBoard(scope);
+  const subtitles = recentSubtitlesOf(props.tabs, props.worktreesByRepo);
   return (
     <View style={styles.grid}>
-      {props.tabs.map((tab) => {
-        const folder = parentOf(tab.entry.path).split("/").filter(Boolean).pop() ?? tab.repo;
+      {props.tabs.map((tab, index) => {
+        const folder = subtitles[index] ?? "";
         const target = tab.entry.kind === "directory" ? folderTarget(tab.repo, tab.entry.path, tab.entry.name) : fileTarget(tab.repo, tab.entry.path, tab.entry.name);
         const isFav = board.some((each) => sameTarget(each, target));
         return (
@@ -54,7 +60,8 @@ export const RecentTabsSection = (props: { readonly tabs: ReadonlyArray<RecentTa
                   <Text style={styles.name} numberOfLines={1}>
                     {tab.entry.name}
                   </Text>
-                  <Text style={styles.folder} numberOfLines={1}>
+                  {/* Truncate from the head so the end of the path stays visible. */}
+                  <Text style={styles.folder} numberOfLines={1} ellipsizeMode="head">
                     {folder}
                   </Text>
                 </View>

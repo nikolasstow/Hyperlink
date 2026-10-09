@@ -12,7 +12,7 @@
  *
  * @internal
  */
-import { under } from "./pathForms";
+import { fromHome, under } from "./pathForms";
 import { Context, Effect, HashMap, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
 import { KeyValueStore } from "effect/unstable/persistence";
 
@@ -52,6 +52,16 @@ const HISTORY_LIMIT = 200;
 /** A tab's entry showing. */
 export const tabEntry = (tab: FileTab): FileNavEntry | undefined => tab.entries[tab.index];
 export const activeTab = (place: FilePlace): FileTab | undefined => place.tabs[place.active];
+
+/** The index of the tab currently showing `path` (however it is written), or
+ * -1 when no tab is on it. A browser reuses that tab rather than duplicating. */
+export const tabShowing = (place: FilePlace, path: string): number => {
+  const at = fromHome(path);
+  return place.tabs.findIndex((tab) => {
+    const entry = tabEntry(tab);
+    return entry !== undefined && fromHome(entry.path) === at;
+  });
+};
 export const canGoBack = (tab: FileTab): boolean => tab.index > 0;
 export const canGoForward = (tab: FileTab): boolean => tab.index < tab.entries.length - 1;
 
@@ -151,6 +161,15 @@ const make = Effect.gen(function* () {
       update(repo, (place) => ({ ...place, tabs: place.tabs.map((tab, each) => (each === index ? tabRerooted(tab, from, to) : tab)) })),
     /** Opens an entry in the tab showing. */
     open: (repo: string, entry: FileNavEntry) => update(repo, (place) => visited(withActive(place, (tab) => opened(tab, entry)), entry)),
+    /** Opens an address the browser way: if a tab already shows it, go to that
+     * tab (keeping its back/forward history); otherwise open it in a new tab.
+     * No duplicate tabs for the same address. */
+    openOrSelect: (repo: string, entry: FileNavEntry) =>
+      update(repo, (place) => {
+        const existing = tabShowing(place, entry.path);
+        if (existing >= 0) return visited({ ...place, active: existing }, entry);
+        return visited({ ...place, tabs: [...place.tabs, { id: newTabId(), entries: [entry], index: 0 }], active: place.tabs.length }, entry);
+      }),
     back: (repo: string) => update(repo, (place) => withActive(place, (tab) => (canGoBack(tab) ? { ...tab, index: tab.index - 1 } : tab))),
     forward: (repo: string) => update(repo, (place) => withActive(place, (tab) => (canGoForward(tab) ? { ...tab, index: tab.index + 1 } : tab))),
     /** Shows another tab. */

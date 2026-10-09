@@ -85,6 +85,30 @@ describe("FileNav", () => {
     expect(after?.tabs.map((tab) => tab.entries.map((entry) => entry.path))).toEqual([["/r", "/r/src", "/r/src/main.ts"]]);
   });
 
+  it("openOrSelect reuses the tab already on an address, else opens a new one (no duplicate tabs)", async () => {
+    const place = await run(
+      Effect.gen(function* () {
+        const nav = yield* FileNav;
+        yield* nav.ensureRoot("app", dir("/r"));
+        yield* nav.open("app", dir("/r/src"));
+        yield* nav.newTab("app", file("/r/README.md")); // tab 1, now active
+        // A folder not open anywhere → a new tab (no push into README's tab).
+        yield* nav.openOrSelect("app", dir("/r/lib"));
+        const afterNew = yield* placeOf(nav, "app");
+        // An address a tab already shows (tab 0 shows /r/src) → go to that tab.
+        yield* nav.openOrSelect("app", dir("/r/src"));
+        return [afterNew, yield* placeOf(nav, "app")] as const;
+      }),
+      deviceStorage(),
+    );
+    // New tab appended and shown, README's history untouched.
+    expect(place[0]?.tabs.map((tab) => tabEntry(tab)?.path)).toEqual(["/r/src", "/r/README.md", "/r/lib"]);
+    expect(place[0]?.active).toBe(2);
+    // Reopening /r/src selects tab 0 rather than making a fourth tab.
+    expect(place[1]?.tabs.length).toBe(3);
+    expect(place[1]?.active).toBe(0);
+  });
+
   it("keeps tabs apart: a new one shows, each has its own history, closing moves to a neighbour", async () => {
     const place = await run(
       Effect.gen(function* () {
