@@ -324,9 +324,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         if let enclosing {
             header = enclosing.header
             end = enclosing.end
-        } else if displayedHeader >= 0, textView.contentY(ofLine: displayedEnd) - textView.contentOffset.y > 0 {
-            // No enclosing scope, but the last one hasn't finished sliding off —
-            // keep it so it rides all the way up through the top space.
+        } else if displayedHeader >= 0, textView.contentY(ofLine: displayedEnd) - textView.contentOffset.y > -topInset {
+            // No enclosing scope, but the last one hasn't finished sliding off.
+            // It isn't gone when its end line reaches y=0 — the whole block still
+            // has to travel the top-inset region (status bar / nav space) to leave
+            // the screen. So keep it riding until the end line is a full topInset
+            // ABOVE the top, then it's actually off screen.
             header = displayedHeader
             end = displayedEnd
         } else {
