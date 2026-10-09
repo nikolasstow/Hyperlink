@@ -87,11 +87,14 @@ Build order:
   state.)
 - **Keep On Device — DONE:** file hard-press menu pins a file for offline
   (downloads + warms it; `fileKeep.ts`, persisted, read back at launch).
-- **PENDING — file 3-dot menu:** the open-file toolbar/3-dot (doesn't exist yet)
-  should host **manual/permanent Save** and **Keep On Device**; plus the
-  temp-vs-permanent + error save states.
+- **File 3-dot menu — DONE:** open file gets a glass 3-dot (top-right, beside the
+  status light, in `FileView`) with **Save** (manual permanent write — flushes
+  via `saveCloud`) and **Keep On Device**. So Keep On Device is in both the 3-dot
+  and the hard-press menu.
 - **PENDING — scoped autosave setting** (file/folder/repo/workspace/server/app;
-  nearest wins) + UI; conflict/reload handling.
+  nearest wins) + UI; the temp/permanent/error save states shown distinctly;
+  conflict/reload handling.
+- **PENDING — Copilot completions** (inline ghost text, configurable model).
 
 ## Instant opens — also fixed
 Theme resolves once (process-wide cache; no default-then-correct flash on every
