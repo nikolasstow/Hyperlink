@@ -17,7 +17,8 @@ has its own Favorites board:
 | Home | `home` | Home's Favorites section (top of Home) |
 | A repo/project page | `repo:<name>` | that repo page's Favorites section |
 | A server page | `server:<id>` | that server page's Favorites section |
-| Inside a page (e.g. a file in Files) | its immediate parent page's scope | that parent page |
+| Inside a page (e.g. a file in Files) | its immediate parent page's scope (the repo/workspace) | that parent page |
+| A file/folder in Home's **Recents** | `home` | Home's Favorites section |
 
 "Where you favorite it matters." Favoriting is **per-scope and independent** —
 the same session can be a Home favorite *and* a repo favorite; its star reflects
@@ -26,16 +27,17 @@ membership *in the current scope*.
 ## 2. What's favoritable
 
 session · repo · server · **file · folder** — anything that appears on a surface.
-Home's board can hold all of them (it's the universal board, like the iOS Home
-Screen); repo/server boards hold what's relevant to them.
+Home's board can hold all of them; repo boards hold what's in that repo; server
+boards hold their services.
 
-**Files and folders are favoritable to Home.** There is no "file page" to own a
-file/folder favorite, and the point of pinning a file/folder is quick reach from
-Home. So:
-- **context-menu Favorite on a file or folder → `home`** (not the repo). This is
-  the one deviation from "scope = current surface," and it's deliberate.
-- (Later, edit-mode drag can also drop a file/folder onto a repo board if we
-  want per-repo pinning; not needed now.)
+**Scope follows the surface, uniformly — no special cases.** For files/folders:
+- A file or folder favorited **in the Files/explorer view** → that
+  **repo/workspace** scope (the project it lives in).
+- A file favorited **on Home** — hard-press on a file in **Recents** → **`home`**.
+
+So a file/folder reaches the Home board by being favorited from Home's Recents
+(or, later, dragged there in edit mode); otherwise it lives on its project's
+board. Favoriting a file/folder from Files **does not** put it on Home.
 
 ## 3. Two ways to favorite
 
@@ -95,7 +97,8 @@ A Favorites section renders each target with the right native card/row:
 
 ## 7. Open / confirm
 
-- **file/folder context-menu Favorite → `home`** (§2) — recommended; confirm vs.
-  "ask each time" or "→ repo."
-- Whether repo/server boards should also accept file/folder via edit-mode drag
-  later (not now).
+- **Folder granularity:** a file favorited while drilled into a subfolder goes to
+  the **repo/workspace** board (recommended — one board per project), not a
+  per-subfolder board. Confirm.
+- Whether Home/other boards should also accept cross-placement via edit-mode drag
+  later (e.g. drag a repo-board file onto Home); available once drag lands.
