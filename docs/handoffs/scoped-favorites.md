@@ -24,6 +24,19 @@ has its own Favorites board:
 the same session can be a Home favorite *and* a repo favorite; its star reflects
 membership *in the current scope*.
 
+### Pages vs. locations
+
+A **page** is an application surface — Home, a repo/workspace, a server. Pages
+are what have Favorites boards; a scope is always a page.
+
+A **location** is something you *browse*, not a page. The File browser works like
+a web browser: files and folders are locations (like URLs), not application
+pages — so **they have no board of their own**. A file/folder favorite is a
+pointer to a location, and its scope is its **owning page**: the repo/workspace
+it lives in (or `home`, when favorited from Home's Recents). This is why drilling
+into a subfolder doesn't create a new board — a subfolder is a location, not a
+page.
+
 ## 2. What's favoritable
 
 session · repo · server · **file · folder** — anything that appears on a surface.
@@ -95,10 +108,11 @@ A Favorites section renders each target with the right native card/row:
 2. **Edit mode + drag (soon):** jiggle mode (hard-press-drag or ⋯ → Edit),
    reorder, drag-into-section, remove. Reorder persists board order.
 
-## 7. Open / confirm
+## 7. Resolved / open
 
-- **Folder granularity:** a file favorited while drilled into a subfolder goes to
-  the **repo/workspace** board (recommended — one board per project), not a
-  per-subfolder board. Confirm.
-- Whether Home/other boards should also accept cross-placement via edit-mode drag
-  later (e.g. drag a repo-board file onto Home); available once drag lands.
+- **Folder granularity — RESOLVED:** files/folders are *locations*, not pages, so
+  there's no per-subfolder board; a file/folder favorite's scope is its owning
+  **page** (the repo/workspace, or `home` from Recents). See "Pages vs.
+  locations" above.
+- Open: whether boards should accept cross-placement via edit-mode drag later
+  (e.g. drag a repo-board file onto Home). Available once drag lands; not now.
