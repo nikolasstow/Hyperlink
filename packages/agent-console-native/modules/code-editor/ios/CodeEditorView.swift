@@ -303,11 +303,13 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             return
         }
         let line = topVisibleLine()
-        // The innermost scope whose header has scrolled off the top — that's the
-        // context we freeze. (The chain/breadcrumb is a separate bottom pill.)
-        let enclosing = stickyRanges
+        // The enclosing scope stack, outermost → innermost (closest parent last).
+        // We freeze the closest parent at the block's bottom with its ancestors
+        // stacked above it, so you always see the scope chain you're inside.
+        let stack = stickyRanges
             .filter { $0.start <= line && line <= $0.end && $0.header < line }
-            .max { $0.start < $1.start }
+            .sorted { $0.start < $1.start }
+        let enclosing = stack.last
         let header: Int
         let end: Int
         if let enclosing {
@@ -330,9 +332,20 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         // Rows top->bottom: [header - rowCount + 1 ... header], header last.
         if shownHeaders != [header] {
             shownHeaders = [header]
-            let firstLine = header - rowCount + 1
+            // Bottom rows are the enclosing scope headers (closest parent last,
+            // its ancestors above); any remaining space is filled with the lines
+            // just above the outermost shown scope, so the block still fills up
+            // through the status bar as before.
+            let shownScopes = Array(stack.suffix(rowCount))
+            let fillCount = max(0, rowCount - shownScopes.count)
+            let topScopeHeader = shownScopes.first?.header ?? header
             let rows = (0..<rowCount).map { offset -> StickyScrollOverlay.Row in
-                let lineIndex = firstLine + offset
+                let lineIndex: Int
+                if offset < fillCount {
+                    lineIndex = topScopeHeader - (fillCount - offset)
+                } else {
+                    lineIndex = shownScopes[offset - fillCount].header
+                }
                 return StickyScrollOverlay.Row(
                     number: lineIndex >= 0 ? lineIndex + 1 : nil,
                     code: attributedLine(at: lineIndex)
