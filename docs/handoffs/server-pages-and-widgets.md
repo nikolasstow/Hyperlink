@@ -144,6 +144,36 @@ later — but the Server page is the only host wired up now.
 
 ---
 
+## 3a. Plugin locus & cross-server deployment (future — not priority)
+
+Two orthogonal properties, planned now so the model doesn't fight them later.
+
+**Locus — where a plugin runs:**
+- **Device-only** — app-side only (no server `main`); lives on the phone, needs
+  no backend. Cross-server deployment is N/A.
+- **Device + server** — app-side rendering + a server-side Effect module that
+  must run on a server box. UPS and internet-down are these.
+The manifest already implies this (a server `main` ⇒ a server component); make it
+explicit: `locus: "device" | "device+server"`.
+
+**Cross-server deployment — for device+server plugins, once there are many
+servers.** A **toggle** governs how the server component is managed:
+- **Synced** (default): install/update once → deployed to **all** bound servers,
+  one uniform version + config. "Set it everywhere."
+- **Individual**: each server has its own install, version, and config. For this
+  the **plugin detail page shows a per-server install section** — a row per
+  server (installed? · version · Install / Update / Remove · per-server config) —
+  so each box is managed independently.
+- Toggle scope: a **global default** with an optional **per-plugin override**
+  (open decision, §8).
+
+**What to honor now (the only concrete ask):** **persist plugin install + config
+keyed by server, not globally, from the start** — even with one server. Then
+synced is "write the same record to every server," individual is "per-server
+records," and the plugin detail page grows a per-server section without a
+migration. With N=1 the two modes are identical, so there's **nothing to build
+now** — just leave room in the data model.
+
 ## 4. The UPS plugin (built-in)
 
 - **Server module:** owns the UPS data — folds in today's `~/ups-monitor`
@@ -228,6 +258,9 @@ Both reuse the APNs path we proved (external watcher → `exp.host` → APNs →
 - **Server identity source:** manual add (name + address) vs. discovery
   (Tailscale peers, Bonjour). Start manual; localhost auto. (Multi-server from
   the start — a list, not one special box.)
+- **Sync toggle scope:** a global default (sync all / individual) vs. a
+  per-plugin override, for how device+server plugins deploy across servers. (Data
+  model is keyed-by-server either way; this is just the control surface.)
 - **Per-server backend model:** every server runs the full agent-console backend
   + extension host (uniform, simplest to reason about, heavier per box) vs. a
   lighter "server agent" hosting only server-scoped plugins with a hub
