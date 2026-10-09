@@ -73,8 +73,16 @@ export const CodeEditor = (props: {
   const lang = React.useMemo(() => langFromFilename(props.name), [props.name]);
   const [tokensJson, setTokensJson] = React.useState<string>("[]");
   const [stickyJson, setStickyJson] = React.useState<string>("[]");
-  const [editorTheme, setEditorTheme] = React.useState<EditorTheme>({});
+  // Base colours resolve synchronously from the theme so the editor paints the
+  // right background/foreground on the first frame; the async tokenise below
+  // only refines them (and fills the per-token colours). Without this the editor
+  // flashes its default background until the debounced tokenise returns.
+  const [editorTheme, setEditorTheme] = React.useState<EditorTheme>(() => editorThemeOf(theme, undefined));
   const { text } = props;
+
+  React.useEffect(() => {
+    setEditorTheme(editorThemeOf(theme, undefined));
+  }, [theme]);
 
   React.useEffect(() => {
     let alive = true;
@@ -102,7 +110,9 @@ export const CodeEditor = (props: {
 
   if (CodeEditorNativeView === undefined) return null;
   return (
-    <View style={styles.fill}>
+    // Paint the container with the editor background too, so there's no wrong-
+    // coloured gap behind the native view before it draws its own.
+    <View style={[styles.fill, editorTheme.background === undefined ? null : { backgroundColor: editorTheme.background }]}>
       <CodeEditorNativeView
         style={styles.fill}
         text={props.text}
