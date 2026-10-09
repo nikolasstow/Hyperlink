@@ -228,14 +228,16 @@ const IncreaseContrast = (props: {
   );
 };
 
-/** What "System" is for each mode: the grouped background iOS gives screens. */
+/** What "Default" is for each mode: the blackish/whitish background iOS gives
+ * screens, and the way back to it (stored as no custom colour). */
 const SYSTEM_BACKGROUND = {
   light: "#F2F2F7",
   dark: "#000000",
 };
 
-/** One mode's background: System (the default, and the way back to it) or a
- * colour from Apple's picker. */
+/** One mode's background, as an ordered set of swatches: Default (the
+ * blackish/whitish system background), the enabled theme's background for this
+ * mode (when it has one), then Apple's colour picker for anything custom. */
 const BackgroundRow = (props: {
   readonly label: string;
   readonly value: string | undefined;
@@ -248,20 +250,23 @@ const BackgroundRow = (props: {
   return (
   <View style={styles.backgroundRow}>
     <Text style={styles.backgroundLabel}>{props.label}</Text>
+    {/* Default — blackish in dark, whitish in light. */}
+    <TouchableOpacity
+      accessibilityLabel={`${props.label} background: Default`}
+      onPress={() => props.onChange(undefined)}
+      style={[styles.swatch, { backgroundColor: props.systemColor }, props.value === undefined ? styles.swatchSelected : null]}
+    />
+    {/* Theme background, when the enabled theme has one for this mode. */}
     {props.themeColor === undefined ? null : (
       <TouchableOpacity
-        accessibilityLabel={`${props.label} background: theme`}
+        accessibilityLabel={`${props.label} background: Theme`}
         onPress={() => props.onChange(props.themeColor)}
         style={[styles.swatch, { backgroundColor: props.themeColor }, props.value !== undefined && eq(props.value, props.themeColor) ? styles.swatchSelected : null]}
       >
         <SystemIcon name="paintpalette.fill" size={12} color="#FFFFFF" />
       </TouchableOpacity>
     )}
-    <TouchableOpacity
-      accessibilityLabel={`${props.label} background: System`}
-      onPress={() => props.onChange(undefined)}
-      style={[styles.swatch, { backgroundColor: props.systemColor }, props.value === undefined ? styles.swatchSelected : null]}
-    />
+    {/* Custom — Apple's colour picker. */}
     <Host style={styles.pickerSwatch} matchContents>
       <ColorPicker
         label=""
