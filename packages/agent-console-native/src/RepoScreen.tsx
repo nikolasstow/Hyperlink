@@ -384,7 +384,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       onPress={() =>
         target.page === "folder"
           ? props.navigation.navigate("Files", { repo: name, dir: target.path })
-          : props.navigation.navigate("Files", { repo: name, dir, open: { path: target.path, name: target.name } })
+          : props.navigation.navigate("Files", { repo: name, dir, open: { path: target.path, name: target.name, kind: "file" } })
       }
     >
       <SystemIcon name={target.page === "folder" ? "folder" : "doc.text"} size={18} color={colors.tint} />

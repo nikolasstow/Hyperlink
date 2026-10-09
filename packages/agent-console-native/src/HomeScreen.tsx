@@ -458,7 +458,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             return (
               <RecentTabsSection
                 tabs={item.tabs}
-                onOpen={(tab) => props.navigation.navigate("Files", { repo: tab.repo, dir: primaryWorktreeOf(tab.repo)?.path ?? scanned.find((r) => r.repo === tab.repo)?.worktrees[0]?.path ?? tab.entry.path, open: { path: tab.entry.path, name: tab.entry.name } })}
+                onOpen={(tab) => props.navigation.navigate("Files", { repo: tab.repo, dir: primaryWorktreeOf(tab.repo)?.path ?? scanned.find((r) => r.repo === tab.repo)?.worktrees[0]?.path ?? tab.entry.path, open: { path: tab.entry.path, name: tab.entry.name, kind: tab.entry.kind } })}
               />
             );
           }
@@ -506,7 +506,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 onOpen={() =>
                   target.page === "folder"
                     ? props.navigation.navigate("Files", { repo: target.repo, dir: target.path })
-                    : props.navigation.navigate("Files", { repo: target.repo, dir: parentOf(target.path), open: { path: target.path, name: target.name } })
+                    : props.navigation.navigate("Files", { repo: target.repo, dir: parentOf(target.path), open: { path: target.path, name: target.name, kind: "file" } })
                 }
               />
             );

@@ -89,7 +89,7 @@ export type RootStackParamList = {
   /** A repo's files (where in them is Files' own: files/FileNav.ts). `dir`
    * is the folder Files was opened for, while the primary worktree is not
    * known; `open`, a file to open in a new tab (from a chat). */
-  Files: { repo: string; dir: string; open?: { path: string; name: string } };
+  Files: { repo: string; dir: string; open?: { path: string; name: string; kind: "file" | "directory" } };
   // A minimal read-only view of the file at `path`; `name` is the nav-bar title.
   // `line` (1-based) scrolls to it, as an extension opening a file asks.
   FileViewer: { path: string; name: string; line?: number };

@@ -69,7 +69,13 @@ const useText = (path: string): string | "missing" => {
         notePath(path, read !== undefined);
         if (alive) setText(read ?? "missing");
       })
-      .catch((error: unknown) => console.error(`[files] reading ${path} for its preview failed`, error));
+      .catch((error: unknown) => {
+        // A read can fail because the entry is actually a directory (an older
+        // mislabeled tab) or is gone — show the fallback rather than a blank
+        // preview, and warn rather than erroring (it's recoverable).
+        console.warn(`[files] reading ${path} for its preview failed`, error);
+        if (alive) setText("missing");
+      });
     return () => {
       alive = false;
     };

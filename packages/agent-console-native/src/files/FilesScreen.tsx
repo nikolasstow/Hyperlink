@@ -144,7 +144,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const openRequest = props.route.params.open;
   React.useEffect(() => {
     if (openRequest === undefined) return;
-    newFileTab(repo, { path: openRequest.path, name: openRequest.name, kind: "file" });
+    newFileTab(repo, { path: openRequest.path, name: openRequest.name, kind: openRequest.kind });
     navigation.setParams({ open: undefined });
   }, [openRequest, repo, navigation]);
   // This repo's tabs; at its root until the kept place is read back. At
