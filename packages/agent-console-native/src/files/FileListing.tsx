@@ -27,8 +27,10 @@ import { useDirtyPaths } from "./fileEdits";
 import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
 import { preloadFile } from "./preloadFile";
 
-/** The "has unsaved local changes" (pending upload to disk) colour. */
+/** Green = unsaved local changes (pending upload); blue = kept on device
+ * (downloaded for offline). */
 const UPLOAD_COLOR = "#32d74b";
+const DOWNLOAD_COLOR = "#0a84ff";
 
 /** Left screen inset, indentation per level, and the leading chevron column.
  * Tuned to the Files reference: a small chevron with generous room around it,
@@ -47,6 +49,8 @@ const Row = (props: {
   readonly last: boolean;
   /** Has unsaved local changes (pending upload to disk). */
   readonly dirty: boolean;
+  /** Kept on device for offline (downloaded). */
+  readonly kept: boolean;
   readonly onToggle: (row: FileRow) => void;
   readonly onOpen: (row: FileRow) => void;
 }): React.ReactElement => {
@@ -89,6 +93,7 @@ const Row = (props: {
             {row.name}
           </Text>
         </TouchableOpacity>
+        {props.kept ? <SystemIcon name="arrow.down.circle.fill" size={15} color={DOWNLOAD_COLOR} /> : null}
         {props.dirty ? <SystemIcon name="arrow.up.circle.fill" size={15} color={UPLOAD_COLOR} /> : null}
       </View>
       {props.last ? null : <View style={[styles.separator, { marginLeft: separatorInset }]} />}
@@ -180,7 +185,7 @@ export const FileListing = (props: {
               }
             }}
           >
-            <Row row={row} last={index === rows.length - 1} dirty={row.type !== "directory" && dirty.has(row.path)} onToggle={onToggle} onOpen={open} />
+            <Row row={row} last={index === rows.length - 1} dirty={row.type !== "directory" && dirty.has(row.path)} kept={row.type !== "directory" && kept.has(row.path)} onToggle={onToggle} onOpen={open} />
           </ContextMenuView>
         );
       })}
