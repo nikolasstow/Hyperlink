@@ -77,6 +77,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.editorDelegate = self
         textView.delegate = self
         textView.showLineNumbers = true
+        // More breathing room around the line numbers than Runestone's default
+        // 3/3 — the gutter reads as its own column, not cramped against the edge
+        // or the code.
+        textView.gutterLeadingPadding = 10
+        textView.gutterTrailingPadding = 10
         textView.isLineWrappingEnabled = false
         textView.alwaysBounceVertical = true
         textView.contentInsetAdjustmentBehavior = .never
