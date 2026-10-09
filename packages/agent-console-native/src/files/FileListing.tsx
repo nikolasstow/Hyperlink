@@ -18,6 +18,7 @@ import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
+import { type TreePaneColors, useTreePaneColors } from "../treePaneColors";
 import type { FileNavEntry } from "./FileNav";
 import { ContextMenuView, type MenuAction } from "../../modules/context-menu";
 import { fileTarget, folderTarget, repoScope, sameTarget } from "../favorites/model";
@@ -51,11 +52,14 @@ const Row = (props: {
   readonly dirty: boolean;
   /** Kept on device for offline (downloaded). */
   readonly kept: boolean;
+  /** The pane's theme colours — the row paints its text, chevron and separator
+   * from the enabled code theme, like a VS Code tree. */
+  readonly pane: TreePaneColors;
   readonly onToggle: (row: FileRow) => void;
   readonly onOpen: (row: FileRow) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
-  const { row } = props;
+  const { row, pane } = props;
   const isDir = row.type === "directory";
   const fileSpec = isDir ? undefined : iconForFile(row.name);
   const indent = row.depth * INDENT;
@@ -72,13 +76,13 @@ const Row = (props: {
             hitSlop={{ top: 14, bottom: 14, left: 8, right: 10 }}
           >
             {row.loading ? (
-              <ActivityIndicator size="small" color={colors.tint} />
+              <ActivityIndicator size="small" color={pane.icon} />
             ) : (
               <SystemIcon
                 name={row.failed ? "exclamationmark.triangle.fill" : row.expanded ? "chevron.down" : "chevron.right"}
                 size={13}
                 weight="semibold"
-                color={row.failed ? colors.warning : colors.tint}
+                color={row.failed ? colors.warning : pane.icon}
               />
             )}
           </TouchableOpacity>
@@ -89,14 +93,14 @@ const Row = (props: {
           <SetiIcon glyph={fileSpec === undefined ? setiFolderGlyph ?? setiDefaultGlyph : fileSpec.glyph} size={26} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={[styles.name, { color: pane.foreground }]} numberOfLines={1}>
             {row.name}
           </Text>
         </TouchableOpacity>
         {props.kept ? <SystemIcon name="arrow.down.circle.fill" size={15} color={DOWNLOAD_COLOR} /> : null}
         {props.dirty ? <SystemIcon name="arrow.up.circle.fill" size={15} color={UPLOAD_COLOR} /> : null}
       </View>
-      {props.last ? null : <View style={[styles.separator, { marginLeft: separatorInset }]} />}
+      {props.last ? null : <View style={[styles.separator, { marginLeft: separatorInset, backgroundColor: pane.separator }]} />}
     </View>
   );
 };
@@ -117,6 +121,7 @@ export const FileListing = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
+  const pane = useTreePaneColors();
   const { backend } = useAppContext();
   const tree = useFileTree(backend, props.dir);
   const { rows } = tree;
@@ -137,14 +142,14 @@ export const FileListing = (props: {
 
   if (tree.rootLoading) {
     return (
-      <View style={[styles.center, { paddingTop: props.topInset + 40 }]}>
+      <View style={[styles.fill, styles.center, { backgroundColor: pane.background, paddingTop: props.topInset + 40 }]}>
         <ActivityIndicator color={textColors.secondaryLabel} />
       </View>
     );
   }
   if (tree.rootFailed) {
     return (
-      <View style={[styles.center, { paddingTop: props.topInset + 40 }]}>
+      <View style={[styles.fill, styles.center, { backgroundColor: pane.background, paddingTop: props.topInset + 40 }]}>
         <Text style={styles.error}>Couldn’t load this folder.</Text>
         {tree.rootError !== undefined ? <Text style={styles.errorDetail}>{tree.rootError}</Text> : null}
         <TouchableOpacity onPress={tree.reloadRoot} activeOpacity={0.6}>
@@ -153,9 +158,15 @@ export const FileListing = (props: {
       </View>
     );
   }
-  if (rows.length === 0) return <Text style={[styles.empty, { marginTop: props.topInset + 24 }]}>Empty folder.</Text>;
+  if (rows.length === 0) {
+    return (
+      <View style={[styles.fill, { backgroundColor: pane.background }]}>
+        <Text style={[styles.empty, { marginTop: props.topInset + 24 }]}>Empty folder.</Text>
+      </View>
+    );
+  }
   return (
-    <ScrollView style={styles.fill} onScroll={props.onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
+    <ScrollView style={[styles.fill, { backgroundColor: pane.background }]} onScroll={props.onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
       {rows.map((row, index) => {
         const target = row.type === "directory" ? folderTarget(repo, row.path, row.name) : fileTarget(repo, row.path, row.name);
         const isFav = favBoard.some((each) => sameTarget(each, target));
@@ -185,7 +196,7 @@ export const FileListing = (props: {
               }
             }}
           >
-            <Row row={row} last={index === rows.length - 1} dirty={row.type !== "directory" && dirty.has(row.path)} kept={row.type !== "directory" && kept.has(row.path)} onToggle={onToggle} onOpen={open} />
+            <Row row={row} last={index === rows.length - 1} dirty={row.type !== "directory" && dirty.has(row.path)} kept={row.type !== "directory" && kept.has(row.path)} pane={pane} onToggle={onToggle} onOpen={open} />
           </ContextMenuView>
         );
       })}

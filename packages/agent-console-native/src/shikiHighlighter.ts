@@ -72,6 +72,32 @@ const LANG_ALIASES: Record<string, string> = {
  * is supplied. */
 export const FALLBACK_THEME = { dark: "github-dark", light: "github-light" } as const;
 
+/** The slice of a theme the workbench UI (not the code tokens) reads: the
+ * `colors` map of workbench keys and whether it is a dark theme. */
+interface UiTheme {
+  readonly colors?: Readonly<Record<string, string>>;
+  readonly type?: string;
+}
+
+/** The bundled fallback themes, by name, so their workbench colours resolve the
+ * same way an installed theme's do when no theme is enabled. */
+const BUNDLED_UI: Record<string, UiTheme> = {
+  "github-dark": githubDark,
+  "github-light": githubLight,
+};
+
+/** The workbench colours and dark/light of a resolved code theme — the raw
+ * object for an installed/created theme, or a bundled fallback looked up by
+ * name. Lets non-code surfaces (the file tree pane, and extension tree views)
+ * paint themselves from the enabled theme the way a VS Code pane does. */
+export const resolveThemeColors = (theme: string | ThemeRegistrationRaw): { readonly colors: Readonly<Record<string, string>>; readonly dark: boolean } => {
+  const raw: UiTheme | undefined = typeof theme === "string" ? BUNDLED_UI[theme] : theme;
+  return {
+    colors: raw?.colors ?? {},
+    dark: (raw?.type ?? "dark") !== "light",
+  };
+};
+
 /**
  * A device-created theme shaped for Shiki, the same way `getThemeJson` shapes a
  * server one — so a created theme can highlight with no server file to fetch.
