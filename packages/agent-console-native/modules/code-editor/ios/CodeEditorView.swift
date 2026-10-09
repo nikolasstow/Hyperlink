@@ -40,6 +40,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // Scope ranges for sticky scroll, and the UTF-16 start offset of each line in
     // the current text (so we can slice a header line's text + look up its tokens).
     private var stickyRanges: [StickyRangeNative] = []
+    // A scope must span at least this fraction of the visible lines (rounded
+    // down) to pin — short blocks that fit on screen don't sticky, and a shorter
+    // screen lowers the bar. Tweak freely.
+    private let stickyMinFraction: Double = 0.1
     private var lineStarts: [Int] = [0]
     private var shownHeaders: [Int] = []
     // The scope currently on screen, kept while it rides up off the top even
@@ -303,11 +307,17 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             return
         }
         let line = topVisibleLine()
-        // The innermost scope whose header has scrolled off the top — the closest
-        // parent you're inside. (Which declarations count as scopes is
+        // Only pin scopes tall enough to matter: at least `stickyMinFraction` of
+        // the visible lines (rounded down). Short blocks never sticky; a shorter
+        // screen lowers the bar.
+        let rowHeight = stickyRowHeight()
+        let availableHeight = max(rowHeight, textView.bounds.height - topInset - bottomInset)
+        let minSpan = Int((Double(availableHeight / rowHeight) * stickyMinFraction).rounded(.down))
+        // The innermost qualifying scope whose header has scrolled off the top —
+        // the closest parent you're inside. (Which declarations count as scopes is
         // stickyRanges.ts; broaden that, not this.)
         let enclosing = stickyRanges
-            .filter { $0.start <= line && line <= $0.end && $0.header < line }
+            .filter { $0.start <= line && line <= $0.end && $0.header < line && ($0.end - $0.start) >= minSpan }
             .max { $0.start < $1.start }
         let header: Int
         let end: Int
@@ -325,8 +335,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         }
         displayedHeader = header
         displayedEnd = end
-        let rowHeight = stickyRowHeight()
-        // Enough rows to fill from the header up through the status bar.
+        // Enough rows to fill from the header up through the status bar (rowHeight
+        // computed above).
         let rowCount = max(1, Int((stickyFill / rowHeight).rounded(.up)))
         // Rows top->bottom: [header - rowCount + 1 ... header], header last.
         if shownHeaders != [header] {
