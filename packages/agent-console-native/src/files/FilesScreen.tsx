@@ -30,7 +30,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { HashMap, Option, Predicate } from "effect";
 import * as React from "react";
 import type { NavigationRoute } from "@react-navigation/native";
-import { Pressable, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
+import { InteractionManager, Pressable, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { cachedSessionTitle } from "../sessionCache";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { Easing, interpolate, runOnJS, type SharedValue, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
@@ -167,6 +167,15 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   );
   const active = place === undefined ? undefined : activeTab(place);
   const [overview, setOverview] = React.useState<Overview>({ kind: "closed" });
+  // The overview pre-renders every tab's preview (each reads + tokenises a
+  // file), which is costly on mount — so defer mounting it until after the push
+  // settles, so opening a file isn't stuck behind that work. It still mounts on
+  // demand the instant the overview is opened, so it's never missing when needed.
+  const [overviewReady, setOverviewReady] = React.useState(false);
+  React.useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setOverviewReady(true));
+    return () => task.cancel();
+  }, []);
   const [filter, setFilter] = React.useState<TabFilter>("all");
   const [historyOpen, setHistoryOpen] = React.useState(false);
   // Whose tabs the overview shows: this repo's (each time it opens), or
@@ -565,9 +574,11 @@ export const FilesScreen = (props: Props): React.ReactElement => {
 
   return (
     <View style={styles.root}>
-      {/* Always mounted, unseen until it opens (so opening it is only the
-        * animation, its previews already drawn and kept up to date). */}
-      {place === undefined ? null : (
+      {/* Mounted unseen so opening it is only the animation (its previews
+        * already drawn) — but deferred past the push (overviewReady) so it
+        * doesn't render every preview while a file is trying to open; mounted at
+        * once if the overview is opened before then. */}
+      {place === undefined || (!overviewReady && overview.kind === "closed") ? null : (
         <TabOverview
           back={<BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={tabsBackMax} />}
           top={
