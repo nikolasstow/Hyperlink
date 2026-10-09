@@ -23,17 +23,44 @@ without a keystroke.
 ### 1. Pages supply capabilities, not UI
 
 `DubzContext` (today `{ surface, scope }`) gains `entries` — each a thing on the
-page Dubz can act on, carrying everything a script or model needs:
+page Dubz can act on, carrying everything a script or model needs. Declared as
+an **Effect `Schema`** (it crosses into Laya, model prompts, and maybe
+persistence/sync, so we want validation + a JSON codec + principled evolution —
+the same standard as the rest of the wire/stored data here). Pages still build
+plain object literals; we decode only at the boundaries.
+
+A **tagged union over a shared `FileRef`**, discriminated by **`_tag`** (Effect's
+idiom — `Schema.TaggedStruct`, `Match.tag`):
 
 ```
-type DubzContextEntry =
-  | { kind: "editableDocument"; file: { repo; path; name }; instructions?; label? }
-  // more kinds later (reference-only files, etc.)
+FileRef = { repo; path; name; kind: "file" | "directory" }   // the FileNavEntry shape, reused
+
+DubzContextEntry =
+  | { _tag: "EditableDocument"; id; file: FileRef; instructions?; label? }
+  | { _tag: "ReferenceDocument"; id; file: FileRef; label? }   // read-only context
+  // expand by adding more well-defined kinds — never a catch-all
+
+DubzContext = { v: 1; surface; scope; entries: DubzContextEntry[] }
 ```
 
 Context stays a cheap plain value built at page open, so it is ready before the
 tap (preload-before-tap). Pages declare capability + data + model instructions;
 they do not build suggestion UI.
+
+**Schema standard (owner's call):**
+- **No catch-all.** No `custom`/opaque-`data` entry. Every capability is its own
+  typed entry, "everything in its place." Extensions/plugins extend the schema
+  by contributing **well-defined** entry kinds (when the extension host lands),
+  not an opaque blob.
+- **`_tag` discriminator**, and the repo is held to that standard: the existing
+  `kind`-discriminated Dubz unions (`DubzScope`, `DubzSuggestion`) are migrated
+  to `_tag` as part of this work rather than left half-and-half. (A file's
+  `kind: "file" | "directory"` stays — that's a value, not a union tag.)
+- **Additive-only evolution**: new fields optional; a `_tag` is never
+  repurposed. The resolver **ignores unknown `_tag`s** so a newer page and an
+  older build tolerate each other; top-level `v` is the coarse hard-break gate.
+- **Per-entry `id`** so a suggestion can point back at the entry that produced
+  it, and the UI can update/dedupe.
 
 ### 2. Scripting turns entries → suggestions
 
