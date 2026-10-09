@@ -14,7 +14,7 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { useColorScheme } from "react-native";
-import { useAppContext } from "./AppContext";
+import { useAppContextOptional } from "./AppContext";
 import { getCreatedTheme } from "./createdThemes";
 import { getThemeJson } from "./extensionsClient";
 import { getApiAddress, type CodeTheme, type Theme } from "./settings";
@@ -47,8 +47,12 @@ const resolvedThemes = new Map<string, string | ThemeRegistrationRaw>();
  * preview resolves both slots at once with this; `useCodeTheme` resolves the
  * effective one for the live appearance. */
 export const useResolvedCodeTheme = (enabled: CodeTheme | undefined, scheme: Scheme): string | ThemeRegistrationRaw => {
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  // Optional: this runs on the launch screen too (resolving the theme
+  // background), before the app has connected and the provider is mounted. With
+  // no server, bundled and device-created themes still resolve; only an
+  // extension theme's fetch is skipped (it falls back until there is one).
+  const ctx = useAppContextOptional();
+  const apiBase = ctx === undefined ? undefined : getApiAddress(ctx.address);
   const key = themeKey(scheme, enabled);
 
   // Seed from the cache synchronously: if the theme's already resolved, the
@@ -75,7 +79,7 @@ export const useResolvedCodeTheme = (enabled: CodeTheme | undefined, scheme: Sch
           if (mine !== undefined) remember(shikiThemeOf(mine.theme));
         })
         .catch(() => undefined);
-    } else {
+    } else if (apiBase !== undefined) {
       const file = enabled.file;
       void getThemeJson(apiBase, file)
         .then((json) => remember({ ...json, name: file }))

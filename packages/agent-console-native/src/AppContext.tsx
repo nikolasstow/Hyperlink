@@ -38,3 +38,8 @@ export const useAppContext = (): AppContextValue => {
   if (value === undefined) throw new Error("useAppContext() called outside AppContextProvider");
   return value;
 };
+
+/** The app context when there is one, else undefined — for the few things that
+ * render both before the app connects (the launch screen) and after (e.g.
+ * resolving the theme background), so they must not require the provider. */
+export const useAppContextOptional = (): AppContextValue | undefined => React.useContext(AppContext);
