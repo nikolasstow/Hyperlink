@@ -135,15 +135,17 @@ A Favorites section renders each target with the right native card/row:
 
 ## 6. Build order
 
-1. **Base scoped favorites — foundation SHIPPED:** `src/favorites/`. Schema is
-   the SSOT (`FavoriteTarget` per-page Struct union; `Scope` tagged union; one
-   `Board` per scope); equality derived via `Schema.toEquivalence`; legacy flat
-   list migrated into `home` immediately on first construction and discarded
-   (store-level test). `useBoard`/`useIsFavorited`/`toggleFavorite` + a
-   `FavoriteScope` context. RepoCard/SessionCard + Home rewired; behavior
-   unchanged. **Next within this phase:** the remaining entry points — favorite a
-   server (Servers section), favorite a file/folder (Files + Recents), and the
-   Favorites boards on repo/server pages.
+1. **Base scoped favorites — SHIPPED (foundation + all entry points):**
+   `src/favorites/`. Schema is the SSOT (`FavoriteTarget` per-page Struct union;
+   `Scope` tagged union; one `Board` per scope); equality derived via
+   `Schema.toEquivalence`; legacy flat list migrated into `home` immediately on
+   first construction and discarded (store-level test).
+   `useBoard`/`useIsFavorited`/`toggleFavorite` + a `FavoriteScope` context.
+   **Entry points all live:** session (Home cards + repo page), repo (Home),
+   server (Home ServerCard menu), file/folder (Files rows → repo scope, Recents →
+   home scope). **Boards rendered:** Home (sessions/repos/servers/locations), repo
+   page (favorited sessions + location rows). Server-page board awaits
+   favoritable widgets (Phase 3 of server-pages).
 2. **Edit mode + drag (soon):** jiggle mode (hard-press-drag or ⋯ → Edit),
    reorder (store `reorder` already exists), drag-into-section, remove.
 
