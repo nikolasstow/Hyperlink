@@ -37,6 +37,29 @@ it lives in (or `home`, when favorited from Home's Recents). This is why drillin
 into a subfolder doesn't create a new board — a subfolder is a location, not a
 page.
 
+### A favorite is a page + its input
+
+A page can take an **input** — the same page renders different content for
+different inputs. That input is **part of what's favorited**, and part of its
+identity:
+
+- The **server page** can't be favorited without a server id — it needs one to
+  have anything to render. Input = `serverId`.
+- The **file browser** is the same: its input is the **location**. A file/folder
+  favorite is the browser page bound to a location (repo + path).
+- A **session** favorite is the chat page bound to a session id; a **repo**
+  favorite is the repo page bound to a repo/workspace.
+
+So a favorite = **(page, input)**, and *the input is what makes it unique*. The
+same page favorited with different inputs gives distinct favorites — that's how
+you pin many files, or several servers. Two favorites are the "same" only when
+page **and** input match (dedup key). Some pages take no input (Home itself) and
+simply aren't the kind of thing you favorite; a page that *requires* input can't
+be favorited without it.
+
+This is also the forward-compatible shape: a plugin page + its input becomes
+favoritable later with no model change.
+
 ## 2. What's favoritable
 
 session · repo · server · **file · folder** — anything that appears on a surface.
@@ -74,18 +97,29 @@ home exception in §2). Fast, no mode.
 
 ## 4. Data model
 
+A favorite is a **(page, input)** pair (§"A favorite is a page + its input").
+`page` is the kind; `input` is its identity-bearing parameters — concretely a
+discriminated union now, generalizing to a `(pageId, input)` pair when plugin
+pages become favoritable.
+
 ```
 Scope        = "home" | `repo:${string}` | `server:${string}`
+
+// page = kind; the remaining fields = that page's input.
 FavoriteTarget =
-  | { kind: "session"; id }
-  | { kind: "repo";    name }
-  | { kind: "server";  id }
-  | { kind: "file";    repo; path; name }
-  | { kind: "folder";  repo; path; name }
+  | { page: "session"; id }                       // chat page, input: session id
+  | { page: "repo";    name }                      // repo/workspace page, input: repo
+  | { page: "server";  id }                        // server page, input: server id
+  | { page: "file";    repo; path; name }          // file browser, input: location
+  | { page: "folder";  repo; path; name }          // file browser, input: location
 
 Favorites: Scope → ReadonlyArray<FavoriteTarget>   // ordered; order is user-arrangeable (drag)
 ```
 
+- **Identity / dedup key = (scope, page, input)** — same page + same input is the
+  same favorite; different input is a distinct favorite (many files, many
+  servers). Favoriting an already-favorited (page, input) in a scope is a no-op
+  (or unfavorite, toggled).
 - Persisted (AsyncStorage, as favorites are today).
 - **Migration:** the current flat favorites list folds into the `home` scope.
 - Order within a scope is the board order (drag reorders it once edit mode lands;
