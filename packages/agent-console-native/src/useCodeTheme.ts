@@ -17,16 +17,25 @@ import { useColorScheme } from "react-native";
 import { useAppContext } from "./AppContext";
 import { getCreatedTheme } from "./createdThemes";
 import { getThemeJson } from "./extensionsClient";
-import { getApiAddress } from "./settings";
+import { getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { FALLBACK_THEME, shikiThemeOf } from "./shikiHighlighter";
 import { useTheme } from "./theme";
 
-const fallbackFor = (scheme: ReturnType<typeof useColorScheme>): string | ThemeRegistrationRaw =>
+type Scheme = "light" | "dark";
+
+const fallbackFor = (scheme: Scheme): string | ThemeRegistrationRaw =>
   scheme === "dark" ? FALLBACK_THEME.dark : FALLBACK_THEME.light;
 
 /** The theme identity (scheme + enabled theme), the key for the resolved cache. */
-const themeKey = (scheme: ReturnType<typeof useColorScheme>, enabled: { readonly file?: string; readonly createdId?: string } | undefined): string =>
-  `${scheme === "dark" ? "dark" : "light"}:${enabled === undefined ? "none" : enabled.createdId !== undefined ? `c:${enabled.createdId}` : `f:${enabled.file}`}`;
+const themeKey = (scheme: Scheme, enabled: { readonly file?: string; readonly createdId?: string } | undefined): string =>
+  `${scheme}:${enabled === undefined ? "none" : enabled.createdId !== undefined ? `c:${enabled.createdId}` : `f:${enabled.file}`}`;
+
+/** The code theme in effect for a scheme: the dark slot in dark mode when dual
+ * is on (falling back to the light slot until a dark theme is picked), else the
+ * single `code`. Shared so the preview's split halves and the live editor
+ * resolve the same way. */
+export const effectiveCode = (theme: Theme, scheme: Scheme): CodeTheme | undefined =>
+  theme.codeDual === true && scheme === "dark" ? (theme.codeDark ?? theme.code) : theme.code;
 
 /** Resolved themes, cached process-wide so every editor mount gets the right
  * theme synchronously instead of flashing the default while it re-resolves.
@@ -34,12 +43,12 @@ const themeKey = (scheme: ReturnType<typeof useColorScheme>, enabled: { readonly
  * instant and correctly themed. */
 const resolvedThemes = new Map<string, string | ThemeRegistrationRaw>();
 
-export const useCodeTheme = (): string | ThemeRegistrationRaw => {
-  const { theme } = useTheme();
+/** Resolve a specific enabled code theme for a specific scheme. The split
+ * preview resolves both slots at once with this; `useCodeTheme` resolves the
+ * effective one for the live appearance. */
+export const useResolvedCodeTheme = (enabled: CodeTheme | undefined, scheme: Scheme): string | ThemeRegistrationRaw => {
   const { address } = useAppContext();
   const apiBase = getApiAddress(address);
-  const scheme = useColorScheme();
-  const enabled = theme.code;
   const key = themeKey(scheme, enabled);
 
   // Seed from the cache synchronously: if the theme's already resolved, the
@@ -78,4 +87,12 @@ export const useCodeTheme = (): string | ThemeRegistrationRaw => {
   }, [apiBase, key, scheme, enabled]); // eslint-disable-line react-hooks/exhaustive-deps -- identity captured by key
 
   return value;
+};
+
+/** The Shiki theme for the live appearance: the effective code theme (dual-aware)
+ * resolved for the device's current colour scheme. */
+export const useCodeTheme = (): string | ThemeRegistrationRaw => {
+  const { theme } = useTheme();
+  const scheme: Scheme = useColorScheme() === "dark" ? "dark" : "light";
+  return useResolvedCodeTheme(effectiveCode(theme, scheme), scheme);
 };

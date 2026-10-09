@@ -300,7 +300,15 @@ export type CodeTheme = {
 export type Theme = {
   readonly primary: string;
   readonly secondary: string;
+  /** The enabled code theme. In single mode it applies in both appearances; in
+   * dual mode (`codeDual`) it is the LIGHT slot. */
   readonly code?: CodeTheme;
+  /** The code theme used in dark appearance when `codeDual` is on; falls back to
+   * `code` until a dark theme is picked. Ignored in single mode. */
+  readonly codeDark?: CodeTheme;
+  /** Match the system appearance: use `code` in light mode and `codeDark` in
+   * dark mode, switching with the OS. Off, `code` is used in both. */
+  readonly codeDual?: boolean;
   readonly codeFont: string;
   /** The screens' background in light mode, when not the system's. */
   readonly backgroundLight?: string;
@@ -334,6 +342,8 @@ export const parseTheme = (parsed: unknown): Theme | undefined => {
   if (typeof primary !== "string" || typeof secondary !== "string") return undefined;
   const codeFont = "codeFont" in parsed && typeof parsed.codeFont === "string" ? parsed.codeFont : DEFAULT_CODE_FONT;
   const code = "code" in parsed ? parseCodeTheme(parsed.code) : undefined;
+  const codeDark = "codeDark" in parsed ? parseCodeTheme(parsed.codeDark) : undefined;
+  const codeDual = "codeDual" in parsed && typeof parsed.codeDual === "boolean" ? parsed.codeDual : undefined;
   const backgroundLight = "backgroundLight" in parsed && typeof parsed.backgroundLight === "string" ? parsed.backgroundLight : undefined;
   const backgroundDark = "backgroundDark" in parsed && typeof parsed.backgroundDark === "string" ? parsed.backgroundDark : undefined;
   const contrast =
@@ -354,6 +364,8 @@ export const parseTheme = (parsed: unknown): Theme | undefined => {
     secondary,
     codeFont,
     ...(code === undefined ? {} : { code }),
+    ...(codeDark === undefined ? {} : { codeDark }),
+    ...(codeDual === undefined ? {} : { codeDual }),
     ...(backgroundLight === undefined ? {} : { backgroundLight }),
     ...(backgroundDark === undefined ? {} : { backgroundDark }),
     ...(contrast === undefined ? {} : { contrast }),

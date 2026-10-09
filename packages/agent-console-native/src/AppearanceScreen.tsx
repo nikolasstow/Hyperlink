@@ -11,8 +11,9 @@
  * @internal
  */
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
-import { Alert, LayoutAnimation, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import { Alert, LayoutAnimation, ScrollView, Share, StyleSheet, Switch, Text, TouchableOpacity, useColorScheme, useWindowDimensions, View } from "react-native";
 import { File, Paths } from "expo-file-system";
 import { Button, Circle, ColorPicker, ContextMenu, Host, HStack, Image, Section, Slider, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
@@ -27,7 +28,7 @@ import type { RootStackParamList } from "./RootNavigator";
 import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { CONTRAST_START, type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
-import { useCodeTheme } from "./useCodeTheme";
+import { effectiveCode, useResolvedCodeTheme } from "./useCodeTheme";
 import {
   deleteCreatedTheme,
   listCreatedThemes,
@@ -150,6 +151,21 @@ const withBackground = (theme: Theme, key: "backgroundLight" | "backgroundDark",
  * mode that theme is made for; unchanged when the theme has none. */
 const withThemeBackground = (theme: Theme, background: string | undefined, dark: boolean): Theme =>
   background === undefined ? theme : withBackground(theme, dark ? "backgroundDark" : "backgroundLight", background);
+
+/** Which code-theme slot a selection targets: the only slot in single mode, or
+ * one of the two in dual mode. */
+type Slot = "light" | "dark";
+
+/** The field a slot writes: the dark slot is its own `codeDark`; the light (and
+ * single-mode) slot is `code`. */
+const slotKey = (slot: Slot): "code" | "codeDark" => (slot === "dark" ? "codeDark" : "code");
+
+/** The theme with a code theme placed in (or cleared from) a slot. */
+const withCodeSlot = (theme: Theme, slot: Slot, code: CodeTheme | undefined): Theme => {
+  const key = slotKey(slot);
+  const { [key]: _previous, ...rest } = theme;
+  return code === undefined ? rest : { ...rest, [key]: code };
+};
 
 /** The contrast slider's box: its own (set) height, the card's inner width. */
 const CONTRAST_SLIDER_HEIGHT = 34;
@@ -327,23 +343,33 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   // duplicates created from the context menu.
   React.useEffect(() => props.navigation.addListener("focus", refreshCreated), [props.navigation, refreshCreated]);
 
+  // Dual mode (match system) gives a light slot and a dark slot; a selection
+  // targets the active one. The split preview's halves pick it; it starts on the
+  // device's current appearance so a tap changes what's on screen. In single
+  // mode there is only the light slot (`code`).
+  const scheme: Slot = useColorScheme() === "dark" ? "dark" : "light";
+  const dual = theme.codeDual === true;
+  const [activeSlot, setActiveSlot] = React.useState<Slot>(scheme);
+  const slot: Slot = dual ? activeSlot : "light";
+
   // The enabled code theme is tracked independently of the accents, so changing
-  // a colour never unsets it. Its accents are the picker's "Theme" anchor.
-  const enabled = theme.code;
+  // a colour never unsets it. Its accents are the picker's "Theme" anchor. In
+  // dual mode this is the active slot's theme (dark slot falls back to the light
+  // one until a dark theme is picked, matching the live editor).
+  const enabled = slot === "dark" ? (theme.codeDark ?? theme.code) : theme.code;
   const anchor = enabled !== undefined ? { primary: enabled.primary, secondary: enabled.secondary, codeFont: theme.codeFont } : DEFAULT_THEME;
 
-  // Selecting a theme seeds the accents AND records it as the code theme;
-  // changing colours afterwards leaves `code` intact.
+  // Selecting a theme seeds the accents AND records it in the active slot;
+  // changing colours afterwards leaves the slot intact.
   // It pre-selects the theme's background too, for the mode the theme is made
   // for (a dark theme sets Dark, a light one Light).
   const selectTheme = (t: SelectableTheme): void =>
     setTheme(
       withThemeBackground(
-        {
-          ...theme,
-          primary: t.primary,
-          secondary: t.secondary,
-          code: {
+        withCodeSlot(
+          { ...theme, primary: t.primary, secondary: t.secondary },
+          slot,
+          {
             label: t.label,
             file: t.file,
             primary: t.primary,
@@ -351,7 +377,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             dark: t.dark,
             ...(t.background === undefined ? {} : { background: t.background }),
           },
-        },
+        ),
         t.background,
         t.dark,
       ),
@@ -365,11 +391,10 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
     const dark = mine.theme.type === "dark";
     setTheme(
       withThemeBackground(
-        {
-          ...theme,
-          primary,
-          secondary,
-          code: {
+        withCodeSlot(
+          { ...theme, primary, secondary },
+          slot,
+          {
             label: mine.theme.name,
             file: "",
             primary,
@@ -378,14 +403,28 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             dark,
             ...(background === undefined ? {} : { background }),
           },
-        },
+        ),
         background,
         dark,
       ),
     );
   };
 
-  const selectDefault = (): void => setTheme({ ...theme, primary: DEFAULT_THEME.primary, secondary: DEFAULT_THEME.secondary, code: undefined });
+  const selectDefault = (): void =>
+    setTheme({ ...withCodeSlot(theme, slot, undefined), primary: DEFAULT_THEME.primary, secondary: DEFAULT_THEME.secondary });
+
+  // The match-system toggle. Turning it on seeds the dark slot from the single
+  // theme so both halves start populated; turning it off drops the dark slot.
+  const setDual = (on: boolean): void => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (on) {
+      setActiveSlot(scheme);
+      setTheme({ ...theme, codeDual: true, ...(theme.codeDark === undefined && theme.code !== undefined ? { codeDark: theme.code } : {}) });
+    } else {
+      const { codeDual: _d, codeDark: _dk, ...rest } = theme;
+      setTheme(rest);
+    }
+  };
 
   /* --- The long-press menu on each theme ---------------------------------- */
 
@@ -489,8 +528,12 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   };
 
   // The code preview highlights with the enabled theme (installed, created, or a
-  // bundled fallback) — resolved by the same hook the file viewer uses.
-  const previewTheme = useCodeTheme();
+  // bundled fallback) — resolved the same way the file viewer resolves it. Both
+  // slots are resolved so the split preview can show them side by side; the
+  // single preview shows the one effective for the device's appearance.
+  const lightPreview = useResolvedCodeTheme(theme.code, "light");
+  const darkPreview = useResolvedCodeTheme(theme.codeDark ?? theme.code, "dark");
+  const singlePreview = useResolvedCodeTheme(effectiveCode(theme, scheme), scheme);
 
   return (
     <ScrollView
@@ -500,6 +543,32 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
     >
+        <Text style={styles.sectionLabel}>Preview</Text>
+        <View style={styles.card}>
+          <CardGlass />
+          <ThemePreview
+            width={contentWidth - 28}
+            code={PREVIEW_CODE}
+            fontFamily={theme.codeFont}
+            dual={dual}
+            single={singlePreview}
+            light={lightPreview}
+            dark={darkPreview}
+            activeSlot={slot}
+            onPickSlot={setActiveSlot}
+          />
+          <View style={styles.rowSeparator} />
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleText}>
+              <Text style={styles.toggleTitle}>Match system appearance</Text>
+              <Text style={styles.toggleSubtitle} numberOfLines={2}>
+                Separate light and dark themes that follow iOS.
+              </Text>
+            </View>
+            <Switch value={dual} onValueChange={setDual} />
+          </View>
+        </View>
+
         <Text style={styles.sectionLabel}>Theme</Text>
         <ThemeList
           contentWidth={contentWidth}
@@ -539,13 +608,13 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             label="Light"
             value={theme.backgroundLight}
             systemColor={SYSTEM_BACKGROUND.light}
-            themeColor={theme.code?.dark === false ? theme.code.background : undefined}
+            themeColor={dual ? theme.code?.background : theme.code?.dark === false ? theme.code.background : undefined}
             onChange={(color) => setTheme(withBackground(theme, "backgroundLight", color))} />
           <BackgroundRow
             label="Dark"
             value={theme.backgroundDark}
             systemColor={SYSTEM_BACKGROUND.dark}
-            themeColor={theme.code?.dark === true ? theme.code.background : undefined}
+            themeColor={dual ? (theme.codeDark ?? theme.code)?.background : theme.code?.dark === true ? theme.code.background : undefined}
             onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
         </View>
 
@@ -581,15 +650,112 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             </View>
           </TouchableOpacity>
         </View>
-
-        <Text style={styles.sectionLabel}>Preview</Text>
-        <View style={styles.card}>
-          <CardGlass />
-          <CodeBlock code={PREVIEW_CODE} lang="typescript" theme={previewTheme} fontFamily={theme.codeFont} />
-        </View>
     </ScrollView>
   );
 };
+
+/**
+ * The code preview at the top of Appearance. In single mode it is one block in
+ * the enabled theme. In dual mode it is literally split down the middle — the
+ * left half rendered in the light theme, the right half in the dark theme — so
+ * both are visible at once. Tapping a half makes it the slot that theme
+ * selection targets; the active half is ringed and labelled.
+ */
+const ThemePreview = (props: {
+  readonly width: number;
+  readonly code: string;
+  readonly fontFamily: string;
+  readonly dual: boolean;
+  readonly single: string | ThemeRegistrationRaw;
+  readonly light: string | ThemeRegistrationRaw;
+  readonly dark: string | ThemeRegistrationRaw;
+  readonly activeSlot: Slot;
+  readonly onPickSlot: (slot: Slot) => void;
+}): React.ReactElement => {
+  if (!props.dual) {
+    return <CodeBlock code={props.code} lang="typescript" theme={props.single} fontFamily={props.fontFamily} />;
+  }
+  const half = props.width / 2;
+  return (
+    // The left (light) block sets the height; the right (dark) block overlays it,
+    // shifted so its code aligns across the seam, and is clipped to the right
+    // half. Both render the same code, so the split lands mid-glyph-row cleanly.
+    <View style={previewStyles.split}>
+      <CodeBlock code={props.code} lang="typescript" theme={props.light} fontFamily={props.fontFamily} />
+      <View style={[StyleSheet.absoluteFill, previewStyles.rightClip, { left: half }]} pointerEvents="none">
+        <View style={{ width: props.width, marginLeft: -half }}>
+          <CodeBlock code={props.code} lang="typescript" theme={props.dark} fontFamily={props.fontFamily} />
+        </View>
+      </View>
+      {/* The seam. */}
+      <View style={[previewStyles.seam, { left: half }]} pointerEvents="none" />
+      {/* The ring on the active half. */}
+      <View
+        style={[previewStyles.activeRing, props.activeSlot === "dark" ? { left: half, right: 0 } : { left: 0, right: half }]}
+        pointerEvents="none"
+      />
+      {/* Half labels. */}
+      <View style={previewStyles.labelRow} pointerEvents="none">
+        <Text style={[previewStyles.label, props.activeSlot === "light" ? previewStyles.labelActive : undefined]}>Light</Text>
+        <Text style={[previewStyles.label, props.activeSlot === "dark" ? previewStyles.labelActive : undefined]}>Dark</Text>
+      </View>
+      {/* Tap targets — a half each. */}
+      <TouchableOpacity style={[previewStyles.tap, { left: 0, width: half }]} activeOpacity={0.8} onPress={() => props.onPickSlot("light")} />
+      <TouchableOpacity style={[previewStyles.tap, { left: half, width: half }]} activeOpacity={0.8} onPress={() => props.onPickSlot("dark")} />
+    </View>
+  );
+};
+
+const previewStyles = StyleSheet.create({
+  split: {
+    position: "relative",
+    borderRadius: 10,
+    borderCurve: "continuous",
+    overflow: "hidden",
+  },
+  rightClip: {
+    right: 0,
+    overflow: "hidden",
+  },
+  seam: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(128,128,128,0.6)",
+  },
+  activeRing: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    borderWidth: 2,
+    borderColor: colors.tint,
+    borderRadius: 10,
+    borderCurve: "continuous",
+  },
+  labelRow: {
+    position: "absolute",
+    top: 8,
+    left: 10,
+    right: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(160,160,160,0.9)",
+    overflow: "hidden",
+  },
+  labelActive: {
+    color: colors.tint,
+  },
+  tap: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+  },
+});
 
 interface ThemeListProps {
   readonly contentWidth: number;
@@ -808,6 +974,24 @@ const makeStyles = (text: TextColors) =>
   rowSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.separator,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 4,
+  },
+  toggleText: {
+    flex: 1,
+  },
+  toggleTitle: {
+    color: text.label,
+    fontSize: 16,
+  },
+  toggleSubtitle: {
+    color: text.secondaryLabel,
+    fontSize: 12,
+    marginTop: 2,
   },
   swatchRow: {
     flexDirection: "row",
