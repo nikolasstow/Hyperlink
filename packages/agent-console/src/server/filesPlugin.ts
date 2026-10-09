@@ -28,7 +28,7 @@ import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { Effect } from "effect";
 import type { Connect, Plugin } from "vite";
-import { buildTree, fsRootPath, fsRuntime, listDirectory, noteAccess, readTextFile, resolveSession, statusOfFsError } from "./fs";
+import { buildTree, fsRootPath, fsRuntime, listDirectory, noteAccess, readTextFile, resolveSession, statusOfFsError, writeTextFile } from "./fs";
 
 const MIME_BY_EXT: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -132,6 +132,49 @@ export const filesPlugin = (): Plugin => {
             ),
           )
           .then(({ status, body }) => respond(status, "application/json", body))
+          .catch(() => json(500, { error: "internal" }));
+      });
+      return;
+    }
+
+    // Writing a file: the path + new content come in the POST body (like
+    // /fs/tree), confined to the files root and to existing files.
+    if (parsed.pathname === "/fs/write") {
+      if (req.method !== "POST") {
+        json(405, { error: "Method not allowed" });
+        return;
+      }
+      let raw = "";
+      req.on("data", (chunk) => {
+        raw += chunk;
+        if (raw.length > 8_000_000) req.destroy();
+      });
+      req.on("error", () => json(400, { error: "read error" }));
+      req.on("end", () => {
+        let body: { readonly path?: unknown; readonly content?: unknown };
+        try {
+          body = raw === "" ? {} : JSON.parse(raw);
+        } catch {
+          json(400, { error: "bad json" });
+          return;
+        }
+        const writePath = typeof body.path === "string" ? body.path : "";
+        const content = typeof body.content === "string" ? body.content : undefined;
+        if (writePath === "" || content === undefined) {
+          json(400, { error: "path and content required" });
+          return;
+        }
+        noteAccess(writePath);
+        void fsRuntime
+          .runPromise(
+            writeTextFile(writePath, content).pipe(
+              Effect.match({
+                onSuccess: () => ({ status: 200, body: JSON.stringify({ ok: true }) }),
+                onFailure: (error) => ({ status: statusOfFsError(error), body: JSON.stringify({ error: error.reason }) }),
+              }),
+            ),
+          )
+          .then(({ status, body: responseBody }) => respond(status, "application/json", responseBody))
           .catch(() => json(500, { error: "internal" }));
       });
       return;
@@ -245,7 +288,7 @@ export const filesPlugin = (): Plugin => {
       server.middlewares.use(handler);
       server.middlewares.use(fsHandler);
       server.config.logger.info(`  ➜  files:   /files/* → ${root}`);
-      server.config.logger.info(`  ➜  fs:      /fs/list, /fs/read, /fs/tree → ${fsRootPath()}`);
+      server.config.logger.info(`  ➜  fs:      /fs/list, /fs/read, /fs/write, /fs/tree → ${fsRootPath()}`);
     },
   };
 };

@@ -58,6 +58,7 @@ const listUrl = (base: string, path: string): string =>
 const readUrl = (base: string, path: string): string =>
   `${base.replace(/\/+$/, "")}/fs/read?path=${encodeURIComponent(path)}`;
 const treeUrl = (base: string): string => `${base.replace(/\/+$/, "")}/fs/tree`;
+const writeUrl = (base: string): string => `${base.replace(/\/+$/, "")}/fs/write`;
 
 /**
  * Fetch the hot tree bundle rooted at `path`. `session` is the opaque id from a
@@ -122,4 +123,22 @@ export const fsReadText = (base: string, path: string): Effect.Effect<string | u
     if (response.status === 404) return undefined;
     if (response.status >= 400) return yield* new FsError({ reason: "http", path, status: response.status });
     return yield* response.text.pipe(Effect.mapError(() => new FsError({ reason: "transport", path })));
+  });
+
+/** Overwrite `path` with `content` on the backend (permanent save). Fails with
+ * `FsError` on a transport/server error. Uses `fetch` directly with a JSON string
+ * body for the same reason `fsTree` does (RN's fetch rejects the Effect
+ * HttpClient's Uint8Array body). */
+export const fsWrite = (base: string, path: string, content: string): Effect.Effect<void, FsError> =>
+  Effect.gen(function* () {
+    const response = yield* Effect.tryPromise({
+      try: () =>
+        fetch(writeUrl(base), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path, content }),
+        }),
+      catch: () => new FsError({ reason: "transport", path }),
+    });
+    if (response.status >= 400) return yield* new FsError({ reason: "http", path, status: response.status });
   });

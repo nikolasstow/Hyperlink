@@ -350,6 +350,21 @@ export const readTextFile = (requested: string): Effect.Effect<string, FsError, 
     return yield* fs.readFileString(target).pipe(Effect.mapError(() => new FsError({ reason: "io", path: requested })));
   });
 
+/** Overwrite an existing file's text, confined to the files root. Only existing
+ * files are writable (resolveWithin follows the real path) — creating new files
+ * isn't supported yet. Size-capped like reads. */
+export const writeTextFile = (requested: string, content: string): Effect.Effect<void, FsError, FileSystem.FileSystem | Path.Path> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const target = yield* resolveWithin(requested);
+
+    const info = yield* fs.stat(target).pipe(Effect.mapError(() => new FsError({ reason: "not-found", path: requested })));
+    if (info.type !== "File") return yield* new FsError({ reason: "not-a-file", path: requested });
+    if (new TextEncoder().encode(content).length > MAX_READ_BYTES) return yield* new FsError({ reason: "too-large", path: requested });
+
+    yield* fs.writeFileString(target, content).pipe(Effect.mapError(() => new FsError({ reason: "io", path: requested })));
+  });
+
 /** HTTP status for each failure reason. `outside-root` is reported as 404 so a
  * probe can't tell a blocked path from a missing one. */
 export const statusOfFsError = (error: FsError): number => {
