@@ -71,13 +71,38 @@ interface UpsData {
   readonly outages: ReadonlyArray<Outage>;
   readonly stats: Stats;
   readonly events: ReadonlyArray<string>;
+  /** Epoch (ms) of the first sample on record, for choosing useful ranges. */
+  readonly dataStartMs: number | null;
 }
 
-const RANGES = [
+interface Range {
+  readonly label: string;
+  readonly mins: number;
+}
+
+const FIXED: ReadonlyArray<Range> = [
   { label: "1h", mins: 60 },
   { label: "6h", mins: 360 },
   { label: "24h", mins: 1440 },
-] as const;
+  { label: "3d", mins: 4320 },
+  { label: "7d", mins: 10080 },
+  { label: "30d", mins: 43200 },
+  { label: "1Y", mins: 525600 },
+];
+
+/** Only the ranges worth showing for how much data exists: up to and including
+ * the first that covers the whole span (so no "1Y" with a day of data), plus
+ * all-time. Before any data, the usual three. */
+const rangesFor = (spanMins: number | undefined): ReadonlyArray<Range> => {
+  if (spanMins === undefined) return FIXED.slice(0, 3);
+  const out: Array<Range> = [];
+  for (const range of FIXED) {
+    out.push(range);
+    if (range.mins >= spanMins) break;
+  }
+  out.push({ label: "All", mins: Math.max(60, Math.ceil(spanMins) + 1) });
+  return out;
+};
 
 const useUps = (baseUrl: string, mins: number): { readonly data: UpsData | undefined; readonly error: boolean } => {
   const [data, setData] = React.useState<UpsData | undefined>(undefined);
@@ -230,13 +255,23 @@ export const ServerUpsScreen = (props: Props): React.ReactElement => {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
-  const [mins, setMins] = React.useState<number>(60);
+  const [rangeLabel, setRangeLabel] = React.useState<string>("1h");
   // `?.` guards a nav state restored before this screen took params (an older
   // ServerUps route persisted with none): no address → empty base → the fetch
   // just fails into the offline state rather than throwing.
   const serverAddress = props.route.params?.serverAddress;
   const baseUrl = serverAddress === undefined ? "" : `http://${serverAddress}:${UPS_PORT}`;
+  // Which ranges to offer depends on how much data exists; before data arrives
+  // use the usual three. The selected range is kept by label so "All" stays
+  // selected as the span grows.
+  const [spanMins, setSpanMins] = React.useState<number | undefined>(undefined);
+  const ranges = React.useMemo(() => rangesFor(spanMins), [spanMins]);
+  const selected = ranges.find((r) => r.label === rangeLabel) ?? ranges[0];
+  const mins = selected.mins;
   const { data, error } = useUps(baseUrl, mins);
+  React.useEffect(() => {
+    if (data?.dataStartMs != null) setSpanMins((data.updated - data.dataStartMs) / 60000);
+  }, [data]);
 
   const now = data?.now;
   const ringColor = now?.onBattery ? RED : now?.lowBattery || (now?.charge ?? 100) < 30 ? AMBER : GREEN;
@@ -282,9 +317,9 @@ export const ServerUpsScreen = (props: Props): React.ReactElement => {
 
           {/* Range selector */}
           <View style={styles.ranges}>
-            {RANGES.map((r) => (
-              <Pressable key={r.mins} onPress={() => setMins(r.mins)} style={[styles.range, mins === r.mins && styles.rangeOn]}>
-                <Text style={[styles.rangeText, mins === r.mins && styles.rangeTextOn]}>{r.label}</Text>
+            {ranges.map((r) => (
+              <Pressable key={r.label} onPress={() => setRangeLabel(r.label)} style={[styles.range, selected.label === r.label && styles.rangeOn]}>
+                <Text style={[styles.rangeText, selected.label === r.label && styles.rangeTextOn]}>{r.label}</Text>
               </Pressable>
             ))}
           </View>
