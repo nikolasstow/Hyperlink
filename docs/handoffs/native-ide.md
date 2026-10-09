@@ -110,8 +110,21 @@ the innermost scope ends.
 
 Ghost-text inline suggestions like VS Code Copilot. Two halves:
 - **Native (Runestone):** render an inline suggestion after the caret, accept on
-  Tab, dismiss on keystroke/Esc.
-- **JS provider:** debounced; sends prefix/suffix (FIM-style) to a model, streams
-  back a completion.
-- **Model is configurable** (a setting) — not hardcoded; let the user choose
-  which model drives completions (latency matters, so a fast one by default).
+  Tab, dismiss on keystroke/Esc. Swift — needs a build.
+- **JS provider:** debounced on typing pause; builds a FIM prompt (prefix before
+  the caret + suffix after), calls a model, shows the result as ghost text;
+  cancels on the next keystroke. Gated by a setting (on/off + model), reusing the
+  scoped-settings pattern (`autosaveSettings.ts`).
+- **Model is configurable** (a setting); `models.ts` `listModels`/`useModels` +
+  `ModelPicker` already enumerate providers/models to pick from.
+
+**The one decision (model call path), from investigating the client:** the chat
+path (`session.promptAsync`) is too heavy for inline completions — it spins up a
+session, an agent, and streaming. Options:
+1. **Dedicated backend `/complete` endpoint** (recommended) — a single-turn FIM
+   completion against the chosen model, no session/agent, low latency. A bit of
+   backend work (agent-console), mirrors `/fs/*`.
+2. **Reuse the chat prompt** — no backend work, but slow + noisy (creates
+   sessions); poor for keystroke-rate completions.
+Lean #1. Needs: the endpoint + a `completionClient`, the native ghost-text, the
+JS provider + debounce, the on/off + model setting.
