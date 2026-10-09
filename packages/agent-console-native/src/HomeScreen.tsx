@@ -18,7 +18,7 @@ import { SessionID } from "./opencode/schema/session-id";
 import { sendMessage } from "./outbox/useOutbox";
 import { fetchSessions } from "./sessions/fetchSessions";
 import type { SessionSummary } from "./sessions/sessionList";
-import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { InteractionManager, RefreshControl, StyleSheet, Text, View } from "react-native";
 import Animated, { LinearTransition } from "react-native-reanimated";
 import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -289,7 +289,22 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     return out;
   }, [filePlaces, recentTabs]);
   React.useEffect(() => {
-    for (const file of filesToPreload) void preloadFile(backend, file.path, file.name, codeTheme);
+    // Tokenising is a synchronous CPU burst per file, so warming many at once
+    // would saturate the JS thread and make a tap (and the navigation it
+    // triggers) wait behind it. Run it after interactions, one file at a time,
+    // yielding between — so opens stay snappy while the cache fills in the gaps.
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(async () => {
+      for (const file of filesToPreload) {
+        if (cancelled) return;
+        await preloadFile(backend, file.path, file.name, codeTheme);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+    };
   }, [filesToPreload, backend, codeTheme]);
   const groups = groupByRepo(visible, scanned);
   const knownGroups = groups.filter((g) => g.isKnownRepo);
