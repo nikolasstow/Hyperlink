@@ -349,21 +349,19 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   // mode there is only the light slot (`code`).
   const scheme: Slot = useColorScheme() === "dark" ? "dark" : "light";
   const dual = theme.codeDual === true;
-  const [activeSlot, setActiveSlot] = React.useState<Slot>(scheme);
-  const slot: Slot = dual ? activeSlot : "light";
 
-  // The enabled code theme is tracked independently of the accents, so changing
-  // a colour never unsets it. Its accents are the picker's "Theme" anchor. In
-  // dual mode this is the active slot's theme (dark slot falls back to the light
-  // one until a dark theme is picked, matching the live editor).
-  const enabled = slot === "dark" ? (theme.codeDark ?? theme.code) : theme.code;
-  const anchor = enabled !== undefined ? { primary: enabled.primary, secondary: enabled.secondary, codeFont: theme.codeFont } : DEFAULT_THEME;
+  // The enabled theme in a slot: the dark slot shows what is actually chosen for
+  // dark (not the light fallback), so its selector reads honestly. Accents are a
+  // single app-wide pair; the anchor follows the light slot, then the dark one.
+  const enabledIn = (slot: Slot): CodeTheme | undefined => (slot === "dark" ? theme.codeDark : theme.code);
+  const anchorTheme = theme.code ?? theme.codeDark;
+  const anchor = anchorTheme !== undefined ? { primary: anchorTheme.primary, secondary: anchorTheme.secondary, codeFont: theme.codeFont } : DEFAULT_THEME;
 
-  // Selecting a theme seeds the accents AND records it in the active slot;
+  // Selecting a theme seeds the accents AND records it in the given slot;
   // changing colours afterwards leaves the slot intact.
   // It pre-selects the theme's background too, for the mode the theme is made
   // for (a dark theme sets Dark, a light one Light).
-  const selectTheme = (t: SelectableTheme): void =>
+  const selectTheme = (slot: Slot, t: SelectableTheme): void =>
     setTheme(
       withThemeBackground(
         withCodeSlot(
@@ -385,7 +383,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
 
   // A created theme has no server file, so its accents come from its own colours
   // and it is recorded by `createdId`; the preview reads it from local storage.
-  const selectCreated = (mine: CreatedTheme): void => {
+  const selectCreated = (slot: Slot, mine: CreatedTheme): void => {
     const { primary, secondary } = deriveThemeAccents(mine.theme, DEFAULT_THEME);
     const background = toOpaqueHex(mine.theme.colors["editor.background"]);
     const dark = mine.theme.type === "dark";
@@ -410,15 +408,31 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
     );
   };
 
-  const selectDefault = (): void =>
+  const selectDefault = (slot: Slot): void =>
     setTheme({ ...withCodeSlot(theme, slot, undefined), primary: DEFAULT_THEME.primary, secondary: DEFAULT_THEME.secondary });
 
+  // A deleted/uninstalled theme is dropped from whichever slot(s) referenced it;
+  // if that leaves nothing enabled, the accents fall back to the defaults.
+  const clearMatching = (match: (code: CodeTheme) => boolean): void => {
+    const used = (slot: Slot): boolean => {
+      const code = enabledIn(slot);
+      return code !== undefined && match(code);
+    };
+    if (!used("light") && !used("dark")) return;
+    let next = theme;
+    if (used("light")) next = withCodeSlot(next, "light", undefined);
+    if (used("dark")) next = withCodeSlot(next, "dark", undefined);
+    if (next.code === undefined && next.codeDark === undefined) {
+      next = { ...next, primary: DEFAULT_THEME.primary, secondary: DEFAULT_THEME.secondary };
+    }
+    setTheme(next);
+  };
+
   // The match-system toggle. Turning it on seeds the dark slot from the single
-  // theme so both halves start populated; turning it off drops the dark slot.
+  // theme so both selectors start populated; turning it off drops the dark slot.
   const setDual = (on: boolean): void => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     if (on) {
-      setActiveSlot(scheme);
       setTheme({ ...theme, codeDual: true, ...(theme.codeDark === undefined && theme.code !== undefined ? { codeDark: theme.code } : {}) });
     } else {
       const { codeDual: _d, codeDark: _dk, ...rest } = theme;
@@ -499,7 +513,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
         onPress: () =>
           void (async () => {
             await deleteCreatedTheme(mine.id);
-            if (enabled?.createdId === mine.id) selectDefault();
+            clearMatching((code) => code.createdId === mine.id);
             refreshCreated();
           })(),
       },
@@ -520,7 +534,7 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
               Alert.alert("Couldn’t uninstall", error instanceof Error ? error.message : "Unknown error.");
               return;
             }
-            if (enabled?.createdId === undefined && enabled?.file === t.file) selectDefault();
+            clearMatching((code) => code.createdId === undefined && code.file === t.file);
             await refreshThemes();
           })(),
       },
@@ -554,7 +568,6 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             single={singlePreview}
             light={lightPreview}
             dark={darkPreview}
-            onPickSlot={setActiveSlot}
           />
           <View style={styles.rowSeparator} />
           <View style={styles.toggleRow}>
@@ -568,25 +581,31 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
           </View>
         </View>
 
-        <Text style={styles.sectionLabel}>Theme</Text>
-        <ThemeList
-          contentWidth={contentWidth}
-          themes={themes}
-          created={created}
-          enabled={enabled}
-          onSelectDefault={selectDefault}
-          onSelectExtension={selectTheme}
-          onSelectCreated={selectCreated}
-          onView={viewExtension}
-          onEdit={editCreated}
-          onDuplicateExtension={duplicateExtension}
-          onDuplicateCreated={duplicateCreated}
-          onExportExtension={exportExtension}
-          onExportCreated={exportCreated}
-          onDelete={deleteCreated}
-          onUninstall={uninstallExtension}
-          onCreate={() => props.navigation.navigate("ThemeEditor", {})}
-        />
+        {/* One list in single mode; a Light and a Dark list in dual mode, each
+            targeting its own slot so you choose which theme is which. */}
+        {(dual ? (["light", "dark"] as const) : (["light"] as const)).map((listSlot) => (
+          <React.Fragment key={listSlot}>
+            <Text style={styles.sectionLabel}>{dual ? (listSlot === "dark" ? "Dark Theme" : "Light Theme") : "Theme"}</Text>
+            <ThemeList
+              contentWidth={contentWidth}
+              themes={themes}
+              created={created}
+              enabled={enabledIn(listSlot)}
+              onSelectDefault={() => selectDefault(listSlot)}
+              onSelectExtension={(t) => selectTheme(listSlot, t)}
+              onSelectCreated={(mine) => selectCreated(listSlot, mine)}
+              onView={viewExtension}
+              onEdit={editCreated}
+              onDuplicateExtension={duplicateExtension}
+              onDuplicateCreated={duplicateCreated}
+              onExportExtension={exportExtension}
+              onExportCreated={exportCreated}
+              onDelete={deleteCreated}
+              onUninstall={uninstallExtension}
+              onCreate={() => props.navigation.navigate("ThemeEditor", {})}
+            />
+          </React.Fragment>
+        ))}
 
         <Text style={styles.sectionLabel}>Primary color</Text>
         <View style={styles.card}>
@@ -657,8 +676,8 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
  * The code preview at the top of Appearance. In single mode it is one block in
  * the enabled theme. In dual mode it is literally split down the middle — the
  * left half rendered in the light theme, the right half in the dark theme — so
- * both are visible at once. Tapping a half makes it the slot that theme
- * selection targets; the active half is ringed and labelled.
+ * both are visible at once, labelled along the bottom. The Light/Dark theme
+ * selectors below choose which theme fills each half.
  */
 const ThemePreview = (props: {
   readonly width: number;
@@ -668,7 +687,6 @@ const ThemePreview = (props: {
   readonly single: string | ThemeRegistrationRaw;
   readonly light: string | ThemeRegistrationRaw;
   readonly dark: string | ThemeRegistrationRaw;
-  readonly onPickSlot: (slot: Slot) => void;
 }): React.ReactElement => {
   if (!props.dual) {
     return <CodeBlock code={props.code} lang="typescript" theme={props.single} fontFamily={props.fontFamily} />;
@@ -692,9 +710,6 @@ const ThemePreview = (props: {
         <Text style={previewStyles.label}>Light</Text>
         <Text style={previewStyles.label}>Dark</Text>
       </View>
-      {/* Tap targets — a half each. */}
-      <TouchableOpacity style={[previewStyles.tap, { left: 0, width: half }]} activeOpacity={0.8} onPress={() => props.onPickSlot("light")} />
-      <TouchableOpacity style={[previewStyles.tap, { left: half, width: half }]} activeOpacity={0.8} onPress={() => props.onPickSlot("dark")} />
     </View>
   );
 };
@@ -730,11 +745,6 @@ const previewStyles = StyleSheet.create({
     fontWeight: "600",
     color: "rgba(142,142,147,0.9)",
     overflow: "hidden",
-  },
-  tap: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
   },
 });
 
