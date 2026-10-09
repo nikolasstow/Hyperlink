@@ -8,9 +8,10 @@
  * - the bottom bar (FileNavBar.tsx): back, forward, the tab's name (the tab
  *   bar) and Dubz; it drops away as a listing scrolls down and comes back as
  *   it scrolls up, or when a new page shows;
- * - a swipe in from the left edge goes back in the tab (out to the repo when
- *   there is nothing before), from the right edge forward; the page follows
- *   the finger (the app's own swipe-back is off here);
+ * - a swipe in from the left edge goes back in the tab, from the right edge
+ *   forward; the page follows the finger. With nothing before in the tab the
+ *   back pan steps aside and the stack's own interactive pop takes the left
+ *   edge, so the same swipe slides the whole Files screen out to the repo;
  * - a tap or a swipe up on the name opens the tab overview (TabOverview.tsx):
  *   the tab shrinks into its preview (cropped to the preview's 3:4 as it
  *   goes), and a preview tapped there grows back out of it to full screen; a
@@ -403,45 +404,73 @@ export const FilesScreen = (props: Props): React.ReactElement => {
     [repo, rise],
   );
 
-  // ── Swipes from the edges: back and forward in the tab ──
+  // ── Swipes from the screen edges: back and forward in the browser ──
+  // Each edge owns its own pan (confined to a thin strip by hitSlop): the left
+  // goes back in the tab, the right forward, the page following the finger the
+  // way a native push/pop does. When the tab has nothing before it, the back
+  // pan is disabled and the left edge is handed to the stack's own interactive
+  // pop (enabled just then), so the same gesture slides the whole Files screen
+  // away instead of doing nothing.
   const drag = useSharedValue(0);
   const tabCanGoBack = tab !== undefined && canGoBack(tab);
   const tabCanGoForward = tab !== undefined && canGoForward(tab);
-  // Back in the tab; with nothing before, out to the repo.
-  const back = React.useCallback((): void => {
-    if (tabCanGoBack) fileBack(repo);
-    else navigation.goBack();
-  }, [tabCanGoBack, repo, navigation]);
+  const back = React.useCallback((): void => fileBack(repo), [repo]);
   const forward = React.useCallback((): void => fileForward(repo), [repo]);
+
+  // Let the native pop handle the left edge exactly when the browser can't.
+  React.useEffect(() => {
+    navigation.setOptions({ gestureEnabled: !tabCanGoBack });
+  }, [navigation, tabCanGoBack]);
+
   const edgeSwipe = React.useMemo(() => {
-    const from = { side: 0 };
-    return Gesture.Pan()
-      .activeOffsetX([-12, 12])
+    // Back: left-edge strip, dragging right. Disabled (edge freed for the
+    // native pop) when there is nothing before in the tab.
+    const backPan = Gesture.Pan()
+      .enabled(tabCanGoBack)
+      .hitSlop({ left: 0, width: EDGE })
+      .activeOffsetX(12)
       .failOffsetY([-14, 14])
-      .onBegin((e) => {
-        from.side = e.x < EDGE ? 1 : e.x > screen.width - EDGE ? -1 : 0;
-      })
       .onUpdate((e) => {
-        // From the left edge, back (rightwards); from the right, forward.
-        if (from.side === 1) drag.value = Math.max(0, e.translationX);
-        else if (from.side === -1 && tabCanGoForward) drag.value = Math.min(0, e.translationX);
+        drag.value = Math.max(0, e.translationX);
       })
       .onEnd((e) => {
-        const side = from.side;
-        const turned = side !== 0 && drag.value !== 0 && (Math.abs(drag.value) > screen.width * SWIPE_TURN || side * e.velocityX > SWIPE_FLING);
+        const turned = drag.value > 0 && (drag.value > screen.width * SWIPE_TURN || e.velocityX > SWIPE_FLING);
         if (!turned) {
           drag.value = withTiming(0, SLIDE);
           return;
         }
         // Off it goes; the page it went to slides in from the other side.
-        drag.value = withTiming(side * screen.width, SLIDE, (finished) => {
+        drag.value = withTiming(screen.width, SLIDE, (finished) => {
           if (finished !== true) return;
-          runOnJS(side === 1 ? back : forward)();
-          drag.value = -side * screen.width * 0.3;
+          runOnJS(back)();
+          drag.value = -screen.width * 0.3;
           drag.value = withTiming(0, SLIDE);
         });
       });
-  }, [screen.width, drag, tabCanGoForward, back, forward]);
+    // Forward: right-edge strip, dragging left.
+    const forwardPan = Gesture.Pan()
+      .enabled(tabCanGoForward)
+      .hitSlop({ right: 0, width: EDGE })
+      .activeOffsetX(-12)
+      .failOffsetY([-14, 14])
+      .onUpdate((e) => {
+        drag.value = Math.min(0, e.translationX);
+      })
+      .onEnd((e) => {
+        const turned = drag.value < 0 && (-drag.value > screen.width * SWIPE_TURN || -e.velocityX > SWIPE_FLING);
+        if (!turned) {
+          drag.value = withTiming(0, SLIDE);
+          return;
+        }
+        drag.value = withTiming(-screen.width, SLIDE, (finished) => {
+          if (finished !== true) return;
+          runOnJS(forward)();
+          drag.value = screen.width * 0.3;
+          drag.value = withTiming(0, SLIDE);
+        });
+      });
+    return Gesture.Race(backPan, forwardPan);
+  }, [screen.width, drag, tabCanGoBack, tabCanGoForward, back, forward]);
 
   const pageStyle = useAnimatedStyle(() => {
     const card = 1 - (1 - CARD_SCALE) * paging.value;
