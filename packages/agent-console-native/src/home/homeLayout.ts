@@ -19,6 +19,7 @@ export const HomeRow = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("session"), size: CardSize }),
   Schema.Struct({ kind: Schema.Literal("repo"), latest: Schema.Boolean }),
   Schema.Struct({ kind: Schema.Literal("server") }),
+  Schema.Struct({ kind: Schema.Literal("favLocation") }),
 ]);
 export type HomeRow = typeof HomeRow.Type;
 
@@ -44,6 +45,9 @@ export const REPO_CARD_HEIGHT = { latest: 92, plain: 68 };
 
 /** A server card's height (name line + address line, padding). */
 export const SERVER_CARD_HEIGHT = 72;
+
+/** A favorited file/folder (location) card's height on Home. */
+export const FAV_LOCATION_CARD_HEIGHT = 60;
 
 /** The gap under each card, and the cards' side margin (Home's). */
 export const CARD_GAP = 10;

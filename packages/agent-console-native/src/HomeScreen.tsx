@@ -65,8 +65,10 @@ import { primaryWorktreeOf } from "./primaryWorktree";
 import { updateScannedRepos } from "./primaryWorktree";
 import { archiveWithUndo, loadArchivedSessions, loadMutedSessions, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { cachedSessionsNow, getCachedSessions, setCachedSessions } from "./sessionCache";
-import { homeScope } from "./favorites/model";
+import { type FavoriteTarget, homeScope } from "./favorites/model";
 import { useBoard } from "./favorites/useFavorites";
+import { FavoriteLocationCard } from "./FavoriteLocationCard";
+import { parentOf } from "./files/tabLayout";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -94,6 +96,7 @@ type Row =
   | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined; readonly favorite: boolean }
   | { readonly kind: "repo"; readonly group: RepoGroup; readonly favorite: boolean }
   | { readonly kind: "server"; readonly server: Server; readonly favorite?: boolean }
+  | { readonly kind: "favLocation"; readonly target: Extract<FavoriteTarget, { readonly page: "file" | "folder" }> }
   | { readonly kind: "recentTabs"; readonly tabs: ReadonlyArray<RecentTab> };
 
 const heading = (title: string): Row => ({ kind: "heading", title });
@@ -305,11 +308,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           const server = serverById(target.id);
           return server === undefined ? [] : [{ kind: "server", server, favorite: true }];
         }
-        // file / folder have no Home entry point yet (Phase 1b — from Recents);
-        // none exist, so none render. Listed so adding it is a local change.
         case "file":
         case "folder":
-          return [];
+          return [{ kind: "favLocation", target }];
       }
     });
     return [
@@ -352,6 +353,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           return [{ kind: "repo", latest: row.group.sessions[0]?.title !== undefined }];
         case "server":
           return [{ kind: "server" }];
+        case "favLocation":
+          return [{ kind: "favLocation" }];
       }
     });
     keepHomeLayout(layout).catch((error: unknown) => console.error("[home layout] keeping it failed", error));
@@ -392,6 +395,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             ? `h-${row.title}`
             : row.kind === "recentTabs"
               ? "recent-tabs"
+              : row.kind === "favLocation"
+                ? `favloc-${row.target.path}`
               : row.kind === "server"
                 ? `${row.favorite ? "fs-" : "s-"}${row.server.id}`
                 : `${row.favorite ? "f-" : ""}${row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`}`
@@ -458,6 +463,22 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 name={item.server.name}
                 address={item.server.address}
                 onOpen={() => props.navigation.navigate("Server", { serverId: item.server.id })}
+              />
+            );
+          }
+          if (item.kind === "favLocation") {
+            const target = item.target;
+            const folder = parentOf(target.path).split("/").filter(Boolean).pop() ?? target.repo;
+            return (
+              <FavoriteLocationCard
+                name={target.name}
+                folder={folder}
+                isFolder={target.page === "folder"}
+                onOpen={() =>
+                  target.page === "folder"
+                    ? props.navigation.navigate("Files", { repo: target.repo, dir: target.path })
+                    : props.navigation.navigate("Files", { repo: target.repo, dir: parentOf(target.path), open: { path: target.path, name: target.name } })
+                }
               />
             );
           }

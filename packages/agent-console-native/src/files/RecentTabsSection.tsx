@@ -15,6 +15,9 @@ import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { type TextColors, useThemedStyles } from "../theme";
 import { parentOf } from "./tabLayout";
 import type { RecentTab } from "./recentTabs";
+import { ContextMenuView } from "../../modules/context-menu";
+import { fileTarget, folderTarget, sameTarget } from "../favorites/model";
+import { toggleFavorite, useBoard, useFavoriteScope } from "../favorites/useFavorites";
 
 const GUTTER = 12;
 const GAP = 10;
@@ -25,24 +28,39 @@ export const RecentTabsSection = (props: { readonly tabs: ReadonlyArray<RecentTa
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const { width } = useWindowDimensions();
   const cellWidth = (width - GUTTER * 2 - GAP) / 2;
+  // A hard press favorites a recent file/folder to the surface's scope (Home).
+  const scope = useFavoriteScope();
+  const board = useBoard(scope);
   return (
     <View style={styles.grid}>
       {props.tabs.map((tab) => {
         const folder = parentOf(tab.entry.path).split("/").filter(Boolean).pop() ?? tab.repo;
+        const target = tab.entry.kind === "directory" ? folderTarget(tab.repo, tab.entry.path, tab.entry.name) : fileTarget(tab.repo, tab.entry.path, tab.entry.name);
+        const isFav = board.some((each) => sameTarget(each, target));
         return (
-          <Pressable key={`${tab.repo}:${tab.entry.path}`} style={[styles.shadow, { width: cellWidth }]} onPress={() => props.onOpen(tab)} accessibilityRole="button" accessibilityLabel={`Open ${tab.entry.name}`}>
-            <GlassView style={styles.cell} glassEffectStyle="regular" colorScheme={scheme}>
-              <SetiIcon glyph={tab.entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(tab.entry.name).glyph} size={22} />
-              <View style={styles.text}>
-                <Text style={styles.name} numberOfLines={1}>
-                  {tab.entry.name}
-                </Text>
-                <Text style={styles.folder} numberOfLines={1}>
-                  {folder}
-                </Text>
-              </View>
-            </GlassView>
-          </Pressable>
+          <ContextMenuView
+            key={`${tab.repo}:${tab.entry.path}`}
+            style={[styles.shadow, { width: cellWidth }]}
+            previewCornerRadius={14}
+            actions={[{ id: "favorite", title: isFav ? "Unfavorite" : "Favorite", systemImage: isFav ? "star.slash" : "star" }]}
+            onAction={(id) => {
+              if (id === "favorite") void toggleFavorite(scope, target);
+            }}
+          >
+            <Pressable onPress={() => props.onOpen(tab)} accessibilityRole="button" accessibilityLabel={`Open ${tab.entry.name}`}>
+              <GlassView style={styles.cell} glassEffectStyle="regular" colorScheme={scheme}>
+                <SetiIcon glyph={tab.entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(tab.entry.name).glyph} size={22} />
+                <View style={styles.text}>
+                  <Text style={styles.name} numberOfLines={1}>
+                    {tab.entry.name}
+                  </Text>
+                  <Text style={styles.folder} numberOfLines={1}>
+                    {folder}
+                  </Text>
+                </View>
+              </GlassView>
+            </Pressable>
+          </ContextMenuView>
         );
       })}
     </View>
