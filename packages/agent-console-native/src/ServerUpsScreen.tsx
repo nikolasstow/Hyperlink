@@ -17,6 +17,7 @@ import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop, Text as RNSvgText } from "react-native-svg";
 import { type TextColors, useScreenBackground, useThemedStyles } from "./theme";
 
@@ -222,6 +223,7 @@ export const ServerUpsScreen = (): React.ReactElement => {
   const background = useScreenBackground("grouped");
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const [mins, setMins] = React.useState<number>(60);
   const { data, error } = useUps(mins);
@@ -233,7 +235,7 @@ export const ServerUpsScreen = (): React.ReactElement => {
   const chartW = cardW - 28;
 
   return (
-    <ScrollView style={{ backgroundColor: background }} contentContainerStyle={{ padding: 16, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 48 }}>
+    <ScrollView style={{ backgroundColor: background }} contentInsetAdjustmentBehavior="never" contentContainerStyle={{ padding: 16, paddingTop: headerHeight + 8, paddingBottom: insets.bottom + 48 }}>
       <View style={styles.top}>
         <View>
           <Text style={styles.h1}>UPS</Text>
