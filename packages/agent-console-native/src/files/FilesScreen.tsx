@@ -605,7 +605,27 @@ export const FilesScreen = (props: Props): React.ReactElement => {
 
   // Dubz here is about the repo these files are in.
   const dubzContext = React.useMemo((): DubzContext => ({ surface: "repo", scope: { kind: "repo", repo } }), [repo]);
-  const open = React.useCallback((entry: FileNavEntry) => openFileEntry(repo, entry), [repo]);
+  // Opening a file or folder is a forward push: mark it so the new page slides
+  // in from the right (below), the way a navigation push does, rather than
+  // swapping in place.
+  const pushPending = React.useRef(false);
+  const open = React.useCallback(
+    (entry: FileNavEntry) => {
+      pushPending.current = true;
+      openFileEntry(repo, entry);
+    },
+    [repo],
+  );
+  // When the opened entry becomes the shown page, slide it in from the right.
+  // Set in a layout effect (after the new page has committed) so the incoming
+  // page starts off-screen without the old one flashing away first. Back and
+  // forward swipes animate their own drag, so they leave the flag unset.
+  React.useLayoutEffect(() => {
+    if (!pushPending.current) return;
+    pushPending.current = false;
+    drag.value = screen.width;
+    drag.value = withTiming(0, SLIDE);
+  }, [current.path, drag, screen.width]);
 
   return (
     <View style={styles.root}>
