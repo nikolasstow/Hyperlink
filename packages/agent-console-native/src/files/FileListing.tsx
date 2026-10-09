@@ -22,6 +22,10 @@ import type { FileNavEntry } from "./FileNav";
 import { ContextMenuView, type MenuAction } from "../../modules/context-menu";
 import { fileTarget, folderTarget, repoScope, sameTarget } from "../favorites/model";
 import { toggleFavorite, useBoard } from "../favorites/useFavorites";
+import { useDirtyPaths } from "./fileEdits";
+
+/** The "has unsaved local changes" (pending upload to disk) colour. */
+const UPLOAD_COLOR = "#32d74b";
 
 /** Left screen inset, indentation per level, and the leading chevron column.
  * Tuned to the Files reference: a small chevron with generous room around it,
@@ -38,6 +42,8 @@ const DIVIDER = DynamicColorIOS({ light: "rgba(60,60,67,0.4)", dark: "rgba(120,1
 const Row = (props: {
   readonly row: FileRow;
   readonly last: boolean;
+  /** Has unsaved local changes (pending upload to disk). */
+  readonly dirty: boolean;
   readonly onToggle: (row: FileRow) => void;
   readonly onOpen: (row: FileRow) => void;
 }): React.ReactElement => {
@@ -80,6 +86,7 @@ const Row = (props: {
             {row.name}
           </Text>
         </TouchableOpacity>
+        {props.dirty ? <SystemIcon name="arrow.up.circle.fill" size={15} color={UPLOAD_COLOR} /> : null}
       </View>
       {props.last ? null : <View style={[styles.separator, { marginLeft: separatorInset }]} />}
     </View>
@@ -109,6 +116,8 @@ export const FileListing = (props: {
   // A file/folder favorites to this repo/workspace's scope.
   const favScope = React.useMemo(() => repoScope(repo), [repo]);
   const favBoard = useBoard(favScope);
+  // Files with unsaved local changes, for the upload indicator.
+  const dirty = useDirtyPaths();
 
   const onToggle = (row: FileRow): void => {
     LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
@@ -155,7 +164,7 @@ export const FileListing = (props: {
               else if (id === "favorite") void toggleFavorite(favScope, target);
             }}
           >
-            <Row row={row} last={index === rows.length - 1} onToggle={onToggle} onOpen={open} />
+            <Row row={row} last={index === rows.length - 1} dirty={row.type !== "directory" && dirty.has(row.path)} onToggle={onToggle} onOpen={open} />
           </ContextMenuView>
         );
       })}

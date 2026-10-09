@@ -10,6 +10,7 @@ import { startHomeLayout } from "./src/home/useHomeLayout";
 import { startFileNav } from "./src/files/useFileNav";
 import { startKeptNav } from "./src/navigation/useKeptNav";
 import { startFavorites } from "./src/favorites/useFavorites";
+import { loadDirtyEdits } from "./src/files/fileEdits";
 import { startOutbox } from "./src/outbox/useOutbox";
 
 // The OpenCode SDK's SSE helper (client.event.subscribe, used by
@@ -37,6 +38,9 @@ startHomeLayout();
 startFileNav();
 startKeptNav();
 startFavorites();
+// Read back which files have pending (unsaved-to-disk) edits, for the folder
+// view's local-changes indicator.
+void loadDirtyEdits();
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
