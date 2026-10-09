@@ -33,6 +33,7 @@ import {
   type PermissionMode,
 } from "./sessionPermissions";
 import { registerForPush } from "./push";
+import { canReload, reloadApp } from "./reload";
 import {
   DEFAULT_REPO_TEMPLATE,
   DEFAULT_WORKTREE_TEMPLATE,
@@ -99,6 +100,21 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => {
     setRootDirDraft(rootDir);
   }, [rootDir]);
+
+  // A reload button in the top-right of the nav bar — the same JS-bundle reload
+  // the page menus carry, promoted to a dedicated control here. Development
+  // builds only (DevSettings.reload); no button in a release build.
+  const { navigation } = props;
+  React.useLayoutEffect(() => {
+    if (!canReload) return;
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity accessibilityLabel="Reload app" onPress={reloadApp} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <SystemIcon name="arrow.clockwise" size={18} weight="semibold" color={colors.tint} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   React.useEffect(() => {
     void (async () => {
