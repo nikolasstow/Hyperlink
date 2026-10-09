@@ -56,6 +56,7 @@ import { prefetchWorkspaces } from "./extensionViewsStore";
 import { refreshPlugins } from "./pluginsStore";
 import { getApiAddress } from "./settings";
 import { preloadFile } from "./files/preloadFile";
+import { tabEntry } from "./files/FileNav";
 import { useCodeTheme } from "./useCodeTheme";
 import type { ScannedRepo } from "./repoScan";
 import { cachedReposNow, isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
@@ -264,14 +265,32 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // Recent files across every repo's Files (recentTabs.ts), newest first.
   const filePlaces = useFilePlaces();
   const recentTabs = React.useMemo(() => recentTabsOf(HashMap.entries(filePlaces), RECENT_TABS), [filePlaces]);
-  // Warm the text + token caches for recent files so tapping one opens instantly
-  // and already coloured — preload here, the tap only renders.
+  // Warm the text + token caches so opening a file is instant and already
+  // coloured — preload here, the tap only renders. Covers every OPEN tab (across
+  // all repos) and the recent files, deduped by path.
   const codeTheme = useCodeTheme();
-  React.useEffect(() => {
-    for (const tab of recentTabs) {
-      if (tab.entry.kind === "file") void preloadFile(backend, tab.entry.path, tab.entry.name, codeTheme);
+  const filesToPreload = React.useMemo((): ReadonlyArray<{ readonly path: string; readonly name: string }> => {
+    const seen = new Set<string>();
+    const out: Array<{ readonly path: string; readonly name: string }> = [];
+    const add = (path: string, name: string): void => {
+      if (seen.has(path)) return;
+      seen.add(path);
+      out.push({ path, name });
+    };
+    for (const [, place] of HashMap.entries(filePlaces)) {
+      for (const tab of place.tabs) {
+        const entry = tabEntry(tab);
+        if (entry !== undefined && entry.kind === "file") add(entry.path, entry.name);
+      }
     }
-  }, [recentTabs, backend, codeTheme]);
+    for (const tab of recentTabs) {
+      if (tab.entry.kind === "file") add(tab.entry.path, tab.entry.name);
+    }
+    return out;
+  }, [filePlaces, recentTabs]);
+  React.useEffect(() => {
+    for (const file of filesToPreload) void preloadFile(backend, file.path, file.name, codeTheme);
+  }, [filesToPreload, backend, codeTheme]);
   const groups = groupByRepo(visible, scanned);
   const knownGroups = groups.filter((g) => g.isKnownRepo);
   const otherGroups = groups.filter((g) => !g.isKnownRepo);
