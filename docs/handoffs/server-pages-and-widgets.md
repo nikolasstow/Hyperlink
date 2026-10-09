@@ -76,6 +76,27 @@ context. (Exact plumbing in §7.)
 repo binding (§4.3 of the system doc). Built-in UPS/internet-down bind to the
 Mac mini server out of the box.
 
+**Multi-server — designed in from day one (not retrofitted).** Servers are
+independent boxes, each reached at its own address (Tailscale). The app is a
+**multi-backend client**: a server-scoped page/widget uses the **bound server's
+address as its `apiBase`**, so the *same* plugin (e.g. UPS) bound to N servers
+each reads *its own* box. Consequences baked in now, not later:
+- **No hardcoded addresses anywhere.** (Today's `ServerUpsScreen` hardcodes the
+  Tailscale IP — that becomes the bound server's address, threaded from context.)
+- The **binding context carries the server** (id + address); every server-scoped
+  fetch — plugin list, pages, widget data — is parameterized by it.
+- A plugin is **installed/bound per server**; one plugin, many servers, each
+  instance local to its box.
+- **Reachability is Tailscale** (every server on the tailnet); `localhost` is the
+  implicit local server, and the Mac mini is just the first entry.
+- The servers registry, Home list, and Server page are all **N-server** from the
+  start (a list, not a single special case).
+
+Open (§8): does every server run the **full agent-console backend + extension
+host** (uniform, heavier per box), or a **lighter "server agent"** that only
+hosts server-scoped plugins while one hub aggregates? Either way the app-facing
+contract (per-server `apiBase`) is the same, so this doesn't block Phase 1.
+
 ---
 
 ## 3. Widgets
@@ -190,8 +211,10 @@ Both reuse the APNs path we proved (external watcher → `exp.host` → APNs →
    ServerScreen listing *menu items* (no widgets yet). UPS/internet-down appear
    as rows that open their pages. (Proves servers end-to-end.)
 2. **UPS as a built-in plugin** — move `ServerUpsScreen` behind the page registry
-   (`pageId "ups"`), fold `~/ups-monitor` into the plugin's server module. UPS
-   opens from the Server page as a real plugin page.
+   (`pageId "ups"`), **drive its data from the bound server's address (drop the
+   hardcoded Tailscale IP)** so it's multi-server-ready, and fold `~/ups-monitor`
+   into the plugin's server module. UPS opens from the Server page as a real
+   plugin page.
 3. **Widgets** — the widget contribution + registry + generic renderer; add the
    `UpsWidget` (live card). Server page shows the UPS widget; others still menu
    items.
@@ -203,7 +226,13 @@ Both reuse the APNs path we proved (external watcher → `exp.host` → APNs →
 ## 8. Open decisions
 
 - **Server identity source:** manual add (name + address) vs. discovery
-  (Tailscale peers, Bonjour). Start manual; localhost auto.
+  (Tailscale peers, Bonjour). Start manual; localhost auto. (Multi-server from
+  the start — a list, not one special box.)
+- **Per-server backend model:** every server runs the full agent-console backend
+  + extension host (uniform, simplest to reason about, heavier per box) vs. a
+  lighter "server agent" hosting only server-scoped plugins with a hub
+  aggregating. App contract (per-server `apiBase`) is identical either way; pick
+  when a *second* server is real.
 - **Widget data transport:** each widget polls its plugin endpoint (simple, like
   `/api/ups`) vs. a unified `/widget/<id>/data` the Server page batches. Start
   per-widget polling.
