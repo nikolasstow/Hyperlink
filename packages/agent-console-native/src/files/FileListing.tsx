@@ -22,7 +22,10 @@ import type { FileNavEntry } from "./FileNav";
 import { ContextMenuView, type MenuAction } from "../../modules/context-menu";
 import { fileTarget, folderTarget, repoScope, sameTarget } from "../favorites/model";
 import { toggleFavorite, useBoard } from "../favorites/useFavorites";
+import { useCodeTheme } from "../useCodeTheme";
 import { useDirtyPaths } from "./fileEdits";
+import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
+import { preloadFile } from "./preloadFile";
 
 /** The "has unsaved local changes" (pending upload to disk) colour. */
 const UPLOAD_COLOR = "#32d74b";
@@ -118,6 +121,8 @@ export const FileListing = (props: {
   const favBoard = useBoard(favScope);
   // Files with unsaved local changes, for the upload indicator.
   const dirty = useDirtyPaths();
+  const kept = useKeptPaths();
+  const theme = useCodeTheme();
 
   const onToggle = (row: FileRow): void => {
     LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
@@ -149,9 +154,12 @@ export const FileListing = (props: {
       {rows.map((row, index) => {
         const target = row.type === "directory" ? folderTarget(repo, row.path, row.name) : fileTarget(repo, row.path, row.name);
         const isFav = favBoard.some((each) => sameTarget(each, target));
+        const isKept = kept.has(row.path);
         const actions: ReadonlyArray<MenuAction> = [
           { id: "newTab", title: "Open in New Tab", systemImage: "plus.square.on.square" },
           { id: "favorite", title: isFav ? "Unfavorite" : "Favorite", systemImage: isFav ? "star.slash" : "star" },
+          // Keep On Device is for files (a folder isn't a single document).
+          ...(row.type === "directory" ? [] : [{ id: "keep", title: isKept ? "Remove from Device" : "Keep On Device", systemImage: isKept ? "trash" : "arrow.down.circle" }]),
         ];
         return (
           // A long press: the row's menu (iOS's own, the row lifting).
@@ -162,6 +170,14 @@ export const FileListing = (props: {
             onAction={(id) => {
               if (id === "newTab") onOpenInNewTab({ path: row.path, name: row.name, kind: row.type });
               else if (id === "favorite") void toggleFavorite(favScope, target);
+              else if (id === "keep") {
+                if (isKept) removeFromDevice(row.path);
+                else {
+                  keepOnDevice(row.path);
+                  // Download it now so it's available offline.
+                  void preloadFile(backend, row.path, row.name, theme);
+                }
+              }
             }}
           >
             <Row row={row} last={index === rows.length - 1} dirty={row.type !== "directory" && dirty.has(row.path)} onToggle={onToggle} onOpen={open} />

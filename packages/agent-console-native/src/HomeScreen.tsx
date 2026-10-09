@@ -57,6 +57,7 @@ import { refreshPlugins } from "./pluginsStore";
 import { getApiAddress } from "./settings";
 import { preloadFile } from "./files/preloadFile";
 import { tabEntry } from "./files/FileNav";
+import { useKeptPaths } from "./files/fileKeep";
 import { useCodeTheme } from "./useCodeTheme";
 import type { ScannedRepo } from "./repoScan";
 import { cachedReposNow, isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
@@ -269,6 +270,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // coloured — preload here, the tap only renders. Covers every OPEN tab (across
   // all repos) and the recent files, deduped by path.
   const codeTheme = useCodeTheme();
+  const kept = useKeptPaths();
   const filesToPreload = React.useMemo((): ReadonlyArray<{ readonly path: string; readonly name: string }> => {
     const seen = new Set<string>();
     const out: Array<{ readonly path: string; readonly name: string }> = [];
@@ -286,8 +288,10 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     for (const tab of recentTabs) {
       if (tab.entry.kind === "file") add(tab.entry.path, tab.entry.name);
     }
+    // Files kept on device: warm them so they open instantly, offline.
+    for (const path of kept) add(path, path.split("/").filter(Boolean).pop() ?? path);
     return out;
-  }, [filePlaces, recentTabs]);
+  }, [filePlaces, recentTabs, kept]);
   React.useEffect(() => {
     // Tokenising is a synchronous CPU burst per file, so warming many at once
     // would saturate the JS thread and make a tap (and the navigation it
