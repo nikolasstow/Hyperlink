@@ -44,6 +44,7 @@ import { CollectionScreen, type CollectionView } from "./CollectionScreen";
 import { ExtensionViewScreen } from "./ExtensionViewScreen";
 import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
+import { ServerUpsScreen } from "./ServerUpsScreen";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
 import { RepoScreen } from "./RepoScreen";
 import { SessionListScreen } from "./SessionListScreen";
@@ -104,6 +105,8 @@ export type RootStackParamList = {
   // The plugin manager, and one installed plugin (`name` is the nav title).
   Plugins: undefined;
   PluginDetail: { id: string; name: string };
+  // A server's UPS page (Mac mini), rendered from the UPS dashboard API.
+  ServerUps: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -320,6 +323,7 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="SessionSettings" component={SessionSettingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Session Settings" /> }} />
         <Stack.Screen name="Plugins" component={PluginsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Plugins" /> }} />
         <Stack.Screen name="PluginDetail" component={PluginDetailScreen} options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={route.params.name} /> })} />
+        <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native

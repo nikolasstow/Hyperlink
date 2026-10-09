@@ -225,6 +225,15 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           ))}
         </View>
 
+        <Text style={styles.sectionLabel}>Servers</Text>
+        <View style={[styles.card, styles.listCard]}>
+          <CardGlass />
+          <TouchableOpacity style={styles.optionRow} onPress={() => props.navigation.navigate("ServerUps")} activeOpacity={0.6}>
+            <Text style={styles.fieldLabel}>UPS — Mac mini</Text>
+            <SystemIcon name="chevron.right" size={15} color={textColors.secondaryLabel} />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sectionLabel}>Workspace</Text>
         <View style={styles.card}>
           <CardGlass />
