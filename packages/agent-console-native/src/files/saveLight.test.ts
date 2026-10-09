@@ -6,9 +6,16 @@ describe("enqueueFlash", () => {
     expect(enqueueFlash(initialSaveLight, "local")).toEqual({ current: "local", pending: [] });
   });
 
-  it("drops a flash that repeats the current colour", () => {
+  it("drops a flash that would queue the same colour back-to-back", () => {
     const state: SaveLightState = { current: "local", pending: [] };
     expect(enqueueFlash(state, "local")).toBe(state);
+  });
+
+  it("flashes the same colour again once at rest (twice in a row is fine when not queued)", () => {
+    // local flashes, finishes (→ rest), local flashes again.
+    const afterFirst = advanceFlash(enqueueFlash(initialSaveLight, "local"));
+    expect(afterFirst).toEqual(initialSaveLight);
+    expect(enqueueFlash(afterFirst, "local")).toEqual({ current: "local", pending: [] });
   });
 
   it("queues a different colour behind the current one", () => {

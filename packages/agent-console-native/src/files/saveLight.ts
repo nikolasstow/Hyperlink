@@ -8,10 +8,11 @@
  * colour already showing or already queued are coalesced, so a burst of saves
  * never builds a backlog — at most one local and one cloud flash wait.
  *
- * The queue dedupes by **consecutive** colour: a flash is dropped only when it
- * repeats whatever is already at the tail (current, or the last queued), so
- * colours can alternate (blue, green, blue) but the same colour never stutters
- * twice in a row.
+ * Dedupe is by **consecutive colour, in the queue only**: a flash is dropped
+ * only when the light is busy *and* it repeats whatever is at the tail (the
+ * current flash, or the last queued one). So a same-colour flash is dropped when
+ * it would queue back-to-back (no visible change), but once the light is at rest
+ * the same colour may flash again — two in a row is fine when it isn't queued.
  *
  * The queue transitions here are pure (tested); `useSaveLight` drives them with
  * a timer.
@@ -41,9 +42,10 @@ export interface SaveLightState {
 
 export const initialSaveLight: SaveLightState = { current: null, pending: [] };
 
-/** Add a flash. Idle → it shows at once; busy → it waits, unless it would just
+/** Add a flash. Idle → it shows at once (even the same colour as the last one —
+ * two in a row is fine when not queued). Busy → it waits, unless it would just
  * repeat the colour already at the tail (current, or the last queued), in which
- * case it's dropped — consecutive-colour dedupe. */
+ * case it's dropped — consecutive-colour dedupe within the queue. */
 export const enqueueFlash = (state: SaveLightState, kind: SaveFlash): SaveLightState => {
   if (state.current === null) return { current: kind, pending: [] };
   const tail = state.pending.length > 0 ? state.pending[state.pending.length - 1] : state.current;
