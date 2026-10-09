@@ -23,6 +23,7 @@ import { fsReadText, fsWrite } from "../fsClient";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor } from "./CodeEditor";
+import { clearFileEdit, getFileEditSync, setFileEdit } from "./fileEdits";
 import { getFileTextSync, setFileText } from "./fileTextCache";
 import { useSaveLight } from "./saveLight";
 import { StatusLight } from "./StatusLight";
@@ -62,11 +63,12 @@ export const FileView = (props: {
   const textColors = useTextColors();
   const { path, name, line, topInset, bottomInset } = props;
   const { backend } = useAppContext();
-  // Start from the cached text if we have it, so the editor mounts instantly
-  // (the token cache then paints it coloured on the first frame too).
+  // Start from what we have, offline-first: a pending local edit wins over the
+  // cached disk text, so the editor mounts instantly with your latest work (even
+  // after a restart, before any network).
   const [state, setState] = React.useState<State>(() => {
-    const cached = getFileTextSync(path);
-    return cached === undefined ? { kind: "loading" } : { kind: "text", text: cached };
+    const shown = getFileEditSync(path) ?? getFileTextSync(path);
+    return shown === undefined ? { kind: "loading" } : { kind: "text", text: shown };
   });
   const lang = React.useMemo(() => langFromFilename(name), [name]);
 
@@ -90,8 +92,10 @@ export const FileView = (props: {
     if (next === null || next === diskRef.current) return;
     void runFs(fsWrite(backend, path, next))
       .then(() => {
+        // Disk now matches: the pending offline edit is no longer pending.
         diskRef.current = next;
         setFileText(path, next);
+        clearFileEdit(path);
         flash("cloud");
       })
       .catch(() => undefined);
@@ -100,47 +104,58 @@ export const FileView = (props: {
   const onChangeText = React.useCallback(
     (next: string): void => {
       editedRef.current = next;
-      // Local (device) checkpoint — debounced short.
+      // Local (device) checkpoint — debounced short: persist the edit offline so
+      // it survives a restart, then flash the light.
       if (localTimer.current !== undefined) clearTimeout(localTimer.current);
-      localTimer.current = setTimeout(() => flash("local"), LOCAL_DELAY_MS);
+      localTimer.current = setTimeout(() => {
+        if (next === diskRef.current) {
+          clearFileEdit(path);
+        } else {
+          setFileEdit(path, next);
+          flash("local");
+        }
+      }, LOCAL_DELAY_MS);
       // Cloud (disk) autosave — debounced, with a max-wait flush so a steady
       // typist still saves every few seconds.
       if (cloudTimer.current !== undefined) clearTimeout(cloudTimer.current);
       cloudTimer.current = setTimeout(saveCloud, CLOUD_DELAY_MS);
       if (cloudMaxTimer.current === undefined) cloudMaxTimer.current = setTimeout(saveCloud, CLOUD_MAX_WAIT_MS);
     },
-    [flash, saveCloud],
+    [flash, saveCloud, path],
   );
 
   React.useEffect(() => {
     let alive = true;
-    // New file (or path change): forget prior edits, and show the cached text at
-    // once if we have it; otherwise load.
-    editedRef.current = null;
+    // New file (or path change). Offline-first: a pending local edit is the
+    // current content (it survived a restart); otherwise the cached disk text;
+    // otherwise load.
+    const pendingEdit = getFileEditSync(path);
+    editedRef.current = pendingEdit ?? null;
     const cached = getFileTextSync(path);
-    if (cached === undefined) {
-      setState({ kind: "loading" });
-    } else {
-      diskRef.current = cached;
-      setState({ kind: "text", text: cached });
-    }
-    // Revalidate in the background: re-read, refresh the cache, and update the
-    // shown text if it changed and the user isn't mid-edit.
+    const shown = pendingEdit ?? cached;
+    diskRef.current = cached ?? "";
+    setState(shown === undefined ? { kind: "loading" } : { kind: "text", text: shown });
+    // Revalidate in the background: re-read, refresh the disk cache, update the
+    // shown text only when there's no pending edit, and drop a pending edit that
+    // now matches disk.
     void runFs(fsReadText(backend, path))
       .then((text) => {
         if (!alive) return;
         if (text === undefined) {
-          if (cached === undefined) setState({ kind: "missing" });
+          if (shown === undefined) setState({ kind: "missing" });
           return;
         }
         setFileText(path, text);
         diskRef.current = text;
         if (editedRef.current === null) {
           setState((prev) => (prev.kind === "text" && prev.text === text ? prev : { kind: "text", text }));
+        } else if (editedRef.current === text) {
+          // The pending edit is already on disk (saved elsewhere): no longer pending.
+          clearFileEdit(path);
         }
       })
       .catch(() => {
-        if (alive && cached === undefined) setState({ kind: "error" });
+        if (alive && shown === undefined) setState({ kind: "error" });
       });
     return () => {
       alive = false;
