@@ -135,12 +135,42 @@ A Favorites section renders each target with the right native card/row:
 
 ## 6. Build order
 
-1. **Base scoped favorites (buildable now):** model with scope + the new kinds +
-   migration into `home`; context-menu Favorite on each surface with scope
-   resolution (incl. file/folder → home); Favorites sections on Home / repo /
-   server that render all kinds. No drag, no mode.
+1. **Base scoped favorites — foundation SHIPPED:** `src/favorites/`. Schema is
+   the SSOT (`FavoriteTarget` per-page Struct union; `Scope` tagged union; one
+   `Board` per scope); equality derived via `Schema.toEquivalence`; legacy flat
+   list migrated into `home` immediately on first construction and discarded
+   (store-level test). `useBoard`/`useIsFavorited`/`toggleFavorite` + a
+   `FavoriteScope` context. RepoCard/SessionCard + Home rewired; behavior
+   unchanged. **Next within this phase:** the remaining entry points — favorite a
+   server (Servers section), favorite a file/folder (Files + Recents), and the
+   Favorites boards on repo/server pages.
 2. **Edit mode + drag (soon):** jiggle mode (hard-press-drag or ⋯ → Edit),
-   reorder, drag-into-section, remove. Reorder persists board order.
+   reorder (store `reorder` already exists), drag-into-section, remove.
+
+## 8. Implementation (Effect v4)
+
+Logic in Effect, UI native — reusing the app's shipped store pattern.
+
+- **Schema is the SSOT** (`model.ts`): its JSON codec persists favorites
+  (`KeyValueStore.toSchemaStore`), and **equality is derived from it**
+  (`Schema.toEquivalence`), not hand-written. `Scope` is a tagged union so
+  illegal scopes are unrepresentable. Pure ops: `toggled` / `reordered` /
+  `boardItems` / `isFavorited`.
+- **Store** (`Favorites.ts`): `Context.Service` + `SubscriptionRef` +
+  `Stream`; `toggle(scope,target)` / `reorder(scope,items)` persist through the
+  schema store. **Migration** reads the legacy key, folds into the home board,
+  `store.set` + `legacyStore.remove` in one go — immediate, then never read
+  again. All read/write failures `Effect.logError`'d, never swallowed.
+- **Bridge** (`useFavorites.ts`): the existing `startFavorites` +
+  `useSyncExternalStore` mirror; `FavoriteScope` React context resolves "where
+  you favorite from" per surface (default Home).
+- **Exhaustiveness** guards correctness: Home's render switches over every
+  `page`; adding a kind is a compile error until handled.
+- **Not Effect, by design:** reanimated worklets + React render (native). The
+  drag phase commits reorder through `store.reorder` only.
+- **Tested:** `model.test.ts` (pure ops, identity, scope isolation, legacy fold)
+  + `Favorites.test.ts` (store migration + discard + toggle against an in-memory
+  `KeyValueStore`).
 
 ## 7. Resolved / open
 
