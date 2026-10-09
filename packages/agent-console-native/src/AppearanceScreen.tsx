@@ -28,6 +28,7 @@ import type { RootStackParamList } from "./RootNavigator";
 import { DEFAULT_THEME, getApiAddress, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { CONTRAST_START, type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
+import { resolveThemeColors } from "./shikiHighlighter";
 import { effectiveCode, useResolvedCodeTheme } from "./useCodeTheme";
 import {
   deleteCreatedTheme,
@@ -554,6 +555,13 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   const darkPreview = useResolvedCodeTheme(theme.codeDark ?? theme.code, "dark");
   const singlePreview = useResolvedCodeTheme(effectiveCode(theme, scheme), scheme);
 
+  // The actual editor background of the resolved theme for each mode — offered
+  // as the "Theme" background swatch so the screen background can match it.
+  // Resolved (not the stored CodeTheme.background), so it is present even for
+  // the bundled fallback when no theme is enabled.
+  const lightThemeBg = toOpaqueHex(resolveThemeColors(lightPreview).colors["editor.background"]);
+  const darkThemeBg = toOpaqueHex(resolveThemeColors(darkPreview).colors["editor.background"]);
+
   return (
     <ScrollView
       style={styles.root}
@@ -631,13 +639,13 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
             label="Light"
             value={theme.backgroundLight}
             systemColor={SYSTEM_BACKGROUND.light}
-            themeColor={dual ? theme.code?.background : theme.code?.dark === false ? theme.code.background : undefined}
+            themeColor={lightThemeBg}
             onChange={(color) => setTheme(withBackground(theme, "backgroundLight", color))} />
           <BackgroundRow
             label="Dark"
             value={theme.backgroundDark}
             systemColor={SYSTEM_BACKGROUND.dark}
-            themeColor={dual ? (theme.codeDark ?? theme.code)?.background : theme.code?.dark === true ? theme.code.background : undefined}
+            themeColor={darkThemeBg}
             onChange={(color) => setTheme(withBackground(theme, "backgroundDark", color))} />
         </View>
 
