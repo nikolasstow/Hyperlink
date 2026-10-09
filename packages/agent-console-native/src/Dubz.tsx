@@ -211,7 +211,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         <View style={styles.suggestionsArea} pointerEvents="box-none">
           <View style={styles.suggestions}>
             {suggestions.map((suggestion) => (
-              <Suggestion key={suggestion.kind} suggestion={suggestion} />
+              <Suggestion key={suggestion._tag} suggestion={suggestion} />
             ))}
           </View>
         </View>
@@ -245,8 +245,8 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
 /** One suggestion, by its kind. */
 const Suggestion = (props: { readonly suggestion: DubzSuggestion }): React.ReactElement | null => {
   const styles = useThemedStyles(makeStyles);
-  switch (props.suggestion.kind) {
-    case "tasks":
+  switch (props.suggestion._tag) {
+    case "Tasks":
       // A plain fixed rectangle stands in for the tasks block for now.
       return <View style={styles.placeholder} />;
   }

@@ -605,7 +605,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const gutter = useCardGutter();
 
   // Dubz here is about the repo these files are in.
-  const dubzContext = React.useMemo((): DubzContext => ({ surface: "repo", scope: { kind: "repo", repo } }), [repo]);
+  const dubzContext = React.useMemo((): DubzContext => ({ surface: "repo", scope: { _tag: "Repo", repo } }), [repo]);
   const open = React.useCallback((entry: FileNavEntry) => openFileEntry(repo, entry), [repo]);
 
   return (

@@ -221,7 +221,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const dubzContext = React.useMemo(
     (): DubzContext => ({
       surface: "repo",
-      scope: isRepo ? { kind: "repo", repo: name } : { kind: "folder" },
+      scope: isRepo ? { _tag: "Repo", repo: name } : { _tag: "Folder" },
     }),
     [isRepo, name],
   );

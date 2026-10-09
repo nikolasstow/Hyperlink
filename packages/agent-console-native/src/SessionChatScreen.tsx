@@ -76,7 +76,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 /** Dubz in a session: its suggestions pick a repo, for now. */
 const SESSION_DUBZ: DubzContext = {
   surface: "session",
-  scope: { kind: "all" },
+  scope: { _tag: "All" },
 };
 
 const NO_MESSAGES: ReadonlyArray<ChatMessage> = [];

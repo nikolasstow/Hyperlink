@@ -88,7 +88,7 @@ type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 /** Dubz on Home: about every repo, so its suggestions pick one. */
 const HOME_DUBZ: DubzContext = {
   surface: "home",
-  scope: { kind: "all" },
+  scope: { _tag: "All" },
 };
 
 /** `favorite`: in Favorites (it may be in Recent or its group too). */
