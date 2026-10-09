@@ -64,6 +64,11 @@ import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
 import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
+import { useAppContext } from "../AppContext";
+import { useCodeTheme } from "../useCodeTheme";
+import { saveFileNow } from "./fileSave";
+import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
+import { preloadFile } from "./preloadFile";
 import { TAB_TOP_ACTIONS_WIDTH, TabTopActions } from "./TabTopActions";
 import { useMissingPaths } from "./missingPaths";
 
@@ -686,7 +691,12 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           <Reanimated.View style={[styles.top, topSlide]} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
             <BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={topBackMax} />
             <View style={styles.topSpacer} pointerEvents="none" />
-            <MoreMenu worktrees={current.kind === "file" ? primary.worktrees : []} selected={currentWt?.path} onSelect={switchWorktree} />
+            <MoreMenu
+              worktrees={current.kind === "file" ? primary.worktrees : []}
+              selected={currentWt?.path}
+              onSelect={switchWorktree}
+              file={current.kind === "file" ? { path: current.path, name: current.name } : undefined}
+            />
             <View style={styles.title} pointerEvents="box-none">
               {current.kind === "file" ? null : primary.primary !== undefined ? (
                 <WorktreePicker repo={repo} fallback={dir} title={current.name} selected={currentWt?.path} onSelect={switchWorktree} />
@@ -756,9 +766,16 @@ const MoreMenu = (props: {
   readonly worktrees: ReadonlyArray<ScannedWorktree>;
   readonly selected: string | undefined;
   readonly onSelect: (path: string) => void;
+  /** The open file (undefined for a folder tab) — adds Save / Keep On Device. */
+  readonly file: { readonly path: string; readonly name: string } | undefined;
 }): React.ReactElement => {
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const { backend } = useAppContext();
+  const theme = useCodeTheme();
+  const kept = useKeptPaths();
+  const file = props.file;
+  const isKept = file !== undefined && kept.has(file.path);
   return (
     <Host
       style={styles.more}
@@ -780,6 +797,22 @@ const MoreMenu = (props: {
         }
         modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
       >
+        {file === undefined ? null : <Button key="save" label="Save" systemImage="square.and.arrow.down" onPress={() => saveFileNow(file.path)} />}
+        {file === undefined ? null : (
+          <Button
+            key="keep"
+            label={isKept ? "Remove from Device" : "Keep On Device"}
+            systemImage={isKept ? "trash" : "arrow.down.circle"}
+            onPress={() => {
+              if (isKept) {
+                removeFromDevice(file.path);
+              } else {
+                keepOnDevice(file.path);
+                void preloadFile(backend, file.path, file.name, theme);
+              }
+            }}
+          />
+        )}
         {props.worktrees.length > 1 ? (
           <Menu label={worktreeName(props.worktrees.find((worktree) => worktree.path === props.selected) ?? props.worktrees[0])} systemImage="arrow.triangle.branch">
             {props.worktrees.map((worktree) => (
