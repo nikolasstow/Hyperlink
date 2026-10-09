@@ -101,18 +101,14 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
     setRootDirDraft(rootDir);
   }, [rootDir]);
 
-  // A reload button in the top-right of the nav bar — the same JS-bundle reload
-  // the page menus carry, promoted to a dedicated control here. Development
-  // builds only (DevSettings.reload); no button in a release build.
+  // A reload button in the top-right of the nav bar — a normal native bar
+  // button (the same JS-bundle reload the page menus carry). Development builds
+  // only (DevSettings.reload); nothing in a release build.
   const { navigation } = props;
   React.useLayoutEffect(() => {
-    if (!canReload) return;
     navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity accessibilityLabel="Reload app" onPress={reloadApp} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <SystemIcon name="arrow.clockwise" size={18} weight="semibold" color={colors.tint} />
-        </TouchableOpacity>
-      ),
+      unstable_headerRightItems: () =>
+        canReload ? [{ type: "button", label: "Reload", icon: { type: "sfSymbol", name: "arrow.clockwise" }, onPress: reloadApp }] : [],
     });
   }, [navigation]);
 
