@@ -44,9 +44,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // down) to pin — short blocks that fit on screen don't sticky, and a shorter
     // screen lowers the bar. Tweak freely.
     private let stickyMinFraction: Double = 0.05
-    // Stickies engage only while scrolling down (past a header); scrolling up,
-    // they hide — you're heading back toward the real header.
-    private var lastStickyOffsetY: CGFloat = 0
     private var lineStarts: [Int] = [0]
     private var shownHeaders: [Int] = []
     // The scope currently on screen, kept while it rides up off the top even
@@ -289,14 +286,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// behind the line it should pin. Falls back to arithmetic if the hit-test
     /// misses.
     private func topVisibleLine() -> Int {
-        // Sample the first line BELOW the sticky block (it covers the top down to
-        // stickyFill), not the line hidden behind it — otherwise the scope is read
-        // against a line under the block, so "scope ended" is noticed only once the
-        // real end is already near the top and there's no room left to push off.
-        // Half a line of bias so jitter at a boundary can't flip the line.
+        // Sample half a line into the visible area so scroll jitter at a line
+        // boundary can't flip the detected line back and forth.
         let bias = stickyRowHeight() * 0.5
-        let top = max(topInset, stickyFill)
-        return textView.lineIndex(atContentY: textView.contentOffset.y + top + bias)
+        return textView.lineIndex(atContentY: textView.contentOffset.y + topInset + bias)
     }
 
     private func hideSticky() {
@@ -310,16 +303,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     private func updateSticky() {
         guard !stickyRanges.isEmpty else {
-            hideSticky()
-            return
-        }
-        // Only engage while scrolling down. Scrolling up, hide — the real header
-        // is on its way back. (Non-scroll calls keep the same offset, so they
-        // don't count as "up".)
-        let offsetY = textView.contentOffset.y
-        let scrollingUp = offsetY < lastStickyOffsetY - 0.5
-        lastStickyOffsetY = offsetY
-        if scrollingUp {
             hideSticky()
             return
         }
@@ -341,9 +324,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         if let enclosing {
             header = enclosing.header
             end = enclosing.end
-        } else if displayedHeader >= 0, textView.contentY(ofLine: displayedEnd) - textView.contentOffset.y > 0 {
-            // No enclosing scope, but the last one hasn't finished sliding off —
-            // keep it so it rides all the way up through the top space.
+        } else if displayedHeader >= 0, line > displayedEnd {
+            // Scrolled down past the scope's end — keep showing it so it can ride
+            // up and off (the push-off below hides it only once it's fully off the
+            // top of the screen). Scrolled back up above the header instead →
+            // fall through to hide.
             header = displayedHeader
             end = displayedEnd
         } else {
@@ -387,12 +372,19 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
                 "topInset": Double(topInset)
             ])
         }
-        // Push-off: the block is pinned at the top, but once the scope's last
-        // line rises to the block's bottom it rides the scroll up and off — like
-        // it's part of the content — instead of vanishing. y tracks the end line.
+        // Push-off: the block stays pinned at the top while any of the scope is
+        // still on screen — including the whole top-of-screen space. Only once the
+        // scope's end line crosses the top of the screen (y = 0) does the block
+        // ride up and off WITH it, one-to-one, so it's pushed off rather than
+        // vanishing. Being position-based, scrolling back up reverses it exactly —
+        // the block slides back down. It's gone only when fully above the top.
         let stickyHeight = sticky.preferredHeight
         let endTopViewY = textView.contentY(ofLine: end) - textView.contentOffset.y
-        let pushY = min(0, endTopViewY - stickyHeight)
+        let pushY = max(-stickyHeight, min(0, endTopViewY))
+        if enclosing == nil && pushY <= -stickyHeight + 0.5 {
+            hideSticky()
+            return
+        }
         sticky.frame = CGRect(x: 0, y: pushY, width: bounds.width, height: stickyHeight)
         // Track horizontal scroll so the frozen code lines up with the editor.
         sticky.setHorizontalOffset(textView.contentOffset.x)
