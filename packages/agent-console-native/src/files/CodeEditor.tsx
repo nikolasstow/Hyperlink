@@ -14,7 +14,7 @@ import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
 import { CodeEditorNativeView, type EditorTheme, type LineToken } from "../../modules/code-editor";
-import { type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
+import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
 import { stickyRanges } from "./stickyRanges";
 import { useCodeTheme } from "../useCodeTheme";
 
@@ -71,14 +71,21 @@ export const CodeEditor = (props: {
 }): React.ReactElement | null => {
   const theme = useCodeTheme();
   const lang = React.useMemo(() => langFromFilename(props.name), [props.name]);
-  const [tokensJson, setTokensJson] = React.useState<string>("[]");
+  // A cached file renders already-coloured on the first frame: peek the in-memory
+  // token cache synchronously (warm from a previous open or preload) so there's
+  // no flash of uncoloured text before the async tokenise returns.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- first frame only, by design
+  const initialHighlight = React.useMemo(() => cachedHighlightSync({ code: props.text, lang, theme }), []);
+  const [tokensJson, setTokensJson] = React.useState<string>(() => (initialHighlight === undefined ? "[]" : JSON.stringify(toLineTokens(initialHighlight))));
   const [stickyJson, setStickyJson] = React.useState<string>("[]");
-  // Base colours resolve synchronously from the theme so the editor paints the
-  // right background/foreground on the first frame; the async tokenise below
-  // only refines them (and fills the per-token colours). Without this the editor
-  // flashes its default background until the debounced tokenise returns.
-  const [editorTheme, setEditorTheme] = React.useState<EditorTheme>(() => editorThemeOf(theme, undefined));
+  // Base colours resolve synchronously from the theme (and the cached highlight's
+  // exact bg/fg when present) so the editor paints right on the first frame; the
+  // async tokenise below only refines them.
+  const [editorTheme, setEditorTheme] = React.useState<EditorTheme>(() => editorThemeOf(theme, initialHighlight));
   const { text } = props;
+  // The first tokenise is immediate (no flash); only re-tokenising while typing
+  // is debounced.
+  const firstRun = React.useRef(true);
 
   React.useEffect(() => {
     setEditorTheme(editorThemeOf(theme, undefined));
@@ -86,6 +93,8 @@ export const CodeEditor = (props: {
 
   React.useEffect(() => {
     let alive = true;
+    const delay = firstRun.current ? 0 : RETOKENIZE_MS;
+    firstRun.current = false;
     const handle = setTimeout(() => {
       void tokenizeCode({ code: text, lang, theme })
         .then((highlight) => {
@@ -101,7 +110,7 @@ export const CodeEditor = (props: {
           setStickyJson(JSON.stringify(ranges));
         })
         .catch((error: unknown) => console.warn(`[sticky] ${lang} structure failed`, error));
-    }, RETOKENIZE_MS);
+    }, delay);
     return () => {
       alive = false;
       clearTimeout(handle);

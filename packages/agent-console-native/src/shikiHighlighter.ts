@@ -16,7 +16,7 @@
  */
 import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemeRegistrationRaw } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { cacheKey, getCachedTokens, setCachedTokens } from "./codeCache";
+import { cacheKey, getCachedTokens, getCachedTokensSync, setCachedTokens } from "./codeCache";
 import type { VsCodeTheme } from "./vscodeTheme";
 import bash from "shiki/langs/bash.mjs";
 import css from "shiki/langs/css.mjs";
@@ -189,4 +189,18 @@ export const tokenizeCode = async (params: {
   const output: HighlightResult = { lines, background: result.bg, foreground: result.fg };
   setCachedTokens(key, output);
   return output;
+};
+
+/** The highlighted result if it's already in the in-memory cache (same
+ * code+lang+theme), synchronously — so a view renders coloured on its first
+ * frame instead of after the async tokenise. Undefined on a memory miss (warm it
+ * via `tokenizeCode`/preload first). */
+export const cachedHighlightSync = (params: {
+  readonly code: string;
+  readonly lang: string;
+  readonly theme: string | ThemeRegistrationRaw;
+}): HighlightResult | undefined => {
+  const themeName = typeof params.theme === "string" ? params.theme : (params.theme.name ?? "custom");
+  const langId = LANG_ALIASES[params.lang.toLowerCase()] ?? params.lang.toLowerCase();
+  return getCachedTokensSync(cacheKey(params.code, langId, themeName));
 };

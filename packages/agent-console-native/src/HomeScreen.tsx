@@ -55,6 +55,8 @@ import type { RootStackParamList } from "./RootNavigator";
 import { prefetchWorkspaces } from "./extensionViewsStore";
 import { refreshPlugins } from "./pluginsStore";
 import { getApiAddress } from "./settings";
+import { preloadFile } from "./files/preloadFile";
+import { useCodeTheme } from "./useCodeTheme";
 import type { ScannedRepo } from "./repoScan";
 import { cachedReposNow, isStale, readWorkspace, refreshWorkspace } from "./repoScanCache";
 import { HashMap } from "effect";
@@ -262,6 +264,14 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // Recent files across every repo's Files (recentTabs.ts), newest first.
   const filePlaces = useFilePlaces();
   const recentTabs = React.useMemo(() => recentTabsOf(HashMap.entries(filePlaces), RECENT_TABS), [filePlaces]);
+  // Warm the text + token caches for recent files so tapping one opens instantly
+  // and already coloured — preload here, the tap only renders.
+  const codeTheme = useCodeTheme();
+  React.useEffect(() => {
+    for (const tab of recentTabs) {
+      if (tab.entry.kind === "file") void preloadFile(backend, tab.entry.path, tab.entry.name, codeTheme);
+    }
+  }, [recentTabs, backend, codeTheme]);
   const groups = groupByRepo(visible, scanned);
   const knownGroups = groups.filter((g) => g.isKnownRepo);
   const otherGroups = groups.filter((g) => !g.isKnownRepo);

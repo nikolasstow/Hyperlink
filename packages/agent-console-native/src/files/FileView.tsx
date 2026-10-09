@@ -23,6 +23,7 @@ import { fsReadText, fsWrite } from "../fsClient";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor } from "./CodeEditor";
+import { getFileTextSync, setFileText } from "./fileTextCache";
 import { useSaveLight } from "./saveLight";
 import { StatusLight } from "./StatusLight";
 
@@ -61,7 +62,12 @@ export const FileView = (props: {
   const textColors = useTextColors();
   const { path, name, line, topInset, bottomInset } = props;
   const { backend } = useAppContext();
-  const [state, setState] = React.useState<State>({ kind: "loading" });
+  // Start from the cached text if we have it, so the editor mounts instantly
+  // (the token cache then paints it coloured on the first frame too).
+  const [state, setState] = React.useState<State>(() => {
+    const cached = getFileTextSync(path);
+    return cached === undefined ? { kind: "loading" } : { kind: "text", text: cached };
+  });
   const lang = React.useMemo(() => langFromFilename(name), [name]);
 
   // Editing + autosave. The native editor owns the text after mount; we read its
@@ -85,6 +91,7 @@ export const FileView = (props: {
     void runFs(fsWrite(backend, path, next))
       .then(() => {
         diskRef.current = next;
+        setFileText(path, next);
         flash("cloud");
       })
       .catch(() => undefined);
@@ -107,17 +114,33 @@ export const FileView = (props: {
 
   React.useEffect(() => {
     let alive = true;
-    setState({ kind: "loading" });
+    // New file (or path change): forget prior edits, and show the cached text at
+    // once if we have it; otherwise load.
+    editedRef.current = null;
+    const cached = getFileTextSync(path);
+    if (cached === undefined) {
+      setState({ kind: "loading" });
+    } else {
+      diskRef.current = cached;
+      setState({ kind: "text", text: cached });
+    }
+    // Revalidate in the background: re-read, refresh the cache, and update the
+    // shown text if it changed and the user isn't mid-edit.
     void runFs(fsReadText(backend, path))
       .then((text) => {
         if (!alive) return;
-        // A fresh file: the loaded text is what's on disk; forget prior edits.
-        diskRef.current = text ?? "";
-        editedRef.current = null;
-        setState(text === undefined ? { kind: "missing" } : { kind: "text", text });
+        if (text === undefined) {
+          if (cached === undefined) setState({ kind: "missing" });
+          return;
+        }
+        setFileText(path, text);
+        diskRef.current = text;
+        if (editedRef.current === null) {
+          setState((prev) => (prev.kind === "text" && prev.text === text ? prev : { kind: "text", text }));
+        }
       })
       .catch(() => {
-        if (alive) setState({ kind: "error" });
+        if (alive && cached === undefined) setState({ kind: "error" });
       });
     return () => {
       alive = false;

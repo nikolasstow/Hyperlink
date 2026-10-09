@@ -43,6 +43,17 @@ const touch = (key: string, value: HighlightResult): void => {
   }
 };
 
+/** A synchronous, memory-only lookup (no AsyncStorage await) — so a view can
+ * render already-highlighted on its first frame instead of after the async
+ * tokenise. Misses in memory return undefined even if AsyncStorage has it; warm
+ * the memory tier (open/preload) to make first opens instant. */
+export const getCachedTokensSync = (key: string): HighlightResult | undefined => {
+  const inMemory = memory.get(key);
+  if (inMemory === undefined) return undefined;
+  touch(key, inMemory);
+  return inMemory;
+};
+
 /** Look up a cached result: memory first, then AsyncStorage (promoting hits). */
 export const getCachedTokens = async (key: string): Promise<HighlightResult | undefined> => {
   const inMemory = memory.get(key);
