@@ -65,7 +65,8 @@ import { primaryWorktreeOf } from "./primaryWorktree";
 import { updateScannedRepos } from "./primaryWorktree";
 import { archiveWithUndo, loadArchivedSessions, loadMutedSessions, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { cachedSessionsNow, getCachedSessions, setCachedSessions } from "./sessionCache";
-import { useFavorites } from "./favorites/useFavorites";
+import { homeScope } from "./favorites/model";
+import { useBoard } from "./favorites/useFavorites";
 import { relativeTime } from "./time";
 import { useGroupSize } from "./useGroupSize";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -281,7 +282,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     return map;
   }, [groups]);
 
-  const favorites = useFavorites();
+  const homeFavorites = useBoard(homeScope);
   const servers = useServers();
   const rows = React.useMemo((): ReadonlyArray<Row> => {
     const sessionRow = (session: SessionSummary, favorite: boolean): Row => {
@@ -290,13 +291,24 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     };
     // In the order they were added; one archived, deleted or gone from the
     // scan is left out until it is back.
-    const favoriteRows = favorites.flatMap((favorite): ReadonlyArray<Row> => {
-      if (favorite.kind === "session") {
-        const session = visible.find((each) => each.id === favorite.id);
-        return session === undefined ? [] : [sessionRow(session, true)];
+    const favoriteRows = homeFavorites.flatMap((target): ReadonlyArray<Row> => {
+      switch (target.page) {
+        case "session": {
+          const session = visible.find((each) => each.id === target.id);
+          return session === undefined ? [] : [sessionRow(session, true)];
+        }
+        case "repo": {
+          const group = groups.find((each) => each.repo === target.name);
+          return group === undefined ? [] : [{ kind: "repo", group, favorite: true }];
+        }
+        // server / file / folder have no Home entry point to favorite them yet
+        // (Phase 1b — from the Servers section and Recents); none exist, so none
+        // render. Listed so adding those entry points is a local change here.
+        case "server":
+        case "file":
+        case "folder":
+          return [];
       }
-      const group = groups.find((each) => each.repo === favorite.name);
-      return group === undefined ? [] : [{ kind: "repo", group, favorite: true }];
     });
     return [
       ...(favoriteRows.length > 0 ? [heading("Favorites"), ...favoriteRows] : []),
@@ -309,7 +321,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       ...otherGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
       ...(servers.length > 0 ? [heading("Servers"), ...servers.map((server): Row => ({ kind: "server", server }))] : []),
     ];
-  }, [servers, favorites, visible, groups, recent, recentTabs, scanned, knownGroups, otherGroups]);
+  }, [servers, homeFavorites, visible, groups, recent, recentTabs, scanned, knownGroups, otherGroups]);
   // Its first screenful kept for the launch screen, which draws it before
   // Home is up (home/homeLayout.ts).
   React.useEffect(() => {

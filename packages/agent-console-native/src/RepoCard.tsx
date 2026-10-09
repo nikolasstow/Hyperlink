@@ -18,8 +18,8 @@ import { colors } from "./colors";
 import { useCardTint, useTextColors } from "./theme";
 import { repoMenuFor } from "./repoMenu";
 import { CARD_GAP, REPO_CARD_HEIGHT } from "./home/homeLayout";
-import { favoriteRepo, isFavorite } from "./favorites/model";
-import { toggleFavorite, useFavorites } from "./favorites/useFavorites";
+import { repoTarget } from "./favorites/model";
+import { toggleFavorite, useFavoriteScope, useIsFavorited } from "./favorites/useFavorites";
 
 const CARD_GUTTER = 12;
 
@@ -105,7 +105,8 @@ export const RepoCard = (props: RepoCardProps): React.ReactElement => {
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = screenWidth - CARD_GUTTER * 2;
   const menu = repoMenuFor(props.isKnownRepo);
-  const favorite = isFavorite(useFavorites(), favoriteRepo(props.repo));
+  const scope = useFavoriteScope();
+  const favorite = useIsFavorited(scope, repoTarget(props.repo));
 
   return (
     <Host
@@ -122,7 +123,7 @@ export const RepoCard = (props: RepoCardProps): React.ReactElement => {
             <Button key={item.label} label={item.label} systemImage={item.icon} onPress={() => props.onSelect?.(item.label)} />
           ))}
           <Section>
-            <Button label={favorite ? "Unfavorite" : "Favorite"} systemImage={favorite ? "star.slash" : "star"} onPress={() => void toggleFavorite(favoriteRepo(props.repo))} />
+            <Button label={favorite ? "Unfavorite" : "Favorite"} systemImage={favorite ? "star.slash" : "star"} onPress={() => void toggleFavorite(scope, repoTarget(props.repo))} />
           </Section>
         </ContextMenu.Items>
         <ContextMenu.Preview>
