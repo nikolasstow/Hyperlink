@@ -299,7 +299,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       return group === undefined ? [] : [{ kind: "repo", group, favorite: true }];
     });
     return [
-      ...(servers.length > 0 ? [heading("Servers"), ...servers.map((server): Row => ({ kind: "server", server }))] : []),
       ...(favoriteRows.length > 0 ? [heading("Favorites"), ...favoriteRows] : []),
       ...(recent.length > 0 ? [heading("Recent")] : []),
       ...recent.map((session) => sessionRow(session, false)),
@@ -308,6 +307,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       ...knownGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
       ...(otherGroups.length > 0 ? [heading("Workspaces")] : []),
       ...otherGroups.map((group): Row => ({ kind: "repo", group, favorite: false })),
+      ...(servers.length > 0 ? [heading("Servers"), ...servers.map((server): Row => ({ kind: "server", server }))] : []),
     ];
   }, [servers, favorites, visible, groups, recent, recentTabs, scanned, knownGroups, otherGroups]);
   // Its first screenful kept for the launch screen, which draws it before
