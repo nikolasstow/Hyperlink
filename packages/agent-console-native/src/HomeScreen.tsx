@@ -30,7 +30,7 @@ import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessi
 import { getSetupDate, loadReads } from "./sessionReads";
 import { RepoCard } from "./RepoCard";
 import { ServerCard } from "./ServerCard";
-import { type Server, useServers } from "./servers";
+import { type Server, serverById, useServers } from "./servers";
 import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { useSessionActivity } from "./useSessionActivity";
 import { HomeSkeleton } from "./HomeSkeleton";
@@ -93,7 +93,7 @@ type Row =
   | { readonly kind: "heading"; readonly title: string }
   | { readonly kind: "session"; readonly session: SessionSummary; readonly repo: string; readonly worktree: string | undefined; readonly favorite: boolean }
   | { readonly kind: "repo"; readonly group: RepoGroup; readonly favorite: boolean }
-  | { readonly kind: "server"; readonly server: Server }
+  | { readonly kind: "server"; readonly server: Server; readonly favorite?: boolean }
   | { readonly kind: "recentTabs"; readonly tabs: ReadonlyArray<RecentTab> };
 
 const heading = (title: string): Row => ({ kind: "heading", title });
@@ -301,10 +301,12 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           const group = groups.find((each) => each.repo === target.name);
           return group === undefined ? [] : [{ kind: "repo", group, favorite: true }];
         }
-        // server / file / folder have no Home entry point to favorite them yet
-        // (Phase 1b — from the Servers section and Recents); none exist, so none
-        // render. Listed so adding those entry points is a local change here.
-        case "server":
+        case "server": {
+          const server = serverById(target.id);
+          return server === undefined ? [] : [{ kind: "server", server, favorite: true }];
+        }
+        // file / folder have no Home entry point yet (Phase 1b — from Recents);
+        // none exist, so none render. Listed so adding it is a local change.
         case "file":
         case "folder":
           return [];
@@ -391,7 +393,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             : row.kind === "recentTabs"
               ? "recent-tabs"
               : row.kind === "server"
-                ? `s-${row.server.id}`
+                ? `${row.favorite ? "fs-" : "s-"}${row.server.id}`
                 : `${row.favorite ? "f-" : ""}${row.kind === "session" ? row.session.id : `r-${row.group.repo}-${i}`}`
         }
         refreshControl={
@@ -452,6 +454,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           if (item.kind === "server") {
             return (
               <ServerCard
+                id={item.server.id}
                 name={item.server.name}
                 address={item.server.address}
                 onOpen={() => props.navigation.navigate("Server", { serverId: item.server.id })}
