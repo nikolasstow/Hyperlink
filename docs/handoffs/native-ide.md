@@ -48,9 +48,20 @@ Turn on editing with a save flow. Decisions:
   offline / temp vs permanent / dirty / syncing / error) — **simple, clean,
   immediately legible.** One small consistent symbol language.
 
-Needs: backend `/fs/write` (`filesPlugin.ts`) + `fsClient` write; offline store
-of open-tab contents; the scoped autosave setting; the save-status icon system;
-conflict/reload handling.
+Build order:
+- **E1 — DONE:** backend `POST /fs/write` (`fs.ts` `writeTextFile`, within-root +
+  size-capped, existing files only) + native `fsClient.fsWrite`.
+- **E2:** enable editing + an **offline store of open-tab edits** (temporary
+  saves) — onChangeText persists locally per repo+path, survives restart, no
+  network. Effect store like conversations/favorites.
+- **E3:** **permanent save** (manual, via 3-dot + hard-press menu) → `fsWrite`;
+  the temp vs permanent distinction.
+- **E4:** **debounced autosave** (pause-to-save, with a max cap that flushes) →
+  permanent save, gated by the scoped autosave setting.
+- **E5:** **scoped autosave setting** (file/folder/repo/workspace/server/app;
+  nearest scope wins) + its UI.
+- Throughout: the **save-status indicator** (icons for dirty / temp-saved /
+  permanently-saved / syncing / error) and conflict/reload handling.
 
 ## 3. Copilot-style inline completions (DECIDED model: configurable — build last)
 
