@@ -313,25 +313,26 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         let rowHeight = stickyRowHeight()
         let availableHeight = max(rowHeight, textView.bounds.height - topInset - bottomInset)
         let minSpan = Int((Double(availableHeight / rowHeight) * stickyMinFraction).rounded(.down))
-        // The innermost qualifying scope whose header has scrolled off the top —
-        // the closest parent you're inside. (Which declarations count as scopes is
-        // stickyRanges.ts; broaden that, not this.)
+        // A scope is "active" — gets a sticky — whenever its header has scrolled
+        // off AND it's tall enough AND you're either inside it OR just past its
+        // end but it hasn't fully ridden off the top yet (the end line is still
+        // within a topInset of the top). That second clause is what makes the
+        // push-off symmetric: it's the same test whether you scroll DOWN past the
+        // end (block rides up) or back UP toward it (block slides back down) — the
+        // position-based pushY below does the rest. The innermost such scope wins.
         let enclosing = stickyRanges
-            .filter { $0.start <= line && line <= $0.end && $0.header < line && ($0.end - $0.start) >= minSpan }
+            .filter { range in
+                guard range.header < line, (range.end - range.start) >= minSpan else { return false }
+                if line <= range.end { return true }
+                let endY = textView.contentY(ofLine: range.end) - textView.contentOffset.y
+                return endY > -topInset
+            }
             .max { $0.start < $1.start }
         let header: Int
         let end: Int
         if let enclosing {
             header = enclosing.header
             end = enclosing.end
-        } else if displayedHeader >= 0, textView.contentY(ofLine: displayedEnd) - textView.contentOffset.y > -topInset {
-            // No enclosing scope, but the last one hasn't finished sliding off.
-            // It isn't gone when its end line reaches y=0 — the whole block still
-            // has to travel the top-inset region (status bar / nav space) to leave
-            // the screen. So keep it riding until the end line is a full topInset
-            // ABOVE the top, then it's actually off screen.
-            header = displayedHeader
-            end = displayedEnd
         } else {
             hideSticky()
             return
