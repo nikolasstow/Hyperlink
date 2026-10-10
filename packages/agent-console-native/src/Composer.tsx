@@ -68,6 +68,9 @@ export const Composer = (props: {
   /** Where this bar is: whether Dubz is its second page (per the user's
    * settings, by surface), and what Dubz suggests there. */
   readonly dubzContext: DubzContext;
+  /** Open a session full screen from Dubz's session view (its full-screen
+   * button). Provided by screens that can navigate to the chat. */
+  readonly onOpenSessionPage?: (sessionID: string) => void;
   /** Above the bar, on its page, staying on top of it as it expands (the
    * chat's file chips). */
   readonly accessory?: React.ReactNode;
@@ -385,7 +388,7 @@ export const Composer = (props: {
       </View>
       {withDubz ? (
         <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
-          <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} />
+          <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} onOpenSessionPage={props.onOpenSessionPage} pageBack={pageBack} />
         </Reanimated.View>
       ) : null}
     </View>

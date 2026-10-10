@@ -1,13 +1,14 @@
 /**
- * Sessions inside the Dubz window. On a page that publishes a file (an
- * EditableDocument entry), Dubz shows session chips; tapping one opens that
- * session *in the Dubz window* as a sub-page — a read-only transcript with a
- * back chip to the main Dubz view — so you can read where a session left off
- * while the file stays behind.
+ * Sessions inside the Dubz window. On a page that publishes an editable document,
+ * Dubz shows one session row: a big pill with the most related session and a
+ * number pill with how many sessions live in that file's worktree. Tap the big
+ * pill to open that session; tap the number for the full list (related first,
+ * then by recency). A session opens as the real chat — the actual MessageBubble
+ * transcript — in the Dubz window, with a full-screen button to pop out to the
+ * proper session page.
  *
- * First cut: the chips are recent sessions and the transcript is read-only.
- * Next: filter the chips to the sessions that actually touched the file, and a
- * composer to continue the conversation from here.
+ * First cut: the transcript is the kept/preview conversation (not yet live) and
+ * continuing the conversation rides the Dubz pill — both next.
  *
  * @internal
  */
@@ -15,22 +16,22 @@ import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { useAppContext } from "../AppContext";
+import { chatMessageOfV1 } from "../chat/fromV1";
+import { CollapsiblePartsProvider } from "../CollapsibleParts";
+import type { FileRef } from "../dubzSuggestions";
+import { MessageBubble } from "../MessageBubble";
 import { cachedSessionsNow } from "../sessionCache";
-import type { SessionSummary } from "../sessions/sessionList";
 import { useSessionPreview } from "../sessionPreview";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles, useTheme } from "../theme";
-import type { TranscriptMessage } from "../useSessionStream";
+import { sessionsForFile } from "./sessionsForFile";
 
-/** The session a chip opens, as the sub-page needs it. */
+/** The session a row/list opens, as the sub-page needs it. */
 export interface DubzOpenSession {
   readonly id: string;
   readonly title: string;
   readonly updated: number;
 }
-
-/** How many recent sessions to offer as chips. */
-const CHIP_LIMIT = 6;
 
 const relativeTime = (ms: number): string => {
   const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
@@ -41,114 +42,186 @@ const relativeTime = (ms: number): string => {
   return `${Math.round(hours / 24)}d`;
 };
 
-/** The readable text of a transcript message: its text parts, skipping the
- * synthetic ones (attached file contents) — what you'd glance at to recall it. */
-const messageText = (message: TranscriptMessage): string =>
-  [...message.parts.values()]
-    .filter((part) => part.type === "text" && part.synthetic !== true)
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("")
-    .trim();
+const baseName = (dir: string): string => dir.split("/").filter(Boolean).pop() ?? dir;
 
-/** The session chips — recent sessions, each a glass pill. */
-export const DubzSessionChips = (props: { readonly onOpen: (session: DubzOpenSession) => void }): React.ReactElement | null => {
+/**
+ * The session suggestion: one row, the big pill (most related session) and the
+ * number pill (sessions in the file's worktree). Together they fill the width.
+ */
+export const DubzSessionRow = (props: {
+  readonly file: FileRef;
+  readonly onOpen: (session: DubzOpenSession) => void;
+  readonly onList: () => void;
+}): React.ReactElement | null => {
   const styles = useThemedStyles(makeStyles);
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
-  const sessions = React.useMemo(() => [...cachedSessionsNow()].sort((a, b) => b.time.updated - a.time.updated).slice(0, CHIP_LIMIT), []);
-  if (sessions.length === 0) return null;
+  const { related, all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
+  const top = related[0] ?? all[0];
+  if (top === undefined) return null;
   return (
-    <View style={styles.chipRow}>
-      {sessions.map((session: SessionSummary) => (
-        <Pressable
-          key={session.id}
-          onPress={() => props.onOpen({ id: session.id, title: session.title, updated: session.time.updated })}
-          accessibilityRole="button"
-          accessibilityLabel={`Open session ${session.title}`}
-        >
-          <GlassView style={styles.chip} glassEffectStyle="regular" colorScheme={scheme}>
-            <SystemIcon name="bubble.left.and.bubble.right" size={12} color={styles.chipTime.color} />
-            <Text style={styles.chipTitle} numberOfLines={1}>
-              {session.title}
-            </Text>
-            <Text style={styles.chipTime}>{relativeTime(session.time.updated)}</Text>
-          </GlassView>
-        </Pressable>
-      ))}
+    <View style={styles.row}>
+      <Pressable
+        style={styles.bigWrap}
+        onPress={() => props.onOpen({ id: top.id, title: top.title, updated: top.time.updated })}
+        accessibilityRole="button"
+        accessibilityLabel={`Open session ${top.title}`}
+      >
+        <GlassView style={styles.bigPill} glassEffectStyle="regular" colorScheme={scheme}>
+          <SystemIcon name="bubble.left.and.bubble.right.fill" size={14} color={styles.countText.color} />
+          <Text style={styles.bigLabel} numberOfLines={1}>
+            {top.title}
+          </Text>
+        </GlassView>
+      </Pressable>
+      <Pressable onPress={props.onList} accessibilityRole="button" accessibilityLabel={`All sessions in this worktree: ${related.length}`}>
+        <GlassView style={styles.countPill} glassEffectStyle="regular" colorScheme={scheme}>
+          <Text style={styles.countText}>{related.length}</Text>
+        </GlassView>
+      </Pressable>
     </View>
   );
 };
 
-/** A session open inside the Dubz window: a back chip, then its transcript. */
-export const DubzSessionView = (props: { readonly session: DubzOpenSession; readonly onBack: () => void }): React.ReactElement => {
+/** The full list of sessions for a file — related first, then by recency. */
+export const DubzSessionList = (props: {
+  readonly file: FileRef;
+  readonly onOpen: (session: DubzOpenSession) => void;
+  readonly onBack: () => void;
+}): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const { colors: themeColors } = useTheme();
-  const { client } = useAppContext();
-  const transcript = useSessionPreview(client, props.session.id, props.session.updated, true);
-
+  const { all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
   return (
-    <View style={styles.sessionArea}>
-      <View style={styles.sessionHeader}>
-        <Pressable onPress={props.onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back to Dubz" style={styles.backChip}>
-          <SystemIcon name="chevron.left" size={15} color={themeColors.secondary} />
-          <Text style={[styles.backLabel, { color: themeColors.secondary }]}>Dubz</Text>
-        </Pressable>
-        <Text style={styles.sessionTitle} numberOfLines={1}>
-          {props.session.title}
-        </Text>
-      </View>
-      <ScrollView style={styles.transcript} contentContainerStyle={styles.transcriptContent} showsVerticalScrollIndicator={false}>
-        {transcript === undefined ? (
-          <Text style={styles.empty}>Loading…</Text>
-        ) : (
-          transcript.order.map((id) => {
-            const message = transcript.messages.get(id);
-            if (message === undefined) return null;
-            const text = messageText(message);
-            if (text === "") return null;
-            const isUser = message.role === "user";
-            return (
-              <View key={id} style={[styles.row, isUser ? styles.rowUser : styles.rowAgent]}>
-                <Text style={[styles.message, isUser ? styles.userMessage : styles.agentMessage]}>{text}</Text>
-              </View>
-            );
-          })
-        )}
+    <View style={styles.sub}>
+      <Header title="Sessions" onBack={props.onBack} tint={themeColors.secondary} />
+      <ScrollView style={styles.fill} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+        {all.map((session) => (
+          <Pressable
+            key={session.id}
+            style={styles.listRow}
+            onPress={() => props.onOpen({ id: session.id, title: session.title, updated: session.time.updated })}
+            accessibilityRole="button"
+            accessibilityLabel={`Open session ${session.title}`}
+          >
+            <View style={styles.listText}>
+              <Text style={styles.listTitle} numberOfLines={1}>
+                {session.title}
+              </Text>
+              <Text style={styles.listMeta} numberOfLines={1}>
+                {baseName(session.directory)}
+              </Text>
+            </View>
+            <Text style={styles.listTime}>{relativeTime(session.time.updated)}</Text>
+          </Pressable>
+        ))}
       </ScrollView>
     </View>
   );
 };
 
+/** A session open in the Dubz window: the real transcript, a back chip, and a
+ * full-screen button to the proper session page (where the 3-dot menu would be). */
+export const DubzSessionView = (props: {
+  readonly session: DubzOpenSession;
+  readonly onBack: () => void;
+  readonly onFullScreen: (sessionID: string) => void;
+}): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  const { colors: themeColors } = useTheme();
+  const { client } = useAppContext();
+  const transcript = useSessionPreview(client, props.session.id, props.session.updated, true);
+  const messages = React.useMemo(
+    () => (transcript === undefined ? [] : transcript.order.flatMap((id) => {
+      const message = transcript.messages.get(id);
+      return message === undefined ? [] : [chatMessageOfV1(message)];
+    })),
+    [transcript],
+  );
+  return (
+    <View style={styles.sub}>
+      <Header
+        title={props.session.title}
+        onBack={props.onBack}
+        tint={themeColors.secondary}
+        right={
+          <Pressable onPress={() => props.onFullScreen(props.session.id)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Open full screen">
+            <SystemIcon name="arrow.up.left.and.arrow.down.right" size={16} color={themeColors.secondary} />
+          </Pressable>
+        }
+      />
+      <CollapsiblePartsProvider newestID={undefined}>
+        <ScrollView style={styles.fill} contentContainerStyle={styles.transcriptContent} showsVerticalScrollIndicator={false}>
+          {transcript === undefined ? (
+            <Text style={styles.loading}>Loading…</Text>
+          ) : (
+            messages.map((message) => <MessageBubble key={message.id} message={message} noMenu />)
+          )}
+        </ScrollView>
+      </CollapsiblePartsProvider>
+    </View>
+  );
+};
+
+/** A sub-page header: back chip to the main Dubz, title, and an optional right. */
+const Header = (props: { readonly title: string; readonly onBack: () => void; readonly tint: string; readonly right?: React.ReactNode }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <View style={styles.header}>
+      <Pressable onPress={props.onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back to Dubz" style={styles.backChip}>
+        <SystemIcon name="chevron.left" size={15} color={props.tint} />
+        <Text style={[styles.backLabel, { color: props.tint }]}>Dubz</Text>
+      </Pressable>
+      <Text style={styles.headerTitle} numberOfLines={1}>
+        {props.title}
+      </Text>
+      {props.right ?? null}
+    </View>
+  );
+};
+
+const BIG_HEIGHT = 44;
+
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-    chipRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-      paddingHorizontal: 2,
-    },
-    chip: {
+    row: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
-      height: 34,
-      maxWidth: 220,
-      paddingHorizontal: 12,
-      borderRadius: 17,
+      gap: 8,
     },
-    chipTitle: {
-      color: text.label,
-      fontSize: 14,
-      fontWeight: "600",
-      flexShrink: 1,
-    },
-    chipTime: {
-      color: text.secondaryLabel,
-      fontSize: 12,
-    },
-    sessionArea: {
+    bigWrap: {
       flex: 1,
     },
-    sessionHeader: {
+    bigPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      height: BIG_HEIGHT,
+      paddingHorizontal: 16,
+      borderRadius: BIG_HEIGHT / 2,
+    },
+    bigLabel: {
+      flex: 1,
+      color: text.label,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    countPill: {
+      alignItems: "center",
+      justifyContent: "center",
+      height: BIG_HEIGHT,
+      minWidth: 52,
+      paddingHorizontal: 16,
+      borderRadius: BIG_HEIGHT / 2,
+    },
+    countText: {
+      color: text.secondaryLabel,
+      fontSize: 17,
+      fontWeight: "600",
+    },
+    sub: {
+      flex: 1,
+    },
+    header: {
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
@@ -163,39 +236,45 @@ const makeStyles = (text: TextColors) =>
       fontSize: 15,
       fontWeight: "600",
     },
-    sessionTitle: {
+    headerTitle: {
       flex: 1,
       color: text.label,
       fontSize: 15,
       fontWeight: "600",
     },
-    transcript: {
+    fill: {
       flex: 1,
     },
-    transcriptContent: {
-      gap: 10,
+    listContent: {
       paddingBottom: 12,
     },
-    row: {
-      maxWidth: "88%",
+    listRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 10,
     },
-    rowUser: {
-      alignSelf: "flex-end",
+    listText: {
+      flex: 1,
     },
-    rowAgent: {
-      alignSelf: "flex-start",
-    },
-    message: {
-      fontSize: 14,
-      lineHeight: 20,
-    },
-    userMessage: {
+    listTitle: {
       color: text.label,
+      fontSize: 15,
+      fontWeight: "600",
     },
-    agentMessage: {
-      color: text.label,
+    listMeta: {
+      color: text.secondaryLabel,
+      fontSize: 12,
+      marginTop: 1,
     },
-    empty: {
+    listTime: {
+      color: text.secondaryLabel,
+      fontSize: 13,
+    },
+    transcriptContent: {
+      paddingBottom: 12,
+    },
+    loading: {
       color: text.secondaryLabel,
       fontSize: 14,
     },

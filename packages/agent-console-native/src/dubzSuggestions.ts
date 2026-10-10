@@ -67,20 +67,30 @@ export interface DubzContext {
   readonly entries?: ReadonlyArray<DubzContextEntry>;
 }
 
-/** A suggestion to show. */
+/** A suggestion to show. One row per type. */
 export type DubzSuggestion =
+  /** The sessions around an editable document: one row — the most related
+   * session, and the count in its worktree. Rendered from live session data. */
+  | { readonly _tag: "Sessions"; readonly file: FileRef }
   /** The repo's open tasks by kind, and New Task: a block. `repo` is fixed
    * when the page is about one repo; otherwise the block picks one. */
-  { readonly _tag: "Tasks"; readonly repo: string | undefined };
+  | { readonly _tag: "Tasks"; readonly repo: string | undefined };
 
-export const suggestionsFor = (context: DubzContext): ReadonlyArray<DubzSuggestion> => {
-  switch (context.scope._tag) {
+const tasksFor = (scope: DubzScope): ReadonlyArray<DubzSuggestion> => {
+  switch (scope._tag) {
     case "All":
       return [{ _tag: "Tasks", repo: undefined }];
     case "Repo":
-      return [{ _tag: "Tasks", repo: context.scope.repo }];
+      return [{ _tag: "Tasks", repo: scope.repo }];
     case "Folder":
       // Tasks are a repo's GitHub issues; a plain folder has none.
       return [];
   }
+};
+
+export const suggestionsFor = (context: DubzContext): ReadonlyArray<DubzSuggestion> => {
+  // The session row leads when the page publishes an editable document.
+  const editable = (context.entries ?? []).find((entry) => entry._tag === "EditableDocument");
+  const sessions: ReadonlyArray<DubzSuggestion> = editable === undefined ? [] : [{ _tag: "Sessions", file: editable.file }];
+  return [...sessions, ...tasksFor(context.scope)];
 };

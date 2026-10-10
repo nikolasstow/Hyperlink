@@ -763,6 +763,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               onBack={back}
               onForward={forward}
               dubzContext={dubzContext}
+              onOpenSessionPage={(sessionID) => navigation.navigate("Chat", { sessionID })}
               hidden={barHidden}
             />
           </View>

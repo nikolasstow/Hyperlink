@@ -220,6 +220,8 @@ export const FileNavBar = (props: {
   readonly onForward: () => void;
   /** Where Dubz is: its suggestions. */
   readonly dubzContext: DubzContext;
+  /** Open a session full screen from Dubz's session view. */
+  readonly onOpenSessionPage?: (sessionID: string) => void;
   /** How far it is dropped out of sight as the page scrolls down (0 shown;
    * scrollHide.ts). */
   readonly hidden: SharedValue<number>;
@@ -354,7 +356,7 @@ export const FileNavBar = (props: {
         </Reanimated.View>
         {withDubz ? (
           <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
-            <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} pageBack={pageBack} />
+            <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} onOpenSessionPage={props.onOpenSessionPage} pageBack={pageBack} />
           </Reanimated.View>
         ) : null}
       </View>

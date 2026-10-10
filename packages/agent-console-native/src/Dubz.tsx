@@ -20,8 +20,8 @@ import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentBut
 import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
-import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
-import { DubzSessionChips, DubzSessionView, type DubzOpenSession } from "./dubz/DubzSessions";
+import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
+import { DubzSessionList, DubzSessionRow, DubzSessionView, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -142,6 +142,9 @@ export interface DubzPageProps {
   readonly inputRef: React.RefObject<TextInput | null>;
   /** Where it was opened: decides its suggestions (dubzSuggestions.ts). */
   readonly context: DubzContext;
+  /** Open a session full screen (its proper page), from the session view's
+   * full-screen button. Omitted where there is no navigation to it. */
+  readonly onOpenSessionPage?: (sessionID: string) => void;
   /** Where the composer is beside it; omitted where Dubz is the only page. */
   readonly pageBack?: PageBack;
 }
@@ -160,15 +163,26 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
-  // The page publishes an editable document → Dubz can surface the sessions
-  // around it. A session opened from a chip takes over the window as a sub-page
-  // (back chip → main). Closing the window returns to the main view.
-  const hasEditable = React.useMemo(() => (context.entries ?? []).some((entry) => entry._tag === "EditableDocument"), [context.entries]);
-  const [openSession, setOpenSession] = React.useState<DubzOpenSession | undefined>(undefined);
+  // The session row opens a sub-page over the window — the full list (tap the
+  // number) or a session (tap the big pill / a list row), with a back chip to
+  // here. Closing the window returns to the main view.
+  const [sub, setSub] = React.useState<{ readonly kind: "list"; readonly file: FileRef } | { readonly kind: "session"; readonly session: DubzOpenSession } | undefined>(undefined);
+  const toMain = React.useCallback(() => setSub(undefined), []);
+  const openSession = React.useCallback((session: DubzOpenSession) => setSub({ kind: "session", session }), []);
+  const openList = React.useCallback((file: FileRef) => setSub({ kind: "list", file }), []);
   const close = React.useCallback(() => {
-    setOpenSession(undefined);
+    setSub(undefined);
     onClose();
   }, [onClose]);
+  const onOpenSessionPage = props.onOpenSessionPage;
+  const fullScreen = React.useCallback(
+    (sessionID: string) => {
+      setSub(undefined);
+      onClose();
+      onOpenSessionPage?.(sessionID);
+    },
+    [onClose, onOpenSessionPage],
+  );
 
   // Swipe right, where the composer is beside it, to slide back to it. Only a
   // clear sideways drag pages. The page's own work (focus, state) waits until
@@ -219,17 +233,24 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
-        openSession !== undefined ? (
+        sub?.kind === "session" ? (
           <View style={styles.suggestionsArea}>
-            <DubzSessionView session={openSession} onBack={() => setOpenSession(undefined)} />
+            <DubzSessionView session={sub.session} onBack={toMain} onFullScreen={fullScreen} />
+          </View>
+        ) : sub?.kind === "list" ? (
+          <View style={styles.suggestionsArea}>
+            <DubzSessionList file={sub.file} onOpen={openSession} onBack={toMain} />
           </View>
         ) : (
           <View style={styles.suggestionsArea} pointerEvents="box-none">
             <View style={styles.suggestions}>
-              {hasEditable ? <DubzSessionChips onOpen={setOpenSession} /> : null}
-              {suggestions.map((suggestion) => (
-                <Suggestion key={suggestion._tag} suggestion={suggestion} />
-              ))}
+              {suggestions.map((suggestion) =>
+                suggestion._tag === "Sessions" ? (
+                  <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} onList={() => openList(suggestion.file)} />
+                ) : (
+                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
+                ),
+              )}
             </View>
           </View>
         )
@@ -267,6 +288,10 @@ const Suggestion = (props: { readonly suggestion: DubzSuggestion }): React.React
     case "Tasks":
       // A plain fixed rectangle stands in for the tasks block for now.
       return <View style={styles.placeholder} />;
+    case "Sessions":
+      // The session row is rendered inline by DubzPage (it needs the sub-page
+      // callbacks), never here.
+      return null;
   }
 };
 
@@ -275,7 +300,7 @@ const Suggestion = (props: { readonly suggestion: DubzSuggestion }): React.React
  * a Dubz page riding the keyboard where the composer's bar would. Nothing where
  * Dubz is off for the surface.
  */
-export const DubzBar = (props: { readonly context: DubzContext }): React.ReactElement | null => {
+export const DubzBar = (props: { readonly context: DubzContext; readonly onOpenSessionPage?: (sessionID: string) => void }): React.ReactElement | null => {
   const styles = useThemedStyles(makeStyles);
   const visible = useAgentButtonVisible(props.context.surface);
   const [open, setOpen] = React.useState(false);
@@ -288,7 +313,7 @@ export const DubzBar = (props: { readonly context: DubzContext }): React.ReactEl
   if (!visible) return null;
   return (
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
-      <DubzPage open={open} instant={false} onOpen={onOpen} onClose={onClose} inputRef={inputRef} context={props.context} />
+      <DubzPage open={open} instant={false} onOpen={onOpen} onClose={onClose} inputRef={inputRef} context={props.context} onOpenSessionPage={props.onOpenSessionPage} />
     </Reanimated.View>
   );
 };
