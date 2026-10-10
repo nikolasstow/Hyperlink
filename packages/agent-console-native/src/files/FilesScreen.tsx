@@ -604,8 +604,20 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   }, [paging, swipe, cardStep, hasPrevious, hasNext, swipeTo]);
   const gutter = useCardGutter();
 
-  // Dubz here is about the repo these files are in.
-  const dubzContext = React.useMemo((): DubzContext => ({ surface: "repo", scope: { _tag: "Repo", repo } }), [repo]);
+  // Dubz here is about the repo these files are in; when a file is showing, it
+  // publishes that file as an editable document so Dubz can surface the sessions
+  // that touched it (and, later, offer to edit it).
+  const dubzContext = React.useMemo(
+    (): DubzContext => ({
+      surface: "repo",
+      scope: { _tag: "Repo", repo },
+      entries:
+        current.kind === "file"
+          ? [{ _tag: "EditableDocument", id: current.path, file: { repo, path: current.path, name: current.name, kind: "file" }, label: current.name }]
+          : [],
+    }),
+    [repo, current.kind, current.path, current.name],
+  );
   const open = React.useCallback((entry: FileNavEntry) => openFileEntry(repo, entry), [repo]);
 
   return (

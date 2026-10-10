@@ -21,6 +21,7 @@ import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
+import { DubzSessionChips, DubzSessionView, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -159,6 +160,16 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
+  // The page publishes an editable document → Dubz can surface the sessions
+  // around it. A session opened from a chip takes over the window as a sub-page
+  // (back chip → main). Closing the window returns to the main view.
+  const hasEditable = React.useMemo(() => (context.entries ?? []).some((entry) => entry._tag === "EditableDocument"), [context.entries]);
+  const [openSession, setOpenSession] = React.useState<DubzOpenSession | undefined>(undefined);
+  const close = React.useCallback(() => {
+    setOpenSession(undefined);
+    onClose();
+  }, [onClose]);
+
   // Swipe right, where the composer is beside it, to slide back to it. Only a
   // clear sideways drag pages. The page's own work (focus, state) waits until
   // the slide has finished, so nothing on the JS side competes with its frames.
@@ -193,7 +204,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     <BarWindow
       open={open}
       instant={instant}
-      onClose={onClose}
+      onClose={close}
       inputRef={inputRef}
       glass="clear"
       // A slight dark tint (tints the glass material, not a solid fill) to give
@@ -208,13 +219,20 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
-        <View style={styles.suggestionsArea} pointerEvents="box-none">
-          <View style={styles.suggestions}>
-            {suggestions.map((suggestion) => (
-              <Suggestion key={suggestion._tag} suggestion={suggestion} />
-            ))}
+        openSession !== undefined ? (
+          <View style={styles.suggestionsArea}>
+            <DubzSessionView session={openSession} onBack={() => setOpenSession(undefined)} />
           </View>
-        </View>
+        ) : (
+          <View style={styles.suggestionsArea} pointerEvents="box-none">
+            <View style={styles.suggestions}>
+              {hasEditable ? <DubzSessionChips onOpen={setOpenSession} /> : null}
+              {suggestions.map((suggestion) => (
+                <Suggestion key={suggestion._tag} suggestion={suggestion} />
+              ))}
+            </View>
+          </View>
+        )
       }
       pill={
         <>
