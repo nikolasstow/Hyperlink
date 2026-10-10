@@ -1,20 +1,25 @@
 /**
  * Sessions inside the Dubz window. On a page that publishes an editable document,
  * Dubz shows one session row: a big pill with the most related session and a
- * number pill with how many sessions live in that file's worktree. Tap the big
- * pill to open that session; tap the number for the full list (related first,
- * then by recency). A session opens as the real chat — the actual MessageBubble
- * transcript — in the Dubz window, with a full-screen button to pop out to the
- * proper session page.
+ * number pill with how many sessions live in that file's worktree, together
+ * filling the width. Tap the big pill to open that session; tap the number for
+ * the full list (related first, then by recency). A session opens as the real
+ * chat — the actual MessageBubble transcript — in the Dubz window, with a
+ * full-screen button to the proper session page.
  *
- * First cut: the transcript is the kept/preview conversation (not yet live) and
- * continuing the conversation rides the Dubz pill — both next.
+ * Glass here is SwiftUI (`Host` + `glassEffect`), the only glass that renders
+ * inside the window's own glass — `expo-glass-effect` nested in it does not.
+ * Pills are a fixed size computed from the screen (nothing measured).
+ *
+ * First cut: the transcript is the kept/preview conversation (live streaming and
+ * continuing from the Dubz pill are next).
  *
  * @internal
  */
-import { GlassView } from "expo-glass-effect";
+import { Host, HStack, Image, Text as UIText } from "@expo/ui/swift-ui";
+import { contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
 import { chatMessageOfV1 } from "../chat/fromV1";
 import { CollapsiblePartsProvider } from "../CollapsibleParts";
@@ -31,7 +36,14 @@ export interface DubzOpenSession {
   readonly id: string;
   readonly title: string;
   readonly updated: number;
+  readonly directory: string;
 }
+
+const ROW_HEIGHT = 44;
+const NUMBER_WIDTH = 56;
+const ROW_GAP = 8;
+/** The suggestions area's horizontal padding (Dubz makeStyles). */
+const AREA_PADDING = 16;
 
 const relativeTime = (ms: number): string => {
   const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
@@ -44,41 +56,58 @@ const relativeTime = (ms: number): string => {
 
 const baseName = (dir: string): string => dir.split("/").filter(Boolean).pop() ?? dir;
 
+const toOpen = (session: { id: string; title: string; directory: string; time: { updated: number } }): DubzOpenSession => ({
+  id: session.id,
+  title: session.title,
+  updated: session.time.updated,
+  directory: session.directory,
+});
+
 /**
- * The session suggestion: one row, the big pill (most related session) and the
- * number pill (sessions in the file's worktree). Together they fill the width.
+ * The session suggestion: one row — a big pill (most related session) and a
+ * number pill (sessions in the file's worktree), filling the width. SwiftUI
+ * glass so it renders inside the window.
  */
 export const DubzSessionRow = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
   readonly onList: () => void;
 }): React.ReactElement | null => {
-  const styles = useThemedStyles(makeStyles);
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const textColors = useTextColors();
+  const { width } = useWindowDimensions();
   const { related, all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
   const top = related[0] ?? all[0];
   if (top === undefined) return null;
+  const rowWidth = width - AREA_PADDING * 2;
+  const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - ROW_GAP);
   return (
-    <View style={styles.row}>
-      <Pressable
-        style={styles.bigWrap}
-        onPress={() => props.onOpen({ id: top.id, title: top.title, updated: top.time.updated })}
-        accessibilityRole="button"
-        accessibilityLabel={`Open session ${top.title}`}
-      >
-        <GlassView style={styles.bigPill} glassEffectStyle="regular" colorScheme={scheme}>
-          <SystemIcon name="bubble.left.and.bubble.right.fill" size={14} color={styles.countText.color} />
-          <Text style={styles.bigLabel} numberOfLines={1}>
-            {top.title}
-          </Text>
-        </GlassView>
-      </Pressable>
-      <Pressable onPress={props.onList} accessibilityRole="button" accessibilityLabel={`All sessions in this worktree: ${related.length}`}>
-        <GlassView style={styles.countPill} glassEffectStyle="regular" colorScheme={scheme}>
-          <Text style={styles.countText}>{related.length}</Text>
-        </GlassView>
-      </Pressable>
-    </View>
+    <Host style={{ width: rowWidth, height: ROW_HEIGHT }} ignoreSafeArea="all">
+      <HStack spacing={ROW_GAP}>
+        <HStack
+          spacing={8}
+          modifiers={[
+            padding({ horizontal: 16 }),
+            frame({ width: bigWidth, height: ROW_HEIGHT, alignment: "leading" }),
+            glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+            contentShape(shapes.capsule()),
+            onTapGesture(() => props.onOpen(toOpen(top))),
+          ]}
+        >
+          <Image systemName="bubble.left.and.bubble.right.fill" size={14} color={textColors.secondaryLabel} />
+          <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{top.title}</UIText>
+        </HStack>
+        <HStack
+          modifiers={[
+            frame({ width: NUMBER_WIDTH, height: ROW_HEIGHT, alignment: "center" }),
+            glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+            contentShape(shapes.capsule()),
+            onTapGesture(props.onList),
+          ]}
+        >
+          <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(related.length)}</UIText>
+        </HStack>
+      </HStack>
+    </Host>
   );
 };
 
@@ -99,7 +128,7 @@ export const DubzSessionList = (props: {
           <Pressable
             key={session.id}
             style={styles.listRow}
-            onPress={() => props.onOpen({ id: session.id, title: session.title, updated: session.time.updated })}
+            onPress={() => props.onOpen(toOpen(session))}
             accessibilityRole="button"
             accessibilityLabel={`Open session ${session.title}`}
           >
@@ -119,8 +148,9 @@ export const DubzSessionList = (props: {
   );
 };
 
-/** A session open in the Dubz window: the real transcript, a back chip, and a
- * full-screen button to the proper session page (where the 3-dot menu would be). */
+/** A session open in the Dubz window: the real transcript (pinned to the
+ * bottom, newest in view), a back chip, and a full-screen button to the proper
+ * session page (where the 3-dot menu would be). */
 export const DubzSessionView = (props: {
   readonly session: DubzOpenSession;
   readonly onBack: () => void;
@@ -130,11 +160,15 @@ export const DubzSessionView = (props: {
   const { colors: themeColors } = useTheme();
   const { client } = useAppContext();
   const transcript = useSessionPreview(client, props.session.id, props.session.updated, true);
+  const scrollRef = React.useRef<ScrollView>(null);
   const messages = React.useMemo(
-    () => (transcript === undefined ? [] : transcript.order.flatMap((id) => {
-      const message = transcript.messages.get(id);
-      return message === undefined ? [] : [chatMessageOfV1(message)];
-    })),
+    () =>
+      transcript === undefined
+        ? []
+        : transcript.order.flatMap((id) => {
+            const message = transcript.messages.get(id);
+            return message === undefined ? [] : [chatMessageOfV1(message)];
+          }),
     [transcript],
   );
   return (
@@ -150,7 +184,13 @@ export const DubzSessionView = (props: {
         }
       />
       <CollapsiblePartsProvider newestID={undefined}>
-        <ScrollView style={styles.fill} contentContainerStyle={styles.transcriptContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.fill}
+          contentContainerStyle={styles.transcriptContent}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+        >
           {transcript === undefined ? (
             <Text style={styles.loading}>Loading…</Text>
           ) : (
@@ -179,45 +219,8 @@ const Header = (props: { readonly title: string; readonly onBack: () => void; re
   );
 };
 
-const BIG_HEIGHT = 44;
-
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-    row: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    bigWrap: {
-      flex: 1,
-    },
-    bigPill: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      height: BIG_HEIGHT,
-      paddingHorizontal: 16,
-      borderRadius: BIG_HEIGHT / 2,
-    },
-    bigLabel: {
-      flex: 1,
-      color: text.label,
-      fontSize: 16,
-      fontWeight: "600",
-    },
-    countPill: {
-      alignItems: "center",
-      justifyContent: "center",
-      height: BIG_HEIGHT,
-      minWidth: 52,
-      paddingHorizontal: 16,
-      borderRadius: BIG_HEIGHT / 2,
-    },
-    countText: {
-      color: text.secondaryLabel,
-      fontSize: 17,
-      fontWeight: "600",
-    },
     sub: {
       flex: 1,
     },
@@ -225,6 +228,7 @@ const makeStyles = (text: TextColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
+      paddingHorizontal: AREA_PADDING,
       paddingBottom: 8,
     },
     backChip: {
@@ -246,6 +250,7 @@ const makeStyles = (text: TextColors) =>
       flex: 1,
     },
     listContent: {
+      paddingHorizontal: AREA_PADDING,
       paddingBottom: 12,
     },
     listRow: {
@@ -272,6 +277,7 @@ const makeStyles = (text: TextColors) =>
       fontSize: 13,
     },
     transcriptContent: {
+      paddingHorizontal: AREA_PADDING,
       paddingBottom: 12,
     },
     loading: {
