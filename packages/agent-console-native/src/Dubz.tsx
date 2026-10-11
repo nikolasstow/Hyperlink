@@ -234,24 +234,25 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
         sub?.kind === "session" ? (
-          <View style={styles.suggestionsArea}>
+          <View style={StyleSheet.absoluteFill}>
             <DubzSessionView session={sub.session} onBack={toMain} onFullScreen={fullScreen} />
           </View>
         ) : sub?.kind === "list" ? (
-          <View style={styles.suggestionsArea}>
+          <View style={StyleSheet.absoluteFill}>
             <DubzSessionList file={sub.file} onOpen={openSession} onBack={toMain} />
           </View>
         ) : (
-          <View style={styles.suggestionsArea} pointerEvents="box-none">
-            <View style={styles.suggestions}>
-              {suggestions.map((suggestion) =>
-                suggestion._tag === "Sessions" ? (
-                  <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} onList={() => openList(suggestion.file)} />
-                ) : (
-                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
-                ),
-              )}
-            </View>
+          // Pinned to the bottom of the body (just above the pill) by absolute
+          // position — not flex — so the glass container's layout can't defeat
+          // it. Its bottom edge is the body's bottom; content grows upward.
+          <View style={styles.pinned} pointerEvents="box-none">
+            {suggestions.map((suggestion) =>
+              suggestion._tag === "Sessions" ? (
+                <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} onList={() => openList(suggestion.file)} />
+              ) : (
+                <Suggestion key={suggestion._tag} suggestion={suggestion} />
+              ),
+            )}
           </View>
         )
       }
@@ -286,8 +287,9 @@ const Suggestion = (props: { readonly suggestion: DubzSuggestion }): React.React
   const styles = useThemedStyles(makeStyles);
   switch (props.suggestion._tag) {
     case "Tasks":
-      // A plain fixed rectangle stands in for the tasks block for now.
-      return <View style={styles.placeholder} />;
+      // The tasks block isn't built yet — render nothing rather than a
+      // placeholder rectangle.
+      return null;
     case "Sessions":
       // The session row is rendered inline by DubzPage (it needs the sub-page
       // callbacks), never here.
@@ -332,24 +334,16 @@ const makeStyles = (text: TextColors) =>
     left: 0,
     right: 0,
   },
-  // The suggestions' space, above the pill: its contents at its bottom.
-  suggestionsArea: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  // The suggestions themselves: no padding on the area, so it shrinks to
-  // nothing collapsed and leaves the pill exactly the bar. `marginTop: auto`
-  // pins the block to the bottom of the body (just above the pill) even if the
-  // area's flex-end is ever defeated by the window's detent height.
-  suggestions: {
-    marginTop: "auto",
+  // The suggestions, pinned to the body's bottom (just above the pill) by
+  // absolute position, so the glass container's flex layout can't push them up.
+  pinned: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 16,
-  },
-  placeholder: {
-    height: 106,
-    backgroundColor: "rgba(255,255,255,0.12)",
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {

@@ -35,7 +35,7 @@ describe("suggestionsFor", () => {
     expect(suggestionsFor(ctx({ _tag: "Folder" }))).toEqual([]);
   });
 
-  it("leads with the session row when the page publishes an editable document", () => {
+  it("shows just the session row when the page publishes an editable document", () => {
     const file = { repo: "app", path: "/app/package.json", name: "package.json", kind: "file" } as const;
     expect(
       suggestionsFor({
@@ -43,9 +43,6 @@ describe("suggestionsFor", () => {
         scope: { _tag: "Repo", repo: "app" },
         entries: [{ _tag: "EditableDocument", id: "pkg", file }],
       }),
-    ).toEqual([
-      { _tag: "Sessions", file },
-      { _tag: "Tasks", repo: "app" },
-    ]);
+    ).toEqual([{ _tag: "Sessions", file }]);
   });
 });

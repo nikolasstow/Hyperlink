@@ -89,8 +89,8 @@ const tasksFor = (scope: DubzScope): ReadonlyArray<DubzSuggestion> => {
 };
 
 export const suggestionsFor = (context: DubzContext): ReadonlyArray<DubzSuggestion> => {
-  // The session row leads when the page publishes an editable document.
+  // A page that publishes an editable document shows just its session row.
   const editable = (context.entries ?? []).find((entry) => entry._tag === "EditableDocument");
-  const sessions: ReadonlyArray<DubzSuggestion> = editable === undefined ? [] : [{ _tag: "Sessions", file: editable.file }];
-  return [...sessions, ...tasksFor(context.scope)];
+  if (editable !== undefined) return [{ _tag: "Sessions", file: editable.file }];
+  return tasksFor(context.scope);
 };
