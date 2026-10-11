@@ -338,8 +338,11 @@ const makeStyles = (text: TextColors) =>
     justifyContent: "flex-end",
   },
   // The suggestions themselves: no padding on the area, so it shrinks to
-  // nothing collapsed and leaves the pill exactly the bar.
+  // nothing collapsed and leaves the pill exactly the bar. `marginTop: auto`
+  // pins the block to the bottom of the body (just above the pill) even if the
+  // area's flex-end is ever defeated by the window's detent height.
   suggestions: {
+    marginTop: "auto",
     paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 16,
