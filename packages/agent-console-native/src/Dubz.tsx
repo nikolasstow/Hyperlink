@@ -274,7 +274,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
            * unmounted); it slides in from the right natively. */}
           {openedSession !== undefined ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-              <DubzSessionPlaceholder title={openedSession.title} onFullScreen={fullScreen} shifted={shifted} />
+              <DubzSessionPlaceholder session={openedSession} onFullScreen={fullScreen} shifted={shifted} />
             </View>
           ) : null}
           {/* The persistent back button, top-left: it goes back from a page, and

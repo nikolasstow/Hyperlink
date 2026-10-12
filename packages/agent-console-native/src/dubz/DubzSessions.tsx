@@ -11,20 +11,33 @@
  *
  * @internal
  */
-import { Host, HStack, Image, Spacer, Text as UIText } from "@expo/ui/swift-ui";
+import { Host, HStack, Image, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
 import { Animation, animation, contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, offset, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
+import { useAppContext } from "../AppContext";
 import type { FileRef } from "../dubzSuggestions";
 import { cachedSessionsNow } from "../sessionCache";
-import { type TextColors, useTextColors, useThemedStyles } from "../theme";
+import { useSessionPreview } from "../sessionPreview";
+import { useTextColors } from "../theme";
+import type { TranscriptMessage } from "../useSessionStream";
 import { sessionsForFile } from "./sessionsForFile";
 
 /** The session a row opens. */
 export interface DubzOpenSession {
   readonly id: string;
   readonly title: string;
+  readonly updated: number;
 }
+
+/** The readable text of a transcript message: its text parts, skipping the
+ * synthetic ones (attached file contents). */
+const messageText = (message: TranscriptMessage): string =>
+  [...message.parts.values()]
+    .filter((part) => part.type === "text" && part.synthetic !== true)
+    .map((part) => (part.type === "text" ? part.text : ""))
+    .join("")
+    .trim();
 
 const ROW_HEIGHT = 44;
 const NUMBER_WIDTH = 52;
@@ -55,7 +68,7 @@ export const DubzSessionRow = (props: {
   const rowWidth = width - WINDOW_SIDE * 2;
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - ROW_GAP);
   const shifted = props.shifted === true;
-  const open = (): void => props.onOpen({ id: top.id, title: top.title });
+  const open = (): void => props.onOpen({ id: top.id, title: top.title, updated: top.time.updated });
   return (
     <Host style={{ width: rowWidth, height: ROW_HEIGHT }} ignoreSafeArea="all">
       <HStack spacing={ROW_GAP} modifiers={[offset({ x: shifted ? -width : 0 }), animation(SLIDE, shifted)]}>
@@ -111,68 +124,86 @@ export const DubzTopBack = (props: { readonly onPress: () => void }): React.Reac
   );
 };
 
+/** A large value standing in for SwiftUI's `.infinity` so a frame fills. */
+const FILL = 100000;
+
 /**
- * A placeholder session page inside the Dubz window — a native glass header (the
+ * A session open inside the Dubz window, rendered natively: a glass header (the
  * title, clearing the window's persistent back button, and a full-screen button
- * to the proper page) over an empty body. It stands in for the real chat so the
- * transition and the glass buttons can be got right before the heavy chat goes
- * in. The back button is the window's persistent one (DubzTopBack).
+ * to the proper page) over the transcript — SwiftUI `Text` rows in a native
+ * `ScrollView`, fed by the kept/preview conversation. Nothing React renders in
+ * the glass, so the window stays stable. The whole page slides in natively
+ * (offset + animation) with `shifted`.
  */
 export const DubzSessionPlaceholder = (props: {
-  readonly title: string;
+  readonly session: DubzOpenSession;
   readonly onFullScreen: () => void;
   /** Drives the native slide-in from the right (false = off-screen right). */
   readonly shifted?: boolean;
 }): React.ReactElement => {
-  const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
-  const headerWidth = width - WINDOW_SIDE * 2;
+  const { client } = useAppContext();
+  const pageWidth = width - WINDOW_SIDE * 2;
   const shifted = props.shifted === true;
+  const transcript = useSessionPreview(client, props.session.id, props.session.updated, true);
+  const messages = React.useMemo(
+    () =>
+      transcript === undefined
+        ? []
+        : transcript.order.flatMap((id) => {
+            const message = transcript.messages.get(id);
+            if (message === undefined) return [];
+            const text = messageText(message);
+            return text === "" ? [] : [{ id, role: message.role, text }];
+          }),
+    [transcript],
+  );
   return (
     <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
-      <Host style={{ width: headerWidth, height: BUTTON }} ignoreSafeArea="all">
-        <HStack spacing={10} alignment="center" modifiers={[offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
-          <UIText modifiers={[padding({ leading: BACK_INSET }), font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
-          <Spacer />
-          <HStack
-            modifiers={[
-              frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
-              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-              contentShape(shapes.capsule()),
-              onTapGesture(props.onFullScreen),
-            ]}
-          >
-            <Image systemName="arrow.up.left.and.arrow.down.right" size={14} color={textColors.label} />
+      <Host style={{ flex: 1 }} ignoreSafeArea="all">
+        <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
+          <HStack spacing={10} alignment="center" modifiers={[frame({ width: pageWidth, height: BUTTON })]}>
+            <UIText modifiers={[padding({ leading: BACK_INSET }), font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.session.title}</UIText>
+            <Spacer />
+            <HStack
+              modifiers={[
+                frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
+                glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                contentShape(shapes.capsule()),
+                onTapGesture(props.onFullScreen),
+              ]}
+            >
+              <Image systemName="arrow.up.left.and.arrow.down.right" size={14} color={textColors.label} />
+            </HStack>
           </HStack>
-        </HStack>
+          <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
+            <VStack alignment="leading" spacing={12} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
+              {messages.map((message) => (
+                <UIText
+                  key={message.id}
+                  modifiers={[font({ size: 14 }), foregroundStyle(message.role === "user" ? textColors.label : textColors.secondaryLabel)]}
+                >
+                  {message.text}
+                </UIText>
+              ))}
+            </VStack>
+          </ScrollView>
+        </VStack>
       </Host>
-      <View style={styles.placeholderBody}>
-        <Text style={styles.placeholderText}>Session chat goes here</Text>
-      </View>
     </View>
   );
 };
 
-const makeStyles = (text: TextColors) =>
-  StyleSheet.create({
-    page: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      paddingHorizontal: 16,
-      paddingTop: 12,
-      paddingBottom: 16,
-    },
-    placeholderBody: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    placeholderText: {
-      color: text.secondaryLabel,
-      fontSize: 14,
-    },
-  });
+const styles = StyleSheet.create({
+  page: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+});
