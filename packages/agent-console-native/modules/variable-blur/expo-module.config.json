@@ -2,5 +2,6 @@
   "platforms": ["ios"],
   "ios": {
     "modules": ["VariableBlurModule"]
-  }
+  },
+  "coreFeatures": ["swiftui"]
 }

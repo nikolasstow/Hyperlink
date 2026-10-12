@@ -4,10 +4,12 @@ public class VariableBlurModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VariableBlur")
 
-    // Lets JS detect that this build has the SwiftUI view before using it, so
-    // older builds (without it) stay inert rather than rendering a missing view.
+    // Version of the SwiftUI blur support, so JS can gate on it. v2 adds the
+    // `coreFeatures: ["swiftui"]` config that hosts the view as a proper Host
+    // child; v1 (no coreFeatures) mounted it as a plain UIView and must stay
+    // off. JS requires >= 2.
     Constants([
-      "hasSwiftUIBlur": true
+      "swiftUIBlurVersion": 2
     ])
 
     // SwiftUI variant, usable inside an @expo/ui Host. Props bind via @Field.

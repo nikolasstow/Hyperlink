@@ -84,10 +84,6 @@ const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
 const BOTTOM_CLEARANCE = PILL_AREA;
 /** The top feather's height — covers the header zone plus a fading tail. */
 const TOP_BLUR_HEIGHT = HEADER_CLEARANCE + 20;
-/** The native SwiftUI blur mounts as a plain UIView inside the Host (Expo warns
- * a cross-module SwiftUI virtual view isn't collected as a Host child), so the
- * top feather is parked until that's solved — the bottom feather is unaffected. */
-const ENABLE_NATIVE_TOP_FEATHER = false;
 
 const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated, directory: s.directory });
 
@@ -384,7 +380,7 @@ const DubzScrollPage = (props: {
           {/* Native feathered blur over the scroll's top, under the header pill
            * (a ZStack layer between them — no RN view in the glass, no hoist).
            * Inert until the native build ships the SwiftUI blur view. */}
-          {ENABLE_NATIVE_TOP_FEATHER && hasNativeSwiftUIBlur ? (
+          {hasNativeSwiftUIBlur ? (
             <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" })]}>
               <VariableBlurSwiftUI direction="down" blurRadius={2} height={TOP_BLUR_HEIGHT} />
               <Spacer />

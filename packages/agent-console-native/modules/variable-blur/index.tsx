@@ -22,13 +22,13 @@ export const VariableBlur = (props: VariableBlurProps): React.ReactElement | nul
 
 // ── SwiftUI variant (for @expo/ui Hosts) ────────────────────────────────────
 
-const variableBlurModule: { readonly hasSwiftUIBlur?: boolean } | null =
+const variableBlurModule: { readonly swiftUIBlurVersion?: number } | null =
   Platform.OS === "ios" ? requireNativeModule("VariableBlur") : null;
 
-/** True when this native build ships the SwiftUI blur view. Gate any use on it
- * so older builds (without the view) stay inert instead of rendering nothing /
- * warning — set once the new build lands. */
-export const hasNativeSwiftUIBlur: boolean = variableBlurModule?.hasSwiftUIBlur === true;
+/** True when this native build hosts the SwiftUI blur as a proper Host child
+ * (v2 — the module declares `coreFeatures: ["swiftui"]`). Gate any use on it so
+ * older builds stay inert instead of mounting it as a plain UIView (which warns). */
+export const hasNativeSwiftUIBlur: boolean = (variableBlurModule?.swiftUIBlurVersion ?? 0) >= 2;
 
 export type VariableBlurSwiftUIProps = {
   readonly blurRadius?: number;
