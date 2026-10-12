@@ -47,9 +47,11 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly text: string;
   readonly editable: boolean;
   /**
-   * Tokens as JSON — `[[LineToken]]`, one inner array per line (0-based). A
-   * string, not a nested-array prop: it decodes straight into the native
-   * `ShikiToken` and avoids bridging arrays of records.
+   * Tokens as JSON — `[[LineToken]]`, one inner array per line (0-based), or
+   * (`apiVersion` 7) `{length, lines}` with the length of the text they were
+   * made for, so tokens for older text are never laid over newer. A string,
+   * not a nested-array prop: it decodes straight into the native `ShikiToken`
+   * and avoids bridging arrays of records.
    */
   readonly tokensJson: string;
   /**
@@ -119,3 +121,7 @@ export const canApplyChanges = apiVersion >= 5;
 
 /** Whether the editor draws conflicts in the document (`conflictsJson`). */
 export const canShowConflicts = apiVersion >= 6;
+
+/** Whether the editor takes `tokensJson` as `{length, lines}` and keeps its
+ * colours in step while typing. */
+export const canVersionTokens = apiVersion >= 7;

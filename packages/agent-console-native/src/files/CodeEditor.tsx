@@ -13,7 +13,7 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
-import { canApplyChanges, canShowConflicts, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
+import { canApplyChanges, canShowConflicts, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
 import type { Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
 import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
@@ -28,6 +28,17 @@ const RETOKENIZE_MS = 150;
 
 /** Each line's coloured runs as offset ranges (what the native view wants) from
  * Shiki's per-line content tokens. UTF-16 lengths, since JS string length is UTF-16. */
+/** Tokens for the native view: with the text's length where it can check it. */
+const tokensJsonOf = (text: string, result: HighlightResult): string =>
+  JSON.stringify(
+    canVersionTokens
+      ? {
+          length: text.length,
+          lines: toLineTokens(result),
+        }
+      : toLineTokens(result),
+  );
+
 const toLineTokens = (result: HighlightResult): ReadonlyArray<ReadonlyArray<LineToken>> =>
   result.lines.map((line) => {
     let start = 0;
@@ -115,16 +126,16 @@ export const CodeEditor = (props: {
   // no flash of uncoloured text before the async tokenise returns.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- first frame only, by design
   const initialHighlight = React.useMemo(() => cachedHighlightSync({ code: props.text, lang, theme }), []);
-  const [tokensJson, setTokensJson] = React.useState<string>(() => (initialHighlight === undefined ? "[]" : JSON.stringify(toLineTokens(initialHighlight))));
+  const [tokensJson, setTokensJson] = React.useState<string>(() => (initialHighlight === undefined ? "[]" : tokensJsonOf(props.text, initialHighlight)));
   const [stickyJson, setStickyJson] = React.useState<string>("[]");
   // Base colours resolve synchronously from the theme (and the cached highlight's
   // exact bg/fg when present) so the editor paints right on the first frame; the
   // async tokenise below only refines them.
   const [editorTheme, setEditorTheme] = React.useState<EditorTheme>(() => editorThemeOf(theme, initialHighlight));
   // The text handed to the native view (it owns the text once mounted), and
-  // the text tokenised. Both follow `props.text`; an outside change moves the
-  // tokenised text, and the native one only where the build cannot apply a
-  // change in place.
+  // the text tokenised. Both follow `props.text`; typing and outside changes
+  // move the tokenised text (re-coloured once they pause), and the native one
+  // only where the build cannot apply a change in place.
   const [nativeText, setNativeText] = React.useState(props.text);
   const [text, setText] = React.useState(props.text);
   React.useEffect(() => {
@@ -196,7 +207,7 @@ export const CodeEditor = (props: {
       void tokenizeCode({ code: text, lang, theme })
         .then((highlight) => {
           if (!alive) return;
-          setTokensJson(JSON.stringify(toLineTokens(highlight)));
+          setTokensJson(tokensJsonOf(text, highlight));
           setEditorTheme(editorThemeOf(theme, highlight));
         })
         .catch(() => undefined);
@@ -235,7 +246,12 @@ export const CodeEditor = (props: {
         showLineNumbers
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}
-        {...(props.onChangeText === undefined ? {} : { onTextChange: (event) => props.onChangeText?.(event.nativeEvent.text) })}
+        onTextChange={(event) => {
+          // Re-colour what was typed, once typing pauses (the tokenise below is
+          // debounced); the native view keeps the colours in step meanwhile.
+          setText(event.nativeEvent.text);
+          props.onChangeText?.(event.nativeEvent.text);
+        }}
         {...(props.onConflictChoice === undefined ? {} : { onConflictAction: (event) => props.onConflictChoice?.(event.nativeEvent.index, event.nativeEvent.keep) })}
       />
     </View>

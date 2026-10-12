@@ -32,8 +32,9 @@ public final class CodeEditorModule: Module {
         // absent and falls back to the web surface.
         // 5: `applyChanges` (outside edits in place).
         // 6: conflicts drawn in the document (`conflictsJson`, `onConflictAction`).
+        // 7: `tokensJson` may be `{length, lines}`; colours move with edits.
         Constants([
-            "apiVersion": 6,
+            "apiVersion": 7,
         ])
 
         View(CodeEditorView.self) {

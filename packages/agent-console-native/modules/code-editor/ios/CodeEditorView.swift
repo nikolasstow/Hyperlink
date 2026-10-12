@@ -11,6 +11,12 @@ private struct StickyRangeNative: Decodable {
     let label: String?
 }
 
+/// Tokens with the length of the text they were made for (`apiVersion` 7).
+private struct VersionedTokens: Decodable {
+    let length: Int
+    let lines: [[ShikiToken]]
+}
+
 /// One change from JS (`file-sync`'s `TextChange`): replace `[from, to)` of the
 /// text before any of the set is applied, in UTF-16 offsets.
 private struct TextChangeNative: Decodable {
@@ -52,6 +58,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // whenever the text changes so the two can arrive in any order without
     // losing the highlight.
     private var pendingLineTokens: [[ShikiToken]] = []
+    /// The length of the text the pending tokens were made for, when JS says.
+    /// Tokens for older text are not laid over newer text: the colours the
+    /// store moved along with the edits stay until tokens for this text come.
+    private var pendingTokensLength: Int?
 
     // Scope ranges for sticky scroll, and the UTF-16 start offset of each line in
     // the current text (so we can slice a header line's text + look up its tokens).
@@ -264,8 +274,15 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         guard let data = json.data(using: .utf8) else {
             return
         }
+        if let versioned = try? JSONDecoder().decode(VersionedTokens.self, from: data) {
+            pendingLineTokens = versioned.lines
+            pendingTokensLength = versioned.length
+            rebuildHighlights()
+            return
+        }
         do {
             pendingLineTokens = try JSONDecoder().decode([[ShikiToken]].self, from: data)
+            pendingTokensLength = nil
             rebuildHighlights()
         } catch {
             NSLog("[CodeEditor] token JSON decode failed: \(error)")
@@ -404,6 +421,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// each `\n`, matching Runestone's line ranges and the Shiki per-line split.
     private func rebuildHighlights() {
         lineStarts = lineStartOffsets(textView.text as NSString)
+        if let pendingTokensLength, pendingTokensLength != (textView.text as NSString).length {
+            // Tokens for an older text: keep the moved colours, wait for fresh ones.
+            textView.redisplayVisibleLines()
+            updateSticky()
+            return
+        }
         guard !pendingLineTokens.isEmpty else {
             tokenStore.set([:])
             textView.redisplayVisibleLines()
@@ -630,6 +653,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         conflictZones.textWillChange(in: range, replacementLength: (text as NSString).length)
+        tokenStore.textWillChange(in: range, replacement: text)
         return true
     }
 
@@ -637,7 +661,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         guard !isApplyingText else {
             return
         }
-        // Typing moves lines: the conflicts' space moves with them.
+        // Typing moves lines: the conflicts' space moves with them, and the
+        // line starts sticky scroll reads are refreshed.
+        lineStarts = lineStartOffsets(textView.text as NSString)
         conflictZones.layout()
         onTextChange(["text": textView.text])
     }
