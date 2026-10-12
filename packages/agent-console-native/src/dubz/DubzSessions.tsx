@@ -88,6 +88,8 @@ export const DubzSessionArea = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
   readonly onViewAll: () => void;
+  /** True while a sub-page is open: the area slides out to the left. */
+  readonly shifted?: boolean;
 }): React.ReactElement | null => {
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
@@ -182,29 +184,34 @@ export const DubzSessionArea = (props: {
     // sits at the top — bottom-anchoring an animated List is the open problem
     // (see the handoff); a ScrollView-wrapped fixedSize List renders nothing.
     <Host style={{ flex: 1 }} ignoreSafeArea="all">
-      <List
-        modifiers={[
-          listStyle("plain"),
-          scrollContentBackground("hidden"),
-          listRowSpacing(GAP),
-          animation(SLIDE, rows.length),
-          // Inverted-list trick: flip the List vertically so its content sticks
-          // to the bottom; each row is flipped back so it reads upright.
-          scaleEffect({ x: 1, y: -1 }),
-          frame({ maxWidth: FILL, maxHeight: FILL }),
-        ]}
-      >
-        <List.ForEach>
-          {/* Reversed because the List is flipped (scaleEffect y:-1): reversing
-           * here makes the rows read in their natural top→bottom order, while the
-           * flip keeps the whole block anchored to the bottom. */}
-          {[...rows].reverse().map((row) => (
-            <HStack key={row.id} modifiers={[tag(row.id), ...rowMods, scaleEffect({ x: 1, y: -1 }), frame({ width: rowWidth, alignment: "leading" })]}>
-              {row.content}
-            </HStack>
-          ))}
-        </List.ForEach>
-      </List>
+      {/* Wrapper slides the whole area out left (natively) when a sub-page opens,
+       * so main doesn't just pop out. The List's own animation (rows) is
+       * separate. */}
+      <VStack modifiers={[offset({ x: props.shifted === true ? -width : 0 }), animation(SLIDE, props.shifted === true), frame({ maxWidth: FILL, maxHeight: FILL, alignment: "bottomLeading" })]}>
+        <List
+          modifiers={[
+            listStyle("plain"),
+            scrollContentBackground("hidden"),
+            listRowSpacing(GAP),
+            animation(SLIDE, rows.length),
+            // Inverted-list trick: flip the List vertically so its content sticks
+            // to the bottom; each row is flipped back so it reads upright.
+            scaleEffect({ x: 1, y: -1 }),
+            frame({ maxWidth: FILL, maxHeight: FILL }),
+          ]}
+        >
+          <List.ForEach>
+            {/* Reversed because the List is flipped (scaleEffect y:-1): reversing
+             * here makes the rows read in their natural top→bottom order, while the
+             * flip keeps the whole block anchored to the bottom. */}
+            {[...rows].reverse().map((row) => (
+              <HStack key={row.id} modifiers={[tag(row.id), ...rowMods, scaleEffect({ x: 1, y: -1 }), frame({ width: rowWidth, alignment: "leading" })]}>
+                {row.content}
+              </HStack>
+            ))}
+          </List.ForEach>
+        </List>
+      </VStack>
     </Host>
   );
 };

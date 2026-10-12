@@ -173,12 +173,19 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const [sub, setSub] = React.useState<Sub | undefined>(undefined);
   const [shifted, setShifted] = React.useState(false);
   const exitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // Mount at the off-screen offset, then flip `shifted` next frame so SwiftUI
-  // animates the push in rather than the page appearing already in place.
+  // Mount at the off-screen offset, then flip `shifted` after the off-screen
+  // frame has actually painted (two rAFs) so SwiftUI reliably animates the push
+  // in — a single rAF sometimes applied both states together and it popped.
   React.useEffect(() => {
     if (sub === undefined) return undefined;
-    const frame = requestAnimationFrame(() => setShifted(true));
-    return () => cancelAnimationFrame(frame);
+    let f2: number | undefined;
+    const f1 = requestAnimationFrame(() => {
+      f2 = requestAnimationFrame(() => setShifted(true));
+    });
+    return () => {
+      cancelAnimationFrame(f1);
+      if (f2 !== undefined) cancelAnimationFrame(f2);
+    };
   }, [sub]);
   const show = React.useCallback((next: Sub) => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
@@ -260,30 +267,28 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
         <>
-          {sub === undefined ? (
-            // Fill the body (padded so the rows have margins) so the session
-            // area's bottom-anchored list sits just above the pill, insets from
-            // the window edges, and grows upward.
-            <View style={styles.mainArea} pointerEvents="box-none">
-              {suggestions.map((suggestion) =>
-                suggestion._tag === "Sessions" ? (
-                  <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} />
-                ) : (
-                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
-                ),
-              )}
-            </View>
-          ) : sub.kind === "session" ? (
-            // A session, slid in from the right natively; kept through the
-            // slide-out, then unmounted.
+          {/* Main suggestions — always mounted so it slides out (left) natively
+           * when a page opens, instead of popping. Padded for margins. */}
+          <View style={styles.mainArea} pointerEvents={sub === undefined ? "box-none" : "none"}>
+            {suggestions.map((suggestion) =>
+              suggestion._tag === "Sessions" ? (
+                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} />
+              ) : (
+                <Suggestion key={suggestion._tag} suggestion={suggestion} />
+              ),
+            )}
+          </View>
+          {/* The page, slid in from the right natively; kept mounted through the
+           * slide-out, then unmounted. */}
+          {sub?.kind === "session" ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               <DubzSessionPage session={sub.session} onFullScreen={fullScreen} shifted={shifted} />
             </View>
-          ) : (
+          ) : sub?.kind === "list" ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               <DubzSessionListPage file={sub.file} onOpen={openSession} shifted={shifted} />
             </View>
-          )}
+          ) : null}
           {/* The persistent back button, top-left: it goes back from a page, and
            * closes Dubz at home (nothing to go back to). */}
           <View style={styles.topBack}>
