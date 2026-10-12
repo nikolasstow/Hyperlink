@@ -46,7 +46,7 @@ import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
 import type { TranscriptMessage } from "../useSessionStream";
 import { useSessionActivity } from "../useSessionActivity";
-import { hasNativeSwiftUIBlur, VariableBlurSwiftUI } from "../../modules/variable-blur";
+import { EdgeBlurBars } from "../EdgeBlurBars";
 import { groupSessions } from "./groupSessions";
 import { sessionsForFile } from "./sessionsForFile";
 
@@ -82,8 +82,6 @@ export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
 const BOTTOM_CLEARANCE = PILL_AREA;
-/** The top feather's height — covers the header zone plus a fading tail. */
-const TOP_BLUR_HEIGHT = HEADER_CLEARANCE + 20;
 
 const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated, directory: s.directory });
 
@@ -367,33 +365,28 @@ const DubzScrollPage = (props: {
   const resize = React.useContext(BarWindowResizeContext);
   return (
     <View style={styles.page} pointerEvents={props.shifted ? "auto" : "none"}>
+      {/* Scroll content — its own Host, slides. Fills the body so content passes
+       * behind the top feather + header pill and the bottom composer pill. */}
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
-        <ZStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted)]}>
-          {/* The scroll fills the whole body; its content starts below the
-           * header and ends above the pill, but the track runs edge to edge so
-           * content slides behind both. */}
-          <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
-            <VStack alignment="leading" spacing={props.spacing} modifiers={[frame({ width: props.pageWidth, alignment: "leading" }), padding({ top: HEADER_CLEARANCE, bottom: BOTTOM_CLEARANCE })]}>
-              {props.children}
-            </VStack>
-          </ScrollView>
-          {/* Native feathered blur over the scroll's top, under the header pill
-           * (a ZStack layer between them — no RN view in the glass, no hoist).
-           * Inert until the native build ships the SwiftUI blur view. */}
-          {hasNativeSwiftUIBlur ? (
-            <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" })]}>
-              <VariableBlurSwiftUI direction="down" blurRadius={2} height={TOP_BLUR_HEIGHT} />
-              <Spacer />
-            </VStack>
-          ) : null}
-          {/* The header floats over the scroll's top (a Spacer fills the rest,
-           * so only the pills hit-test and the scroll shows through). */}
-          <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), padding({ top: TOP_INSET })]}>
-            <PageHeader title={props.title} width={props.pageWidth} trailing={props.trailing} />
-            <Spacer />
+        <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted)]}>
+          <VStack alignment="leading" spacing={props.spacing} modifiers={[frame({ width: props.pageWidth, alignment: "leading" }), padding({ top: HEADER_CLEARANCE, bottom: BOTTOM_CLEARANCE })]}>
+            {props.children}
           </VStack>
-        </ZStack>
+        </ScrollView>
       </Host>
+      {/* Feathered blur over the scroll's top, under the header pill — the RN
+       * VariableBlur (same as the bottom feather), layered between the scroll
+       * Host above and the header Host below. */}
+      <EdgeBlurBars variant="top" />
+      {/* The header pill — its own Host over the feather, sliding with the page
+       * (sized to the header area so it never covers the scroll below). */}
+      <View style={styles.headerSlot} pointerEvents="box-none">
+        <Host style={{ flex: 1 }} ignoreSafeArea="all">
+          <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted), padding({ top: TOP_INSET })]}>
+            <PageHeader title={props.title} width={props.pageWidth} trailing={props.trailing} />
+          </VStack>
+        </Host>
+      </View>
       {/* The title pill IS the resize grab area: a transparent pan zone over the
        * pill (centred, its max width — clear of the leading/trailing buttons)
        * driving the window's own resize gesture. */}
@@ -602,6 +595,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
+  },
+  // The header pill's own layer over the top feather — only the header area
+  // tall, so it never covers (or blocks touches to) the scroll below it.
+  headerSlot: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: TOP_INSET + PILL,
   },
   // The pan zone over the title pill (centred at the header's top).
   grabZone: {

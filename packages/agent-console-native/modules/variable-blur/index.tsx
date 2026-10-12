@@ -4,7 +4,7 @@
  *
  * @internal
  */
-import { requireNativeModule, requireNativeView } from "expo";
+import { requireNativeView } from "expo";
 import * as React from "react";
 import { Platform, type ViewProps } from "react-native";
 
@@ -19,30 +19,3 @@ const NativeView =
 
 export const VariableBlur = (props: VariableBlurProps): React.ReactElement | null =>
   NativeView === null ? null : <NativeView {...props} />;
-
-// ── SwiftUI variant (for @expo/ui Hosts) ────────────────────────────────────
-
-const variableBlurModule: { readonly swiftUIBlurVersion?: number } | null =
-  Platform.OS === "ios" ? requireNativeModule("VariableBlur") : null;
-
-/** True when this native build hosts the SwiftUI blur as a proper Host child
- * (v2 — the module declares `coreFeatures: ["swiftui"]`). Gate any use on it so
- * older builds stay inert instead of mounting it as a plain UIView (which warns). */
-export const hasNativeSwiftUIBlur: boolean = (variableBlurModule?.swiftUIBlurVersion ?? 0) >= 2;
-
-export type VariableBlurSwiftUIProps = {
-  readonly blurRadius?: number;
-  /** `up` = blur strongest at the top edge; `down` = strongest at the bottom. */
-  readonly direction?: "up" | "down";
-  /** The feather's height (it fills its width). */
-  readonly height?: number;
-};
-
-const NativeSwiftUIBlur = hasNativeSwiftUIBlur
-  ? requireNativeView<VariableBlurSwiftUIProps>("VariableBlur", "VariableBlurSwiftUIView")
-  : null;
-
-/** The variable blur as a native SwiftUI view — a valid `@expo/ui` `Host`
- * child. Renders nothing until the native build provides it. */
-export const VariableBlurSwiftUI = (props: VariableBlurSwiftUIProps): React.ReactElement | null =>
-  NativeSwiftUIBlur === null ? null : <NativeSwiftUIBlur {...props} />;
