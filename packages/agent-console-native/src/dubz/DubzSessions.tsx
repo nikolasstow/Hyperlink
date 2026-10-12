@@ -453,7 +453,7 @@ const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text:
     return (
       <HStack modifiers={[frame({ width: props.width, alignment: "trailing" })]}>
         <HStack modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), frame({ width: bubbleWidth, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 })]}>
-          <UIText modifiers={[font({ size: 15 }), foregroundStyle("#FFFFFF")]}>{props.text}</UIText>
+          <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle("#FFFFFF")]}>{props.text}</UIText>
         </HStack>
       </HStack>
     );
