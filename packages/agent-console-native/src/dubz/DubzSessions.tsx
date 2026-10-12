@@ -18,7 +18,7 @@
  *
  * @internal
  */
-import { Button, ContextMenu, Host, HStack, Image, List, Menu, ScrollView, Section, Spacer, Text as UIText, Toggle, VStack, ZStack } from "@expo/ui/swift-ui";
+import { Button, ContextMenu, Host, HStack, Image, List, Menu, RNHostView, ScrollView, Section, Spacer, Text as UIText, Toggle, VStack, ZStack } from "@expo/ui/swift-ui";
 import { Animation, animation, background, contentShape, cornerRadius, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, menuActionDismissBehavior, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
@@ -34,6 +34,7 @@ import type { FileRef } from "../dubzSuggestions";
 import { repoScope, sessionTarget } from "../favorites/model";
 import { FavoriteScopeProvider, toggleFavorite, useFavoriteScope, useIsFavorited } from "../favorites/useFavorites";
 import { sessionCardHeight, summaryLines, titleLines } from "../home/homeLayout";
+import { Markdown } from "../Markdown";
 import { serverAddressOf } from "../opencode/serverAddress";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "../sessionActions";
 import { archiveWithUndo, toggleMute, useMutedSessions } from "../sessionArchive";
@@ -45,6 +46,7 @@ import { useSessionPreview } from "../sessionPreview";
 import { getApiAddress } from "../settings";
 import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
+import { PILL_FONT_SIZE, PILL_PAD_H, titlePillWidth } from "../titlePillStyle";
 import type { TranscriptMessage } from "../useSessionStream";
 import { useSessionActivity } from "../useSessionActivity";
 import { EdgeBlurBars } from "../EdgeBlurBars";
@@ -74,8 +76,8 @@ export const SLIDE_MS = 280;
 const FILL = 100000;
 /** The header pill's top, matching the window's persistent back button. */
 const TOP_INSET = 12;
-/** The horizontal padding inside the title pill (PageHeader). */
-const TITLE_PILL_PAD = 14;
+/** The title pill's smallest width (matches HeaderTitlePill's MIN_WIDTH). */
+const TITLE_PILL_MIN = 56;
 /** The floating composer pill's space at the window's bottom: the pill, its
  * inset (BarWindow COMPOSER_INSET), and a gap. */
 export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
@@ -316,22 +318,21 @@ const SortMenu = (props: {
  * centred between them. Used by every Dubz page so they're consistent. */
 const PageHeader = (props: { readonly title: string; readonly width: number; readonly trailing?: React.ReactNode }): React.ReactElement => {
   const textColors = useTextColors();
+  // Fixed width from the (always-known) title — the app's HeaderTitlePill
+  // approach — capped so it clears the back (left) and trailing (right) buttons.
+  // A hug/maxWidth frame went greedy (always full) in the ZStack, so compute it.
+  const pillWidth = Math.min(Math.max(titlePillWidth(props.title, false), TITLE_PILL_MIN), props.width - 2 * (PILL + GAP));
   return (
     <ZStack modifiers={[frame({ width: props.width, height: PILL })]}>
-      {/* Centred title pill. A transparent wrapper caps the width at a button's
-       * room each side; the glass pill inside hugs its text, which truncates
-       * only when it would exceed the cap — so a short title keeps a small pill,
-       * a long one stops before the back (left) and trailing (right) buttons. */}
-      <HStack modifiers={[frame({ maxWidth: props.width - 2 * (PILL + GAP), height: PILL, alignment: "center" })]}>
-        <HStack
-          modifiers={[
-            padding({ horizontal: TITLE_PILL_PAD }),
-            frame({ height: PILL, alignment: "center" }),
-            glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
-          ]}
-        >
-          <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
-        </HStack>
+      {/* Centred title pill at its computed width; the title truncates within. */}
+      <HStack
+        modifiers={[
+          frame({ width: pillWidth, height: PILL, alignment: "center" }),
+          padding({ horizontal: PILL_PAD_H }),
+          glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+        ]}
+      >
+        <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
       </HStack>
       {/* The resize grabber, just inside the pill's top (top-centre), overlaid so
        * it doesn't widen the pill — the pill itself is the grab area (see
@@ -435,24 +436,43 @@ export const DubzSessionPage = (props: {
   );
 };
 
-/** One chat message as a native glass bubble — markdown-rendered (inline, via
- * SwiftUI's LocalizedStringKey), user trailing and agent leading, both glass. */
+/** Bubble padding, shared by the layout and the markdown's inner width. */
+const BUBBLE_PAD_H = 14;
+
+/** One chat message as a glass bubble. Outbound (user) is a native, white,
+ * inline-markdown bubble, trailing and constrained. Inbound (agent) is a
+ * FULL-WIDTH glass bubble rendering the REAL markdown (code fences, lists, …)
+ * via the app's Markdown in an RNHostView, so it uses all the space. */
 const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text: string; readonly width: number }): React.ReactElement => {
-  const textColors = useTextColors();
-  const mine = props.role === "user";
-  const maxBubble = Math.round(props.width * 0.84);
-  return (
-    <HStack modifiers={[frame({ width: props.width, alignment: mine ? "trailing" : "leading" })]}>
-      <HStack
-        modifiers={[
-          padding({ horizontal: 14, vertical: 10 }),
-          frame({ maxWidth: maxBubble, alignment: "leading" }),
-          glassEffect({ glass: mine ? { variant: "regular", tint: colors.tint } : { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 18 }),
-        ]}
-      >
-        <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle(mine ? "#FFFFFF" : textColors.label)]}>{props.text}</UIText>
+  if (props.role === "user") {
+    const maxBubble = Math.round(props.width * 0.84);
+    return (
+      <HStack modifiers={[frame({ width: props.width, alignment: "trailing" })]}>
+        <HStack
+          modifiers={[
+            padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }),
+            frame({ maxWidth: maxBubble, alignment: "leading" }),
+            glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 }),
+          ]}
+        >
+          <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle("#FFFFFF")]}>{props.text}</UIText>
+        </HStack>
       </HStack>
-    </HStack>
+    );
+  }
+  return (
+    <VStack
+      alignment="leading"
+      modifiers={[
+        padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }),
+        frame({ width: props.width, alignment: "leading" }),
+        glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 18 }),
+      ]}
+    >
+      <RNHostView matchContents>
+        <Markdown text={props.text} width={props.width - BUBBLE_PAD_H * 2} />
+      </RNHostView>
+    </VStack>
   );
 };
 
