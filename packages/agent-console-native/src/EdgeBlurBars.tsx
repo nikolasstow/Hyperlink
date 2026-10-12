@@ -55,10 +55,14 @@ export const EdgeBlurBars = (props: {
    * "bottom" only the bottom feather (a floating bar over content whose top
    * feather is drawn separately, e.g. the repo screen's own header). */
   readonly variant?: "both" | "top" | "bottom";
+  /** The bottom feather rides the keyboard by default (screen-level bars). Set
+   * false inside a container that already rides it (the Dubz window), so the
+   * bottom feather stays at the container's bottom. */
+  readonly ridesKeyboard?: boolean;
 }): React.ReactElement | null => {
   const pulse = React.useRef(new Animated.Value(0)).current;
   const keyboardHeight = useKeyboardHeightValue();
-  const bottomEdge = useAnimatedStyle(() => ({ bottom: keyboardHeight.value }));
+  const bottomEdge = useAnimatedStyle(() => ({ bottom: props.ridesKeyboard === false ? 0 : keyboardHeight.value }));
 
   React.useEffect(() => {
     if (!props.busy) {

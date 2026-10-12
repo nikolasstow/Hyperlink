@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
@@ -296,6 +297,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
               <DubzSessionListPage file={sub.file} onOpen={openSession} shifted={shifted} />
             </View>
           ) : null}
+          {/* Feathered blur at the window's bottom — content scrolls behind the
+           * floating composer pill (ridesKeyboard=false: the window already
+           * rides the keyboard). Over the content, under the pill and back. */}
+          <EdgeBlurBars variant="bottom" ridesKeyboard={false} />
           {/* The persistent back button, top-left: it goes back from a page, and
            * closes Dubz at home (nothing to go back to). */}
           <View style={styles.topBack}>
