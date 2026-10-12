@@ -148,12 +148,50 @@ const SwipeActions = (props: {
   );
 };
 
-const summaryLabel = (role: "user" | "assistant", text: string): string => (role === "user" ? `You: ${text}` : text);
+export const summaryLabel = (role: "user" | "assistant", text: string): string => (role === "user" ? `You: ${text}` : text);
+
+/** One entry of a session's context menu. */
+export interface SessionCardAction {
+  readonly key: string;
+  readonly label: string;
+  readonly systemImage: NonNullable<React.ComponentProps<typeof Button>["systemImage"]>;
+  readonly onPress: () => void;
+}
+
+/** The session context menu as data, so every surface (Home's card, Dubz's
+ * native card) renders the SAME menu from one source — change here, change
+ * everywhere. `primary` are the plain actions; `danger` the destructive ones
+ * (their own section, drawn with the destructive role). */
+export const sessionCardActions = (props: {
+  readonly muted: boolean;
+  readonly archived: boolean;
+  readonly running: boolean;
+  readonly favorite: boolean;
+  readonly onOpen: () => void;
+  readonly onRename: () => void;
+  readonly onMute: () => void;
+  readonly onToggleFavorite: () => void;
+  readonly onArchive: () => void;
+  readonly onStop: () => void;
+  readonly onDelete: () => void;
+}): { readonly primary: ReadonlyArray<SessionCardAction>; readonly danger: ReadonlyArray<SessionCardAction> } => {
+  const primary: ReadonlyArray<SessionCardAction> = [
+    { key: "open", label: "Open", systemImage: "bubble.left.and.bubble.right", onPress: props.onOpen },
+    { key: "rename", label: "Rename", systemImage: "pencil", onPress: props.onRename },
+    { key: "mute", label: props.muted ? "Unmute" : "Mute", systemImage: props.muted ? "bell" : "bell.slash", onPress: props.onMute },
+    { key: "favorite", label: props.favorite ? "Unfavorite" : "Favorite", systemImage: props.favorite ? "star.slash" : "star", onPress: props.onToggleFavorite },
+    { key: "archive", label: props.archived ? "Unarchive" : "Archive", systemImage: props.archived ? "tray.and.arrow.up" : "archivebox", onPress: props.onArchive },
+  ];
+  const danger: Array<SessionCardAction> = [{ key: "delete", label: "Delete", systemImage: "trash", onPress: props.onDelete }];
+  // Stop is destructive and only when the agent is running (it precedes Delete).
+  if (props.running) danger.unshift({ key: "stop", label: "Stop", systemImage: "stop.fill", onPress: props.onStop });
+  return { primary, danger };
+};
 
 // An exact `frame` width (row width = screen minus the gutters), left-aligned,
 // sits between the padding and the background so the rounded fill spans the row
 // (SwiftUI hugs content otherwise) while the text stays left-aligned.
-const CardBody = (props: {
+export const CardBody = (props: {
   readonly width: number;
   readonly height: number;
   readonly titleLines: number;
@@ -239,6 +277,22 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   // A card arriving in the list (Undo, or newly archived) fades in, once.
   const [arriving] = React.useState(() => takeReturning(props.sessionId));
 
+  // The context menu is shared with Dubz's native card (sessionCardActions) so
+  // one edit changes both.
+  const actions = sessionCardActions({
+    muted: props.muted,
+    archived: props.archived === true,
+    running: props.running,
+    favorite,
+    onOpen: props.onOpen,
+    onRename: props.onRename,
+    onMute: props.onMute,
+    onToggleFavorite: () => void toggleFavorite(scope, sessionTarget(props.sessionId)),
+    onArchive: () => archive(),
+    onStop: props.onStop,
+    onDelete: props.onDelete,
+  });
+
   return (
     <Animated.View
       style={[styles.row, leave]}
@@ -281,18 +335,13 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
     >
       <ContextMenu>
         <ContextMenu.Items>
-          <Button label="Open" systemImage="bubble.left.and.bubble.right" onPress={props.onOpen} />
-          <Button label="Rename" systemImage="pencil" onPress={props.onRename} />
-          <Button label={props.muted ? "Unmute" : "Mute"} systemImage={props.muted ? "bell" : "bell.slash"} onPress={props.onMute} />
-          <Button label={favorite ? "Unfavorite" : "Favorite"} systemImage={favorite ? "star.slash" : "star"} onPress={() => void toggleFavorite(scope, sessionTarget(props.sessionId))} />
-          {props.archived === true ? (
-            <Button label="Unarchive" systemImage="tray.and.arrow.up" onPress={archive} />
-          ) : (
-            <Button label="Archive" systemImage="archivebox" onPress={archive} />
-          )}
+          {actions.primary.map((action) => (
+            <Button key={action.key} label={action.label} systemImage={action.systemImage} onPress={action.onPress} />
+          ))}
           <Section>
-            {props.running ? <Button label="Stop" role="destructive" systemImage="stop.fill" onPress={props.onStop} /> : null}
-            <Button label="Delete" role="destructive" systemImage="trash" onPress={props.onDelete} />
+            {actions.danger.map((action) => (
+              <Button key={action.key} label={action.label} role="destructive" systemImage={action.systemImage} onPress={action.onPress} />
+            ))}
           </Section>
         </ContextMenu.Items>
         <ContextMenu.Preview>

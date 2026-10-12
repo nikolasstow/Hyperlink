@@ -55,10 +55,16 @@ export const EdgeBlurBars = (props: {
    * "bottom" only the bottom feather (a floating bar over content whose top
    * feather is drawn separately, e.g. the repo screen's own header). */
   readonly variant?: "both" | "top" | "bottom";
+  /** The bottom feather rides the keyboard by default (screen-level bars). Set
+   * false inside a container that already rides it (the Dubz window), so the
+   * bottom feather stays at the container's bottom. */
+  readonly ridesKeyboard?: boolean;
+  /** Override the feather's blur radius (default per edge). Lower = subtler. */
+  readonly blurRadius?: number;
 }): React.ReactElement | null => {
   const pulse = React.useRef(new Animated.Value(0)).current;
   const keyboardHeight = useKeyboardHeightValue();
-  const bottomEdge = useAnimatedStyle(() => ({ bottom: keyboardHeight.value }));
+  const bottomEdge = useAnimatedStyle(() => ({ bottom: props.ridesKeyboard === false ? 0 : keyboardHeight.value }));
 
   React.useEffect(() => {
     if (!props.busy) {
@@ -84,7 +90,7 @@ export const EdgeBlurBars = (props: {
     <>
       {props.variant === "bottom" ? null : (
       <View style={[styles.edge, { top: 0, height: TOP_BLUR_HEIGHT }]} pointerEvents="none">
-        <VariableBlur blurRadius={TOP_BLUR_RADIUS} direction="down" style={StyleSheet.absoluteFill} />
+        <VariableBlur blurRadius={props.blurRadius ?? TOP_BLUR_RADIUS} direction="down" style={StyleSheet.absoluteFill} />
         <LinearGradient
           colors={[...EDGE_LIGHT_STOPS]}
           locations={[...EDGE_LOCATIONS]}
@@ -96,7 +102,7 @@ export const EdgeBlurBars = (props: {
       )}
       {props.variant === "top" ? null : (
       <Reanimated.View style={[styles.edge, { height: BOTTOM_BLUR_HEIGHT }, bottomEdge]} pointerEvents="none">
-        <VariableBlur blurRadius={BOTTOM_BLUR_RADIUS} direction="up" style={StyleSheet.absoluteFill} />
+        <VariableBlur blurRadius={props.blurRadius ?? BOTTOM_BLUR_RADIUS} direction="up" style={StyleSheet.absoluteFill} />
         <LinearGradient
           colors={[...EDGE_LIGHT_STOPS]}
           locations={[...EDGE_LOCATIONS]}

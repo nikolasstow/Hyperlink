@@ -17,11 +17,21 @@ import { Gesture } from "react-native-gesture-handler";
 import Reanimated, { Easing, runOnJS, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
+import { useAppContext } from "./AppContext";
 import { BarWindow, detentMemory } from "./BarWindow";
+import { AGENT } from "./client";
+import { runApp } from "./effect/runtime";
+import { Agent } from "./opencode/schema/agent";
+import { AbsolutePath } from "./opencode/schema/schema";
+import { SessionID } from "./opencode/schema/session-id";
+import { serverAddressOf } from "./opencode/serverAddress";
+import { sendMessage } from "./outbox/useOutbox";
+import { sessionProtocol } from "./sessions/protocol";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
-import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -102,6 +112,25 @@ const setDraft = (text: string): void => {
   draftListeners.forEach((listener) => listener());
 };
 
+// ── The sub-page open inside the Dubz window ─────────────────────────────────
+
+/** A page open inside the Dubz window (its own navigation): a session's chat,
+ * or the View All list. Dubz state, NOT the app page's — it is held here at the
+ * module so it survives closing the window and navigating the app behind it.
+ * The app page only feeds Dubz its context; it does not control what is open. */
+export type DubzSub = { readonly kind: "session"; readonly session: DubzOpenSession } | { readonly kind: "list"; readonly file: FileRef };
+
+let dubzSub: DubzSub | undefined = undefined;
+const subListeners = new Set<() => void>();
+const subscribeSub = (listener: () => void): (() => void) => {
+  subListeners.add(listener);
+  return () => subListeners.delete(listener);
+};
+const setDubzSub = (next: DubzSub | undefined): void => {
+  dubzSub = next;
+  subListeners.forEach((listener) => listener());
+};
+
 // ── The detent last left ────────────────────────────────────────────────────
 
 // Shared by every screen's page; persisted across launches.
@@ -161,6 +190,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
   const { width: screenW } = useWindowDimensions();
+  const { address } = useAppContext();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
   // Tapping the session row pushes a placeholder page in over the window (main
@@ -169,15 +199,19 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   // through the slide-out, then unmounted); `shifted` is the push state the
   // SwiftUI pieces animate to. The persistent back button goes back (or closes
   // at home); full-screen opens the session's proper page.
-  type Sub = { readonly kind: "session"; readonly session: DubzOpenSession } | { readonly kind: "list"; readonly file: FileRef };
-  const [sub, setSub] = React.useState<Sub | undefined>(undefined);
-  const [shifted, setShifted] = React.useState(false);
+  // The open sub-page is Dubz state, held at the module (subscribeSub) so it
+  // survives closing the window and navigating the app — closing Dubz keeps it;
+  // only the in-window back button returns to the main suggestions.
+  const sub = React.useSyncExternalStore(subscribeSub, () => dubzSub);
+  // `shifted` starts shown when a sub-page is already open (reopened Dubz), so
+  // it's there immediately; a freshly-opened sub-page slides in (false→true).
+  const [shifted, setShifted] = React.useState(() => dubzSub !== undefined);
   const exitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Mount at the off-screen offset, then flip `shifted` after the off-screen
   // frame has actually painted (two rAFs) so SwiftUI reliably animates the push
   // in — a single rAF sometimes applied both states together and it popped.
   React.useEffect(() => {
-    if (sub === undefined) return undefined;
+    if (sub === undefined || shifted) return undefined;
     let f2: number | undefined;
     const f1 = requestAnimationFrame(() => {
       f2 = requestAnimationFrame(() => setShifted(true));
@@ -186,22 +220,21 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       cancelAnimationFrame(f1);
       if (f2 !== undefined) cancelAnimationFrame(f2);
     };
-  }, [sub]);
-  const show = React.useCallback((next: Sub) => {
+  }, [sub, shifted]);
+  const show = React.useCallback((next: DubzSub) => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);
-    setSub(next);
+    setDubzSub(next);
   }, []);
   const openSession = React.useCallback((session: DubzOpenSession) => show({ kind: "session", session }), [show]);
   const openViewAll = React.useCallback((file: FileRef) => show({ kind: "list", file }), [show]);
   const toMain = React.useCallback(() => {
     setShifted(false);
-    exitTimer.current = setTimeout(() => setSub(undefined), SLIDE_MS);
+    exitTimer.current = setTimeout(() => setDubzSub(undefined), SLIDE_MS);
   }, []);
+  // Closing the window keeps the open sub-page, so reopening shows it again.
   const close = React.useCallback(() => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
-    setShifted(false);
-    setSub(undefined);
     onClose();
   }, [onClose]);
   const onOpenSessionPage = props.onOpenSessionPage;
@@ -209,10 +242,45 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     const id = sub?.kind === "session" ? sub.session.id : undefined;
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);
-    setSub(undefined);
+    setDubzSub(undefined);
     onClose();
     if (id !== undefined) onOpenSessionPage?.(id);
   }, [sub, onClose, onOpenSessionPage]);
+
+  // With a session open in the window, the input sends into THAT session — the
+  // same outbox path the full session composer uses. The draft clears at the
+  // tap; the message appears when the session's chat next loads.
+  const session = sub?.kind === "session" ? sub.session : undefined;
+  const sendToSession = React.useCallback(() => {
+    if (session === undefined) return;
+    const body = draft.trim();
+    if (body.length === 0) return;
+    setDraft("");
+    void (async () => {
+      try {
+        const server = serverAddressOf(address);
+        const sessionID = SessionID.make(session.id);
+        const protocol = await runApp(sessionProtocol(server, sessionID));
+        await sendMessage({
+          server,
+          sessionID,
+          protocol,
+          directory: session.directory === "" ? undefined : AbsolutePath.make(session.directory),
+          text: body,
+          files: [],
+          agent: Agent.ID.make(AGENT),
+        });
+      } catch (error: unknown) {
+        console.error("[dubz] sending into the session failed", error);
+      }
+    })();
+  }, [session, address]);
+
+  // The pill floats over the body (which then fills the window), held in place
+  // (0), so a page's scroll passes behind it at the window's bottom — the same
+  // floating-pill mode ModelPicker uses. The main suggestions are padded to
+  // clear it (styles.mainArea).
+  const pillFloat = useSharedValue(0);
 
   // Swipe right, where the composer is beside it, to slide back to it. Only a
   // clear sideways drag pages. The page's own work (focus, state) waits until
@@ -244,6 +312,21 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     [open, pageBack, pageX, begin, turn, stay, screenW],
   );
 
+  // The back button with nothing to go back to (the main view): page over to
+  // the composer — the other bottom bar (the new-session bar at home/repo) —
+  // the same turn a swipe-back does. Where Dubz is the only bar (Files), close.
+  const backToComposer = React.useCallback(() => {
+    if (pageBack === undefined) {
+      close();
+      return;
+    }
+    if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
+    begin(open);
+    pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+      if (finished === true) runOnJS(turn)(open);
+    });
+  }, [pageBack, begin, turn, pageX, open, close]);
+
   return (
     <BarWindow
       open={open}
@@ -262,6 +345,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // The page behind Dubz stays interactive; Dubz closes by its back button,
       // the pill, or the keyboard — never a tap outside.
       dismissOnTapOutside={false}
+      pillLowered={pillFloat}
+      // A sub-page moves the grabber onto its title pill, so hide the top one.
+      grabberHidden={sub !== undefined}
       bodyGesture={paging}
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
@@ -289,10 +375,14 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
               <DubzSessionListPage file={sub.file} onOpen={openSession} shifted={shifted} />
             </View>
           ) : null}
+          {/* Feathered blur at the window's bottom — content scrolls behind the
+           * floating composer pill (ridesKeyboard=false: the window already
+           * rides the keyboard). Over the content, under the pill and back. */}
+          <EdgeBlurBars variant="bottom" ridesKeyboard={false} blurRadius={1} />
           {/* The persistent back button, top-left: it goes back from a page, and
            * closes Dubz at home (nothing to go back to). */}
           <View style={styles.topBack}>
-            <DubzTopBack onPress={sub !== undefined ? toMain : close} />
+            <DubzTopBack onPress={sub !== undefined ? toMain : backToComposer} />
           </View>
         </>
       }
@@ -311,7 +401,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
             editable={open}
             multiline
           />
-          <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? () => setDraft("") : onOpen} />
+          <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? (session !== undefined ? sendToSession : () => setDraft("")) : onOpen} />
           {/* Collapsed: any tap on the bar opens it. */}
           {open ? null : (
             <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
@@ -392,8 +482,9 @@ const makeStyles = (text: TextColors) =>
     top: 12,
     left: 16,
   },
-  // The main suggestions area: fills the body, padded so the session rows have
-  // margins from the window edges and a gap above the pill.
+  // The main suggestions area: fills the body (which now spans the whole window
+  // under the floating pill), padded so the session rows have margins from the
+  // window edges and sit clear of the floating pill at the bottom.
   mainArea: {
     position: "absolute",
     top: 12,
@@ -401,7 +492,7 @@ const makeStyles = (text: TextColors) =>
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingBottom: 14,
+    paddingBottom: PILL_AREA,
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {

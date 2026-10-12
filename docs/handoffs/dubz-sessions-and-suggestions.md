@@ -168,6 +168,20 @@ window.**
 
 ## Directions (owner, in-flight)
 
+- **Session cards rebuilt native, with a shared base.** The "View All" list
+  renders the real session card natively (not glass pills). The card's visual
+  (`CardBody`) and its context menu (`sessionCardActions`, data) are the single
+  source shared with Home's `SessionCard` — change one, both change. The native
+  card (`DubzSessionCard`) is a SwiftUI child of the list's `ScrollView` (no
+  `Host` of its own, no swipe), so the page stays one `Host`, keeps its native
+  slide, and nothing React enters the glass. Owner's call: near-full parity
+  (Open/Rename/Mute/Favorite/Archive/Delete), no swipe.
+- **Worktree hidden** on the Dubz cards (not needed there).
+- **Many card sizes, cached.** `homeLayout.sessionCardHeight` +
+  `summaryLines` give each card an exact, content-fit height from the cached
+  title/summary (not three buckets), so it renders at the right size on load.
+  Dubz adopts it now; Home stays on its persisted bucket cache until that
+  schema is migrated (don't do blind).
 - **Native, not React, inside the glass window.** Mixing React content into the
   Dubz glass window destabilised it (window vanishing / slow, broken glass). The
   session row and the page chrome are SwiftUI (`@expo/ui` Host + glassEffect).

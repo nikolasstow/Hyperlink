@@ -41,6 +41,10 @@ import { COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT } from "./composerBarSpec"
 import { useKeyboardHeightValue } from "./keyboardHeight";
 import { composerRestingBottom } from "./useKeyboardSlide";
 
+/** The window's resize gesture, offered to the body so a consumer can drive the
+ * resize from its own handle (Dubz's title pill) when `grabberHidden`. */
+export const BarWindowResizeContext = React.createContext<GestureType | undefined>(undefined);
+
 /** The bar's side inset (BottomBar's), and so the window's. */
 const MARGIN = 12;
 /** The bottom bar's gap under its pill (BottomBar's bottom padding). */
@@ -127,6 +131,10 @@ export interface BarWindowProps {
   readonly pill: React.ReactNode;
   /** Covers the window's body (never the grab bar): Dubz's page swipe. */
   readonly bodyGesture?: GestureType;
+  /** Hide the default top grab handle. A consumer then drives the resize from
+   * its own control via the resize gesture (BarWindowResizeContext) — Dubz's
+   * sub-pages move the grabber onto their title pill. */
+  readonly grabberHidden?: boolean;
   /** One stop below full, as a window height (pt), in place of half and the
    * pill: the window then rests at full or at this height, whatever the
    * keyboard does. */
@@ -433,7 +441,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
           {/* The space above the pill, which alone is cropped (no glass in it;
            * nothing above the pill's glass ever clips it). */}
           <View style={props.pillLowered !== undefined ? styles.bodyUnder : styles.body} pointerEvents={open ? "box-none" : "none"}>
-            {props.body}
+            <BarWindowResizeContext.Provider value={drag}>{props.body}</BarWindowResizeContext.Provider>
           </View>
           {/* The pill sits at the window's bottom, a direct child of the
            * window's glass: the bar collapsed, the window's input open. */}
@@ -480,12 +488,15 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
         </View>
 
         {/* The one grabber: a line inside the window top at larger detents,
-         * floating over the tab at the smallest; gone collapsed. */}
-        <GestureDetector gesture={drag}>
-          <Reanimated.View style={[styles.grabHandle, handleStyle]} pointerEvents={open ? "auto" : "none"}>
-            <View style={styles.grabber} />
-          </Reanimated.View>
-        </GestureDetector>
+         * floating over the tab at the smallest; gone collapsed. Hidden when a
+         * consumer moves it onto its own control (Dubz's title pill). */}
+        {props.grabberHidden === true ? null : (
+          <GestureDetector gesture={drag}>
+            <Reanimated.View style={[styles.grabHandle, handleStyle]} pointerEvents={open ? "auto" : "none"}>
+              <View style={styles.grabber} />
+            </Reanimated.View>
+          </GestureDetector>
+        )}
       </Reanimated.View>
     </View>
   );

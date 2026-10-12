@@ -32,7 +32,7 @@
  * @internal
  */
 import * as React from "react";
-import { StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useAppContext } from "./AppContext";
@@ -211,10 +211,11 @@ export const Composer = (props: {
     setDubzInstant(true);
     setDubzOpen(true);
   }, []);
-  // The slide has finished on Dubz: it takes the keyboard.
+  // The slide has finished on Dubz: it takes the keyboard — but only if the
+  // keyboard is already up; down, Dubz stays on its suggestions.
   const turnToDubz = React.useCallback(() => {
     rememberPage(pageType, "dubz");
-    dubzInputRef.current?.focus();
+    if (Keyboard.isVisible()) dubzInputRef.current?.focus();
   }, [pageType]);
   // The slide has fallen back: Dubz goes, unseen.
   const stayOnCompose = React.useCallback(() => {
@@ -236,7 +237,16 @@ export const Composer = (props: {
       turn: (open) => {
         rememberPage(pageType, "compose");
         if (!open) return;
-        inputRef.current?.focus();
+        // Keyboard up → focus (onFocus clears `held`, keeps it expanded). Down →
+        // it stays down, and we still collapse: clear `held`/`focused` ourselves
+        // (the focus that used to do that is skipped), else the bar shows the
+        // expanded card with no keyboard.
+        if (Keyboard.isVisible()) {
+          inputRef.current?.focus();
+        } else {
+          setHeld(false);
+          setFocused(false);
+        }
         setDubzInstant(true);
         setDubzOpen(false);
       },
