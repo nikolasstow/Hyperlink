@@ -21,7 +21,7 @@ import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
-import { DubzSessionPlaceholder, DubzSessionRow, DubzTopBack, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DubzSessionPlaceholder, DubzSessionRow, DubzTopBack, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -163,20 +163,42 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
-  // Tapping the session row opens a placeholder page over the window, with the
-  // persistent back button here and a full-screen button to the session's
-  // proper page. Instant swap for now — the native transition comes once the
-  // chat inside is native (so it isn't throwaway work). Closing returns to main.
+  // Tapping the session row pushes a placeholder page in over the window (main
+  // row slides left, page slides in from the right — SwiftUI's own animation,
+  // UI thread, no Reanimated). `openedSession` holds the page while shown (kept
+  // through the slide-out, then unmounted); `shifted` is the push state the
+  // SwiftUI pieces animate to. The persistent back button goes back (or closes
+  // at home); full-screen opens the session's proper page.
   const [openedSession, setOpenedSession] = React.useState<DubzOpenSession | undefined>(undefined);
-  const toMain = React.useCallback(() => setOpenedSession(undefined), []);
-  const openSession = React.useCallback((session: DubzOpenSession) => setOpenedSession(session), []);
+  const [shifted, setShifted] = React.useState(false);
+  const exitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Mount at the off-screen offset, then flip `shifted` next frame so SwiftUI
+  // animates the push in rather than the page appearing already in place.
+  React.useEffect(() => {
+    if (openedSession === undefined) return undefined;
+    const frame = requestAnimationFrame(() => setShifted(true));
+    return () => cancelAnimationFrame(frame);
+  }, [openedSession]);
+  const openSession = React.useCallback((session: DubzOpenSession) => {
+    if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
+    setShifted(false);
+    setOpenedSession(session);
+  }, []);
+  const toMain = React.useCallback(() => {
+    setShifted(false);
+    exitTimer.current = setTimeout(() => setOpenedSession(undefined), SLIDE_MS);
+  }, []);
   const close = React.useCallback(() => {
+    if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
+    setShifted(false);
     setOpenedSession(undefined);
     onClose();
   }, [onClose]);
   const onOpenSessionPage = props.onOpenSessionPage;
   const fullScreen = React.useCallback(() => {
     const id = openedSession?.id;
+    if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
+    setShifted(false);
     setOpenedSession(undefined);
     onClose();
     if (id !== undefined) onOpenSessionPage?.(id);
@@ -237,22 +259,24 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         <>
           {/* Main suggestions, pinned to the body's bottom (just above the
            * pill) by absolute position — not flex — so the glass container's
-           * layout can't push them up. */}
-          {openedSession === undefined ? (
-            <View style={styles.pinned} pointerEvents="box-none">
-              {suggestions.map((suggestion) =>
-                suggestion._tag === "Sessions" ? (
-                  <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} />
-                ) : (
-                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
-                ),
-              )}
+           * layout can't push them up. Slides out left (natively) as a page
+           * comes in. */}
+          <View style={styles.pinned} pointerEvents={openedSession !== undefined ? "none" : "box-none"}>
+            {suggestions.map((suggestion) =>
+              suggestion._tag === "Sessions" ? (
+                <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} shifted={shifted} />
+              ) : (
+                <Suggestion key={suggestion._tag} suggestion={suggestion} />
+              ),
+            )}
+          </View>
+          {/* The page, mounted while shown (kept through the slide-out, then
+           * unmounted); it slides in from the right natively. */}
+          {openedSession !== undefined ? (
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <DubzSessionPlaceholder title={openedSession.title} onFullScreen={fullScreen} shifted={shifted} />
             </View>
-          ) : (
-            <View style={StyleSheet.absoluteFill}>
-              <DubzSessionPlaceholder title={openedSession.title} onFullScreen={fullScreen} />
-            </View>
-          )}
+          ) : null}
           {/* The persistent back button, top-left: it goes back from a page, and
            * closes Dubz at home (nothing to go back to). */}
           <View style={styles.topBack}>

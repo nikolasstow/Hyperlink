@@ -12,7 +12,7 @@
  * @internal
  */
 import { Host, HStack, Image, Spacer, Text as UIText } from "@expo/ui/swift-ui";
-import { contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
+import { Animation, animation, contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, offset, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import type { FileRef } from "../dubzSuggestions";
@@ -32,6 +32,10 @@ const ROW_GAP = 8;
 /** The window's side margin (BarWindow) plus the suggestions' padding, per side:
  * the row stretches to exactly this, so it never overflows the window. */
 const WINDOW_SIDE = 12 + 16;
+/** The push transition — SwiftUI's own animation (UI thread), no Reanimated. */
+const SLIDE = Animation.easeInOut({ duration: 0.28 });
+/** Match SLIDE's duration (ms) for timing an unmount after a slide-out. */
+export const SLIDE_MS = 280;
 
 /**
  * The session suggestion: one native row — a big pill (most related session) and
@@ -40,6 +44,8 @@ const WINDOW_SIDE = 12 + 16;
 export const DubzSessionRow = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
+  /** True while a page is open over the window: the row slides out to the left. */
+  readonly shifted?: boolean;
 }): React.ReactElement | null => {
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
@@ -48,10 +54,11 @@ export const DubzSessionRow = (props: {
   if (top === undefined) return null;
   const rowWidth = width - WINDOW_SIDE * 2;
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - ROW_GAP);
+  const shifted = props.shifted === true;
   const open = (): void => props.onOpen({ id: top.id, title: top.title });
   return (
     <Host style={{ width: rowWidth, height: ROW_HEIGHT }} ignoreSafeArea="all">
-      <HStack spacing={ROW_GAP}>
+      <HStack spacing={ROW_GAP} modifiers={[offset({ x: shifted ? -width : 0 }), animation(SLIDE, shifted)]}>
         <HStack
           spacing={8}
           modifiers={[
@@ -114,15 +121,18 @@ export const DubzTopBack = (props: { readonly onPress: () => void }): React.Reac
 export const DubzSessionPlaceholder = (props: {
   readonly title: string;
   readonly onFullScreen: () => void;
+  /** Drives the native slide-in from the right (false = off-screen right). */
+  readonly shifted?: boolean;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
   const headerWidth = width - WINDOW_SIDE * 2;
+  const shifted = props.shifted === true;
   return (
-    <View style={styles.page}>
+    <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
       <Host style={{ width: headerWidth, height: BUTTON }} ignoreSafeArea="all">
-        <HStack spacing={10} alignment="center">
+        <HStack spacing={10} alignment="center" modifiers={[offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
           <UIText modifiers={[padding({ leading: BACK_INSET }), font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
           <Spacer />
           <HStack
