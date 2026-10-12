@@ -21,7 +21,7 @@
 import { Button, ContextMenu, Host, HStack, Image, List, Menu, RNHostView, ScrollView, Section, Spacer, Text as UIText, Toggle, VStack, ZStack } from "@expo/ui/swift-ui";
 import { Animation, animation, background, contentShape, cornerRadius, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, menuActionDismissBehavior, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
+import { StyleSheet, Text as RNText, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useAppContext } from "../AppContext";
 import { BarWindowResizeContext } from "../BarWindow";
@@ -46,7 +46,7 @@ import { useSessionPreview } from "../sessionPreview";
 import { getApiAddress } from "../settings";
 import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
-import { PILL_FONT_SIZE, PILL_PAD_H, titlePillWidth } from "../titlePillStyle";
+import { PILL_FONT_SIZE, titlePillWidth } from "../titlePillStyle";
 import type { TranscriptMessage } from "../useSessionStream";
 import { useSessionActivity } from "../useSessionActivity";
 import { EdgeBlurBars } from "../EdgeBlurBars";
@@ -324,14 +324,10 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
   const pillWidth = Math.min(Math.max(titlePillWidth(props.title, false), TITLE_PILL_MIN), props.width - 2 * (PILL + GAP));
   return (
     <ZStack modifiers={[frame({ width: props.width, height: PILL })]}>
-      {/* Centred title pill at its computed width; the title truncates within. */}
-      <HStack
-        modifiers={[
-          frame({ width: pillWidth, height: PILL, alignment: "center" }),
-          padding({ horizontal: PILL_PAD_H }),
-          glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
-        ]}
-      >
+      {/* Centred title pill at its computed width (which already includes the
+       * horizontal padding — so no extra padding modifier, or it double-pads
+       * and over-widens). The title centres and truncates within. */}
+      <HStack modifiers={[frame({ width: pillWidth, height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
         <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
       </HStack>
       {/* The resize grabber, just inside the pill's top (top-centre), overlaid so
@@ -444,33 +440,31 @@ const BUBBLE_PAD_H = 14;
  * FULL-WIDTH glass bubble rendering the REAL markdown (code fences, lists, …)
  * via the app's Markdown in an RNHostView, so it uses all the space. */
 const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text: string; readonly width: number }): React.ReactElement => {
+  // RN content inside the glass (via RNHostView) so RN flexbox does the
+  // hug/cap/wrap — @expo/ui's frame(maxWidth) goes greedy and leaves dead space.
   if (props.role === "user") {
-    const maxBubble = Math.round(props.width * 0.84);
+    const maxBubble = Math.round(props.width * 0.82);
     return (
       <HStack modifiers={[frame({ width: props.width, alignment: "trailing" })]}>
-        <HStack
-          modifiers={[
-            padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }),
-            frame({ maxWidth: maxBubble, alignment: "leading" }),
-            glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 }),
-          ]}
-        >
-          <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle("#FFFFFF")]}>{props.text}</UIText>
+        <HStack modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 })]}>
+          <RNHostView matchContents>
+            <View style={{ maxWidth: maxBubble }}>
+              <RNText style={styles.outbound}>{props.text}</RNText>
+            </View>
+          </RNHostView>
         </HStack>
       </HStack>
     );
   }
+  // Inbound: full-width glass bubble; the markdown wraps at an explicit inner
+  // width (without it the content doesn't wrap and is cut off on the right).
+  const inner = props.width - BUBBLE_PAD_H * 2;
   return (
-    <VStack
-      alignment="leading"
-      modifiers={[
-        padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }),
-        frame({ width: props.width, alignment: "leading" }),
-        glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 18 }),
-      ]}
-    >
+    <VStack alignment="leading" modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 18 })]}>
       <RNHostView matchContents>
-        <Markdown text={props.text} width={props.width - BUBBLE_PAD_H * 2} />
+        <View style={{ width: inner }}>
+          <Markdown text={props.text} width={inner} />
+        </View>
       </RNHostView>
     </VStack>
   );
@@ -644,6 +638,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: TOP_INSET + PILL,
+  },
+  // The outbound (user) message text — white on the tinted glass bubble.
+  outbound: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    lineHeight: 20,
   },
   // The pan zone over the title pill (centred at the header's top).
   grabZone: {
