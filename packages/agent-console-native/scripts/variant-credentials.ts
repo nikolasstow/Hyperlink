@@ -30,7 +30,11 @@ import { runString } from "./command";
 
 export class EasGraphqlError extends Data.TaggedError("EasGraphqlError")<{
   readonly errors: string;
-}> {}
+}> {
+  override get message(): string {
+    return this.errors;
+  }
+}
 
 export class AppStoreConnectError extends Data.TaggedError("AppStoreConnectError")<{
   readonly method: string;
@@ -436,7 +440,7 @@ export const ensureVariantCredentials = (target: VariantTarget) =>
 
     // The EAS-held ASC key, in memory only.
     const key = yield* eas(
-      `query ($id: String!) { appStoreConnectApiKey { byId(id: $id) { keyIdentifier issuerIdentifier keyP8 } } }`,
+      `query ($id: ID!) { appStoreConnectApiKey { byId(id: $id) { keyIdentifier issuerIdentifier keyP8 } } }`,
       {
         id: ascKeyRef.id,
       },
