@@ -21,7 +21,7 @@
 import { Button, ContextMenu, Host, HStack, Image, List, Menu, RNHostView, ScrollView, Section, Spacer, Text as UIText, Toggle, VStack, ZStack } from "@expo/ui/swift-ui";
 import { Animation, animation, background, contentShape, cornerRadius, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, menuActionDismissBehavior, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { StyleSheet, Text as RNText, useWindowDimensions, View } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useAppContext } from "../AppContext";
 import { BarWindowResizeContext } from "../BarWindow";
@@ -444,15 +444,16 @@ const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text:
   // RN content inside the glass (via RNHostView) so RN flexbox does the
   // hug/cap/wrap — @expo/ui's frame(maxWidth) goes greedy and leaves dead space.
   if (props.role === "user") {
+    // Compute the width (RNHostView fills to the content's max, and @expo/ui
+    // frame(maxWidth) is greedy — both stretch short messages to full width).
+    // titlePillWidth estimates the one-line width; cap it, then the text wraps
+    // inside. Padding before the frame so it sits inside that width.
     const maxBubble = Math.round(props.width * 0.82);
+    const bubbleWidth = Math.min(titlePillWidth(props.text, false), maxBubble);
     return (
       <HStack modifiers={[frame({ width: props.width, alignment: "trailing" })]}>
-        <HStack modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 })]}>
-          <RNHostView matchContents>
-            {/* Text (not a View) so it's content-sized — hugs up to maxWidth,
-             * wraps beyond; a wrapping View stretched to the full width. */}
-            <RNText style={[styles.outbound, { maxWidth: maxBubble }]}>{props.text}</RNText>
-          </RNHostView>
+        <HStack modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), frame({ width: bubbleWidth, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 })]}>
+          <UIText modifiers={[font({ size: 15 }), foregroundStyle("#FFFFFF")]}>{props.text}</UIText>
         </HStack>
       </HStack>
     );
@@ -639,12 +640,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: TOP_INSET + PILL,
-  },
-  // The outbound (user) message text — white on the tinted glass bubble.
-  outbound: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    lineHeight: 20,
   },
   // The pan zone over the title pill (centred at the header's top).
   grabZone: {
