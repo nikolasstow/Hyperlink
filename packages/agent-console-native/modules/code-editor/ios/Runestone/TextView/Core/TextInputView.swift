@@ -650,6 +650,9 @@ final class TextInputView: UIView, UITextInput {
         applyThemeToChildren()
         indentController.delegate = self
         lineControllerStorage.delegate = self
+        lineControllerStorage.insetsForLine = { [weak self] line in
+            self?.lineInsets[line.index] ?? .zero
+        }
         gutterWidthService.gutterLeadingPadding = gutterLeadingPadding
         gutterWidthService.gutterTrailingPadding = gutterTrailingPadding
         layoutManager.delegate = self
@@ -788,6 +791,54 @@ final class TextInputView: UIView, UITextInput {
             return line.index
         }
         return adjusted <= 0 ? 0 : max(0, lineManager.lineCount - 1)
+    }
+
+    /// Space kept above and below lines' text, by row: the lines below move down
+    /// to make room, and views can be drawn there (`textRect(ofLine:)` says where
+    /// the text itself is).
+    var lineInsets: [Int: LineInsets] = [:] {
+        didSet {
+            guard lineInsets != oldValue else {
+                return
+            }
+            // Lines move between rows as text changes, carrying their insets: clear
+            // every line that still has some and is no longer listed, then set
+            // the listed rows.
+            for lineController in lineControllerStorage where lineController.insets != .zero {
+                let line = lineController.line
+                guard lineInsets[line.index] == nil else {
+                    continue
+                }
+                lineController.insets = .zero
+                lineManager.setHeight(of: line, to: lineController.lineHeight)
+            }
+            for (row, insets) in lineInsets where row >= 0 && row < lineManager.lineCount {
+                let line = lineManager.line(atRow: row)
+                let lineController = lineControllerStorage.getOrCreateLineController(for: line)
+                lineController.insets = insets
+                lineManager.setHeight(of: line, to: lineController.lineHeight)
+            }
+            contentSizeService.invalidateContentSize()
+            layoutManager.setNeedsLayout()
+            layoutManager.layoutIfNeeded()
+            delegate?.textInputViewDidInvalidateContentSize(self)
+        }
+    }
+
+    /// Where a line is in content coordinates, and how much space it keeps
+    /// above and below its text.
+    func lineFrame(ofLine index: Int) -> (top: CGFloat, height: CGFloat, insets: LineInsets)? {
+        guard index >= 0 && index < lineManager.lineCount else {
+            return nil
+        }
+        let line = lineManager.line(atRow: index)
+        let insets = lineControllerStorage[line.id]?.insets ?? lineInsets[index] ?? .zero
+        return (textContainerInset.top + line.yPosition, line.data.lineHeight, insets)
+    }
+
+    /// The row of the line holding `location` (a UTF-16 offset).
+    func row(containing location: Int) -> Int? {
+        lineManager.line(containingCharacterAt: location)?.index
     }
 
     func contentY(ofLine index: Int) -> CGFloat {

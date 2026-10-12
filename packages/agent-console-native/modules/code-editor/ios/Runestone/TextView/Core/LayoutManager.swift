@@ -347,8 +347,11 @@ extension LayoutManager {
         }
         switch lineSelectionDisplayType {
         case .line:
-            let minY = startLine.yPosition
-            let height = (realEndLine.yPosition + realEndLine.data.lineHeight) - minY
+            // The text's rows only, not the space kept above or below them.
+            let startInsets = lineControllerStorage.getOrCreateLineController(for: startLine).insets
+            let endInsets = lineControllerStorage.getOrCreateLineController(for: realEndLine).insets
+            let minY = startLine.yPosition + startInsets.above
+            let height = (realEndLine.yPosition + realEndLine.data.lineHeight - endInsets.below) - minY
             return CGRect(x: 0, y: textContainerInset.top + minY, width: scrollViewWidth, height: height)
         case .lineFragment:
             let startCaretRect = caretRectService.caretRect(at: selectedRange.lowerBound, allowMovingCaretToNextLineFragment: false)
@@ -466,13 +469,14 @@ extension LayoutManager {
         let lineController = lineControllerStorage.getOrCreateLineController(for: line)
         let fontLineHeight = theme.lineNumberFont.lineHeight
         let xPosition = safeAreaInsets.left + gutterWidthService.gutterLeadingPadding
-        var yPosition = textContainerInset.top + line.yPosition
+        // The number sits beside the line's text, below any space kept above it.
+        var yPosition = textContainerInset.top + line.yPosition + lineController.insets.above
         if lineController.numberOfLineFragments > 1 {
             // There are more than one line fragments, so we align the line number at the top.
             yPosition += (fontLineHeight * lineHeightMultiplier - fontLineHeight) / 2
         } else {
             // There's a single line fragment, so we center the line number in the height of the line.
-            yPosition += (lineController.lineHeight - fontLineHeight) / 2
+            yPosition += (lineController.textHeight - fontLineHeight) / 2
         }
         lineNumberView.text = "\(line.index + 1)"
         lineNumberView.font = theme.lineNumberFont

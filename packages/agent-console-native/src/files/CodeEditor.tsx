@@ -13,8 +13,9 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
-import { canApplyChanges, CodeEditorNativeView, type CodeEditorHandle, type EditorTheme, type LineToken } from "../../modules/code-editor";
-import type { EditorUpdate, TextRange } from "./liveFile";
+import { canApplyChanges, canShowConflicts, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
+import type { Rebase } from "file-sync";
+import type { EditorUpdate } from "./liveFile";
 import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
 import { stickyRanges } from "./stickyRanges";
 import { useCodeTheme } from "../useCodeTheme";
@@ -69,8 +70,10 @@ export const CodeEditor = (props: {
   readonly text: string;
   readonly editable: boolean;
   readonly onChangeText?: (text: string) => void;
-  /** Lines in conflict, lit until settled. */
-  readonly conflicts?: ReadonlyArray<TextRange>;
+  /** Lines in conflict, drawn in the document with your version and the
+   * buttons to settle them. */
+  readonly conflicts?: ReadonlyArray<Rebase.Conflict>;
+  readonly onConflictChoice?: (index: number, keep: ConflictChoice) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -118,7 +121,36 @@ export const CodeEditor = (props: {
     }),
     [],
   );
-  const conflictsJson = React.useMemo(() => JSON.stringify(props.conflicts ?? []), [props.conflicts]);
+  // Each conflict with your lines coloured like the code: sent at once, and
+  // again with tokens once they are in.
+  const conflicts = props.conflicts;
+  const [conflictsJson, setConflictsJson] = React.useState("[]");
+  React.useEffect(() => {
+    const plain = (conflicts ?? []).map((conflict) => ({
+      from: conflict.from,
+      to: conflict.to,
+      mine: conflict.mine,
+    }));
+    setConflictsJson(JSON.stringify(plain));
+    if (plain.length === 0) return;
+    let alive = true;
+    void Promise.all(plain.map((conflict) => tokenizeCode({ code: conflict.mine, lang, theme })))
+      .then((highlights) => {
+        if (!alive) return;
+        setConflictsJson(
+          JSON.stringify(
+            plain.map((conflict, index) => ({
+              ...conflict,
+              mineTokens: toLineTokens(highlights[index]),
+            })),
+          ),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [conflicts, lang, theme]);
   // The first tokenise is immediate (no flash); only re-tokenising while typing
   // is debounced.
   const firstRun = React.useRef(true);
@@ -162,7 +194,7 @@ export const CodeEditor = (props: {
         ref={native}
         style={styles.fill}
         text={nativeText}
-        conflictRangesJson={conflictsJson}
+        {...(canShowConflicts ? { conflictsJson } : {})}
         editable={props.editable}
         tokensJson={tokensJson}
         stickyRangesJson={stickyJson}
@@ -175,6 +207,7 @@ export const CodeEditor = (props: {
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}
         {...(props.onChangeText === undefined ? {} : { onTextChange: (event) => props.onChangeText?.(event.nativeEvent.text) })}
+        {...(props.onConflictChoice === undefined ? {} : { onConflictAction: (event) => props.onConflictChoice?.(event.nativeEvent.index, event.nativeEvent.keep) })}
       />
     </View>
   );

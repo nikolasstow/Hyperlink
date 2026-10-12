@@ -77,8 +77,8 @@ const run = (name: string, f: (live: LiveFiles["Service"]) => Effect.Effect<void
 export const editLiveFile = (path: string, text: string): void => run("editing", (live) => live.edit(path, text));
 /** Write a file's edits to disk, as soon as the hub allows. */
 export const saveLiveFile = (path: string): void => run("saving", (live) => live.save(path));
-/** Settle a conflict: keep the outside change, or put ours back. */
-export const resolveLiveConflict = (path: string, index: number, keep: "Mine" | "Theirs"): void =>
+/** Settle a conflict: keep the outside change, put ours back, or keep both. */
+export const resolveLiveConflict = (path: string, index: number, keep: "Mine" | "Theirs" | "Both"): void =>
   run("settling a conflict", (live) => live.resolve(path, index, keep));
 
 /** Calls `onUpdate` with each change an open editor of `path` must apply,

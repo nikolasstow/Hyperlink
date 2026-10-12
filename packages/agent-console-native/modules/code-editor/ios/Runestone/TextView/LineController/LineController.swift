@@ -44,22 +44,37 @@ final class LineController {
     var lineWidth: CGFloat {
         ceil(typesetter.maximumLineWidth)
     }
+    /// Space kept above and below the line's text, for views drawn there (a
+    /// conflict's other version, its buttons). Counted in the line's height, so
+    /// the lines below move down to make room.
+    var insets: LineInsets = .zero {
+        didSet {
+            if insets != oldValue {
+                typesetter.topInset = insets.above
+                isTypesetterInvalid = true
+                isLineFragmentCacheInvalid = true
+                _lineHeight = nil
+            }
+        }
+    }
     var lineHeight: CGFloat {
         if let lineHeight = _lineHeight {
             return lineHeight
-        } else if typesetter.lineFragments.isEmpty {
-            let lineHeight = estimatedLineFragmentHeight * lineFragmentHeightMultiplier
-            _lineHeight = lineHeight
-            return lineHeight
-        } else {
-            let knownLineFragmentHeight = typesetter.lineFragments.reduce(0) { $0 + $1.scaledSize.height }
-            let remainingNumberOfLineFragments = typesetter.bestGuessNumberOfLineFragments - typesetter.lineFragments.count
-            let lineFragmentHeight = estimatedLineFragmentHeight * lineFragmentHeightMultiplier
-            let remainingLineFragmentHeight = CGFloat(remainingNumberOfLineFragments) * lineFragmentHeight
-            let lineHeight = knownLineFragmentHeight + remainingLineFragmentHeight
-            _lineHeight = lineHeight
-            return lineHeight
         }
+        let lineHeight = textHeight + insets.above + insets.below
+        _lineHeight = lineHeight
+        return lineHeight
+    }
+    /// The height of the line's text alone, without its insets.
+    var textHeight: CGFloat {
+        if typesetter.lineFragments.isEmpty {
+            return estimatedLineFragmentHeight * lineFragmentHeightMultiplier
+        }
+        let knownLineFragmentHeight = typesetter.lineFragments.reduce(0) { $0 + $1.scaledSize.height }
+        let remainingNumberOfLineFragments = typesetter.bestGuessNumberOfLineFragments - typesetter.lineFragments.count
+        let lineFragmentHeight = estimatedLineFragmentHeight * lineFragmentHeightMultiplier
+        let remainingLineFragmentHeight = CGFloat(remainingNumberOfLineFragments) * lineFragmentHeight
+        return knownLineFragmentHeight + remainingLineFragmentHeight
     }
     var kern: CGFloat = 0 {
         didSet {
@@ -155,7 +170,9 @@ final class LineController {
     }
 
     func lineFragmentControllers(in rect: CGRect) -> [LineFragmentController] {
-        let lineYPosition = line.yPosition
+        // The fragment tree counts heights from the first fragment, which starts
+        // below the space kept above the line.
+        let lineYPosition = line.yPosition + insets.above
         let localMinY = rect.minY - lineYPosition
         let localMaxY = rect.maxY - lineYPosition
         let query = LineFragmentFrameQuery(range: localMinY ... localMaxY)
@@ -421,7 +438,7 @@ extension LineController {
                 return CGRect(x: xPosition, y: yPosition, width: Caret.width, height: lineFragment.baseSize.height)
             }
         }
-        let yPosition = (estimatedLineFragmentHeight * lineFragmentHeightMultiplier - estimatedLineFragmentHeight) / 2
+        let yPosition = insets.above + (estimatedLineFragmentHeight * lineFragmentHeightMultiplier - estimatedLineFragmentHeight) / 2
         return CGRect(x: 0, y: yPosition, width: Caret.width, height: estimatedLineFragmentHeight)
     }
 
@@ -435,7 +452,7 @@ extension LineController {
                 return CGRect(x: xStart, y: yPosition, width: xEnd - xStart, height: lineFragment.baseSize.height)
             }
         }
-        return CGRect(x: 0, y: 0, width: 0, height: estimatedLineFragmentHeight * lineFragmentHeightMultiplier)
+        return CGRect(x: 0, y: insets.above, width: 0, height: estimatedLineFragmentHeight * lineFragmentHeightMultiplier)
     }
 
     func closestIndex(to point: CGPoint) -> Int {
@@ -454,4 +471,12 @@ extension LineController: LineFragmentControllerDelegate {
         let range = NSRange(location: line.location + lineFragment.visibleRange.location, length: lineFragment.visibleRange.length)
         return stringView.substring(in: range)
     }
+}
+
+/// Space kept above and below a line's text (see `LineController.insets`).
+struct LineInsets: Equatable {
+    var above: CGFloat = 0
+    var below: CGFloat = 0
+
+    static let zero = LineInsets()
 }

@@ -59,6 +59,8 @@ final class LineTypesetter {
     private var startOffset = 0
     private var nextYPosition: CGFloat = 0
     private var lineFragmentIndex = 0
+    /// Space kept above the line's first fragment (a view zone drawn there).
+    var topInset: CGFloat = 0
 
     init(lineID: String) {
         self.lineID = lineID
@@ -72,7 +74,7 @@ final class LineTypesetter {
         typesetter = nil
         lineFragmentsMap = [:]
         startOffset = 0
-        nextYPosition = 0
+        nextYPosition = topInset
         lineFragmentIndex = 0
     }
 

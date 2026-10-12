@@ -380,7 +380,10 @@ const start = async (): Promise<void> => {
     renderLineHighlight: "none",
     occurrencesHighlight: "off",
     selectionHighlight: false,
-    lineNumbersMinChars: 3,
+    // A roomier gutter, matching the native editor's 16pt either side: an
+    // extra character's width ahead of the numbers, and space before the code.
+    lineNumbersMinChars: 4,
+    lineDecorationsWidth: 16,
     padding: { top: 8, bottom: 40 },
     fontLigatures: false,
     wordWrap: "off",

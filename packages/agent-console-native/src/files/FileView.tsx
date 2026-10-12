@@ -16,14 +16,14 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, Linking, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 import { isCodeEditorNative } from "../../modules/code-editor";
+import type { Rebase } from "file-sync";
 import { CodeSurface } from "../CodeSurface";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor, type CodeEditorApi } from "./CodeEditor";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
-import { CONFLICT_BAR_HEIGHT, ConflictBar } from "./ConflictBar";
 import { clearFileEdit, getFileEditSync, setFileEdit } from "./fileEdits";
 import { registerSave, unregisterSave } from "./fileSave";
 import { getFileTextSync } from "./fileTextCache";
@@ -44,9 +44,7 @@ type State =
   | { readonly kind: "missing" }
   | { readonly kind: "error" };
 
-/** Side room around the conflict bar. */
-const CONFLICT_BAR_INSET = 16;
-const noConflicts: ReadonlyArray<never> = [];
+const noConflicts: ReadonlyArray<Rebase.Conflict> = [];
 
 /** Extra breathing room between the top bar and the first line of code. */
 const EDITOR_TOP_MARGIN = 24;
@@ -71,7 +69,6 @@ export const FileView = (props: {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { path, name, line, repo, topInset, bottomInset } = props;
-  const { width: screenWidth } = useWindowDimensions();
   // Followed while on screen (and before, when it is open in a tab or kept).
   useOnScreen(path);
   const live = useLiveFile(path);
@@ -190,6 +187,7 @@ export const FileView = (props: {
             editable
             onChangeText={onChangeText}
             conflicts={conflicts}
+            onConflictChoice={(index, keep) => resolveLiveConflict(path, index, keep)}
             topInset={topInset + EDITOR_TOP_MARGIN}
             bottomInset={bottomInset}
             stickyFill={topInset + EDITOR_TOP_MARGIN}
@@ -200,16 +198,6 @@ export const FileView = (props: {
         {state.kind === "text" ? (
           <View style={[styles.light, { top: topInset + 10 }]} pointerEvents="none">
             <StatusLight current={lightCurrent} />
-          </View>
-        ) : null}
-        {state.kind === "text" && conflicts.length > 0 ? (
-          <View style={[styles.conflictBar, { bottom: bottomInset + 8 }]}>
-            <ConflictBar
-              count={conflicts.length}
-              width={screenWidth - CONFLICT_BAR_INSET * 2}
-              onKeepMine={() => resolveLiveConflict(path, 0, "Mine")}
-              onKeepTheirs={() => resolveLiveConflict(path, 0, "Theirs")}
-            />
           </View>
         ) : null}
         {state.kind === "loading" ? (
@@ -262,11 +250,6 @@ const makeStyles = (text: TextColors) =>
     light: {
       position: "absolute",
       right: 14,
-    },
-    conflictBar: {
-      position: "absolute",
-      left: CONFLICT_BAR_INSET,
-      height: CONFLICT_BAR_HEIGHT,
     },
     message: {
       color: text.secondaryLabel,

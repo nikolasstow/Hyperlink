@@ -203,10 +203,10 @@ export const edited = (file: LiveFile, text: string): LiveFile => ({
 export const pendingWrite = (file: LiveFile): TextChange.ChangeSet => TextChange.diff(file.base, file.text);
 
 /**
- * Settle the conflict at `index`: keep theirs (what is in the text now) or
- * put ours back over it.
+ * Settle the conflict at `index`: keep theirs (what is in the text now), put
+ * ours back over it, or keep both (ours, then theirs).
  */
-export const resolve = (file: LiveFile, index: number, keep: "Mine" | "Theirs"): Received => {
+export const resolve = (file: LiveFile, index: number, keep: "Mine" | "Theirs" | "Both"): Received => {
   const conflict = file.conflicts[index];
   if (conflict === undefined) {
     return {
@@ -228,7 +228,7 @@ export const resolve = (file: LiveFile, index: number, keep: "Mine" | "Theirs"):
     new TextChange.TextChange({
       from: conflict.from,
       to: conflict.to,
-      insert: conflict.mine,
+      insert: keep === "Both" ? `${conflict.mine}\n${conflict.theirs}` : conflict.mine,
     }),
   ]);
   const shownChanges = TextChange.diff(file.text, text);

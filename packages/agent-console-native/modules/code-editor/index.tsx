@@ -62,14 +62,20 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly showLineNumbers: boolean;
   readonly wrapLines: boolean;
   /**
-   * Lines in conflict, lit until resolved: JSON `[{from,to}]` in UTF-16
-   * offsets. Read by builds with `apiVersion` 5 and up.
+   * Conflicts drawn in the document: JSON `[{from,to,mine,mineTokens?}]` — the
+   * agent's lines at `[from, to)` (UTF-16), and what your edit made of them
+   * (`mineTokens` per line, like `tokensJson`). `apiVersion` 6 and up.
    */
-  readonly conflictRangesJson?: string;
+  readonly conflictsJson?: string;
   readonly onTextChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
+  /** A conflict's button: keep yours, theirs, or both (yours, then theirs). */
+  readonly onConflictAction?: (event: NativeSyntheticEvent<{ readonly index: number; readonly keep: ConflictChoice }>) => void;
   /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
   readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
 }
+
+/** How a conflict is settled: your lines, the agent's, or yours then theirs. */
+export type ConflictChoice = "Mine" | "Theirs" | "Both";
 
 /** What a ref on the native view offers (`apiVersion` 5 and up). */
 export interface CodeEditorHandle {
@@ -103,3 +109,6 @@ export const isCodeEditorNative = available;
 /** Whether the editor can take outside changes in place (`applyChanges`) and
  * mark conflicts. Older builds get the whole new text instead. */
 export const canApplyChanges = apiVersion >= 5;
+
+/** Whether the editor draws conflicts in the document (`conflictsJson`). */
+export const canShowConflicts = apiVersion >= 6;

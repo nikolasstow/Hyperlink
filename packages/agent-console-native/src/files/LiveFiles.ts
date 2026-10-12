@@ -234,13 +234,13 @@ const make = Effect.gen(function* () {
     /** Write the file's edits to disk, as soon as the hub allows. */
     save: (path: string) => Ref.update(wanted, (set) => new Set(set).add(path)).pipe(Effect.andThen(write(path))),
     /** Settle a conflict: keep the outside change, or put ours back. */
-    resolve: (path: string, index: number, keep: "Mine" | "Theirs") =>
+    resolve: (path: string, index: number, keep: "Mine" | "Theirs" | "Both") =>
       Effect.gen(function* () {
         const current = yield* fileOf(path);
         if (Option.isNone(current)) return;
         const received = LiveFile.resolve(current.value, index, keep);
         yield* put(path, received.file, received.editor);
-        if (keep === "Mine") yield* Ref.update(wanted, (set) => new Set(set).add(path));
+        if (keep !== "Theirs") yield* Ref.update(wanted, (set) => new Set(set).add(path));
       }).pipe(Semaphore.withPermits(lock, 1), Effect.andThen(writeIfWanted(path))),
     /** Every followed file, as it changes. */
     changes: SubscriptionRef.changes(files),

@@ -22,6 +22,8 @@ final class LineControllerStorage {
 
     private var lineControllers: [DocumentLineNodeID: LineController] = [:]
     private let lineControllerFactory: LineControllerFactory
+    /// The space kept around a line's text, given to each controller as it is made.
+    var insetsForLine: ((DocumentLineNode) -> LineInsets)?
 
     init(stringView: StringView, lineControllerFactory: LineControllerFactory) {
         self.stringView = stringView
@@ -33,6 +35,7 @@ final class LineControllerStorage {
             return cachedLineController
         } else {
             let lineController = lineControllerFactory.makeLineController(for: line)
+            lineController.insets = insetsForLine?(line) ?? .zero
             lineControllers[line.id] = lineController
             delegate?.lineControllerStorage(self, didCreate: lineController)
             return lineController

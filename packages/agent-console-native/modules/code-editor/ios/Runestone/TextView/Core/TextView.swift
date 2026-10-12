@@ -688,6 +688,10 @@ open class TextView: UIScrollView {
         textInputView.frame = CGRect(x: 0, y: 0, width: max(contentSize.width, frame.width), height: max(contentSize.height, frame.height))
         textInputView.viewport = CGRect(origin: contentOffset, size: frame.size)
         bringSubviewToFront(textInputView.gutterContainerView)
+        // Views drawn across the full width, gutter included (conflict zones).
+        for view in viewsAboveGutter where view.superview === self {
+            bringSubviewToFront(view)
+        }
         if #available(iOS 26, *), let scrollPocketView {
             bringSubviewToFront(scrollPocketView)
         }
@@ -781,6 +785,27 @@ open class TextView: UIScrollView {
     /// The y of a line's top in content coordinates (same space as
     /// `contentOffset`), read from the line tree. Drives the sticky-scroll
     /// push-off: the block slides up as the scope's last line reaches it.
+    /// Subviews kept above the gutter as it is brought forward on layout.
+    var viewsAboveGutter: [UIView] = []
+
+    /// Space kept above and below lines' text, by row (see `TextInputView.lineInsets`).
+    var lineInsets: [Int: LineInsets] {
+        get {
+            textInputView.lineInsets
+        }
+        set {
+            textInputView.lineInsets = newValue
+        }
+    }
+
+    func lineFrame(ofLine index: Int) -> (top: CGFloat, height: CGFloat, insets: LineInsets)? {
+        textInputView.lineFrame(ofLine: index)
+    }
+
+    func row(containing location: Int) -> Int? {
+        textInputView.row(containing: location)
+    }
+
     public func contentY(ofLine index: Int) -> CGFloat {
         textInputView.contentY(ofLine: index)
     }

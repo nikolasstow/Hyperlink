@@ -41,6 +41,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// Reports native sticky-scroll decisions to JS so they surface in Metro logs
     /// (NSLog only reaches the device console, which we can't read remotely).
     let onStickyDebug = EventDispatcher()
+    /// A choice on a conflict's buttons: `{index, keep: "Mine" | "Theirs" | "Both"}`.
+    let onConflictAction = EventDispatcher()
 
     /// True while we set `text` programmatically, so the delegate's change
     /// callback never echoes a prop back up as an edit.
@@ -94,8 +96,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         // More breathing room around the line numbers than Runestone's default
         // 3/3 — the gutter reads as its own column, not cramped against the edge
         // or the code.
-        textView.gutterLeadingPadding = 10
-        textView.gutterTrailingPadding = 10
+        textView.gutterLeadingPadding = 16
+        textView.gutterTrailingPadding = 16
         textView.isLineWrappingEnabled = false
         textView.alwaysBounceVertical = true
         textView.contentInsetAdjustmentBehavior = .never
@@ -112,10 +114,20 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         applyTheme()
     }
 
-    /// Lines an agent just changed, lit briefly; lines in conflict, lit until
-    /// resolved. Both drawn as Runestone highlighted ranges.
+    /// Lines an agent just changed, lit briefly (Runestone highlighted ranges).
     private var flashedRanges: [HighlightedRange] = []
-    private var conflictRanges: [HighlightedRange] = []
+    /// Conflicts drawn in the document (ConflictZones.swift).
+    private lazy var conflictZones: ConflictZones = {
+        let zones = ConflictZones(textView: textView)
+        zones.rowHeight = { [weak self] in self?.stickyRowHeight() ?? 17 }
+        zones.styledLine = { [weak self] text, tokens in
+            self?.styledLine(text, tokens: tokens) ?? NSAttributedString(string: text)
+        }
+        zones.onChoice = { [weak self] index, choice in
+            self?.onConflictAction(["index": index, "keep": choice.rawValue])
+        }
+        return zones
+    }()
     private var flashGeneration = 0
     private static let flashDuration: TimeInterval = 1.6
 
@@ -161,6 +173,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             }
         }
         rebuildHighlights()
+        conflictZones.layout()
         flash(decodeJson([TextRangeNative].self, highlightJson) ?? [])
         if (textView.text as NSString).length != expectedLength {
             onTextChange(["text": textView.text])
@@ -205,7 +218,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     }
 
     private func showHighlightedRanges() {
-        textView.highlightedRanges = conflictRanges + flashedRanges
+        textView.highlightedRanges = flashedRanges
     }
 
     private func decodeJson<T: Decodable>(_ type: T.Type, _ json: String) -> T? {
@@ -222,14 +235,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     // MARK: - Props
 
-    /// Lines in conflict (an agent changed lines you were editing), lit until
-    /// resolved: `[{from,to}]`.
-    func setConflictRangesJson(_ json: String) {
-        let ranges = decodeJson([TextRangeNative].self, json) ?? []
-        conflictRanges = ranges.map {
-            HighlightedRange(range: NSRange(location: $0.from, length: max(0, $0.to - $0.from)), color: UIColor.systemOrange.withAlphaComponent(0.28), cornerRadius: 3)
-        }
-        showHighlightedRanges()
+    /// Conflicts as JSON: `[{from,to,mine,mineTokens?}]` — the agent's lines at
+    /// `[from, to)` of the text, and what the user's edit made of them.
+    func setConflictsJson(_ json: String) {
+        conflictZones.set(decodeJson([ConflictNative].self, json) ?? [])
     }
 
     func setText(_ text: String) {
@@ -554,10 +563,16 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             end -= 1
         }
         let lineText = string.substring(with: NSRange(location: start, length: max(0, end - start)))
+        return styledLine(lineText, tokens: tokenStore.tokens(forLineStartingAt: start))
+    }
+
+    /// One line of code in the editor's font, coloured by its Shiki tokens
+    /// (offsets local to the line).
+    private func styledLine(_ lineText: String, tokens: [ShikiToken]) -> NSAttributedString {
         let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         let attributed = NSMutableAttributedString(string: lineText, attributes: [.font: font, .foregroundColor: foreground])
         let fullLength = attributed.length
-        for token in tokenStore.tokens(forLineStartingAt: start) {
+        for token in tokens {
             guard token.length > 0, token.start >= 0, token.start + token.length <= fullLength else {
                 continue
             }
@@ -581,21 +596,30 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        conflictZones.layout()
         updateSticky()
     }
 
     // MARK: - UIScrollViewDelegate
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        conflictZones.followHorizontalScroll()
         updateSticky()
     }
 
     // MARK: - TextViewDelegate
 
+    func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        conflictZones.textWillChange(in: range, replacementLength: (text as NSString).length)
+        return true
+    }
+
     func textViewDidChange(_ textView: TextView) {
         guard !isApplyingText else {
             return
         }
+        // Typing moves lines: the conflicts' space moves with them.
+        conflictZones.layout()
         onTextChange(["text": textView.text])
     }
 }
