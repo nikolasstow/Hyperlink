@@ -195,7 +195,10 @@ export const DubzSessionArea = (props: {
         ]}
       >
         <List.ForEach>
-          {rows.map((row) => (
+          {/* Reversed because the List is flipped (scaleEffect y:-1): reversing
+           * here makes the rows read in their natural top→bottom order, while the
+           * flip keeps the whole block anchored to the bottom. */}
+          {[...rows].reverse().map((row) => (
             <HStack key={row.id} modifiers={[tag(row.id), ...rowMods, scaleEffect({ x: 1, y: -1 }), frame({ width: rowWidth, alignment: "leading" })]}>
               {row.content}
             </HStack>
