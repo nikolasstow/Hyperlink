@@ -341,7 +341,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           {/* Feathered blur at the window's bottom — content scrolls behind the
            * floating composer pill (ridesKeyboard=false: the window already
            * rides the keyboard). Over the content, under the pill and back. */}
-          <EdgeBlurBars variant="bottom" ridesKeyboard={false} />
+          <EdgeBlurBars variant="bottom" ridesKeyboard={false} blurRadius={1} />
           {/* The persistent back button, top-left: it goes back from a page, and
            * closes Dubz at home (nothing to go back to). */}
           <View style={styles.topBack}>

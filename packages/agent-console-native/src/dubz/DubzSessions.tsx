@@ -25,6 +25,7 @@ import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useAppContext } from "../AppContext";
 import { BarWindowResizeContext } from "../BarWindow";
+import { colors } from "../colors";
 import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 import { lastSummary } from "../chat/model";
 import { useKeptConversation } from "../conversations/useConversations";
@@ -329,16 +330,15 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
             glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
           ]}
         >
-          {/* Title centred, with the resize grabber just inside the pill's top
-           * (the pill itself is the grab area — see DubzScrollPage). */}
-          <ZStack modifiers={[frame({ height: PILL })]}>
-            <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
-            <HStack modifiers={[frame({ maxHeight: FILL, alignment: "top" }), padding({ top: 6 })]}>
-              <HStack modifiers={[frame({ width: 32, height: 5 }), background("rgba(120,120,128,0.55)"), cornerRadius(3)]}>
-                <Spacer />
-              </HStack>
-            </HStack>
-          </ZStack>
+          <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+        </HStack>
+      </HStack>
+      {/* The resize grabber, just inside the pill's top (top-centre), overlaid so
+       * it doesn't widen the pill — the pill itself is the grab area (see
+       * DubzScrollPage). */}
+      <HStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), padding({ top: 6 })]}>
+        <HStack modifiers={[frame({ width: 32, height: 5 }), background("rgba(120,120,128,0.55)"), cornerRadius(3)]}>
+          <Spacer />
         </HStack>
       </HStack>
       {/* Trailing control, overlaid at the right. */}
@@ -357,6 +357,8 @@ const DubzScrollPage = (props: {
   readonly title: string;
   readonly spacing: number;
   readonly trailing?: React.ReactNode;
+  /** Chat pages anchor to the bottom (newest in view); lists stay at the top. */
+  readonly bottomAnchored?: boolean;
   readonly children: React.ReactNode;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
@@ -368,7 +370,7 @@ const DubzScrollPage = (props: {
       {/* Scroll content — its own Host, slides. Fills the body so content passes
        * behind the top feather + header pill and the bottom composer pill. */}
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
-        <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted)]}>
+        <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), ...(props.bottomAnchored === true ? [defaultScrollAnchor("bottom")] : []), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted)]}>
           <VStack alignment="leading" spacing={props.spacing} modifiers={[frame({ width: props.pageWidth, alignment: "leading" }), padding({ top: HEADER_CLEARANCE, bottom: BOTTOM_CLEARANCE })]}>
             {props.children}
           </VStack>
@@ -376,8 +378,8 @@ const DubzScrollPage = (props: {
       </Host>
       {/* Feathered blur over the scroll's top, under the header pill — the RN
        * VariableBlur (same as the bottom feather), layered between the scroll
-       * Host above and the header Host below. */}
-      <EdgeBlurBars variant="top" />
+       * Host above and the header Host below. Subtle. */}
+      <EdgeBlurBars variant="top" blurRadius={1} />
       {/* The header pill — its own Host over the feather, sliding with the page
        * (sized to the header area so it never covers the scroll below). */}
       <View style={styles.headerSlot} pointerEvents="box-none">
@@ -407,7 +409,6 @@ export const DubzSessionPage = (props: {
   readonly onFullScreen: () => void;
   readonly shifted?: boolean;
 }): React.ReactElement => {
-  const textColors = useTextColors();
   const { width } = useWindowDimensions();
   const { client } = useAppContext();
   const pageWidth = width - WINDOW_SIDE * 2;
@@ -426,13 +427,32 @@ export const DubzSessionPage = (props: {
     [transcript],
   );
   return (
-    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={12} trailing={<GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
+    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={<GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
       {messages.map((message) => (
-        <UIText key={message.id} modifiers={[font({ size: 14 }), foregroundStyle(message.role === "user" ? textColors.label : textColors.secondaryLabel)]}>
-          {message.text}
-        </UIText>
+        <ChatBubble key={message.id} role={message.role} text={message.text} width={pageWidth} />
       ))}
     </DubzScrollPage>
+  );
+};
+
+/** One chat message as a native glass bubble — markdown-rendered (inline, via
+ * SwiftUI's LocalizedStringKey), user trailing and agent leading, both glass. */
+const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text: string; readonly width: number }): React.ReactElement => {
+  const textColors = useTextColors();
+  const mine = props.role === "user";
+  const maxBubble = Math.round(props.width * 0.84);
+  return (
+    <HStack modifiers={[frame({ width: props.width, alignment: mine ? "trailing" : "leading" })]}>
+      <HStack
+        modifiers={[
+          padding({ horizontal: 14, vertical: 10 }),
+          frame({ maxWidth: maxBubble, alignment: "leading" }),
+          glassEffect({ glass: mine ? { variant: "regular", tint: colors.tint } : { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 18 }),
+        ]}
+      >
+        <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle(textColors.label)]}>{props.text}</UIText>
+      </HStack>
+    </HStack>
   );
 };
 
