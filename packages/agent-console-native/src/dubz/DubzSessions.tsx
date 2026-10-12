@@ -18,17 +18,31 @@
  *
  * @internal
  */
-import { Host, HStack, Image, List, ScrollView, Text as UIText, VStack, ZStack } from "@expo/ui/swift-ui";
+import { Button, ContextMenu, Host, HStack, Image, List, ScrollView, Section, Text as UIText, VStack, ZStack } from "@expo/ui/swift-ui";
 import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
+import { lastSummary } from "../chat/model";
+import { useKeptConversation } from "../conversations/useConversations";
+import { usePreloadConversation } from "../conversations/usePreloadConversation";
 import type { FileRef } from "../dubzSuggestions";
+import { repoScope, sessionTarget } from "../favorites/model";
+import { FavoriteScopeProvider, toggleFavorite, useFavoriteScope, useIsFavorited } from "../favorites/useFavorites";
+import { sessionCardHeight, summaryLines, titleLines } from "../home/homeLayout";
+import { serverAddressOf } from "../opencode/serverAddress";
+import { abortSession, confirmDeleteSession, promptRenameSession } from "../sessionActions";
+import { archiveWithUndo, toggleMute, useMutedSessions } from "../sessionArchive";
 import { cachedSessionsNow } from "../sessionCache";
+import { CardBody, sessionCardActions, summaryLabel } from "../SessionCard";
+import { getSetupDate, loadReads } from "../sessionReads";
 import type { SessionSummary } from "../sessions/sessionList";
 import { useSessionPreview } from "../sessionPreview";
-import { useTextColors } from "../theme";
+import { getApiAddress } from "../settings";
+import { useTextColors, useTheme } from "../theme";
+import { relativeTime } from "../time";
 import type { TranscriptMessage } from "../useSessionStream";
+import { useSessionActivity } from "../useSessionActivity";
 import { sessionsForFile } from "./sessionsForFile";
 
 /** The session a row/list opens. */
@@ -297,42 +311,143 @@ export const DubzSessionPage = (props: {
   );
 };
 
-/** View All: every worktree session by recency, as glass rows. */
+/** One session as the native glass card — the SAME visual (CardBody) and the
+ * SAME context menu (sessionCardActions) as Home's SessionCard, so a change to
+ * either shows on both. No swipe and no Host of its own: it is a SwiftUI child
+ * of the list's ScrollView, so the page stays one Host and slides natively. */
+const DubzSessionCard = (props: {
+  readonly session: SessionSummary;
+  readonly width: number;
+  readonly running: boolean;
+  readonly unread: boolean;
+  readonly muted: boolean;
+  readonly onOpen: () => void;
+  readonly onRename: () => void;
+  readonly onStop: () => void;
+  readonly onDelete: () => void;
+  readonly onArchive: () => void;
+  readonly onMute: () => void;
+}): React.ReactElement => {
+  const { session } = props;
+  const { address } = useAppContext();
+  const { colors: themeColors } = useTheme();
+  // Open a chat: its newest messages are kept before the tap (preload).
+  usePreloadConversation(session.id, session.time.updated, session.title);
+  const kept = useKeptConversation(serverAddressOf(address), session.id);
+  const summary = kept === undefined ? undefined : lastSummary(kept.messages);
+  const summaryText = summary === undefined ? undefined : summaryLabel(summary.role, summary.text);
+  const scope = useFavoriteScope();
+  const favorite = useIsFavorited(scope, sessionTarget(session.id));
+  // No worktree pill here (the Dubz list doesn't need it); the height fits the
+  // title and the summary exactly, from cached text, so it's right on load.
+  const height = sessionCardHeight({ titleLines: titleLines(session.title), pills: false, summaryLines: summaryLines(summaryText) });
+  const actions = sessionCardActions({
+    muted: props.muted,
+    archived: false,
+    running: props.running,
+    favorite,
+    onOpen: props.onOpen,
+    onRename: props.onRename,
+    onMute: props.onMute,
+    onToggleFavorite: () => void toggleFavorite(scope, sessionTarget(session.id)),
+    onArchive: props.onArchive,
+    onStop: props.onStop,
+    onDelete: props.onDelete,
+  });
+  return (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {actions.primary.map((action) => (
+          <Button key={action.key} label={action.label} systemImage={action.systemImage} onPress={action.onPress} />
+        ))}
+        <Section>
+          {actions.danger.map((action) => (
+            <Button key={action.key} label={action.label} role="destructive" systemImage={action.systemImage} onPress={action.onPress} />
+          ))}
+        </Section>
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>
+        <VStack modifiers={[contentShape(shapes.rectangle()), onTapGesture(props.onOpen)]}>
+          <CardBody
+            width={props.width}
+            height={height}
+            titleLines={titleLines(session.title)}
+            title={session.title}
+            meta={relativeTime(session.time.updated)}
+            unread={props.unread}
+            unreadColor={themeColors.secondary}
+            muted={props.muted}
+            summary={summaryText}
+          />
+        </VStack>
+      </ContextMenu.Trigger>
+    </ContextMenu>
+  );
+};
+
+/** View All: every worktree session by recency, as the native session card
+ * (reused from Home). */
 export const DubzSessionListPage = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
   readonly shifted?: boolean;
 }): React.ReactElement => {
-  const textColors = useTextColors();
   const { width } = useWindowDimensions();
   const pageWidth = width - WINDOW_SIDE * 2;
   const shifted = props.shifted === true;
-  const { all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
+  const { client, address } = useAppContext();
+  // Favoriting from this list pins to the file's repo scope (as the repo's own
+  // session list does), not Home.
+  const favScope = React.useMemo(() => repoScope(props.file.repo), [props.file.repo]);
+
+  // A rename/delete/mute refreshes the list from the (globally-updated) cache.
+  const [refresh, setRefresh] = React.useState(0);
+  const bump = React.useCallback(() => setRefresh((n) => n + 1), []);
+  const { all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path, refresh]);
+
+  // Unread, running, muted — the same signals Home's cards use.
+  const [reads, setReads] = React.useState<ReadonlyMap<string, number>>(new Map());
+  const [setupDate, setSetupDate] = React.useState<number>(() => Date.now());
+  React.useEffect(() => {
+    void Promise.all([loadReads(), getSetupDate()]).then(([nextReads, date]) => {
+      setReads(nextReads);
+      setSetupDate(date);
+    });
+  }, [refresh]);
+  const { busy, activityAt } = useSessionActivity(client, shifted);
+  const mutedSet = useMutedSessions();
+  const isUnread = (session: SessionSummary): boolean =>
+    Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
+
   return (
     <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
-      <Host style={{ flex: 1 }} ignoreSafeArea="all">
-        <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
-          <PageHeader title="Sessions" width={pageWidth} />
-          <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
-            <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
-              {all.map((session) => (
-                <HStack
-                  key={session.id}
-                  modifiers={[
-                    padding({ horizontal: 16 }),
-                    frame({ width: pageWidth, height: PILL, alignment: "leading" }),
-                    glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
-                    contentShape(shapes.capsule()),
-                    onTapGesture(() => props.onOpen(toOpen(session))),
-                  ]}
-                >
-                  <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{session.title}</UIText>
-                </HStack>
-              ))}
-            </VStack>
-          </ScrollView>
-        </VStack>
-      </Host>
+      <FavoriteScopeProvider value={favScope}>
+        <Host style={{ flex: 1 }} ignoreSafeArea="all">
+          <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
+            <PageHeader title="Sessions" width={pageWidth} />
+            <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
+              <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
+                {all.map((session) => (
+                  <DubzSessionCard
+                    key={session.id}
+                    session={session}
+                    width={pageWidth}
+                    running={busy.has(session.id)}
+                    unread={isUnread(session)}
+                    muted={mutedSet.has(session.id)}
+                    onOpen={() => props.onOpen(toOpen(session))}
+                    onRename={() => promptRenameSession(client, session.id, session.title, bump)}
+                    onStop={() => abortSession(client, session.id, bump)}
+                    onDelete={() => confirmDeleteSession(client, session.id, session.title, bump)}
+                    onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
+                    onMute={() => toggleMute(getApiAddress(address), session.id)}
+                  />
+                ))}
+              </VStack>
+            </ScrollView>
+          </VStack>
+        </Host>
+      </FavoriteScopeProvider>
     </View>
   );
 };

@@ -66,3 +66,34 @@ export const sessionCardSize = (card: { readonly title: string; readonly pills: 
   const rows = titleLines(card.title) + (card.pills ? 1 : 0) + (card.summary ? 2 : 0);
   return rows <= 1 ? "small" : rows <= 3 ? "medium" : "large";
 };
+
+/** Characters of a 13pt summary line taken to fill one line (fewer than fit,
+ * like the title's), so a summary given one line never wraps to two. */
+const SUMMARY_LINE_CHARS = 30;
+
+/** The lines a card's summary takes, 0 when it has none, capped at the two the
+ * card shows (CardBody's `lineLimit(2)`). A char estimate like `titleLines`, so
+ * it is known from the cached text — no measuring, right on first render. */
+export const summaryLines = (summary: string | undefined): 0 | 1 | 2 => (summary === undefined ? 0 : summary.length > SUMMARY_LINE_CHARS ? 2 : 1);
+
+// The pieces CardBody stacks (its `padding({ all: 14 })` and `spacing={8}`),
+// each rounded up a touch so a card is never too short for its content.
+const CARD_PAD = 14;
+const CARD_VSTACK_GAP = 8;
+const TITLE_LINE_H = 21;
+const PILLS_ROW_H = 20;
+const SUMMARY_LINE_H = 17;
+const META_LINE_H = 15;
+
+/** A session card's exact height from what it shows — title lines, optional
+ * pills, summary lines (0–2), and the meta line — so each card best-fits its
+ * content (many heights, not three buckets). Pure over the cached title and
+ * summary, so the right height is there the moment the page loads. */
+export const sessionCardHeight = (content: { readonly titleLines: number; readonly pills: boolean; readonly summaryLines: number }): number => {
+  const rows: Array<number> = [content.titleLines * TITLE_LINE_H];
+  if (content.pills) rows.push(PILLS_ROW_H);
+  if (content.summaryLines > 0) rows.push(content.summaryLines * SUMMARY_LINE_H);
+  rows.push(META_LINE_H);
+  const stacked = rows.reduce((total, row) => total + row, 0) + (rows.length - 1) * CARD_VSTACK_GAP;
+  return Math.ceil(CARD_PAD * 2 + stacked);
+};
