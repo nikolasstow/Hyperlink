@@ -16,7 +16,6 @@ import { colors } from "./colors";
 import type { InstalledPlugin } from "./pluginsClient";
 import { refreshPlugins, usePlugins } from "./pluginsStore";
 import type { RootStackParamList } from "./RootNavigator";
-import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -32,8 +31,7 @@ export const PluginsScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const insets = useSafeAreaInsets();
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   // Prefetched by Home, so this is normally already here; refresh behind it.
   const load = usePlugins();
   React.useEffect(() => {

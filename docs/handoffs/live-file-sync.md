@@ -146,11 +146,15 @@ plugin.
 - Tests: rebase (incl. randomized), hub (real watcher, stale writes, agent
   attribution, rename-saves), the fold, and the app service against a real hub
   over a WebSocket.
-- Deploy note: the app reaches the hub on the API server. A server without
-  `/files/sync` leaves files the device has never kept unopenable. Until this
-  merges, the `eta` worktree runs its own: API server on :5299 (tmux `eta-api`,
-  state copied from epsilon's) and Metro on :8082 (tmux `eta-metro`); its
-  variant marker sets `"apiPort": 5299`, so only the eta app uses it. The
+- One server: the app's setup asks for the agent-console API server, not
+  opencode. The server forwards opencode under `/opencode` (method, headers,
+  body; responses stream, so `/global/event` stays live), and the app's
+  opencode client points there. A saved opencode address (`host:4096`) is
+  carried over once to `host:5199`. Opencode no longer needs to listen beyond
+  this machine once every app is on this build.
+- Deploy note: until this merges, the `eta` worktree runs its own API server
+  on :5299 (tmux `eta-api`, state copied from epsilon's) and Metro on :8082
+  (tmux `eta-metro`). In the eta app's setup, enter `100.67.32.32:5299`. The
   shared :5199/:5195/:8081 (epsilon) are untouched.
 
 ## Open

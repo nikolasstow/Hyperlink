@@ -86,7 +86,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const fullPaths = useFullPaths();
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { address, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
+  const { server, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
 
   const [rootDirDraft, setRootDirDraft] = React.useState(rootDir);
   const [repoTemplateDraft, setRepoTemplateDraft] = React.useState(DEFAULT_REPO_TEMPLATE);
@@ -168,7 +168,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const enablePush = async (): Promise<void> => {
     setPushBusy(true);
     setPushStatus(undefined);
-    const backend = await getBackendAddress(address);
+    const backend = await getBackendAddress(server);
     const result = await registerForPush(backend);
     setPushBusy(false);
     setPushStatus(
@@ -435,7 +435,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
           <CardGlass />
           <Text style={styles.fieldLabel}>Address</Text>
           <Text style={styles.serverAddress} numberOfLines={1} ellipsizeMode="middle">
-            {address}
+            {server}
           </Text>
           <TouchableOpacity style={styles.destructiveRow} activeOpacity={0.6} onPress={onChangeServer}>
             <Text style={styles.destructiveText}>Change server…</Text>

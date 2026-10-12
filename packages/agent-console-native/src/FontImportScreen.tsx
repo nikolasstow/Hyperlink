@@ -20,7 +20,6 @@ import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { addCustomFont, importFontFile, inspectFont, type FontDetails } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
-import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -41,8 +40,7 @@ const DetailRow = (props: { readonly label: string; readonly value: string }): R
 export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
 
   const [step, setStep] = React.useState<"choose" | "details">("choose");
   const [urlInput, setUrlInput] = React.useState("");

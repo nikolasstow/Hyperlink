@@ -51,6 +51,8 @@ const socketUrl = (api: string): string => `${api.replace(/^http/, "ws")}${FileS
 
 const connect = (api: string) =>
   Effect.gen(function* () {
+    // DIAG(live-files): temporary.
+    yield* Effect.sync(() => console.log("[live] connect", socketUrl(api)));
     const protocol = yield* Layer.build(
       RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
         Layer.provide(Socket.layerWebSocket(socketUrl(api))),
@@ -164,6 +166,8 @@ const make = Effect.gen(function* () {
 
   const receive = (path: string, event: FileSync.FileEvent) =>
     Effect.gen(function* () {
+      // DIAG(live-files): temporary.
+      yield* Effect.sync(() => console.log("[live] event", path, event._tag));
       const current = yield* fileOf(path);
       if (event instanceof FileSync.Synced) {
         const kept = Option.isSome(current) ? nothingKept : yield* keptOnDevice(path);
@@ -185,9 +189,11 @@ const make = Effect.gen(function* () {
     }).pipe(Semaphore.withPermits(lock, 1), Effect.andThen(writeIfWanted(path)));
 
   const followOn = (api: string, path: string) =>
-    RcMap.get(connections, api).pipe(
+    Effect.sync(() => console.log("[live] following", api, path)).pipe(
+      Effect.andThen(RcMap.get(connections, api)),
       Effect.flatMap((client) => client.Follow({ path }).pipe(Stream.runForEach((event) => receive(path, event)))),
       Effect.scoped,
+      Effect.tapError((error) => Effect.sync(() => console.log("[live] follow failed", path, String(error)))),
       Effect.tapError((error) =>
         SubscriptionRef.update(problems, HashMap.set(path, error._tag === "FileSyncError" ? error.reason : error._tag === "OutOfStep" ? "Io" : "Unreachable")).pipe(
           Effect.andThen(Effect.logWarning(`live files: following ${path} stopped; following again`, error)),

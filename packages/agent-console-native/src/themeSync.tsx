@@ -12,13 +12,12 @@
 import * as React from "react";
 import { useAppContext } from "./AppContext";
 import { getRemoteConfig, putRemoteConfig } from "./extensionsClient";
-import { getApiAddress, parseTheme } from "./settings";
+import { parseTheme } from "./settings";
 import { useTheme } from "./theme";
 
 export const ThemeSync = (): null => {
   const { theme, setTheme } = useTheme();
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const hydrated = React.useRef(false);
 
   // Pull the server's theme on launch (and if the server changes).

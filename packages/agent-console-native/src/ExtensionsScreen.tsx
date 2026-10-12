@@ -23,15 +23,13 @@ import {
   type ExtensionManifest,
   type LocalExtension,
 } from "./extensionsClient";
-import { getApiAddress } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 export const ExtensionsScreen = (): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { address } = useAppContext();
+  const { server: apiBase } = useAppContext();
   const insets = useSafeAreaInsets();
-  const apiBase = getApiAddress(address);
 
   const [items, setItems] = React.useState<ReadonlyArray<ExtensionManifest>>([]);
   const [local, setLocal] = React.useState<ReadonlyArray<LocalExtension>>([]);

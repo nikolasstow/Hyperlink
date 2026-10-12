@@ -16,7 +16,6 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
-import { getApiAddress } from "./settings";
 import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
@@ -42,7 +41,7 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   // Favoriting a session from this repo's list pins to the repo's scope (shown
   // on its repo page), not Home.
   const favScope = React.useMemo(() => repoScope(repo), [repo]);
-  const { client, address } = useAppContext();
+  const { client, address, server } = useAppContext();
   const headerHeight = useHeaderHeight();
   const isFocused = useIsFocused();
   const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
@@ -132,9 +131,9 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
             onRename={() => promptRenameSession(client, item.id, item.title, () => void load())}
             onStop={() => abortSession(client, item.id, () => void load())}
             onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void load())}
-            onArchive={() => archiveWithUndo(getApiAddress(address), item.id)}
+            onArchive={() => archiveWithUndo(server, item.id)}
             muted={mutedSet.has(item.id)}
-            onMute={() => toggleMute(getApiAddress(address), item.id)}
+            onMute={() => toggleMute(server, item.id)}
           />
         )}
       />

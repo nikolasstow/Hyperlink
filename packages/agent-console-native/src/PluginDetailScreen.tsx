@@ -16,7 +16,6 @@ import { HeaderTitlePill } from "./HeaderTitlePill";
 import { permissionText, requirementText, type InstalledPlugin } from "./pluginsClient";
 import { refreshPlugins, usePlugins } from "./pluginsStore";
 import type { RootStackParamList } from "./RootNavigator";
-import { getApiAddress } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -28,8 +27,7 @@ export const PluginDetailScreen = (props: Props): React.ReactElement => {
   const { id, name } = props.route.params;
   const { navigation } = props;
   const insets = useSafeAreaInsets();
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   // The manager's cached list: no loading step between it and here.
   const plugins = usePlugins();
 

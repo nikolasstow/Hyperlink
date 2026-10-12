@@ -62,7 +62,6 @@ import { PinToast, type PinToastSubject } from "./PinToast";
 import { invokeCollection, searchCollection, type CollectionState, type CollectionGroup, type CollectionItem, type CollectionTarget, type FormSpec, type PinnedFilter } from "./pagesClient";
 import { changeCollection, loadCollection, useCollection, type CollectionData } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
-import { getApiAddress } from "./settings";
 import { ensureWorkspace } from "./extensionViewsStore";
 import { type TextColors, useThemedStyles } from "./theme";
 
@@ -390,8 +389,7 @@ export const CollectionScreen = (props: Props): React.ReactElement => {
   // A worktree page: it shows the repo's primary worktree (primaryWorktree.ts).
   const { dir } = usePrimaryWorktree(props.route.params.repo, props.route.params.dir);
   const { navigation } = props;
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();

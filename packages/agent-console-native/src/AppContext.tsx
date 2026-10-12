@@ -13,9 +13,14 @@ import type { OpencodeClient } from "./client";
 
 type AppContextValue = {
   readonly client: OpencodeClient;
+  /** The server the app connects to (the agent-console API server): plugins,
+   * themes, sessions' marks, live files. */
+  readonly server: string;
+  /** Where opencode is: forwarded by `server` under `/opencode`
+   * (`opencodeAddressOf`). */
   readonly address: string;
   /** Base URL of OUR vite backend (the `/fs`, `/push`, … endpoints), derived
-   * from `address`. Where the file/repo data layer talks — opencode is only the
+   * from `server`. Where the file/repo data layer talks — opencode is only the
    * agent. */
   readonly backend: string;
   readonly rootDir: string;

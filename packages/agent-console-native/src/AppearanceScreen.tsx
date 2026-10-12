@@ -25,7 +25,7 @@ import { colors } from "./colors";
 import { getThemeJson, listExtensions, removeExtension } from "./extensionsClient";
 import { getCustomFonts, type CustomFont } from "./fontsClient";
 import type { RootStackParamList } from "./RootNavigator";
-import { DEFAULT_THEME, getApiAddress, THEME_BACKGROUND, type CodeTheme, type Theme } from "./settings";
+import { DEFAULT_THEME, THEME_BACKGROUND, type CodeTheme, type Theme } from "./settings";
 import { SystemIcon } from "./SystemIcon";
 import { CONTRAST_START, type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 import { resolveThemeColors } from "./shikiHighlighter";
@@ -292,13 +292,12 @@ export const AppearanceScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { theme, setTheme } = useTheme();
-  const { address } = useAppContext();
+  const { server: apiBase } = useAppContext();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   // The theme list is a SwiftUI card that sizes to an explicit width; the screen
   // content is padded 16 each side, so the card spans the rest.
   const contentWidth = windowWidth - 32;
-  const apiBase = getApiAddress(address);
 
   const [themes, setThemes] = React.useState<ReadonlyArray<SelectableTheme>>([]);
   // Themes made on this device. They sit beside the installed ones but, unlike

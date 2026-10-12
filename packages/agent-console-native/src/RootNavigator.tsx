@@ -152,7 +152,7 @@ export const RootNavigator = (): React.ReactElement => {
   const navigationTheme =
     customBackground === undefined ? baseTheme : { ...baseTheme, colors: { ...baseTheme.colors, background: customBackground } };
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
-  const { client, address } = useAppContext();
+  const { client, address, server } = useAppContext();
   // The pages open when the app was last used (read back before the app
   // shows): it opens on them again, after being closed.
   const [initialState] = React.useState(() => {
@@ -193,7 +193,7 @@ export const RootNavigator = (): React.ReactElement => {
   // then updates/ends the activity via raw APNs while the app is suspended.
   React.useEffect(() => {
     let unsubscribe = (): void => {};
-    void getBackendAddress(address).then((backend) => {
+    void getBackendAddress(server).then((backend) => {
       unsubscribe = subscribeActivityPushTokens((sessionID, token) => {
         void fetch(`${backend}/push/activity`, {
           method: "POST",
@@ -203,7 +203,7 @@ export const RootNavigator = (): React.ReactElement => {
       });
     });
     return () => unsubscribe();
-  }, [address]);
+  }, [server]);
 
   // Tapping a notification opens the session it is about. Handled here rather
   // than in a screen because the tap usually arrives with no screen mounted —

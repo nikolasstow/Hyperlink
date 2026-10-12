@@ -54,7 +54,6 @@ import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./re
 import type { RootStackParamList } from "./RootNavigator";
 import { prefetchWorkspaces } from "./extensionViewsStore";
 import { refreshPlugins } from "./pluginsStore";
-import { getApiAddress } from "./settings";
 import { preloadFile } from "./files/preloadFile";
 import { tabEntry } from "./files/FileNav";
 import { useKeptPaths } from "./files/fileKeep";
@@ -108,7 +107,7 @@ const heading = (title: string): Row => ({ kind: "heading", title });
 export const HomeScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { client, backend, rootDir, address } = useAppContext();
+  const { client, backend, rootDir, address, server } = useAppContext();
   const groupSize = useGroupSize();
   // Only stream / lazily load previews while Home is on screen — the chat holds
   // its own stream when open.
@@ -138,7 +137,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       return undefined;
     });
     if (data === undefined) {
-      setError("Couldn't reach the OpenCode server.");
+      setError("Couldn't reach the server.");
       return;
     }
     const visible = data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
@@ -237,8 +236,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // being read, so a repo's menu and its views open with nothing to wait for.
   React.useEffect(() => {
     const workspaces = scanned.flatMap((repo) => repo.worktrees.map((worktree) => worktree.path));
-    if (workspaces.length > 0) prefetchWorkspaces(getApiAddress(address), workspaces);
-  }, [scanned, address]);
+    if (workspaces.length > 0) prefetchWorkspaces(server, workspaces);
+  }, [scanned, server]);
 
   // Every repo's task counts too, so Dubz's tasks block shows them the
   // instant it renders.
@@ -248,14 +247,14 @@ export const HomeScreen = (props: Props): React.ReactElement => {
 
   // The plugin manager's list too, so Settings → Plugins opens with it.
   React.useEffect(() => {
-    void refreshPlugins(getApiAddress(address));
-  }, [address]);
+    void refreshPlugins(server);
+  }, [server]);
 
   // The archive, so archived sessions stay out of every list.
   React.useEffect(() => {
-    void loadArchivedSessions(getApiAddress(address));
-    void loadMutedSessions(getApiAddress(address));
-  }, [address]);
+    void loadArchivedSessions(server);
+    void loadMutedSessions(server);
+  }, [server]);
   const mutedSet = useMutedSessions();
   const archivedSet = useArchivedSessions();
   const visible = unarchived(sessions, archivedSet);
@@ -505,9 +504,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
                 onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
                 onDelete={() => confirmDeleteSession(client, item.session.id, item.session.title, () => void loadSessions())}
-                onArchive={() => archiveWithUndo(getApiAddress(address), item.session.id)}
+                onArchive={() => archiveWithUndo(server, item.session.id)}
                 muted={mutedSet.has(item.session.id)}
-                onMute={() => toggleMute(getApiAddress(address), item.session.id)}
+                onMute={() => toggleMute(server, item.session.id)}
               />
             );
           }

@@ -51,7 +51,6 @@ import type { ViewInfo } from "./extensionViewsClient";
 import { ensureWorkspace, reloadWorkspace, useWorkspaceViews } from "./extensionViewsStore";
 import { useFileNav } from "./files/useFileNav";
 import { repoMenuFor, type RepoMenuItem } from "./repoMenu";
-import { getApiAddress } from "./settings";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { SessionCard } from "./SessionCard";
 import { type FavoriteTarget, repoScope } from "./favorites/model";
@@ -153,7 +152,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { name, dir, isRepo } = props.route.params;
-  const { client, backend, rootDir, address } = useAppContext();
+  const { client, backend, rootDir, address, server: apiBase } = useAppContext();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const { colors: themeColors } = useTheme();
@@ -293,7 +292,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   // where there is a package.json). Home prefetched them, so they are normally
   // here on first render; a folder opened another way loads now. A failure
   // shows as its own row rather than the section quietly missing.
-  const apiBase = getApiAddress(address);
   const extensionViews = useWorkspaceViews(dir);
   React.useEffect(() => {
     ensureWorkspace(apiBase, dir);
@@ -352,9 +350,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         onRename={() => promptRenameSession(client, session.id, session.title, () => void load())}
         onStop={() => abortSession(client, session.id, () => void load())}
         onDelete={() => confirmDeleteSession(client, session.id, session.title, () => void load())}
-        onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
+        onArchive={() => archiveWithUndo(apiBase, session.id)}
         muted={mutedSet.has(session.id)}
-        onMute={() => toggleMute(getApiAddress(address), session.id)}
+        onMute={() => toggleMute(apiBase, session.id)}
       />
     );
   };

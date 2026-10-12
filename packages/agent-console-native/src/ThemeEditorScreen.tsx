@@ -25,7 +25,6 @@ import { BottomSearchPill, useSearchPill } from "./BottomSearchPill";
 import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { colors } from "./colors";
 import { getCreatedTheme, newThemeId, saveCreatedTheme } from "./createdThemes";
-import { getApiAddress } from "./settings";
 import { getThemeJson } from "./extensionsClient";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
@@ -74,8 +73,7 @@ export const ThemeEditorScreen = (props: Props): React.ReactElement => {
   const { themeId, viewFile, viewLabel } = props.route.params;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const appTheme = useTheme();
   const draft = useThemeDraft();
   const pill = useSearchPill();

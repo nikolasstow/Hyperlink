@@ -15,7 +15,6 @@ import { HeaderTitlePill } from "./HeaderTitlePill";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { followProcess, stopProcess } from "./extensionViewsClient";
 import type { RootStackParamList } from "./RootNavigator";
-import { getApiAddress } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ProcessOutput">;
@@ -38,8 +37,7 @@ export const ProcessOutputScreen = (props: Props): React.ReactElement => {
   const textColors = useTextColors();
   const { id, title, commandLine } = props.route.params;
   const { navigation } = props;
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const headerHeight = useHeaderHeight();
   const scroll = React.useRef<ScrollView>(null);
   const [lines, setLines] = React.useState<ReadonlyArray<Line>>([]);

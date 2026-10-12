@@ -22,7 +22,6 @@ import { colors } from "./colors";
 import { getCreatedTheme } from "./createdThemes";
 import { getThemeJson } from "./extensionsClient";
 import { defaultThemeDocument } from "./shikiHighlighter";
-import { getApiAddress } from "./settings";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
 import { markImported, useThemeDraft } from "./themeDraft";
@@ -55,8 +54,7 @@ export const ThemeImportValuesScreen = (props: Props): React.ReactElement => {
   const textColors = useTextColors();
   const { file, label } = props.route.params;
   const insets = useSafeAreaInsets();
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const draft = useThemeDraft();
 
   const [source, setSource] = React.useState<VsCodeTheme | undefined>(undefined);

@@ -19,10 +19,18 @@
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
+import { normalizeServerAddress } from "./opencode/serverAddress";
 import type { PermissionMode } from "./sessionPermissions";
 
-const SERVER_ADDRESS_KEY = "agent-console-native:serverAddress";
+/** The server the app connects to: the agent-console API server, which forwards
+ * opencode under `/opencode` (`opencodeAddressOf`). */
+const SERVER_ADDRESS_KEY = "agent-console-native:server";
+/** Before the app went through the API server it saved opencode's own address
+ * here; read once to carry it over (`getServerAddress`). */
+const OPENCODE_ADDRESS_KEY = "agent-console-native:serverAddress";
+/** opencode's port then, and the API server's now, for carrying it over. */
+const OPENCODE_PORT = "4096";
+const API_SERVER_PORT = "5199";
 const ROOT_DIR_KEY = "agent-console-native:rootDir";
 const REPO_TEMPLATE_KEY = "agent-console-native:repoTemplate";
 const WORKTREE_TEMPLATE_KEY = "agent-console-native:worktreeTemplate";
@@ -70,7 +78,28 @@ export const resolveWorktreePath = (
 ): string =>
   template.replaceAll("{root}", rootDir).replaceAll("{repo}", repo).replaceAll("{name}", name);
 
+/** Where opencode is: forwarded by the server under `/opencode`. */
+export const opencodeAddressOf = (server: string): string => `${normalizeServerAddress(server)}/opencode`;
+
+/** An address saved for opencode itself, as the API server on the same host.
+ * One the user typed some other way is kept as it is. */
+export const carriedOverAddress = (saved: string): string => {
+  try {
+    const url = new URL(normalizeServerAddress(saved));
+    if (url.port !== OPENCODE_PORT) return saved;
+    url.port = API_SERVER_PORT;
+    return url.origin;
+  } catch {
+    return saved;
+  }
+};
+
 export const getServerAddress = async (): Promise<string | undefined> => {
+  const legacy = await AsyncStorage.getItem(OPENCODE_ADDRESS_KEY);
+  if (legacy !== null) {
+    if (legacy !== "") await AsyncStorage.setItem(SERVER_ADDRESS_KEY, carriedOverAddress(legacy));
+    await AsyncStorage.removeItem(OPENCODE_ADDRESS_KEY);
+  }
   const value = await AsyncStorage.getItem(SERVER_ADDRESS_KEY);
   return value ?? undefined;
 };
@@ -234,12 +263,12 @@ export const getSessionPermissionModes = async (): Promise<Record<string, Permis
 export const setSessionPermissionModes = (value: Record<string, PermissionMode>): Promise<void> =>
   AsyncStorage.setItem(SESSION_PERMISSION_MODES_KEY, JSON.stringify(value));
 
-/** The backend base URL derived from the opencode server address: same host,
- * the dev server's port. Pure — the single source both the sync context value
- * and the async override-aware `getBackendAddress` build on. */
+/** The backend base URL derived from the server address: same host, the dev
+ * server's port. Pure — the single source both the sync context value and the
+ * async override-aware `getBackendAddress` build on. */
 export const deriveBackendAddress = (serverAddress: string): string => {
   try {
-    const url = new URL(serverAddress);
+    const url = new URL(normalizeServerAddress(serverAddress));
     return `${url.protocol}//${url.hostname}:${DEFAULT_BACKEND_PORT}`;
   } catch {
     return serverAddress;
@@ -251,24 +280,6 @@ export const getBackendAddress = async (serverAddress: string): Promise<string> 
   const override = await AsyncStorage.getItem(BACKEND_ADDRESS_KEY);
   if (override !== null && override !== "") return override;
   return deriveBackendAddress(serverAddress);
-};
-
-/** The off-vite Effect API server's port (`pnpm serve`), same host as opencode
- * — where extensions + synced config live, distinct from the vite backend. A
- * variant whose branch changes the server runs its own and names its port
- * (`extra.apiPort`, from app.config.js). */
-const DEFAULT_API_PORT = 5199;
-const variantApiPort: unknown = Constants.expoConfig?.extra?.apiPort;
-const API_PORT = typeof variantApiPort === "number" ? variantApiPort : DEFAULT_API_PORT;
-
-/** Base URL of the Effect API server, derived from the opencode server host. */
-export const getApiAddress = (serverAddress: string): string => {
-  try {
-    const url = new URL(serverAddress);
-    return `${url.protocol}//${url.hostname}:${API_PORT}`;
-  } catch {
-    return serverAddress;
-  }
 };
 
 export const setBackendAddress = (value: string): Promise<void> =>

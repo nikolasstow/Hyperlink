@@ -313,7 +313,7 @@ export const Composer = (props: {
       setText("");
       if (selectedModel !== undefined) void recordModelUse(selectedModel);
     } catch {
-      setError("Message failed to send — is the OpenCode server running?");
+      setError("Message failed to send — is the server running?");
     } finally {
       sending.current = false;
     }

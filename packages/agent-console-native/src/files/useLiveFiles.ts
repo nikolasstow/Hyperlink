@@ -14,7 +14,6 @@ import { Effect, Fiber, HashMap, Option, Stream } from "effect";
 import * as React from "react";
 import { useAppContext } from "../AppContext";
 import { forkApp, runApp } from "../effect/runtime";
-import { getApiAddress } from "../settings";
 import { useKeptPaths } from "./fileKeep";
 import { tabEntry } from "./FileNav";
 import { LiveFiles, type LiveFileProblem, type LiveFileUpdate } from "./LiveFiles";
@@ -141,7 +140,7 @@ const useOnScreenPaths = (): ReadonlySet<string> =>
 
 /** Keeps the files someone might open next followed. Mounted once. */
 export const LiveFilesFollower = (): null => {
-  const { address } = useAppContext();
+  const { server } = useAppContext();
   const places = useFilePlaces();
   const kept = useKeptPaths();
   const shown = useOnScreenPaths();
@@ -157,7 +156,9 @@ export const LiveFilesFollower = (): null => {
     return all;
   }, [places, kept, shown]);
   React.useEffect(() => {
-    run("following", (live) => live.follow(getApiAddress(address), paths));
-  }, [address, paths]);
+    // DIAG(live-files): temporary, remove once the device path is confirmed.
+    console.log("[live] follow", server, [...paths]);
+    run("following", (live) => live.follow(server, paths));
+  }, [server, paths]);
   return null;
 };

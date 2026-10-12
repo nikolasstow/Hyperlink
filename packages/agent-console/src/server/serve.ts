@@ -16,12 +16,13 @@
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
+import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
 import { api } from "./api";
 import { CollectionStates } from "./collections/state";
 import { ExtensionViews } from "./extensionHost/extensionViews";
 import { fileSyncLayer } from "./files/rpc";
+import { opencodeProxyRoute } from "./opencodeProxy";
 import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
 import { SessionArchive } from "./sessions/archive";
@@ -180,7 +181,8 @@ const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 
 // The stream route needs the runner per request, so it is provided to the
 // served router as a whole (the same instance the API's handlers use).
-const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer)).pipe(
+const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer, opencodeProxyRoute)).pipe(
+  Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),
   Layer.provide(NodeHttpServer.layer(createServer, { port })),
 );

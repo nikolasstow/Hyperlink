@@ -176,7 +176,7 @@ const PreviewMetaSkeleton = (): React.ReactElement => (
 );
 
 export const NewRepoSheet = (props: Props): React.ReactElement => {
-  const { client, address, rootDir } = useAppContext();
+  const { client, server, rootDir } = useAppContext();
   const colorScheme = useColorScheme();
   const queryState = useNativeState("");
   const nameState = useNativeState("");
@@ -224,13 +224,13 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
 
   React.useEffect(() => {
     let cancelled = false;
-    void getBackendAddress(address).then((backend) => {
+    void getBackendAddress(server).then((backend) => {
       if (!cancelled) setBackendAddress(backend);
     });
     return () => {
       cancelled = true;
     };
-  }, [address]);
+  }, [server]);
 
   const applyFolderName = (repoName: string): void => {
     nameState.set(repoName);

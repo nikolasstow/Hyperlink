@@ -17,7 +17,7 @@ import { useColorScheme } from "react-native";
 import { useAppContextOptional } from "./AppContext";
 import { getCreatedTheme } from "./createdThemes";
 import { getThemeJson } from "./extensionsClient";
-import { getApiAddress, type CodeTheme, type Theme } from "./settings";
+import { type CodeTheme, type Theme } from "./settings";
 import { FALLBACK_THEME, shikiThemeOf } from "./shikiHighlighter";
 import { useTheme } from "./theme";
 
@@ -52,7 +52,7 @@ export const useResolvedCodeTheme = (enabled: CodeTheme | undefined, scheme: Sch
   // no server, bundled and device-created themes still resolve; only an
   // extension theme's fetch is skipped (it falls back until there is one).
   const ctx = useAppContextOptional();
-  const apiBase = ctx === undefined ? undefined : getApiAddress(ctx.address);
+  const apiBase = ctx === undefined ? undefined : ctx.server;
   const key = themeKey(scheme, enabled);
 
   // Seed from the cache synchronously: if the theme's already resolved, the

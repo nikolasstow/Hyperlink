@@ -23,7 +23,6 @@ import { colors } from "./colors";
 import { listCreatedThemes, type CreatedTheme } from "./createdThemes";
 import { listExtensions, type ThemeContribution } from "./extensionsClient";
 import { resolveThemeColors } from "./shikiHighlighter";
-import { getApiAddress } from "./settings";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
 import { useThemeDraft } from "./themeDraft";
@@ -49,8 +48,7 @@ export const ThemeImportSourceScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const insets = useSafeAreaInsets();
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const draft = useThemeDraft();
 
   const [installed, setInstalled] = React.useState<ReadonlyArray<InstalledSource>>([]);

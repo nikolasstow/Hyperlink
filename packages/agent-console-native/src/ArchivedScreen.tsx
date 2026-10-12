@@ -30,7 +30,6 @@ import type { RootStackParamList } from "./RootNavigator";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
 import { fetchArchive, toggleMute, unarchiveWithUndo, useArchivedSessions, useMutedSessions } from "./sessionArchive";
 import { LAYOUT_MS, SessionCard } from "./SessionCard";
-import { getApiAddress } from "./settings";
 import { SkeletonList } from "./Skeleton";
 import { relativeTime } from "./time";
 import { useSessionActivity } from "./useSessionActivity";
@@ -54,8 +53,7 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { repo } = props.route.params;
-  const { client, address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { client, address, server: apiBase } = useAppContext();
   const headerHeight = useHeaderHeight();
   const isFocused = useIsFocused();
   const { busy } = useSessionActivity(client, isFocused);

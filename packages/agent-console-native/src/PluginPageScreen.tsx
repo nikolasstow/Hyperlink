@@ -34,7 +34,6 @@ import { invokeCollection, invokeSections, pageMenuBlock, type FormSpec, type Pa
 import { FormSheet } from "./CollectionSheets";
 import { changeCollection, loadCollection, loadSections, useCollection, useSections } from "./pagesStore";
 import type { RootStackParamList } from "./RootNavigator";
-import { getApiAddress } from "./settings";
 import { usePullToRefresh } from "./pullToRefresh";
 import { RunCountdownRing } from "./RunCountdownRing";
 import { useRunCountdown } from "./runCountdown";
@@ -345,8 +344,7 @@ export const PluginPageScreen = (props: Props): React.ReactElement => {
   const worktree = usePrimaryWorktree(repo, props.route.params.dir);
   const { dir } = worktree;
   const { navigation } = props;
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const load = useSections(dir, page, params);

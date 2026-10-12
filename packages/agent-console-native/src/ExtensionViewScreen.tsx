@@ -38,7 +38,6 @@ import { usePrimaryWorktree } from "./primaryWorktree";
 import { usePullToRefresh } from "./pullToRefresh";
 import { SkeletonList } from "./Skeleton";
 import { setiDefaultGlyph, setiFolderGlyph } from "./setiIcons";
-import { getApiAddress } from "./settings";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ExtensionView">;
@@ -183,8 +182,7 @@ export const ExtensionViewScreen = (props: Props): React.ReactElement => {
   // A worktree page: it shows the repo's primary worktree (primaryWorktree.ts).
   const { dir } = usePrimaryWorktree(props.route.params.repo, props.route.params.dir);
   const { navigation } = props;
-  const { address } = useAppContext();
-  const apiBase = getApiAddress(address);
+  const { server: apiBase } = useAppContext();
   const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const load = useViewTree(dir, view);

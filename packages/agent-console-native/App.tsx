@@ -16,7 +16,7 @@ import { LiveFilesFollower } from "./src/files/useLiveFiles";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
-import { type OpencodeClient, makeClient } from "./src/client";
+import { type OpencodeClient, makeClient, normalizeServerAddress } from "./src/client";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
 import { ThemeProvider } from "./src/theme";
@@ -28,6 +28,7 @@ import {
   getRootDir,
   getServerAddress,
   getBackendAddress,
+  opencodeAddressOf,
   getSessionPermissionModes,
   setRootDir,
   setServerAddress,
@@ -46,19 +47,28 @@ import { KeyboardHeightProvider } from "./src/keyboardHeight";
 type Screen =
   | { readonly step: "loading" }
   | { readonly step: "server-setup"; readonly error?: string }
-  | { readonly step: "connecting"; readonly address: string }
-  | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly address: string; readonly error?: string }
-  | { readonly step: "ready"; readonly client: OpencodeClient; readonly address: string; readonly rootDir: string };
+  | { readonly step: "connecting"; readonly server: string }
+  | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly server: string; readonly error?: string }
+  | { readonly step: "ready"; readonly client: OpencodeClient; readonly server: string; readonly rootDir: string };
 
 /** The longest the launch waits for the device's stores to be read back. */
 const READ_BACK_WAIT_MS = 1000;
 
-const connectToServer = async (address: string): Promise<OpencodeClient> => {
-  const client = makeClient(address);
-  const { data, error } = await client.session.list();
+/** Reaching the server (and opencode through it) gives up after this long:
+ * an address that answers nothing must not hold the app on the launch screen. */
+const CONNECT_TIMEOUT_MS = 10_000;
+
+/** Connect through the server: listing opencode's sessions there proves both
+ * are up. */
+const connectToServer = async (server: string): Promise<OpencodeClient> => {
+  const client = makeClient(opencodeAddressOf(server));
+  const timedOut = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`No answer from "${server}". Is the agent-console server running there?`)), CONNECT_TIMEOUT_MS),
+  );
+  const { data, error } = await Promise.race([client.session.list(), timedOut]);
   if (error !== undefined || data === undefined) {
     const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : undefined;
-    throw new Error(message ?? `Couldn't reach an OpenCode server at "${address}".`);
+    throw new Error(message ?? `Couldn't reach opencode through the server at "${server}".`);
   }
   return client;
 };
@@ -98,16 +108,16 @@ const AppInner = (): React.ReactElement => {
       // Fire and forget: the backend may be down, permission may be denied,
       // and neither should delay or block getting to the session list.
       void getBackendAddress(savedAddress).then((backend) => registerForPush(backend));
-      setScreen({ step: "connecting", address: savedAddress });
+      setScreen({ step: "connecting", server: savedAddress });
       try {
         const client = await connectToServer(savedAddress);
         const savedRootDir = await getRootDir();
         if (savedRootDir === undefined) {
-          setScreen({ step: "root-setup", client, address: savedAddress });
+          setScreen({ step: "root-setup", client, server: savedAddress });
         } else {
           setRootDirInput(savedRootDir);
           await readBack;
-          setScreen({ step: "ready", client, address: savedAddress, rootDir: savedRootDir });
+          setScreen({ step: "ready", client, server: savedAddress, rootDir: savedRootDir });
         }
       } catch (err) {
         setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) });
@@ -118,26 +128,26 @@ const AppInner = (): React.ReactElement => {
   const onSubmitServer = (): void => {
     const address = addressInput.trim();
     if (address.length === 0) return;
-    setScreen({ step: "connecting", address });
+    setScreen({ step: "connecting", server: address });
     connectToServer(address)
       .then(async (client) => {
         void setServerAddress(address);
         const savedRootDir = await getRootDir();
         if (savedRootDir === undefined) {
-          setScreen({ step: "root-setup", client, address });
+          setScreen({ step: "root-setup", client, server: address });
         } else {
           setRootDirInput(savedRootDir);
-          setScreen({ step: "ready", client, address, rootDir: savedRootDir });
+          setScreen({ step: "ready", client, server: address, rootDir: savedRootDir });
         }
       })
       .catch((err: unknown) => setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) }));
   };
 
-  const onSubmitRootDir = (client: OpencodeClient, address: string): void => {
+  const onSubmitRootDir = (client: OpencodeClient, server: string): void => {
     const rootDir = rootDirInput.trim();
     if (rootDir.length === 0) return;
     void setRootDir(rootDir);
-    setScreen({ step: "ready", client, address, rootDir });
+    setScreen({ step: "ready", client, server, rootDir });
   };
 
   const onChangeServer = (): void => {
@@ -167,14 +177,14 @@ const AppInner = (): React.ReactElement => {
         <LaunchNavigator />
       ) : screen.step === "server-setup" ? (
         <View style={[styles.center, { paddingTop: insets.top }]}>
-          <Text style={styles.title}>Where’s your OpenCode server?</Text>
-          <Text style={styles.dimText}>Host and port, e.g. 100.67.32.32:4096</Text>
+          <Text style={styles.title}>Where’s your server?</Text>
+          <Text style={styles.dimText}>The agent-console server’s host and port, e.g. 100.67.32.32:5199</Text>
           {screen.error !== undefined ? <Text style={styles.errorText}>{screen.error}</Text> : null}
           <TextInput
             style={styles.input}
             value={addressInput}
             onChangeText={setAddressInput}
-            placeholder="100.67.32.32:4096"
+            placeholder="100.67.32.32:5199"
             placeholderTextColor={colors.placeholderText}
             autoCapitalize="none"
             autoCorrect={false}
@@ -196,16 +206,17 @@ const AppInner = (): React.ReactElement => {
             placeholderTextColor={colors.placeholderText}
             autoCapitalize="none"
             autoCorrect={false}
-            onSubmitEditing={() => onSubmitRootDir(screen.client, screen.address)}
+            onSubmitEditing={() => onSubmitRootDir(screen.client, screen.server)}
           />
-          <Button title="Continue" onPress={() => onSubmitRootDir(screen.client, screen.address)} />
+          <Button title="Continue" onPress={() => onSubmitRootDir(screen.client, screen.server)} />
         </View>
       ) : (
         <AppContextProvider
           value={{
             client: screen.client,
-            address: screen.address,
-            backend: deriveBackendAddress(screen.address),
+            server: normalizeServerAddress(screen.server),
+            address: opencodeAddressOf(screen.server),
+            backend: deriveBackendAddress(screen.server),
             rootDir: screen.rootDir,
             onChangeRootDir,
             onChangeServer,
