@@ -18,7 +18,7 @@
  *
  * @internal
  */
-import { Button, ContextMenu, Host, HStack, Image, List, ScrollView, Section, Text as UIText, VStack, ZStack } from "@expo/ui/swift-ui";
+import { Button, ContextMenu, Host, HStack, Image, List, ScrollView, Section, Spacer, Text as UIText, VStack, ZStack } from "@expo/ui/swift-ui";
 import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
@@ -57,8 +57,6 @@ const GAP = 8;
 const NUMBER_WIDTH = 60;
 /** The window's side margin (BarWindow) + the suggestions' padding, per side. */
 const WINDOW_SIDE = 12 + 16;
-/** Space the page title clears for the window's persistent back button. */
-const BACK_INSET = PILL + 10;
 /** How many extra sessions the expand reveals. */
 const EXTRA = 4;
 /** SwiftUI's own animation (UI thread), no Reanimated. */
@@ -66,6 +64,14 @@ const SLIDE = Animation.easeInOut({ duration: 0.28 });
 export const SLIDE_MS = 280;
 /** Stands in for SwiftUI `.infinity` so a frame fills. */
 const FILL = 100000;
+/** The header pill's top, matching the window's persistent back button. */
+const TOP_INSET = 12;
+/** The horizontal padding inside the title pill (PageHeader). */
+const TITLE_PILL_PAD = 14;
+/** Scroll content clears the overlaid header at the top, and the composer pill
+ * at the bottom, so it passes BEHIND both bars as it scrolls. */
+const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
+const BOTTOM_CLEARANCE = 16;
 
 const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated });
 
@@ -238,15 +244,18 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
   const textColors = useTextColors();
   return (
     <ZStack modifiers={[frame({ width: props.width, height: PILL })]}>
-      {/* Centred title pill. */}
+      {/* Centred title pill. The title is capped so a long one truncates rather
+       * than growing the pill over the back (left) and full-screen (right)
+       * buttons: the pill hugs the (capped) text, leaving a button's room each
+       * side. */}
       <HStack
         modifiers={[
-          padding({ horizontal: 14 }),
+          padding({ horizontal: TITLE_PILL_PAD }),
           frame({ height: PILL, alignment: "center" }),
           glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
         ]}
       >
-        <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+        <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1), frame({ maxWidth: props.width - 2 * (PILL + GAP) - 2 * TITLE_PILL_PAD })]}>{props.title}</UIText>
       </HStack>
       {/* Trailing full-screen button, overlaid at the right. */}
       {props.onFullScreen !== undefined ? (
@@ -264,6 +273,43 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
         </HStack>
       ) : null}
     </ZStack>
+  );
+};
+
+/** A Dubz sub-page: a full-height native scroll with the header pill floating
+ * over its top. The scroll fills the window body, so its content passes BEHIND
+ * the header (top) and the composer pill (bottom) as it scrolls; the content is
+ * inset to clear both bars at rest. Slides in from the right natively. */
+const DubzScrollPage = (props: {
+  readonly pageWidth: number;
+  readonly shifted: boolean;
+  readonly title: string;
+  readonly spacing: number;
+  readonly onFullScreen?: () => void;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  const { width } = useWindowDimensions();
+  return (
+    <View style={styles.page} pointerEvents={props.shifted ? "auto" : "none"}>
+      <Host style={{ flex: 1 }} ignoreSafeArea="all">
+        <ZStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted)]}>
+          {/* The scroll fills the whole body; its content starts below the
+           * header and ends above the pill, but the track runs edge to edge so
+           * content slides behind both. */}
+          <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
+            <VStack alignment="leading" spacing={props.spacing} modifiers={[frame({ width: props.pageWidth, alignment: "leading" }), padding({ top: HEADER_CLEARANCE, bottom: BOTTOM_CLEARANCE })]}>
+              {props.children}
+            </VStack>
+          </ScrollView>
+          {/* The header floats over the scroll's top (a Spacer fills the rest,
+           * so only the pills hit-test and the scroll shows through). */}
+          <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), padding({ top: TOP_INSET })]}>
+            <PageHeader title={props.title} width={props.pageWidth} onFullScreen={props.onFullScreen} />
+            <Spacer />
+          </VStack>
+        </ZStack>
+      </Host>
+    </View>
   );
 };
 
@@ -292,22 +338,13 @@ export const DubzSessionPage = (props: {
     [transcript],
   );
   return (
-    <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
-      <Host style={{ flex: 1 }} ignoreSafeArea="all">
-        <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
-          <PageHeader title={props.session.title} width={pageWidth} onFullScreen={props.onFullScreen} />
-          <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
-            <VStack alignment="leading" spacing={12} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
-              {messages.map((message) => (
-                <UIText key={message.id} modifiers={[font({ size: 14 }), foregroundStyle(message.role === "user" ? textColors.label : textColors.secondaryLabel)]}>
-                  {message.text}
-                </UIText>
-              ))}
-            </VStack>
-          </ScrollView>
-        </VStack>
-      </Host>
-    </View>
+    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={12} onFullScreen={props.onFullScreen}>
+      {messages.map((message) => (
+        <UIText key={message.id} modifiers={[font({ size: 14 }), foregroundStyle(message.role === "user" ? textColors.label : textColors.secondaryLabel)]}>
+          {message.text}
+        </UIText>
+      ))}
+    </DubzScrollPage>
   );
 };
 
@@ -420,39 +457,32 @@ export const DubzSessionListPage = (props: {
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
 
   return (
-    <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
-      <FavoriteScopeProvider value={favScope}>
-        <Host style={{ flex: 1 }} ignoreSafeArea="all">
-          <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
-            <PageHeader title="Sessions" width={pageWidth} />
-            <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
-              <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
-                {all.map((session) => (
-                  <DubzSessionCard
-                    key={session.id}
-                    session={session}
-                    width={pageWidth}
-                    running={busy.has(session.id)}
-                    unread={isUnread(session)}
-                    muted={mutedSet.has(session.id)}
-                    onOpen={() => props.onOpen(toOpen(session))}
-                    onRename={() => promptRenameSession(client, session.id, session.title, bump)}
-                    onStop={() => abortSession(client, session.id, bump)}
-                    onDelete={() => confirmDeleteSession(client, session.id, session.title, bump)}
-                    onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
-                    onMute={() => toggleMute(getApiAddress(address), session.id)}
-                  />
-                ))}
-              </VStack>
-            </ScrollView>
-          </VStack>
-        </Host>
-      </FavoriteScopeProvider>
-    </View>
+    <FavoriteScopeProvider value={favScope}>
+      <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title="Sessions" spacing={GAP}>
+        {all.map((session) => (
+          <DubzSessionCard
+            key={session.id}
+            session={session}
+            width={pageWidth}
+            running={busy.has(session.id)}
+            unread={isUnread(session)}
+            muted={mutedSet.has(session.id)}
+            onOpen={() => props.onOpen(toOpen(session))}
+            onRename={() => promptRenameSession(client, session.id, session.title, bump)}
+            onStop={() => abortSession(client, session.id, bump)}
+            onDelete={() => confirmDeleteSession(client, session.id, session.title, bump)}
+            onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
+            onMute={() => toggleMute(getApiAddress(address), session.id)}
+          />
+        ))}
+      </DubzScrollPage>
+    </FavoriteScopeProvider>
   );
 };
 
 const styles = StyleSheet.create({
+  // No vertical padding: the scroll fills the body so content passes behind the
+  // top and bottom bars; DubzScrollPage insets the content to clear them.
   page: {
     position: "absolute",
     top: 0,
@@ -460,7 +490,5 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
   },
 });
