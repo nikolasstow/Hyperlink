@@ -1,85 +1,54 @@
 /**
- * Sessions inside the Dubz window. On a page that publishes an editable document,
- * Dubz shows one session row: a big pill with the most related session and a
- * number pill with how many sessions live in that file's worktree, together
- * filling the width. Tap the big pill to open that session; tap the number for
- * the full list (related first, then by recency). A session opens as the real
- * chat — the actual MessageBubble transcript — in the Dubz window, with a
- * full-screen button to the proper session page.
+ * The session row Dubz shows on a page that publishes an editable document: one
+ * row, all SwiftUI (so nothing React renders inside the window's glass) — a big
+ * pill with the most related session and a number pill with how many sessions
+ * live in that file's worktree, stretched to fit the window. Tapping opens the
+ * session's proper full-screen page.
  *
- * Glass here is SwiftUI (`Host` + `glassEffect`), the only glass that renders
- * inside the window's own glass — `expo-glass-effect` nested in it does not.
- * Pills are a fixed size computed from the screen (nothing measured).
- *
- * First cut: the transcript is the kept/preview conversation (live streaming and
- * continuing from the Dubz pill are next).
+ * The in-window session view was removed: it pulled heavy React (a live
+ * transcript) into the glass window and destabilised it. It comes back later as
+ * native, once the row is solid.
  *
  * @internal
  */
-import { Host, HStack, Image, Text as UIText } from "@expo/ui/swift-ui";
+import { Host, HStack, Image, Spacer, Text as UIText } from "@expo/ui/swift-ui";
 import { contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useAppContext } from "../AppContext";
-import { chatMessageOfV1 } from "../chat/fromV1";
-import { CollapsiblePartsProvider } from "../CollapsibleParts";
+import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import type { FileRef } from "../dubzSuggestions";
-import { MessageBubble } from "../MessageBubble";
 import { cachedSessionsNow } from "../sessionCache";
-import { useSessionPreview } from "../sessionPreview";
-import { SystemIcon } from "../SystemIcon";
-import { type TextColors, useTextColors, useThemedStyles, useTheme } from "../theme";
+import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { sessionsForFile } from "./sessionsForFile";
 
-/** The session a row/list opens, as the sub-page needs it. */
+/** The session a row opens. */
 export interface DubzOpenSession {
   readonly id: string;
   readonly title: string;
-  readonly updated: number;
-  readonly directory: string;
 }
 
 const ROW_HEIGHT = 44;
-const NUMBER_WIDTH = 56;
+const NUMBER_WIDTH = 52;
 const ROW_GAP = 8;
-/** The suggestions area's horizontal padding (Dubz makeStyles). */
-const AREA_PADDING = 16;
-
-const relativeTime = (ms: number): string => {
-  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
-};
-
-const baseName = (dir: string): string => dir.split("/").filter(Boolean).pop() ?? dir;
-
-const toOpen = (session: { id: string; title: string; directory: string; time: { updated: number } }): DubzOpenSession => ({
-  id: session.id,
-  title: session.title,
-  updated: session.time.updated,
-  directory: session.directory,
-});
+/** The window's side margin (BarWindow) plus the suggestions' padding, per side:
+ * the row stretches to exactly this, so it never overflows the window. */
+const WINDOW_SIDE = 12 + 16;
 
 /**
- * The session suggestion: one row — a big pill (most related session) and a
- * number pill (sessions in the file's worktree), filling the width. SwiftUI
- * glass so it renders inside the window.
+ * The session suggestion: one native row — a big pill (most related session) and
+ * a number pill (sessions in the file's worktree), filling the window width.
  */
 export const DubzSessionRow = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
-  readonly onList: () => void;
 }): React.ReactElement | null => {
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
   const { related, all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
   const top = related[0] ?? all[0];
   if (top === undefined) return null;
-  const rowWidth = width - AREA_PADDING * 2;
+  const rowWidth = width - WINDOW_SIDE * 2;
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - ROW_GAP);
+  const open = (): void => props.onOpen({ id: top.id, title: top.title });
   return (
     <Host style={{ width: rowWidth, height: ROW_HEIGHT }} ignoreSafeArea="all">
       <HStack spacing={ROW_GAP}>
@@ -90,7 +59,7 @@ export const DubzSessionRow = (props: {
             frame({ width: bigWidth, height: ROW_HEIGHT, alignment: "leading" }),
             glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
             contentShape(shapes.capsule()),
-            onTapGesture(() => props.onOpen(toOpen(top))),
+            onTapGesture(open),
           ]}
         >
           <Image systemName="bubble.left.and.bubble.right.fill" size={14} color={textColors.secondaryLabel} />
@@ -101,7 +70,7 @@ export const DubzSessionRow = (props: {
             frame({ width: NUMBER_WIDTH, height: ROW_HEIGHT, alignment: "center" }),
             glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
             contentShape(shapes.capsule()),
-            onTapGesture(props.onList),
+            onTapGesture(open),
           ]}
         >
           <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(related.length)}</UIText>
@@ -111,176 +80,75 @@ export const DubzSessionRow = (props: {
   );
 };
 
-/** The full list of sessions for a file — related first, then by recency. */
-export const DubzSessionList = (props: {
-  readonly file: FileRef;
-  readonly onOpen: (session: DubzOpenSession) => void;
+const BUTTON = 36;
+
+/**
+ * A placeholder session page inside the Dubz window — a native glass header (a
+ * back button to the main view, the title, a full-screen button to the proper
+ * page) over an empty body. It stands in for the real chat so the transition
+ * and the glass buttons can be got right before the heavy chat goes in.
+ */
+export const DubzSessionPlaceholder = (props: {
+  readonly title: string;
   readonly onBack: () => void;
+  readonly onFullScreen: () => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
-  const { colors: themeColors } = useTheme();
-  const { all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
+  const textColors = useTextColors();
+  const { width } = useWindowDimensions();
+  const headerWidth = width - WINDOW_SIDE * 2;
   return (
-    <View style={styles.sub}>
-      <Header title="Sessions" onBack={props.onBack} tint={themeColors.secondary} />
-      <ScrollView style={styles.fill} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-        {all.map((session) => (
-          <Pressable
-            key={session.id}
-            style={styles.listRow}
-            onPress={() => props.onOpen(toOpen(session))}
-            accessibilityRole="button"
-            accessibilityLabel={`Open session ${session.title}`}
+    <View style={styles.page}>
+      <Host style={{ width: headerWidth, height: BUTTON }} ignoreSafeArea="all">
+        <HStack spacing={10} alignment="center">
+          <HStack
+            modifiers={[
+              frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
+              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+              contentShape(shapes.capsule()),
+              onTapGesture(props.onBack),
+            ]}
           >
-            <View style={styles.listText}>
-              <Text style={styles.listTitle} numberOfLines={1}>
-                {session.title}
-              </Text>
-              <Text style={styles.listMeta} numberOfLines={1}>
-                {baseName(session.directory)}
-              </Text>
-            </View>
-            <Text style={styles.listTime}>{relativeTime(session.time.updated)}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-    </View>
-  );
-};
-
-/** A session open in the Dubz window: the real transcript (pinned to the
- * bottom, newest in view), a back chip, and a full-screen button to the proper
- * session page (where the 3-dot menu would be). */
-export const DubzSessionView = (props: {
-  readonly session: DubzOpenSession;
-  readonly onBack: () => void;
-  readonly onFullScreen: (sessionID: string) => void;
-}): React.ReactElement => {
-  const styles = useThemedStyles(makeStyles);
-  const { colors: themeColors } = useTheme();
-  const { client } = useAppContext();
-  const transcript = useSessionPreview(client, props.session.id, props.session.updated, true);
-  const scrollRef = React.useRef<ScrollView>(null);
-  const messages = React.useMemo(
-    () =>
-      transcript === undefined
-        ? []
-        : transcript.order.flatMap((id) => {
-            const message = transcript.messages.get(id);
-            return message === undefined ? [] : [chatMessageOfV1(message)];
-          }),
-    [transcript],
-  );
-  return (
-    <View style={styles.sub}>
-      <Header
-        title={props.session.title}
-        onBack={props.onBack}
-        tint={themeColors.secondary}
-        right={
-          <Pressable onPress={() => props.onFullScreen(props.session.id)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Open full screen">
-            <SystemIcon name="arrow.up.left.and.arrow.down.right" size={16} color={themeColors.secondary} />
-          </Pressable>
-        }
-      />
-      <CollapsiblePartsProvider newestID={undefined}>
-        <ScrollView
-          ref={scrollRef}
-          style={styles.fill}
-          contentContainerStyle={styles.transcriptContent}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-        >
-          {transcript === undefined ? (
-            <Text style={styles.loading}>Loading…</Text>
-          ) : (
-            messages.map((message) => <MessageBubble key={message.id} message={message} noMenu />)
-          )}
-        </ScrollView>
-      </CollapsiblePartsProvider>
-    </View>
-  );
-};
-
-/** A sub-page header: back chip to the main Dubz, title, and an optional right. */
-const Header = (props: { readonly title: string; readonly onBack: () => void; readonly tint: string; readonly right?: React.ReactNode }): React.ReactElement => {
-  const styles = useThemedStyles(makeStyles);
-  return (
-    <View style={styles.header}>
-      <Pressable onPress={props.onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="Back to Dubz" style={styles.backChip}>
-        <SystemIcon name="chevron.left" size={15} color={props.tint} />
-        <Text style={[styles.backLabel, { color: props.tint }]}>Dubz</Text>
-      </Pressable>
-      <Text style={styles.headerTitle} numberOfLines={1}>
-        {props.title}
-      </Text>
-      {props.right ?? null}
+            <Image systemName="chevron.left" size={15} color={textColors.label} />
+          </HStack>
+          <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+          <Spacer />
+          <HStack
+            modifiers={[
+              frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
+              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+              contentShape(shapes.capsule()),
+              onTapGesture(props.onFullScreen),
+            ]}
+          >
+            <Image systemName="arrow.up.left.and.arrow.down.right" size={14} color={textColors.label} />
+          </HStack>
+        </HStack>
+      </Host>
+      <View style={styles.placeholderBody}>
+        <Text style={styles.placeholderText}>Session chat goes here</Text>
+      </View>
     </View>
   );
 };
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-    sub: {
-      flex: 1,
+    page: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 16,
+      paddingBottom: 16,
     },
-    header: {
-      flexDirection: "row",
+    placeholderBody: {
+      flex: 1,
       alignItems: "center",
-      gap: 10,
-      paddingHorizontal: AREA_PADDING,
-      paddingBottom: 8,
+      justifyContent: "center",
     },
-    backChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 2,
-    },
-    backLabel: {
-      fontSize: 15,
-      fontWeight: "600",
-    },
-    headerTitle: {
-      flex: 1,
-      color: text.label,
-      fontSize: 15,
-      fontWeight: "600",
-    },
-    fill: {
-      flex: 1,
-    },
-    listContent: {
-      paddingHorizontal: AREA_PADDING,
-      paddingBottom: 12,
-    },
-    listRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      paddingVertical: 10,
-    },
-    listText: {
-      flex: 1,
-    },
-    listTitle: {
-      color: text.label,
-      fontSize: 15,
-      fontWeight: "600",
-    },
-    listMeta: {
-      color: text.secondaryLabel,
-      fontSize: 12,
-      marginTop: 1,
-    },
-    listTime: {
-      color: text.secondaryLabel,
-      fontSize: 13,
-    },
-    transcriptContent: {
-      paddingHorizontal: AREA_PADDING,
-      paddingBottom: 12,
-    },
-    loading: {
+    placeholderText: {
       color: text.secondaryLabel,
       fontSize: 14,
     },

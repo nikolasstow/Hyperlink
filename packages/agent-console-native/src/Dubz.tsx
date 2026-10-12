@@ -20,8 +20,8 @@ import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentBut
 import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
-import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
-import { DubzSessionList, DubzSessionRow, DubzSessionView, type DubzOpenSession } from "./dubz/DubzSessions";
+import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
+import { DubzSessionPlaceholder, DubzSessionRow, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -163,26 +163,23 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
-  // The session row opens a sub-page over the window — the full list (tap the
-  // number) or a session (tap the big pill / a list row), with a back chip to
-  // here. Closing the window returns to the main view.
-  const [sub, setSub] = React.useState<{ readonly kind: "list"; readonly file: FileRef } | { readonly kind: "session"; readonly session: DubzOpenSession } | undefined>(undefined);
-  const toMain = React.useCallback(() => setSub(undefined), []);
-  const openSession = React.useCallback((session: DubzOpenSession) => setSub({ kind: "session", session }), []);
-  const openList = React.useCallback((file: FileRef) => setSub({ kind: "list", file }), []);
+  // Tapping the session row opens a placeholder page over the window, with a
+  // back button here and a full-screen button to the session's proper page.
+  // Closing the window returns to the main view.
+  const [openedSession, setOpenedSession] = React.useState<DubzOpenSession | undefined>(undefined);
+  const toMain = React.useCallback(() => setOpenedSession(undefined), []);
+  const openSession = React.useCallback((session: DubzOpenSession) => setOpenedSession(session), []);
   const close = React.useCallback(() => {
-    setSub(undefined);
+    setOpenedSession(undefined);
     onClose();
   }, [onClose]);
   const onOpenSessionPage = props.onOpenSessionPage;
-  const fullScreen = React.useCallback(
-    (sessionID: string) => {
-      setSub(undefined);
-      onClose();
-      onOpenSessionPage?.(sessionID);
-    },
-    [onClose, onOpenSessionPage],
-  );
+  const fullScreen = React.useCallback(() => {
+    const id = openedSession?.id;
+    setOpenedSession(undefined);
+    onClose();
+    if (id !== undefined) onOpenSessionPage?.(id);
+  }, [openedSession, onClose, onOpenSessionPage]);
 
   // Swipe right, where the composer is beside it, to slide back to it. Only a
   // clear sideways drag pages. The page's own work (focus, state) waits until
@@ -233,13 +230,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
-        sub?.kind === "session" ? (
+        openedSession !== undefined ? (
           <View style={StyleSheet.absoluteFill}>
-            <DubzSessionView session={sub.session} onBack={toMain} onFullScreen={fullScreen} />
-          </View>
-        ) : sub?.kind === "list" ? (
-          <View style={StyleSheet.absoluteFill}>
-            <DubzSessionList file={sub.file} onOpen={openSession} onBack={toMain} />
+            <DubzSessionPlaceholder title={openedSession.title} onBack={toMain} onFullScreen={fullScreen} />
           </View>
         ) : (
           // Pinned to the bottom of the body (just above the pill) by absolute
@@ -248,7 +241,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <View style={styles.pinned} pointerEvents="box-none">
             {suggestions.map((suggestion) =>
               suggestion._tag === "Sessions" ? (
-                <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} onList={() => openList(suggestion.file)} />
+                <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} />
               ) : (
                 <Suggestion key={suggestion._tag} suggestion={suggestion} />
               ),
