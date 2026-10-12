@@ -312,6 +312,21 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     [open, pageBack, pageX, begin, turn, stay, screenW],
   );
 
+  // The back button with nothing to go back to (the main view): page over to
+  // the composer — the other bottom bar (the new-session bar at home/repo) —
+  // the same turn a swipe-back does. Where Dubz is the only bar (Files), close.
+  const backToComposer = React.useCallback(() => {
+    if (pageBack === undefined) {
+      close();
+      return;
+    }
+    if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
+    begin(open);
+    pageX.value = withTiming(0, { duration: PAGE_MS, easing: pageEasing }, (finished) => {
+      if (finished === true) runOnJS(turn)(open);
+    });
+  }, [pageBack, begin, turn, pageX, open, close]);
+
   return (
     <BarWindow
       open={open}
@@ -367,7 +382,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           {/* The persistent back button, top-left: it goes back from a page, and
            * closes Dubz at home (nothing to go back to). */}
           <View style={styles.topBack}>
-            <DubzTopBack onPress={sub !== undefined ? toMain : close} />
+            <DubzTopBack onPress={sub !== undefined ? toMain : backToComposer} />
           </View>
         </>
       }
