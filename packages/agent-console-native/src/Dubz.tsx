@@ -261,10 +261,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         // top, and never move; the window's top only reveals or hides them.
         <>
           {sub === undefined ? (
-            // Main suggestions, pinned to the body's bottom (just above the
-            // pill) by absolute position — not flex — so the glass container's
-            // layout can't push them up.
-            <View style={styles.pinned} pointerEvents="box-none">
+            // Fill the body so the session area's bottom-anchored scroll can sit
+            // its content just above the pill and grow upward.
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               {suggestions.map((suggestion) =>
                 suggestion._tag === "Sessions" ? (
                   <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} />
