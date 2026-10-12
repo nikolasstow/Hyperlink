@@ -55,6 +55,8 @@ export interface DubzOpenSession {
   readonly id: string;
   readonly title: string;
   readonly updated: number;
+  /** Where the session runs — needed to send into it from the Dubz input. */
+  readonly directory: string;
 }
 
 const PILL = 44;
@@ -87,7 +89,7 @@ const TOP_BLUR_HEIGHT = HEADER_CLEARANCE + 20;
  * top feather is parked until that's solved — the bottom feather is unaffected. */
 const ENABLE_NATIVE_TOP_FEATHER = false;
 
-const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated });
+const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated, directory: s.directory });
 
 const messageText = (message: TranscriptMessage): string =>
   [...message.parts.values()]

@@ -17,7 +17,16 @@ import { Gesture } from "react-native-gesture-handler";
 import Reanimated, { Easing, runOnJS, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
+import { useAppContext } from "./AppContext";
 import { BarWindow, detentMemory } from "./BarWindow";
+import { AGENT } from "./client";
+import { runApp } from "./effect/runtime";
+import { Agent } from "./opencode/schema/agent";
+import { AbsolutePath } from "./opencode/schema/schema";
+import { SessionID } from "./opencode/schema/session-id";
+import { serverAddressOf } from "./opencode/serverAddress";
+import { sendMessage } from "./outbox/useOutbox";
+import { sessionProtocol } from "./sessions/protocol";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
@@ -162,6 +171,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
   const { width: screenW } = useWindowDimensions();
+  const { address } = useAppContext();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
   // Tapping the session row pushes a placeholder page in over the window (main
@@ -214,6 +224,35 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     onClose();
     if (id !== undefined) onOpenSessionPage?.(id);
   }, [sub, onClose, onOpenSessionPage]);
+
+  // With a session open in the window, the input sends into THAT session — the
+  // same outbox path the full session composer uses. The draft clears at the
+  // tap; the message appears when the session's chat next loads.
+  const session = sub?.kind === "session" ? sub.session : undefined;
+  const sendToSession = React.useCallback(() => {
+    if (session === undefined) return;
+    const body = draft.trim();
+    if (body.length === 0) return;
+    setDraft("");
+    void (async () => {
+      try {
+        const server = serverAddressOf(address);
+        const sessionID = SessionID.make(session.id);
+        const protocol = await runApp(sessionProtocol(server, sessionID));
+        await sendMessage({
+          server,
+          sessionID,
+          protocol,
+          directory: session.directory === "" ? undefined : AbsolutePath.make(session.directory),
+          text: body,
+          files: [],
+          agent: Agent.ID.make(AGENT),
+        });
+      } catch (error: unknown) {
+        console.error("[dubz] sending into the session failed", error);
+      }
+    })();
+  }, [session, address]);
 
   // The pill floats over the body (which then fills the window), held in place
   // (0), so a page's scroll passes behind it at the window's bottom — the same
@@ -325,7 +364,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
             editable={open}
             multiline
           />
-          <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? () => setDraft("") : onOpen} />
+          <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? (session !== undefined ? sendToSession : () => setDraft("")) : onOpen} />
           {/* Collapsed: any tap on the bar opens it. */}
           {open ? null : (
             <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
