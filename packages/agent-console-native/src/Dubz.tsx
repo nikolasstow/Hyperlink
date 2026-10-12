@@ -261,9 +261,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         // top, and never move; the window's top only reveals or hides them.
         <>
           {sub === undefined ? (
-            // Fill the body so the session area's bottom-anchored scroll can sit
-            // its content just above the pill and grow upward.
-            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            // Fill the body (padded so the rows have margins) so the session
+            // area's bottom-anchored list sits just above the pill, insets from
+            // the window edges, and grows upward.
+            <View style={styles.mainArea} pointerEvents="box-none">
               {suggestions.map((suggestion) =>
                 suggestion._tag === "Sessions" ? (
                   <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} />
@@ -385,6 +386,17 @@ const makeStyles = (text: TextColors) =>
     position: "absolute",
     top: 12,
     left: 16,
+  },
+  // The main suggestions area: fills the body, padded so the session rows have
+  // margins from the window edges and a gap above the pill.
+  mainArea: {
+    position: "absolute",
+    top: 12,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {
