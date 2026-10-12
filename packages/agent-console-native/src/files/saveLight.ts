@@ -1,8 +1,8 @@
 /**
- * The save indicator light's flash queue.
+ * The file light's flash queue: the dot beside a file's name in Files' pill.
  *
- * A save flashes the light a colour — **blue for a local (device) save, green
- * for a cloud (disk) save**. To avoid flicker, a flash lasts at least
+ * It flashes a colour — **blue for a local (device) save, green for a cloud
+ * (disk) save, purple when a change from outside lands** (an agent's). To avoid flicker, a flash lasts at least
  * `FLASH_MS` and only one plays at a time: if a local and a cloud save land
  * together, one flashes, then the other (it waits its turn). Rapid repeats of a
  * colour already showing or already queued are coalesced, so a burst of saves
@@ -14,20 +14,21 @@
  * it would queue back-to-back (no visible change), but once the light is at rest
  * the same colour may flash again — two in a row is fine when it isn't queued.
  *
- * The queue transitions here are pure (tested); `useSaveLight` drives them with
- * a timer.
+ * The queue transitions here are pure (tested); `flashFile` drives them with a
+ * timer per file.
  *
  * @internal
  */
 import * as React from "react";
 
-export type SaveFlash = "local" | "cloud";
+export type SaveFlash = "local" | "cloud" | "incoming";
 
-/** Blue = saved on device (local), green = saved to disk (cloud). Prototype
- * colours — tweak freely. */
+/** Blue = saved on device (local), green = saved to disk (cloud), purple = a
+ * change came in from outside. Prototype colours — tweak freely. */
 export const FLASH_COLOR: Readonly<Record<SaveFlash, string>> = {
   local: "#0a84ff",
   cloud: "#32d74b",
+  incoming: "#bf5af2",
 };
 
 /** The minimum a flash shows (and so the fastest two can follow each other). */
@@ -59,21 +60,46 @@ export const advanceFlash = (state: SaveLightState): SaveLightState => {
   return next === undefined ? { current: null, pending: [] } : { current: next, pending: rest };
 };
 
-type Action = { readonly type: "flash"; readonly kind: SaveFlash } | { readonly type: "advance" };
+// Each file's light, kept outside any view: the open file flashes it, and
+// Files' pill shows it beside the file's name.
+const lights = new Map<string, SaveLightState>();
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
+const listeners = new Set<() => void>();
+const notify = (): void => listeners.forEach((listener) => listener());
 
-const reducer = (state: SaveLightState, action: Action): SaveLightState =>
-  action.type === "flash" ? enqueueFlash(state, action.kind) : advanceFlash(state);
+const lightOf = (path: string): SaveLightState => lights.get(path) ?? initialSaveLight;
 
-/** The save light for React: `flash(kind)` to pulse it; `current` is the colour
- * key showing now (null at rest). The timer holds each flash for `FLASH_MS`
- * before advancing, so the light never flickers. */
-export const useSaveLight = (): { readonly current: SaveFlash | null; readonly flash: (kind: SaveFlash) => void } => {
-  const [state, dispatch] = React.useReducer(reducer, initialSaveLight);
-  React.useEffect(() => {
-    if (state.current === null) return;
-    const handle = setTimeout(() => dispatch({ type: "advance" }), FLASH_MS);
-    return () => clearTimeout(handle);
-  }, [state]);
-  const flash = React.useCallback((kind: SaveFlash) => dispatch({ type: "flash", kind }), []);
-  return { current: state.current, flash };
+const store = (path: string, state: SaveLightState): void => {
+  if (state.current === null) lights.delete(path);
+  else lights.set(path, state);
+  notify();
 };
+
+/** Hold the showing flash for `FLASH_MS`, then show the next or rest. */
+const schedule = (path: string): void => {
+  if (timers.has(path) || lightOf(path).current === null) return;
+  timers.set(
+    path,
+    setTimeout(() => {
+      timers.delete(path);
+      store(path, advanceFlash(lightOf(path)));
+      schedule(path);
+    }, FLASH_MS),
+  );
+};
+
+/** Flash a file's light. */
+export const flashFile = (path: string, kind: SaveFlash): void => {
+  store(path, enqueueFlash(lightOf(path), kind));
+  schedule(path);
+};
+
+/** The colour a file's light shows now, for React (null at rest). */
+export const useFileLight = (path: string): SaveFlash | null =>
+  React.useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    () => lightOf(path).current,
+  );

@@ -36,6 +36,8 @@ import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { useKeyboardHeightValue } from "../keyboardHeight";
+import { useFileLight } from "./saveLight";
+import { StatusLight } from "./StatusLight";
 import { CARD_SCALE, cardStepAt } from "./tabShape";
 import { composerRestingBottom } from "../useKeyboardSlide";
 
@@ -51,6 +53,9 @@ export const NAV_BAR_BOTTOM = 18;
 /** The tab's type in the pill: its size, where it sits, and the room between
  * it and the name. */
 const PILL_ICON = 20;
+/** The file light beside the name, and the room between them. */
+const LIGHT_SIZE = 7;
+const LIGHT_GAP = 6;
 const PILL_ICON_LEFT = 14;
 const PILL_ICON_GAP = 6;
 /** The name's room at its sides: clear of the icon on both (so a long name
@@ -144,6 +149,8 @@ const TabPill = (props: {
   /** The current tab's pill shows a tabs icon at its right (opens the
    * overview — the pill's own tap, beneath). */
   readonly showTabs?: boolean;
+  /** The file whose light shows beside the name (the current tab's file). */
+  readonly lightPath?: string;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -181,9 +188,14 @@ const TabPill = (props: {
             <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={PILL_ICON} />
           </Reanimated.View>
           <View style={[styles.pillName, { width: nameWidth, marginLeft: -nameWidth / 2 }]}>
-            <Text style={[styles.name, styles.centred]} numberOfLines={1}>
-              {entry.name}
-            </Text>
+            {/* The light rides the name: the two are centred as one, so the
+              * dot stays at the name's left however long the name is. */}
+            <View style={styles.nameRow}>
+              {props.lightPath === undefined ? null : <FileLight path={props.lightPath} />}
+              <Text style={[styles.name, styles.nameText]} numberOfLines={1}>
+                {entry.name}
+              </Text>
+            </View>
           </View>
           {props.showTabs === true ? (
             <Reanimated.View style={[styles.pillTabs, icon]}>
@@ -193,6 +205,16 @@ const TabPill = (props: {
         </Reanimated.View>
       </GlassView>
     </Reanimated.View>
+  );
+};
+
+/** A file's light (saveLight.ts), sized for the pill. */
+const FileLight = (props: { readonly path: string }): React.ReactElement => {
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <View style={styles.light}>
+      <StatusLight current={useFileLight(props.path)} size={LIGHT_SIZE} />
+    </View>
   );
 };
 
@@ -225,6 +247,8 @@ export const FileNavBar = (props: {
   /** How far it is dropped out of sight as the page scrolls down (0 shown;
    * scrollHide.ts). */
   readonly hidden: SharedValue<number>;
+  /** The current tab's file, whose light shows beside its name. */
+  readonly lightPath?: string;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -324,7 +348,16 @@ export const FileNavBar = (props: {
           {/* The tabs' pills, under the buttons: the one before, this one,
             * the one after (each only while its card is in the bar). */}
           {props.previous === undefined ? null : <TabPill entry={props.previous} offset={-1} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />}
-          <TabPill entry={{ name: props.name, kind: props.kind }} offset={0} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} showTabs />
+          <TabPill
+            entry={{ name: props.name, kind: props.kind }}
+            offset={0}
+            swipe={swipe}
+            paging={paging}
+            bounds={bounds}
+            forwardShown={forwardShown}
+            showTabs
+            {...(props.lightPath === undefined ? {} : { lightPath: props.lightPath })}
+          />
           {props.next === undefined ? null : <TabPill entry={props.next} offset={1} swipe={swipe} paging={paging} bounds={bounds} forwardShown={forwardShown} />}
           {/* Back and forward: one glass, a circle with back alone, opening
             * into a capsule as forward comes. */}
@@ -474,8 +507,16 @@ const makeStyles = (text: TextColors) =>
       left: "50%",
       justifyContent: "center",
     },
-    centred: {
-      textAlign: "center",
+    nameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    nameText: {
+      flexShrink: 1,
+    },
+    light: {
+      marginRight: LIGHT_GAP,
     },
     buttonHit: {
       flex: 1,

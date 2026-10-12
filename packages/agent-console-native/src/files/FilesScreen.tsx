@@ -765,6 +765,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               dubzContext={dubzContext}
               onOpenSessionPage={(sessionID) => navigation.navigate("Chat", { sessionID })}
               hidden={barHidden}
+              {...(current.kind === "file" ? { lightPath: current.path } : {})}
             />
           </View>
         </>

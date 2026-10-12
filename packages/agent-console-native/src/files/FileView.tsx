@@ -27,8 +27,7 @@ import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
 import { clearFileEdit, getFileEditSync, setFileEdit } from "./fileEdits";
 import { registerSave, unregisterSave } from "./fileSave";
 import { getFileTextSync } from "./fileTextCache";
-import { useSaveLight } from "./saveLight";
-import { StatusLight } from "./StatusLight";
+import { flashFile } from "./saveLight";
 import { editLiveFile, liveFileNow, resolveLiveConflict, saveLiveFile, useLiveFile, useLiveFileEvents, useLiveFileProblem, useOnScreen } from "./useLiveFiles";
 
 /** Autosave timing (prototype): a local (device) flash after a short pause, a
@@ -98,7 +97,8 @@ export const FileView = (props: {
   // Editing + autosave. The native editor owns the text after mount; we read its
   // changes (onChangeText): a local (device) checkpoint after a short pause, and
   // a write through the hub after a longer pause, flushed at a max wait.
-  const { current: lightCurrent, flash } = useSaveLight();
+  // The file's light, shown beside its name in Files' pill.
+  const flash = React.useCallback((kind: "local" | "cloud" | "incoming") => flashFile(path, kind), [path]);
   const editor = React.useRef<CodeEditorApi>(null);
   const localTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const cloudTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -112,11 +112,14 @@ export const FileView = (props: {
     saveLiveFile(path);
   }, [path]);
 
-  // An outside change reaches the open editor in place; a write that reached
-  // the disk flashes the light green.
+  // An outside change reaches the open editor in place and flashes the light
+  // purple; a write that reached the disk flashes it green.
   useLiveFileEvents(
     path,
-    (update) => editor.current?.apply(update),
+    (update) => {
+      editor.current?.apply(update);
+      flash("incoming");
+    },
     () => flash("cloud"),
   );
 
@@ -198,11 +201,6 @@ export const FileView = (props: {
         ) : (
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}
-        {state.kind === "text" ? (
-          <View style={[styles.light, { top: topInset + 10 }]} pointerEvents="none">
-            <StatusLight current={lightCurrent} />
-          </View>
-        ) : null}
         {state.kind === "loading" ? (
           <View style={[styles.center, styles.overlay, { paddingTop: topInset + 40 }]} pointerEvents="none">
             <ActivityIndicator color={textColors.secondaryLabel} />
@@ -249,10 +247,6 @@ const makeStyles = (text: TextColors) =>
       left: 0,
       right: 0,
       bottom: 0,
-    },
-    light: {
-      position: "absolute",
-      right: 14,
     },
     message: {
       color: text.secondaryLabel,
