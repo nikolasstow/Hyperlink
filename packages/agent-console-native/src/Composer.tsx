@@ -237,8 +237,16 @@ export const Composer = (props: {
       turn: (open) => {
         rememberPage(pageType, "compose");
         if (!open) return;
-        // Keep the keyboard only if it was already up; down, it stays down.
-        if (Keyboard.isVisible()) inputRef.current?.focus();
+        // Keyboard up → focus (onFocus clears `held`, keeps it expanded). Down →
+        // it stays down, and we still collapse: clear `held`/`focused` ourselves
+        // (the focus that used to do that is skipped), else the bar shows the
+        // expanded card with no keyboard.
+        if (Keyboard.isVisible()) {
+          inputRef.current?.focus();
+        } else {
+          setHeld(false);
+          setFocused(false);
+        }
         setDubzInstant(true);
         setDubzOpen(false);
       },
