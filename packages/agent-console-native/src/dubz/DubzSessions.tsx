@@ -19,7 +19,7 @@
  * @internal
  */
 import { Host, HStack, Image, List, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
+import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
@@ -188,12 +188,15 @@ export const DubzSessionArea = (props: {
           scrollContentBackground("hidden"),
           listRowSpacing(GAP),
           animation(SLIDE, rows.length),
+          // Inverted-list trick: flip the List vertically so its content sticks
+          // to the bottom; each row is flipped back so it reads upright.
+          scaleEffect({ x: 1, y: -1 }),
           frame({ maxWidth: FILL, maxHeight: FILL }),
         ]}
       >
         <List.ForEach>
           {rows.map((row) => (
-            <HStack key={row.id} modifiers={[tag(row.id), ...rowMods, frame({ width: rowWidth, alignment: "leading" })]}>
+            <HStack key={row.id} modifiers={[tag(row.id), ...rowMods, scaleEffect({ x: 1, y: -1 }), frame({ width: rowWidth, alignment: "leading" })]}>
               {row.content}
             </HStack>
           ))}
