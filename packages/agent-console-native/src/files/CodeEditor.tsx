@@ -42,11 +42,36 @@ const toLineTokens = (result: HighlightResult): ReadonlyArray<ReadonlyArray<Line
 
 /** The editor's base colours from the active VS Code theme, with the token
  * background/foreground Shiki already resolved taking precedence. */
+/** VS Code's own merge colours, for a theme that sets none. */
+const MERGE_DEFAULTS = {
+  dark: {
+    current: "#367366",
+    incoming: "#395F8F",
+    common: "#60606066",
+  },
+  light: {
+    current: "#40C8AE80",
+    incoming: "#40A6FF80",
+    common: "#60606066",
+  },
+} as const;
+
+/** A merge content colour VS Code derives from its header: the header at 40%. */
+const contentOf = (header: string): string => (header.length === 7 ? `${header}66` : header);
+
 const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: HighlightResult | undefined): EditorTheme => {
   const colors = typeof theme === "string" ? undefined : theme.colors;
   const background = highlight?.background ?? colors?.["editor.background"];
   const foreground = highlight?.foreground ?? colors?.["editor.foreground"];
+  const merge = typeof theme !== "string" && theme.type === "light" ? MERGE_DEFAULTS.light : MERGE_DEFAULTS.dark;
+  const currentHeader = colors?.["merge.currentHeaderBackground"] ?? merge.current;
+  const incomingHeader = colors?.["merge.incomingHeaderBackground"] ?? merge.incoming;
   return {
+    mergeCurrentHeader: currentHeader,
+    mergeIncomingHeader: incomingHeader,
+    mergeCurrentContent: colors?.["merge.currentContentBackground"] ?? contentOf(currentHeader),
+    mergeIncomingContent: colors?.["merge.incomingContentBackground"] ?? contentOf(incomingHeader),
+    mergeCommonHeader: colors?.["merge.commonHeaderBackground"] ?? merge.common,
     background,
     foreground,
     gutterBackground: colors?.["editorGutter.background"] ?? background,
@@ -107,6 +132,10 @@ export const CodeEditor = (props: {
     setText(props.text);
   }, [props.text]);
   const native = React.useRef<CodeEditorHandle>(null);
+  // DIAG(live-files): temporary — which native editor this build carries.
+  React.useEffect(() => {
+    console.log("[live] editor", props.name, "applyChanges", canApplyChanges, "conflict zones", canShowConflicts);
+  }, [props.name]);
   React.useImperativeHandle(
     props.ref,
     () => ({

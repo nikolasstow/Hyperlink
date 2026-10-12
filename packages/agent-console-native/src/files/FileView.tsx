@@ -138,7 +138,10 @@ export const FileView = (props: {
       // Write through the hub — debounced, with a max-wait flush so a steady
       // typist still saves every few seconds — but only when autosave is on for
       // this file's scope (manual Save still writes regardless).
-      if (!resolveAutosave(autosaveSettingsNow(), { path, repo })) return;
+      const autosave = resolveAutosave(autosaveSettingsNow(), { path, repo });
+      // DIAG(live-files): temporary — whether this keystroke schedules a save.
+      console.log("[live] typed", path.split("/").pop(), "autosave", autosave);
+      if (!autosave) return;
       if (cloudTimer.current !== undefined) clearTimeout(cloudTimer.current);
       cloudTimer.current = setTimeout(saveCloud, CLOUD_DELAY_MS);
       if (cloudMaxTimer.current === undefined) cloudMaxTimer.current = setTimeout(saveCloud, CLOUD_MAX_WAIT_MS);

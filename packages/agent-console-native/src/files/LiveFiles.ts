@@ -23,6 +23,7 @@ import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Optio
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { Socket } from "effect/unstable/socket";
 import { FileSync } from "file-sync";
+import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
 import { getFileEdit, setFileEdit, clearFileEdit } from "./fileEdits";
 import { getFileText, setFileText } from "./fileTextCache";
 import * as LiveFile from "./liveFile";
@@ -127,6 +128,8 @@ const make = Effect.gen(function* () {
       }).pipe(Semaphore.withPermits(lock, 1));
       if (Option.isNone(start)) return;
       const { file, changes } = start.value;
+      // DIAG(live-files): temporary — every write, and what it sends.
+      yield* Effect.sync(() => console.log("[live] writing", path.split("/").pop(), "base v", file.version, JSON.stringify(changes)));
       const result = yield* RcMap.get(connections, api).pipe(
         Effect.flatMap((client) =>
           client.Write(
@@ -170,12 +173,17 @@ const make = Effect.gen(function* () {
       yield* Effect.sync(() => console.log("[live] event", path, event._tag));
       const current = yield* fileOf(path);
       if (event instanceof FileSync.Synced) {
+        // DIAG(live-files): temporary.
+        yield* Effect.sync(() => console.log("[live] reading kept copy", path.split("/").pop()));
         const kept = Option.isSome(current) ? nothingKept : yield* keptOnDevice(path);
+        yield* Effect.sync(() => console.log("[live] kept copy read", path.split("/").pop(), kept.base?.length, kept.edit?.length));
         const received = LiveFile.synced(Option.getOrUndefined(current), kept, event);
         yield* put(path, received.file, received.editor);
         yield* SubscriptionRef.update(problems, HashMap.remove(path));
-        // Edits made while away (or kept from before a restart) go out now.
-        if (LiveFile.pendingWrite(received.file).length > 0) yield* Ref.update(wanted, (set) => new Set(set).add(path));
+        // Edits made while away (or kept from before a restart) go out now,
+        // where autosave is on for the file; elsewhere they wait for a save.
+        const autosave = yield* Effect.sync(() => resolveAutosave(autosaveSettingsNow(), { path }));
+        if (autosave && LiveFile.pendingWrite(received.file).length > 0) yield* Ref.update(wanted, (set) => new Set(set).add(path));
         return;
       }
       if (Option.isNone(current)) return;
@@ -185,13 +193,28 @@ const make = Effect.gen(function* () {
       }
       const received = LiveFile.changed(current.value, event, clientID);
       if (received === undefined) return yield* new OutOfStep({ path });
+      // DIAG(live-files): temporary — did our edits clash with it?
+      yield* Effect.sync(() =>
+        console.log("[live] change folded", path.split("/").pop(), "had edits", current.value.text !== current.value.base, "conflicts", received.file.conflicts.length),
+      );
       yield* put(path, received.file, received.editor);
-    }).pipe(Semaphore.withPermits(lock, 1), Effect.andThen(writeIfWanted(path)));
+    }).pipe(
+      Semaphore.withPermits(lock, 1),
+      // DIAG(live-files): temporary.
+      Effect.tap(() => Effect.sync(() => console.log("[live] handled", path.split("/").pop(), event._tag))),
+      Effect.andThen(writeIfWanted(path)),
+    );
 
   const followOn = (api: string, path: string) =>
     Effect.sync(() => console.log("[live] following", api, path)).pipe(
       Effect.andThen(RcMap.get(connections, api)),
-      Effect.flatMap((client) => client.Follow({ path }).pipe(Stream.runForEach((event) => receive(path, event)))),
+      Effect.flatMap((client) =>
+        client.Follow({ path }).pipe(
+          // DIAG(live-files): temporary — arrival, before waiting for the lock.
+          Stream.tap((event) => Effect.sync(() => console.log("[live] arrived", path.split("/").pop(), event._tag))),
+          Stream.runForEach((event) => receive(path, event)),
+        ),
+      ),
       Effect.scoped,
       Effect.tapError((error) => Effect.sync(() => console.log("[live] follow failed", path, String(error)))),
       Effect.tapError((error) =>
@@ -234,13 +257,13 @@ const make = Effect.gen(function* () {
     /** Write the file's edits to disk, as soon as the hub allows. */
     save: (path: string) => Ref.update(wanted, (set) => new Set(set).add(path)).pipe(Effect.andThen(write(path))),
     /** Settle a conflict: keep the outside change, or put ours back. */
-    resolve: (path: string, index: number, keep: "Mine" | "Theirs" | "Both") =>
+    resolve: (path: string, index: number, keep: "Mine" | "Theirs") =>
       Effect.gen(function* () {
         const current = yield* fileOf(path);
         if (Option.isNone(current)) return;
         const received = LiveFile.resolve(current.value, index, keep);
         yield* put(path, received.file, received.editor);
-        if (keep !== "Theirs") yield* Ref.update(wanted, (set) => new Set(set).add(path));
+        if (keep === "Mine") yield* Ref.update(wanted, (set) => new Set(set).add(path));
       }).pipe(Semaphore.withPermits(lock, 1), Effect.andThen(writeIfWanted(path))),
     /** Every followed file, as it changes. */
     changes: SubscriptionRef.changes(files),

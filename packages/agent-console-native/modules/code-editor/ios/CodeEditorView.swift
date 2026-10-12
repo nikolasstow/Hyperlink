@@ -41,7 +41,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// Reports native sticky-scroll decisions to JS so they surface in Metro logs
     /// (NSLog only reaches the device console, which we can't read remotely).
     let onStickyDebug = EventDispatcher()
-    /// A choice on a conflict's buttons: `{index, keep: "Mine" | "Theirs" | "Both"}`.
+    /// A choice on a conflict's buttons: `{index, keep: "Mine" | "Theirs"}`.
     let onConflictAction = EventDispatcher()
 
     /// True while we set `text` programmatically, so the delegate's change
@@ -341,6 +341,25 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         if let value = theme.caret.flatMap({ UIColor(shikiHex: $0) }) {
             caret = value
         }
+        var conflictColors = conflictZones.colors
+        conflictColors.editorBackground = background
+        conflictColors.editorForeground = foreground
+        if let value = theme.mergeCurrentContent.flatMap({ UIColor(shikiHex: $0) }) {
+            conflictColors.mineLines = value
+        }
+        if let value = theme.mergeIncomingContent.flatMap({ UIColor(shikiHex: $0) }) {
+            conflictColors.theirsLines = value
+        }
+        if let value = theme.mergeCurrentHeader.flatMap({ UIColor(shikiHex: $0) }) {
+            conflictColors.mineButton = value
+        }
+        if let value = theme.mergeIncomingHeader.flatMap({ UIColor(shikiHex: $0) }) {
+            conflictColors.theirsButton = value
+        }
+        if let value = theme.mergeCommonHeader.flatMap({ UIColor(shikiHex: $0) }) {
+            conflictColors.panel = value
+        }
+        conflictZones.colors = conflictColors
         applyTheme()
     }
 

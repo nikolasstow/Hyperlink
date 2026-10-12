@@ -11,38 +11,66 @@ struct ConflictNative: Decodable {
 }
 
 /// Draws conflicts inside the document, like a merge editor sized for a
-/// phone: the user's lines in space opened above the agent's (green), the
-/// agent's lines (the real text) tinted blue, and a row of buttons in space
-/// opened below them — Mine, Theirs, and Both as an icon. The space comes
-/// from Runestone line insets, so the lines below move down to make room and
-/// the whole thing scrolls with the code.
+/// phone: the user's lines in space opened above the agent's, the agent's
+/// lines (the real text) tinted, and a glass panel with two glass buttons —
+/// Mine and Theirs — in space opened below them. Colours come from the theme
+/// (VS Code's merge colours). The space comes from Runestone line insets, so
+/// the lines below move down to make room and it all scrolls with the code.
 final class ConflictZones {
-    /// Keep mine, keep theirs, or both (mine, then theirs).
+    /// Keep mine or keep theirs.
     enum Choice: String {
         case mine = "Mine"
         case theirs = "Theirs"
-        case both = "Both"
+    }
+
+    /// The theme's merge colours.
+    struct Colors {
+        /// Behind the user's lines, and behind the agent's.
+        var mineLines = UIColor.systemGreen.withAlphaComponent(0.16)
+        var theirsLines = UIColor.systemBlue.withAlphaComponent(0.16)
+        /// The Mine and Theirs buttons' tints.
+        var mineButton = UIColor.systemGreen
+        var theirsButton = UIColor.systemBlue
+        /// The panel holding the buttons.
+        var panel = UIColor.secondarySystemBackground
+        /// Button labels: the editor's background on a light tint, its
+        /// foreground on a dark one.
+        var editorBackground = UIColor.black
+        var editorForeground = UIColor.white
+    }
+
+    /// Set when the theme changes; redraws the conflicts in the new colours.
+    var colors = Colors() {
+        didSet {
+            set(conflicts)
+        }
     }
 
     var rowHeight: () -> CGFloat = { 17 }
     var styledLine: (String, [ShikiToken]) -> NSAttributedString = { text, _ in NSAttributedString(string: text) }
     var onChoice: (Int, Choice) -> Void = { _, _ in }
 
-    private static let mineColor = UIColor.systemGreen
-    private static let theirsColor = UIColor.systemBlue
-    private static let tintAlpha: CGFloat = 0.16
-    /// Room above and below the user's lines inside their block.
-    private static let minePadding: CGFloat = 4
-    private static let buttonHeight: CGFloat = 44
-    private static let buttonSpacing: CGFloat = 8
-    /// Room around the button row inside its space.
-    private static let actionsPadding = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+    private static let buttonHeight: CGFloat = 40
+    private static let buttonSpacing: CGFloat = 6
+    /// Room between the panel's edge and its buttons.
+    private static let panelPadding: CGFloat = 6
+    private static let panelRadius: CGFloat = 16
+    /// Room around the panel inside the space below the agent's lines.
+    private static let actionsPadding = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+    private static var panelHeight: CGFloat {
+        buttonHeight + panelPadding * 2
+    }
 
     private final class Zone {
         let mine = UIView()
         let mineLabel = UILabel()
         let theirs = UIView()
-        let actions = UIStackView()
+        let actions: UIVisualEffectView
+        let buttons = UIStackView()
+
+        init(panel: UIVisualEffectView) {
+            actions = panel
+        }
     }
 
     private weak var textView: TextView?
@@ -87,7 +115,7 @@ final class ConflictZones {
                 continue
             }
             insets[span.first, default: .zero].above = mineHeight(conflict)
-            insets[span.last, default: .zero].below = Self.buttonHeight + Self.actionsPadding.top + Self.actionsPadding.bottom
+            insets[span.last, default: .zero].below = Self.panelHeight + Self.actionsPadding.top + Self.actionsPadding.bottom
         }
         textView.lineInsets = insets
 
@@ -107,9 +135,9 @@ final class ConflictZones {
             let textX = textView.gutterWidth + textView.textContainerInset.left
             zone.mineLabel.frame = CGRect(
                 x: textX,
-                y: Self.minePadding,
+                y: 0,
                 width: max(0, width - textX),
-                height: max(0, first.insets.above - Self.minePadding * 2)
+                height: first.insets.above
             )
             let theirsTop = first.top + first.insets.above
             let theirsBottom = last.top + last.height - last.insets.below
@@ -118,8 +146,9 @@ final class ConflictZones {
                 x: x + Self.actionsPadding.left,
                 y: theirsBottom + Self.actionsPadding.top,
                 width: max(0, width - Self.actionsPadding.left - Self.actionsPadding.right),
-                height: Self.buttonHeight
+                height: Self.panelHeight
             )
+            zone.buttons.frame = zone.actions.bounds.insetBy(dx: Self.panelPadding, dy: Self.panelPadding)
         }
     }
 
@@ -164,42 +193,27 @@ final class ConflictZones {
     }
 
     private func mineHeight(_ conflict: ConflictNative) -> CGFloat {
-        CGFloat(mineLines(conflict).count) * rowHeight() + Self.minePadding * 2
+        CGFloat(mineLines(conflict).count) * rowHeight()
     }
 
     private func makeZone(index: Int, conflict: ConflictNative) -> Zone {
-        let zone = Zone()
-        zone.mine.backgroundColor = Self.mineColor.withAlphaComponent(Self.tintAlpha)
+        let zone = Zone(panel: panel())
+        zone.mine.backgroundColor = colors.mineLines
         zone.mine.isUserInteractionEnabled = false
         zone.mineLabel.numberOfLines = 0
         zone.mineLabel.lineBreakMode = .byClipping
         zone.mineLabel.attributedText = mineText(conflict)
         zone.mine.addSubview(zone.mineLabel)
 
-        zone.theirs.backgroundColor = Self.theirsColor.withAlphaComponent(Self.tintAlpha)
+        zone.theirs.backgroundColor = colors.theirsLines
         zone.theirs.isUserInteractionEnabled = false
 
-        zone.actions.axis = .horizontal
-        zone.actions.spacing = Self.buttonSpacing
-        zone.actions.distribution = .fill
-        let mine = button(title: "Mine", image: nil, color: Self.mineColor) { [weak self] in self?.onChoice(index, .mine) }
-        let theirs = button(title: "Theirs", image: nil, color: Self.theirsColor) { [weak self] in self?.onChoice(index, .theirs) }
-        let both = button(title: nil, image: UIImage(systemName: "arrow.triangle.merge"), color: .secondaryLabel) { [weak self] in
-            self?.onChoice(index, .both)
-        }
-        // An icon only, for room; a long press says what it does.
-        both.accessibilityLabel = "Keep both"
-        both.menu = UIMenu(title: "Keep both: yours, then theirs", children: [
-            UIAction(title: "Keep Both", image: UIImage(systemName: "arrow.triangle.merge")) { [weak self] _ in
-                self?.onChoice(index, .both)
-            },
-        ])
-        zone.actions.addArrangedSubview(mine)
-        zone.actions.addArrangedSubview(theirs)
-        zone.actions.addArrangedSubview(both)
-        // In the same stack now, so their sizes can be tied together.
-        both.widthAnchor.constraint(equalToConstant: Self.buttonHeight).isActive = true
-        mine.widthAnchor.constraint(equalTo: theirs.widthAnchor).isActive = true
+        zone.buttons.axis = .horizontal
+        zone.buttons.spacing = Self.buttonSpacing
+        zone.buttons.distribution = .fillEqually
+        zone.buttons.addArrangedSubview(button(title: "Mine", tint: colors.mineButton) { [weak self] in self?.onChoice(index, .mine) })
+        zone.buttons.addArrangedSubview(button(title: "Theirs", tint: colors.theirsButton) { [weak self] in self?.onChoice(index, .theirs) })
+        zone.actions.contentView.addSubview(zone.buttons)
 
         textView?.addSubview(zone.mine)
         textView?.addSubview(zone.theirs)
@@ -207,18 +221,39 @@ final class ConflictZones {
         return zone
     }
 
-    private func button(title: String?, image: UIImage?, color: UIColor, action: @escaping () -> Void) -> UIButton {
-        var configuration = UIButton.Configuration.tinted()
-        configuration.baseForegroundColor = color
-        configuration.baseBackgroundColor = color
-        configuration.cornerStyle = .medium
-        configuration.image = image
-        if let title {
-            var attributes = AttributeContainer()
-            attributes.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-            configuration.attributedTitle = AttributedString(title, attributes: attributes)
+    /// The glass rectangle holding the buttons, tinted with the theme.
+    private func panel() -> UIVisualEffectView {
+        let effect: UIVisualEffect
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect(style: .regular)
+            glass.tintColor = colors.panel
+            effect = glass
+        } else {
+            effect = UIBlurEffect(style: .systemThinMaterial)
         }
-        return UIButton(configuration: configuration, primaryAction: UIAction { _ in action() })
+        let view = UIVisualEffectView(effect: effect)
+        view.layer.cornerRadius = Self.panelRadius
+        view.layer.cornerCurve = .continuous
+        view.clipsToBounds = true
+        return view
+    }
+
+    /// A glass button tinted with the theme's colour for its side.
+    private func button(title: String, tint: UIColor, action: @escaping () -> Void) -> UIControl {
+        GlassButton(title: title, tint: tint, label: labelColor(on: tint), cornerRadius: Self.panelRadius - Self.panelPadding, action: action)
+    }
+
+    /// Whichever of the editor's two text colours reads on `tint`.
+    private func labelColor(on tint: UIColor) -> UIColor {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard tint.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return colors.editorForeground
+        }
+        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        return luminance > 0.55 ? colors.editorBackground : colors.editorForeground
     }
 
     /// The user's lines, styled like the code: same font, Shiki colours when
@@ -242,5 +277,58 @@ final class ConflictZones {
 private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+/// A button made of tinted, interactive glass with a plain label on top. UIKit's
+/// glass button configurations restyle their label (vibrancy) whatever colour
+/// it is given; this keeps the label exactly the theme's colour.
+private final class GlassButton: UIControl {
+    private let action: () -> Void
+    private let body: UIVisualEffectView
+    private let label = UILabel()
+
+    init(title: String, tint: UIColor, label labelColor: UIColor, cornerRadius: CGFloat, action: @escaping () -> Void) {
+        self.action = action
+        if #available(iOS 26.0, *) {
+            let glass = UIGlassEffect(style: .regular)
+            glass.tintColor = tint
+            glass.isInteractive = true
+            body = UIVisualEffectView(effect: glass)
+        } else {
+            body = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterial))
+            body.contentView.backgroundColor = tint
+        }
+        super.init(frame: .zero)
+        body.isUserInteractionEnabled = false
+        body.layer.cornerRadius = cornerRadius
+        body.layer.cornerCurve = .continuous
+        body.clipsToBounds = true
+        addSubview(body)
+        label.text = title
+        label.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
+        label.textColor = labelColor
+        label.textAlignment = .center
+        addSubview(label)
+        accessibilityLabel = title
+        accessibilityTraits = .button
+        isAccessibilityElement = true
+        addAction(UIAction { [weak self] _ in self?.action() }, for: .touchUpInside)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        body.frame = bounds
+        label.frame = bounds
+    }
+
+    override var isHighlighted: Bool {
+        didSet {
+            alpha = isHighlighted ? 0.7 : 1
+        }
     }
 }

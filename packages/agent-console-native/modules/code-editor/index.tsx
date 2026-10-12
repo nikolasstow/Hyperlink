@@ -34,6 +34,13 @@ export interface EditorTheme {
   readonly currentLine?: string;
   readonly selection?: string;
   readonly caret?: string;
+  /** VS Code's merge colours, for conflicts: behind your lines and the
+   * agent's, the Mine/Theirs buttons, and the panel holding them. */
+  readonly mergeCurrentContent?: string;
+  readonly mergeIncomingContent?: string;
+  readonly mergeCurrentHeader?: string;
+  readonly mergeIncomingHeader?: string;
+  readonly mergeCommonHeader?: string;
 }
 
 export interface CodeEditorNativeProps extends ViewProps {
@@ -68,14 +75,14 @@ export interface CodeEditorNativeProps extends ViewProps {
    */
   readonly conflictsJson?: string;
   readonly onTextChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
-  /** A conflict's button: keep yours, theirs, or both (yours, then theirs). */
+  /** A conflict's button: keep yours or theirs. */
   readonly onConflictAction?: (event: NativeSyntheticEvent<{ readonly index: number; readonly keep: ConflictChoice }>) => void;
   /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
   readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
 }
 
-/** How a conflict is settled: your lines, the agent's, or yours then theirs. */
-export type ConflictChoice = "Mine" | "Theirs" | "Both";
+/** How a conflict is settled: your lines, or the agent's. */
+export type ConflictChoice = "Mine" | "Theirs";
 
 /** What a ref on the native view offers (`apiVersion` 5 and up). */
 export interface CodeEditorHandle {

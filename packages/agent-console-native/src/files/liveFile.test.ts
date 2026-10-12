@@ -63,9 +63,6 @@ describe("liveFile", () => {
     expect(mine.file.text).toBe(original.replace("const y = 2", "const y = 20"));
     expect(mine.file.conflicts).toEqual([]);
     expect(mine.editor?.highlights).toEqual([]);
-    const both = LiveFile.resolve(received.file, 0, "Both");
-    expect(both.file.text).toBe(original.replace("const y = 2", "const y = 20\nconst y = 3"));
-    expect(both.file.conflicts).toEqual([]);
     const theirs = LiveFile.resolve(received.file, 0, "Theirs");
     expect(theirs.file.text).toBe(after);
     expect(theirs.file.conflicts).toEqual([]);
