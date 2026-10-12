@@ -11,8 +11,8 @@ as an Expo module, highlighting driven by **Shiki** (our VS Code themes). Props:
 `wrapLines`; event `onTextChange`. The renderer *is* the editor; it runs
 `editable={false}` only because there's no persistence yet. JS side:
 `src/files/CodeEditor.tsx`, `useCodeTheme.ts`, `shikiHighlighter.ts`; native:
-`ios/CodeEditorView.swift`, `ShikiTheme.swift`. File text via backend `/fs/read`
-(`filesPlugin.ts`); no `/fs/write` yet.
+`ios/CodeEditorView.swift`, `ShikiTheme.swift`. File text and writes go through the
+file hub (`docs/handoffs/live-file-sync.md`); `/fs/read` still serves previews.
 
 ## Instant opens — DONE
 
@@ -56,7 +56,7 @@ Turn on editing with a save flow. Decisions:
   - **Temporary save** — offline cache written because the app/system needed the
     file offline (not user-intended durability).
   - **Permanent save** — the user committed it (hard-press menu, or the file's
-    3-dot menu). Writes through to `/fs/write`.
+    3-dot menu). Writes through the file hub (`live-file-sync.md`).
 - **Manual save** lives in the 3-dot menu (and the hard-press menu).
 - **Always-visible status indicator** for every status we can show (saved
   offline / temp vs permanent / dirty / syncing / error) — **simple, clean,
@@ -71,8 +71,9 @@ upload** icons for transfer state. Autosave is **ON app-wide** by default.
 Prototype first, then tweak.
 
 Build order:
-- **E1 — DONE:** backend `POST /fs/write` (`fs.ts` `writeTextFile`, within-root +
-  size-capped, existing files only) + native `fsClient.fsWrite`.
+- **E1 — REPLACED:** the blind whole-file `POST /fs/write` is gone; writes are
+  versioned through the file hub (`live-file-sync.md`), so an autosave never
+  lands over an agent's change.
 - **E2 — PROTO DONE:** editing on (`FileView` `editable`); `onChangeText` →
   debounced **local flash (blue)** + debounced disk **autosave (green)** with a
   max-wait flush; `StatusLight` (flash queue `saveLight.ts`, tested) top-right;

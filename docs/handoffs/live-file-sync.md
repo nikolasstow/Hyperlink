@@ -57,17 +57,21 @@ plugin.
   the hub's, diff old against new into `changes` (ranges in UTF-16 offsets,
   which JS strings and Runestone's `NSString` both use), bump the version, and
   send `{ path, version, changes, author }` to every follower.
-- **Author.** The hub listens to opencode's `/global/event`. A `file.edited`
-  for a path tags the matching disk change with that session (`author:
-  { _tag: "Agent", sessionID }`). A disk change with no matching event is
-  `{ _tag: "External" }`. A change from a client is `{ _tag: "Client", clientID }`.
-- **Write.** A client sends `{ path, baseVersion, changes }`. If the base is the
-  current version, apply it. If not, shift the changes over the history since
-  the base (operational transform) and apply. If that history has dropped out of
-  the buffer, reject, and the client re-syncs. Then write to disk, bump the
-  version, send the change to the other followers, and acknowledge the writer
-  with the new version. The hub's own disk write must not come back through the
-  watcher as a second change (compare against the hub's text).
+- **Author.** The hub listens to opencode's `/global/event`. `file.edited` has
+  no session, so the session comes from the tool call: a `message.part.updated`
+  tool part (edit/write) naming the file, running or just finished. Either one
+  makes the disk change `Agent { sessionID? }`; anything else is `External`.
+  The watcher settles for 150ms before reading, so the event and the agent's
+  formatter pass usually land first.
+- **Write.** A client sends `{ path, clientID, epoch, baseVersion, changes }`.
+  The hub first takes in whatever is on disk (a write the watcher has not
+  reported yet), then compares: the base is the current version → apply, write
+  to disk, bump, send the change (`Client { clientID }`) to every follower,
+  answer `Accepted`. Anything else → `Stale`, nothing written. The hub never
+  transforms a write; the client already has every change it missed (from the
+  follow stream), rebases on it, and writes again. So the hub keeps no history.
+  Its own disk write coming back through the watcher is no change (the text
+  matches).
 - **Transport.** Effect RPC over a WebSocket (`effect/unstable/rpc` +
   `effect/unstable/socket`). The browser dashboard already requires WebSocket,
   and RN has a native one. Group `FileSync`: `follow(paths) → Stream<FileEvent>`
@@ -100,8 +104,10 @@ plugin.
 ### Native editor (`modules/code-editor`)
 
 - `applyChanges(changes)`: replace ranges in place through Runestone, keeping the
-  selection, the scroll position and the undo stack, with the outside change as
-  its own undo step.
+  selection and the lines on screen. The undo stack is cleared on an outside
+  change: its steps point at offsets that no longer hold the same text, and
+  undoing one would edit the wrong place. (Keeping undo across an outside
+  change means transforming the stack; not in phase 1.)
 - A brief highlight on lines an agent changed, with "edited by ‹session›" that
   can open the session.
 - Conflict marks: the overlapping range shown inline with keep mine / keep
@@ -125,6 +131,24 @@ plugin.
 3. **Other outside edits** (Cursor, vim, git checkout). Already covered by the
    watcher from phase 1, labelled `External`. This phase only adds whatever
    attribution or UI turns out to matter.
+
+## Built (phase 1, branch `feat/live-file-sync`)
+
+- `packages/file-sync` (shared): `TextChange` (change sets, diff, position
+  mapping), `Rebase` (line-level rebase, conflicts), `FileSync` (the RPC group).
+- Server: `packages/agent-console/src/server/files/hub.ts` (`FileHub`) and
+  `files/rpc.ts` (the WebSocket route), mounted in `serve.ts`. `/fs/write` is
+  deleted.
+- App: `src/files/liveFile.ts` (pure fold), `LiveFiles.ts` (the service),
+  `useLiveFiles.ts` (React bridge + `LiveFilesFollower`), `ConflictBar.tsx`,
+  `FileView`/`CodeEditor` wired to it. Native `code-editor` apiVersion 5
+  (`applyChanges`, `conflictRangesJson`); older builds get the whole new text.
+- Tests: rebase (incl. randomized), hub (real watcher, stale writes, agent
+  attribution, rename-saves), the fold, and the app service against a real hub
+  over a WebSocket.
+- Deploy note: the app reaches the hub on the API server (:5199). A server
+  without `/files/sync` leaves files the device has never kept unopenable, so
+  restart :5199 from this branch before running this build.
 
 ## Open
 
