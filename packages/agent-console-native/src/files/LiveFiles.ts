@@ -23,6 +23,7 @@ import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Optio
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { Socket } from "effect/unstable/socket";
 import { FileSync } from "file-sync";
+import { DeviceSignals } from "../effect/DeviceSignals";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
 import { getFileEdit, setFileEdit, clearFileEdit } from "./fileEdits";
 import { getFileText, setFileText } from "./fileTextCache";
@@ -47,6 +48,10 @@ const REFOLLOW = Schedule.spaced(Duration.seconds(2));
 class OutOfStep extends Data.TaggedError("OutOfStep")<{
   readonly path: string;
 }> {}
+
+/** A connection: its server and the generation it belongs to, as one key. */
+const connectionKey = (api: string, generation: number): string => `${generation}#${api}`;
+const apiOfKey = (key: string): string => key.slice(key.indexOf("#") + 1);
 
 const socketUrl = (api: string): string => `${api.replace(/^http/, "ws")}${FileSync.path}`;
 
@@ -81,12 +86,18 @@ const make = Effect.gen(function* () {
   const server = yield* Ref.make<string | undefined>(undefined);
   // One change at a time across all files: the folds are quick and pure.
   const lock = yield* Semaphore.make(1);
+  // Keyed by server and generation: coming back to the foreground starts a new
+  // generation (a fresh connection); the old one closes once nothing uses it.
   const connections = yield* RcMap.make({
-    lookup: connect,
+    lookup: (key: string) => connect(apiOfKey(key)),
     idleTimeToLive: KEEP_CONNECTION,
   });
+  const generation = yield* Ref.make(0);
+  const connection = (api: string) =>
+    Ref.get(generation).pipe(Effect.flatMap((current) => RcMap.get(connections, connectionKey(api, current))));
   const follows = yield* FiberMap.make<string>();
   const followed = yield* Ref.make<ReadonlySet<string>>(new Set());
+  const device = yield* DeviceSignals;
 
   const fileOf = (path: string) => SubscriptionRef.get(files).pipe(Effect.map((map) => HashMap.get(map, path)));
 
@@ -130,7 +141,7 @@ const make = Effect.gen(function* () {
       const { file, changes } = start.value;
       // DIAG(live-files): temporary — every write, and what it sends.
       yield* Effect.sync(() => console.log("[live] writing", path.split("/").pop(), "base v", file.version, JSON.stringify(changes)));
-      const result = yield* RcMap.get(connections, api).pipe(
+      const result = yield* connection(api).pipe(
         Effect.flatMap((client) =>
           client.Write(
             new FileSync.WriteRequest({
@@ -207,7 +218,7 @@ const make = Effect.gen(function* () {
 
   const followOn = (api: string, path: string) =>
     Effect.sync(() => console.log("[live] following", api, path)).pipe(
-      Effect.andThen(RcMap.get(connections, api)),
+      Effect.andThen(connection(api)),
       Effect.flatMap((client) =>
         client.Follow({ path }).pipe(
           // DIAG(live-files): temporary — arrival, before waiting for the lock.
@@ -226,6 +237,26 @@ const make = Effect.gen(function* () {
       // The hub ended the stream (it should not): follow again.
       Effect.repeat(REFOLLOW),
     );
+
+  // Back in the foreground (or online), follow every file afresh: iOS pauses a
+  // backgrounded app's connection, so changes made meanwhile never arrived.
+  // A fresh follow syncs each file at once, rather than after the connection
+  // check notices the old one is gone.
+  yield* device.signals.pipe(
+    Stream.filter((signal) => signal === "foreground" || signal === "online"),
+    Stream.runForEach(() =>
+      Effect.gen(function* () {
+        const api = yield* Ref.get(server);
+        if (api === undefined) return;
+        const paths = yield* Ref.get(followed);
+        yield* Ref.update(generation, (current) => current + 1);
+        for (const path of paths) {
+          yield* FiberMap.run(follows, path, followOn(api, path));
+        }
+      }),
+    ),
+    Effect.forkScoped,
+  );
 
   return {
     /**

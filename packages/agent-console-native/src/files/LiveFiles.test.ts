@@ -6,10 +6,11 @@
  */
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeServices } from "@effect/platform-node";
-import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Option, Path, Schedule, Scope, Stream } from "effect";
+import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { describe, expect, it, vi } from "vitest";
 import { fileSyncLayer } from "../../../agent-console/src/server/files/rpc";
+import { type DeviceSignal, DeviceSignals } from "../effect/DeviceSignals";
 import { LiveFiles } from "./LiveFiles";
 
 vi.mock("@react-native-async-storage/async-storage", () => {
@@ -49,7 +50,15 @@ const untilDisk = (fs: FileSystem.FileSystem, file: string, text: string) =>
     Effect.timeout(Duration.seconds(5)),
   );
 
-const withHub = <A, E>(body: (context: { readonly live: LiveFiles["Service"]; readonly file: string; readonly fs: FileSystem.FileSystem }) => Effect.Effect<A, E, Scope.Scope>) =>
+const withHub = <A, E>(
+  body: (context: {
+    readonly live: LiveFiles["Service"];
+    readonly file: string;
+    readonly fs: FileSystem.FileSystem;
+    /** Send a device signal (the app coming back to the foreground, …). */
+    readonly signal: (signal: DeviceSignal) => Effect.Effect<void>;
+  }) => Effect.Effect<A, E, Scope.Scope>,
+) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -62,7 +71,8 @@ const withHub = <A, E>(body: (context: { readonly live: LiveFiles["Service"]; re
     process.env.AGENT_CONSOLE_OPENCODE_URL = "http://127.0.0.1:59999";
     yield* Layer.launch(HttpRouter.serve(fileSyncLayer).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port: PORT })))).pipe(Effect.forkScoped);
     // Built in this test's scope, so the service lives as long as the test.
-    const services = yield* Layer.build(LiveFiles.layer);
+    const signals = yield* Queue.unbounded<DeviceSignal>();
+    const services = yield* Layer.build(LiveFiles.layer.pipe(Layer.provide(Layer.succeed(DeviceSignals)({ signals: Stream.fromQueue(signals) }))));
     const live = Context.get(services, LiveFiles);
     yield* live.follow(api, new Set([file]));
     yield* until(live, file, (text) => (text === "one\ntwo\nthree\n" ? true : undefined));
@@ -70,6 +80,7 @@ const withHub = <A, E>(body: (context: { readonly live: LiveFiles["Service"]; re
       live,
       file,
       fs,
+      signal: (signal) => Queue.offer(signals, signal).pipe(Effect.asVoid),
     });
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
@@ -148,6 +159,21 @@ describe("LiveFiles against the file hub", () => {
           const files = yield* live.changes.pipe(Stream.runHead);
           const current = Option.flatMap(files, HashMap.get(file));
           expect(Option.map(current, (state) => state.text)).toEqual(Option.some("zero\none\ntwo\nthree\nfour\n"));
+        }),
+      ),
+    ), 20_000);
+
+  it("follows every file afresh when the app comes back, and changes keep arriving", () =>
+    run(
+      withHub(({ live, file, fs, signal }) =>
+        Effect.gen(function* () {
+          yield* fs.writeFileString(file, "one\ntwo\nTHREE\n");
+          yield* until(live, file, (text) => (text === "one\ntwo\nTHREE\n" ? true : undefined));
+          yield* signal("foreground");
+          // Re-followed: a change after it still reaches the app.
+          yield* Effect.sleep(Duration.millis(300));
+          yield* fs.writeFileString(file, "one\nTWO\nTHREE\n");
+          yield* until(live, file, (text) => (text === "one\nTWO\nTHREE\n" ? true : undefined));
         }),
       ),
     ), 20_000);
