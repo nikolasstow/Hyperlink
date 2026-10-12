@@ -16,14 +16,12 @@
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
+import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 import { HttpApiBuilder } from "effect/unstable/httpapi";
-import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
-import { FileSync } from "file-sync";
 import { api } from "./api";
 import { CollectionStates } from "./collections/state";
 import { ExtensionViews } from "./extensionHost/extensionViews";
-import { FileHub } from "./files/hub";
+import { fileSyncLayer } from "./files/rpc";
 import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
 import { SessionArchive } from "./sessions/archive";
@@ -178,27 +176,11 @@ const apiLive = HttpApiBuilder.layer(api).pipe(
   ]),
 );
 
-// Live file sync: the file hub over a WebSocket (file-sync's protocol).
-const fileHubLive = FileHub.layer.pipe(Layer.provide([NodeServices.layer, FetchHttpClient.layer]));
-const fileSyncHandlers = FileSync.FileSyncRpcs.toLayer(
-  FileHub.pipe(
-    Effect.map((hub) => ({
-      Follow: ({ path }: { readonly path: string }) => hub.follow(path),
-      Write: (request: FileSync.WriteRequest) => hub.write(request),
-    })),
-  ),
-);
-const fileSyncLive = RpcServer.layerHttp({
-  group: FileSync.FileSyncRpcs,
-  path: FileSync.path,
-  protocol: "websocket",
-}).pipe(Layer.provide([fileSyncHandlers.pipe(Layer.provide(fileHubLive)), RpcSerialization.layerJson]));
-
 const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 
 // The stream route needs the runner per request, so it is provided to the
 // served router as a whole (the same instance the API's handlers use).
-const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLive)).pipe(
+const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer)).pipe(
   Layer.provide(runnerLive),
   Layer.provide(NodeHttpServer.layer(createServer, { port })),
 );

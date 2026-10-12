@@ -11,6 +11,20 @@ private struct StickyRangeNative: Decodable {
     let label: String?
 }
 
+/// One change from JS (`file-sync`'s `TextChange`): replace `[from, to)` of the
+/// text before any of the set is applied, in UTF-16 offsets.
+private struct TextChangeNative: Decodable {
+    let from: Int
+    let to: Int
+    let insert: String
+}
+
+/// A range of the text in UTF-16 offsets, `[from, to)`.
+private struct TextRangeNative: Decodable {
+    let from: Int
+    let to: Int
+}
+
 /// The native code editor surface: a forked Runestone `TextView` driven entirely
 /// by props. Text and per-line Shiki tokens come down from JS; edits go back up
 /// through `onTextChange`. Highlighting is the vendored Shiki layer, so colours
@@ -98,7 +112,125 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         applyTheme()
     }
 
+    /// Lines an agent just changed, lit briefly; lines in conflict, lit until
+    /// resolved. Both drawn as Runestone highlighted ranges.
+    private var flashedRanges: [HighlightedRange] = []
+    private var conflictRanges: [HighlightedRange] = []
+    private var flashGeneration = 0
+    private static let flashDuration: TimeInterval = 1.6
+
+    // MARK: - Functions
+
+    /// Apply outside changes in place (an agent's edit, another device's):
+    /// each range is replaced where it is, so the cursor, the selection and
+    /// the lines on screen stay put rather than jumping as a whole-text reset
+    /// would. `expectedLength` is the length JS computed for the result; if
+    /// the editor ends up different (it normalizes line endings on insert),
+    /// it reports its text back so JS follows what is shown. `highlightJson`
+    /// lights the changed lines for a moment.
+    func applyChanges(_ changesJson: String, _ expectedLength: Int, _ highlightJson: String) {
+        guard let changes = decodeJson([TextChangeNative].self, changesJson), !changes.isEmpty else {
+            return
+        }
+        let selection = textView.selectedRange
+        // The text at the top of the viewport, and where it is drawn, so it can
+        // be drawn at the same place after the change.
+        let topY = textView.contentOffset.y + textView.adjustedContentInset.top
+        let anchorPosition = textView.closestPosition(to: CGPoint(x: 0, y: topY))
+        let anchor = anchorPosition.map { textView.offset(from: textView.beginningOfDocument, to: $0) }
+        let anchorY = anchorPosition.map { textView.caretRect(for: $0).minY }
+
+        isApplyingText = true
+        for change in changes.reversed() {
+            textView.replace(NSRange(location: change.from, length: change.to - change.from), withText: change.insert)
+        }
+        isApplyingText = false
+        // Undo steps recorded before this change point at offsets that no longer
+        // hold the same text; undoing one would edit the wrong place.
+        textView.undoManager?.removeAllActions()
+
+        let start = Self.map(selection.location, through: changes)
+        let end = Self.map(selection.location + selection.length, through: changes)
+        textView.selectedRange = NSRange(location: start, length: max(0, end - start))
+        if let anchor, let anchorY, let position = textView.position(from: textView.beginningOfDocument, offset: Self.map(anchor, through: changes)) {
+            let shift = textView.caretRect(for: position).minY - anchorY
+            if shift != 0 {
+                let minY = -textView.adjustedContentInset.top
+                let maxY = max(minY, textView.contentSize.height + textView.adjustedContentInset.bottom - textView.bounds.height)
+                textView.contentOffset.y = min(max(textView.contentOffset.y + shift, minY), maxY)
+            }
+        }
+        rebuildHighlights()
+        flash(decodeJson([TextRangeNative].self, highlightJson) ?? [])
+        if (textView.text as NSString).length != expectedLength {
+            onTextChange(["text": textView.text])
+        }
+    }
+
+    /// Where `location` lands after `changes` (sorted, against the text before
+    /// them): inside or at the end of a replaced range it moves to the end of
+    /// the insert.
+    private static func map(_ location: Int, through changes: [TextChangeNative]) -> Int {
+        var shift = 0
+        for change in changes {
+            let delta = (change.insert as NSString).length - (change.to - change.from)
+            if change.to <= location && !(change.from == change.to && change.from == location) {
+                shift += delta
+                continue
+            }
+            if change.from >= location {
+                break
+            }
+            return change.from + shift + (change.insert as NSString).length
+        }
+        return location + shift
+    }
+
+    private func flash(_ ranges: [TextRangeNative]) {
+        guard !ranges.isEmpty else {
+            return
+        }
+        let color = textView.selectionHighlightColor.withAlphaComponent(0.3)
+        flashedRanges = ranges.map { HighlightedRange(range: NSRange(location: $0.from, length: max(0, $0.to - $0.from)), color: color, cornerRadius: 3) }
+        flashGeneration += 1
+        let generation = flashGeneration
+        showHighlightedRanges()
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.flashDuration) { [weak self] in
+            guard let self, self.flashGeneration == generation else {
+                return
+            }
+            self.flashedRanges = []
+            self.showHighlightedRanges()
+        }
+    }
+
+    private func showHighlightedRanges() {
+        textView.highlightedRanges = conflictRanges + flashedRanges
+    }
+
+    private func decodeJson<T: Decodable>(_ type: T.Type, _ json: String) -> T? {
+        guard let data = json.data(using: .utf8) else {
+            return nil
+        }
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            NSLog("[CodeEditor] decode failed: \(error)")
+            return nil
+        }
+    }
+
     // MARK: - Props
+
+    /// Lines in conflict (an agent changed lines you were editing), lit until
+    /// resolved: `[{from,to}]`.
+    func setConflictRangesJson(_ json: String) {
+        let ranges = decodeJson([TextRangeNative].self, json) ?? []
+        conflictRanges = ranges.map {
+            HighlightedRange(range: NSRange(location: $0.from, length: max(0, $0.to - $0.from)), color: UIColor.systemOrange.withAlphaComponent(0.28), cornerRadius: 3)
+        }
+        showHighlightedRanges()
+    }
 
     func setText(_ text: String) {
         guard text != textView.text else {

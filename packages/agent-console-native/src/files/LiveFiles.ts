@@ -1,0 +1,271 @@
+/**
+ * Files kept in step with the file hub (the API server's `/files/sync`), so
+ * a file open in the app shows an agent's edit the moment it lands, and our
+ * edits reach the disk without ever writing over a change we have not seen.
+ *
+ * - **Followed:** every file open in a Files tab or kept on the device, and
+ *   any file on screen (`follow`). Followed before anyone taps, so a file an
+ *   agent changed in the background is already current when opened.
+ * - **Received:** each change the hub sends is folded in by `liveFile.ts`
+ *   (our edits rebased onto it; where it meets one of ours, the hub's text is
+ *   kept and ours is held as a conflict), the device copies are updated, and
+ *   an open editor is handed the change to apply in place (`updates`).
+ * - **Written:** `save` sends our edits against the version they were made
+ *   on. Refused as stale, it waits for the change it missed and tries again.
+ *
+ * One WebSocket per API server, multiplexing every followed file; followed
+ * files resync themselves after a dropped connection.
+ * Decisions: docs/handoffs/live-file-sync.md.
+ *
+ * @internal
+ */
+import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, PubSub, Random, RcMap, Ref, Schedule, Semaphore, Stream, SubscriptionRef } from "effect";
+import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { Socket } from "effect/unstable/socket";
+import { FileSync } from "file-sync";
+import { getFileEdit, setFileEdit, clearFileEdit } from "./fileEdits";
+import { getFileText, setFileText } from "./fileTextCache";
+import * as LiveFile from "./liveFile";
+
+/** Why a followed file has no text from the hub: the hub refused it
+ * (`NotFound`, `TooLarge`, …) or could not be reached. */
+export type LiveFileProblem = FileSync.FileSyncError["reason"] | "Unreachable";
+
+/** A change an open editor must apply. */
+export interface LiveFileUpdate {
+  readonly path: string;
+  readonly update: LiveFile.EditorUpdate;
+}
+
+/** How long a server's connection stays open after its last file is let go. */
+const KEEP_CONNECTION = Duration.seconds(30);
+/** Between attempts to follow a file again after its stream failed. */
+const REFOLLOW = Schedule.spaced(Duration.seconds(2));
+
+/** Raised to follow a file again: the hub's changes skipped a version. */
+class OutOfStep extends Data.TaggedError("OutOfStep")<{
+  readonly path: string;
+}> {}
+
+const socketUrl = (api: string): string => `${api.replace(/^http/, "ws")}${FileSync.path}`;
+
+const connect = (api: string) =>
+  Effect.gen(function* () {
+    const protocol = yield* Layer.build(
+      RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
+        Layer.provide(Socket.layerWebSocket(socketUrl(api))),
+        Layer.provide(Socket.layerWebSocketConstructorGlobal),
+        Layer.provide(RpcSerialization.layerJson),
+      ),
+    );
+    return yield* RpcClient.make(FileSync.FileSyncRpcs).pipe(Effect.provideContext(protocol));
+  });
+
+const make = Effect.gen(function* () {
+  // Tells our writes coming back from the hub from everyone else's.
+  const startedAt = yield* Clock.currentTimeMillis;
+  const salt = yield* Random.nextInt;
+  const clientID = `app-${startedAt.toString(36)}-${Math.abs(salt).toString(36)}`;
+
+  const files = yield* SubscriptionRef.make(HashMap.empty<string, LiveFile.LiveFile>());
+  const problems = yield* SubscriptionRef.make(HashMap.empty<string, LiveFileProblem>());
+  const updates = yield* PubSub.unbounded<LiveFileUpdate>();
+  const saved = yield* PubSub.unbounded<string>();
+  /** Files whose edits should be written as soon as the hub allows. */
+  const wanted = yield* Ref.make<ReadonlySet<string>>(new Set());
+  const writing = yield* Ref.make<ReadonlySet<string>>(new Set());
+  /** The API server the files are followed on. */
+  const server = yield* Ref.make<string | undefined>(undefined);
+  // One change at a time across all files: the folds are quick and pure.
+  const lock = yield* Semaphore.make(1);
+  const connections = yield* RcMap.make({
+    lookup: connect,
+    idleTimeToLive: KEEP_CONNECTION,
+  });
+  const follows = yield* FiberMap.make<string>();
+  const followed = yield* Ref.make<ReadonlySet<string>>(new Set());
+
+  const fileOf = (path: string) => SubscriptionRef.get(files).pipe(Effect.map((map) => HashMap.get(map, path)));
+
+  /** Store `file`, keep the device copies in step, and hand an open editor its change. */
+  const put = (path: string, file: LiveFile.LiveFile, editor: LiveFile.EditorUpdate | undefined) =>
+    Effect.gen(function* () {
+      yield* SubscriptionRef.update(files, HashMap.set(path, file));
+      yield* Effect.sync(() => {
+        setFileText(path, file.base);
+        if (file.text === file.base) clearFileEdit(path);
+        else setFileEdit(path, file.text);
+      });
+      if (editor !== undefined) {
+        yield* PubSub.publish(updates, {
+          path,
+          update: editor,
+        });
+      }
+    });
+
+  const write = (path: string): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const api = yield* Ref.get(server);
+      if (api === undefined) return;
+      const start = yield* Effect.gen(function* () {
+        const busy = yield* Ref.get(writing);
+        const file = yield* fileOf(path);
+        if (busy.has(path) || Option.isNone(file) || file.value.deleted) return Option.none();
+        const changes = LiveFile.pendingWrite(file.value);
+        if (changes.length === 0) {
+          yield* Ref.update(wanted, (set) => without(set, path));
+          return Option.none();
+        }
+        yield* Ref.update(writing, (set) => new Set(set).add(path));
+        return Option.some({
+          file: file.value,
+          changes,
+        });
+      }).pipe(Semaphore.withPermits(lock, 1));
+      if (Option.isNone(start)) return;
+      const { file, changes } = start.value;
+      const result = yield* RcMap.get(connections, api).pipe(
+        Effect.flatMap((client) =>
+          client.Write(
+            new FileSync.WriteRequest({
+              path,
+              clientID,
+              epoch: file.epoch,
+              baseVersion: file.version,
+              changes,
+            }),
+          ),
+        ),
+        Effect.scoped,
+        Effect.option,
+      );
+      const again = yield* Effect.gen(function* () {
+        yield* Ref.update(writing, (set) => without(set, path));
+        if (Option.isNone(result)) return false;
+        if (result.value instanceof FileSync.Stale) return false;
+        const current = yield* fileOf(path);
+        if (Option.isNone(current)) return false;
+        const next = LiveFile.accepted(current.value, changes, result.value.version);
+        yield* put(path, next, undefined);
+        yield* PubSub.publish(saved, path);
+        const still = LiveFile.pendingWrite(next).length > 0;
+        if (!still) yield* Ref.update(wanted, (set) => without(set, path));
+        const wantedNow = yield* Ref.get(wanted);
+        return still && wantedNow.has(path);
+      }).pipe(Semaphore.withPermits(lock, 1));
+      if (Option.isNone(result)) yield* Effect.logWarning(`live files: writing ${path} failed; will retry`);
+      if (again) yield* write(path);
+    });
+
+  /** After any change from the hub, a wanted write may go now. */
+  const writeIfWanted = (path: string) =>
+    Ref.get(wanted).pipe(Effect.flatMap((set) => (set.has(path) ? Effect.forkDetach(write(path)) : Effect.void)));
+
+  const receive = (path: string, event: FileSync.FileEvent) =>
+    Effect.gen(function* () {
+      const current = yield* fileOf(path);
+      if (event instanceof FileSync.Synced) {
+        const kept = Option.isSome(current) ? nothingKept : yield* keptOnDevice(path);
+        const received = LiveFile.synced(Option.getOrUndefined(current), kept, event);
+        yield* put(path, received.file, received.editor);
+        yield* SubscriptionRef.update(problems, HashMap.remove(path));
+        // Edits made while away (or kept from before a restart) go out now.
+        if (LiveFile.pendingWrite(received.file).length > 0) yield* Ref.update(wanted, (set) => new Set(set).add(path));
+        return;
+      }
+      if (Option.isNone(current)) return;
+      if (event instanceof FileSync.Deleted) {
+        yield* put(path, LiveFile.deleted(current.value, event), undefined);
+        return;
+      }
+      const received = LiveFile.changed(current.value, event, clientID);
+      if (received === undefined) return yield* new OutOfStep({ path });
+      yield* put(path, received.file, received.editor);
+    }).pipe(Semaphore.withPermits(lock, 1), Effect.andThen(writeIfWanted(path)));
+
+  const followOn = (api: string, path: string) =>
+    RcMap.get(connections, api).pipe(
+      Effect.flatMap((client) => client.Follow({ path }).pipe(Stream.runForEach((event) => receive(path, event)))),
+      Effect.scoped,
+      Effect.tapError((error) =>
+        SubscriptionRef.update(problems, HashMap.set(path, error._tag === "FileSyncError" ? error.reason : error._tag === "OutOfStep" ? "Io" : "Unreachable")).pipe(
+          Effect.andThen(Effect.logWarning(`live files: following ${path} stopped; following again`, error)),
+        ),
+      ),
+      Effect.retry(REFOLLOW),
+      // The hub ended the stream (it should not): follow again.
+      Effect.repeat(REFOLLOW),
+    );
+
+  return {
+    /**
+     * Follow exactly `paths` on the API server `api` (files open in tabs,
+     * kept on the device, or on screen). Files no longer listed are let go;
+     * a new server starts over.
+     */
+    follow: (api: string, paths: ReadonlySet<string>) =>
+      Effect.gen(function* () {
+        const previous = yield* Ref.getAndSet(server, api);
+        const running = yield* Ref.getAndSet(followed, paths);
+        if (previous !== api) yield* FiberMap.clear(follows);
+        for (const path of running) {
+          if (!paths.has(path)) yield* FiberMap.remove(follows, path);
+        }
+        for (const path of paths) {
+          yield* FiberMap.run(follows, path, followOn(api, path), { onlyIfMissing: true });
+        }
+      }),
+    /** The file as the app has it, if followed. */
+    file: fileOf,
+    /** Typing in an open editor. */
+    edit: (path: string, text: string) =>
+      Effect.gen(function* () {
+        const current = yield* fileOf(path);
+        if (Option.isNone(current)) return;
+        yield* SubscriptionRef.update(files, HashMap.set(path, LiveFile.edited(current.value, text)));
+      }).pipe(Semaphore.withPermits(lock, 1)),
+    /** Write the file's edits to disk, as soon as the hub allows. */
+    save: (path: string) => Ref.update(wanted, (set) => new Set(set).add(path)).pipe(Effect.andThen(write(path))),
+    /** Settle a conflict: keep the outside change, or put ours back. */
+    resolve: (path: string, index: number, keep: "Mine" | "Theirs") =>
+      Effect.gen(function* () {
+        const current = yield* fileOf(path);
+        if (Option.isNone(current)) return;
+        const received = LiveFile.resolve(current.value, index, keep);
+        yield* put(path, received.file, received.editor);
+        if (keep === "Mine") yield* Ref.update(wanted, (set) => new Set(set).add(path));
+      }).pipe(Semaphore.withPermits(lock, 1), Effect.andThen(writeIfWanted(path))),
+    /** Every followed file, as it changes. */
+    changes: SubscriptionRef.changes(files),
+    /** Followed files the hub has not sent, and why. */
+    problems: SubscriptionRef.changes(problems),
+    /** Changes open editors must apply. */
+    updates: Stream.fromPubSub(updates),
+    /** Files just written to disk (for the save light). */
+    saved: Stream.fromPubSub(saved),
+  };
+});
+
+const nothingKept: LiveFile.Kept = {
+  base: undefined,
+  edit: undefined,
+};
+
+/** What the device kept of a file from before (a restart, a dropped connection). */
+const keptOnDevice = (path: string) =>
+  Effect.all({
+    base: Effect.promise(() => getFileText(path)),
+    edit: Effect.promise(() => getFileEdit(path)),
+  });
+
+const without = (set: ReadonlySet<string>, path: string): ReadonlySet<string> => {
+  if (!set.has(path)) return set;
+  const next = new Set(set);
+  next.delete(path);
+  return next;
+};
+
+export class LiveFiles extends Context.Service<LiveFiles, Effect.Success<typeof make>>()("@doubleagent/files/LiveFiles") {
+  static readonly layer = Layer.effect(LiveFiles, make);
+}

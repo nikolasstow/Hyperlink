@@ -61,9 +61,25 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly fontSize: number;
   readonly showLineNumbers: boolean;
   readonly wrapLines: boolean;
+  /**
+   * Lines in conflict, lit until resolved: JSON `[{from,to}]` in UTF-16
+   * offsets. Read by builds with `apiVersion` 5 and up.
+   */
+  readonly conflictRangesJson?: string;
   readonly onTextChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
   /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
   readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
+}
+
+/** What a ref on the native view offers (`apiVersion` 5 and up). */
+export interface CodeEditorHandle {
+  /**
+   * Apply outside changes in place, keeping the cursor and the lines on
+   * screen: `changesJson` is `[{from,to,insert}]` against the current text,
+   * `expectedLength` the result's length (the editor reports its text back
+   * if it differs), `highlightJson` `[{from,to}]` lit for a moment.
+   */
+  readonly applyChanges: (changesJson: string, expectedLength: number, highlightJson: string) => Promise<void>;
 }
 
 // Gate on the native API version, not mere presence: the first build shipped an
@@ -77,9 +93,13 @@ const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.a
 const available = apiVersion >= 2;
 
 /** The native editor view, or undefined where this build has none (or too old). */
-export const CodeEditorNativeView: React.ComponentType<CodeEditorNativeProps> | undefined = available
-  ? requireNativeView<CodeEditorNativeProps>("CodeEditor")
+export const CodeEditorNativeView: React.ComponentType<CodeEditorNativeProps & { readonly ref?: React.Ref<CodeEditorHandle> }> | undefined = available
+  ? requireNativeView<CodeEditorNativeProps & { readonly ref?: React.Ref<CodeEditorHandle> }>("CodeEditor")
   : undefined;
 
 /** Whether this build carries a safe-to-mount native editor. */
 export const isCodeEditorNative = available;
+
+/** Whether the editor can take outside changes in place (`applyChanges`) and
+ * mark conflicts. Older builds get the whole new text instead. */
+export const canApplyChanges = apiVersion >= 5;

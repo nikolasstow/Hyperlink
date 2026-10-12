@@ -12,6 +12,7 @@ import { favoritesReadBack } from "./src/favorites/useFavorites";
 import { reposReadBack } from "./src/repoScanCache";
 import { sessionsReadBack } from "./src/sessionCache";
 import { ConversationPreloader } from "./src/conversations/ConversationPreloader";
+import { LiveFilesFollower } from "./src/files/useLiveFiles";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
@@ -215,6 +216,8 @@ const AppInner = (): React.ReactElement => {
           <PermissionAutoApprover />
           {/* Keeps the recent conversations on the device, before any is opened. */}
           <ConversationPreloader />
+          {/* Keeps open and kept files in step with the file hub, before any is opened. */}
+          <LiveFilesFollower />
           {/* Makes this the app notifications go to whenever it is opened. */}
           <PushOnForeground />
           {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}

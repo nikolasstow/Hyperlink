@@ -23,8 +23,9 @@ public final class CodeEditorModule: Module {
         // event, which collides with React Native's reserved `topChange` and
         // crashes on render; JS treats a binary without `apiVersion >= 2` as
         // absent and falls back to the web surface.
+        // 5: `applyChanges` (outside edits in place) + `conflictRangesJson`.
         Constants([
-            "apiVersion": 4,
+            "apiVersion": 5,
         ])
 
         View(CodeEditorView.self) {
@@ -63,6 +64,13 @@ public final class CodeEditorModule: Module {
             Prop("wrapLines") { (view: CodeEditorView, value: Bool) in
                 view.setWrapLines(value)
             }
+            Prop("conflictRangesJson") { (view: CodeEditorView, value: String) in
+                view.setConflictRangesJson(value)
+            }
+
+            AsyncFunction("applyChanges") { (view: CodeEditorView, changesJson: String, expectedLength: Int, highlightJson: String) in
+                view.applyChanges(changesJson, expectedLength, highlightJson)
+            }.runOnQueue(.main)
         }
     }
 }

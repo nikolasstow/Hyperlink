@@ -1,7 +1,9 @@
 /**
  * A file, rendered on the app's code surface: Monaco in a WebView, read-only,
  * themed by the same Shiki theme and grammars the chat code blocks use. The
- * file text comes from OUR backend (`/fs/read`).
+ * file is kept in step with the file hub (LiveFiles.ts): an agent's edit
+ * lands in the open editor in place, and our edits are written through the
+ * hub, never over a change we have not seen.
  *
  * The surface scrolls itself and virtualizes its own lines, so it gets a
  * fixed frame rather than a `ScrollView`; a large file is Monaco's problem
@@ -14,21 +16,20 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { isCodeEditorNative } from "../../modules/code-editor";
-import { useAppContext } from "../AppContext";
 import { CodeSurface } from "../CodeSurface";
-import { runFs } from "../effect/runtime";
-import { fsReadText, fsWrite } from "../fsClient";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
-import { CodeEditor } from "./CodeEditor";
+import { CodeEditor, type CodeEditorApi } from "./CodeEditor";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
+import { CONFLICT_BAR_HEIGHT, ConflictBar } from "./ConflictBar";
 import { clearFileEdit, getFileEditSync, setFileEdit } from "./fileEdits";
 import { registerSave, unregisterSave } from "./fileSave";
-import { getFileTextSync, setFileText } from "./fileTextCache";
+import { getFileTextSync } from "./fileTextCache";
 import { useSaveLight } from "./saveLight";
 import { StatusLight } from "./StatusLight";
+import { editLiveFile, liveFileNow, resolveLiveConflict, saveLiveFile, useLiveFile, useLiveFileEvents, useLiveFileProblem, useOnScreen } from "./useLiveFiles";
 
 /** Autosave timing (prototype): a local (device) flash after a short pause, a
  * cloud (disk) write after a longer pause — debounced, but flushed at the max
@@ -42,6 +43,10 @@ type State =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "missing" }
   | { readonly kind: "error" };
+
+/** Side room around the conflict bar. */
+const CONFLICT_BAR_INSET = 16;
+const noConflicts: ReadonlyArray<never> = [];
 
 /** Extra breathing room between the top bar and the first line of code. */
 const EDITOR_TOP_MARGIN = 24;
@@ -66,23 +71,38 @@ export const FileView = (props: {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { path, name, line, repo, topInset, bottomInset } = props;
-  const { backend } = useAppContext();
+  const { width: screenWidth } = useWindowDimensions();
+  // Followed while on screen (and before, when it is open in a tab or kept).
+  useOnScreen(path);
+  const live = useLiveFile(path);
   // Start from what we have, offline-first: a pending local edit wins over the
   // cached disk text, so the editor mounts instantly with your latest work (even
-  // after a restart, before any network).
+  // after a restart, before any network). The hub's text replaces it only when
+  // nothing was kept; after that the editor owns the text and outside changes
+  // arrive as changes (`useLiveFileEvents`).
   const [state, setState] = React.useState<State>(() => {
-    const shown = getFileEditSync(path) ?? getFileTextSync(path);
+    const shown = liveFileNow(path)?.text ?? getFileEditSync(path) ?? getFileTextSync(path);
     return shown === undefined ? { kind: "loading" } : { kind: "text", text: shown };
   });
+  React.useEffect(() => {
+    const shown = liveFileNow(path)?.text ?? getFileEditSync(path) ?? getFileTextSync(path);
+    setState(shown === undefined ? { kind: "loading" } : { kind: "text", text: shown });
+  }, [path]);
+  // Nothing was kept: the hub's text, once it comes (or why it can't).
+  const problem = useLiveFileProblem(path);
+  React.useEffect(() => {
+    if (state.kind !== "loading") return;
+    if (live !== undefined) setState({ kind: "text", text: live.text });
+    else if (problem === "NotFound" || problem === "NotAFile") setState({ kind: "missing" });
+    else if (problem !== undefined) setState({ kind: "error" });
+  }, [live, problem, state.kind]);
   const lang = React.useMemo(() => langFromFilename(name), [name]);
 
   // Editing + autosave. The native editor owns the text after mount; we read its
-  // changes (onChangeText) and save them — a local (device) checkpoint after a
-  // short pause, a cloud (disk) write after a longer pause, flushed at a max
-  // wait. Autosave is on app-wide for now (scoped setting to come).
+  // changes (onChangeText): a local (device) checkpoint after a short pause, and
+  // a write through the hub after a longer pause, flushed at a max wait.
   const { current: lightCurrent, flash } = useSaveLight();
-  const editedRef = React.useRef<string | null>(null);
-  const diskRef = React.useRef<string>("");
+  const editor = React.useRef<CodeEditorApi>(null);
   const localTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const cloudTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const cloudMaxTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -92,34 +112,33 @@ export const FileView = (props: {
     if (cloudMaxTimer.current !== undefined) clearTimeout(cloudMaxTimer.current);
     cloudTimer.current = undefined;
     cloudMaxTimer.current = undefined;
-    const next = editedRef.current;
-    if (next === null || next === diskRef.current) return;
-    void runFs(fsWrite(backend, path, next))
-      .then(() => {
-        // Disk now matches: the pending offline edit is no longer pending.
-        diskRef.current = next;
-        setFileText(path, next);
-        clearFileEdit(path);
-        flash("cloud");
-      })
-      .catch(() => undefined);
-  }, [backend, path, flash]);
+    saveLiveFile(path);
+  }, [path]);
+
+  // An outside change reaches the open editor in place; a write that reached
+  // the disk flashes the light green.
+  useLiveFileEvents(
+    path,
+    (update) => editor.current?.apply(update),
+    () => flash("cloud"),
+  );
 
   const onChangeText = React.useCallback(
     (next: string): void => {
-      editedRef.current = next;
+      editLiveFile(path, next);
       // Local (device) checkpoint — debounced short: persist the edit offline so
       // it survives a restart, then flash the light.
       if (localTimer.current !== undefined) clearTimeout(localTimer.current);
       localTimer.current = setTimeout(() => {
-        if (next === diskRef.current) {
+        const base = liveFileNow(path)?.base ?? getFileTextSync(path);
+        if (next === base) {
           clearFileEdit(path);
         } else {
           setFileEdit(path, next);
           flash("local");
         }
       }, LOCAL_DELAY_MS);
-      // Cloud (disk) autosave — debounced, with a max-wait flush so a steady
+      // Write through the hub — debounced, with a max-wait flush so a steady
       // typist still saves every few seconds — but only when autosave is on for
       // this file's scope (manual Save still writes regardless).
       if (!resolveAutosave(autosaveSettingsNow(), { path, repo })) return;
@@ -137,44 +156,6 @@ export const FileView = (props: {
     return () => unregisterSave(path, saveCloud);
   }, [path, saveCloud]);
 
-  React.useEffect(() => {
-    let alive = true;
-    // New file (or path change). Offline-first: a pending local edit is the
-    // current content (it survived a restart); otherwise the cached disk text;
-    // otherwise load.
-    const pendingEdit = getFileEditSync(path);
-    editedRef.current = pendingEdit ?? null;
-    const cached = getFileTextSync(path);
-    const shown = pendingEdit ?? cached;
-    diskRef.current = cached ?? "";
-    setState(shown === undefined ? { kind: "loading" } : { kind: "text", text: shown });
-    // Revalidate in the background: re-read, refresh the disk cache, update the
-    // shown text only when there's no pending edit, and drop a pending edit that
-    // now matches disk.
-    void runFs(fsReadText(backend, path))
-      .then((text) => {
-        if (!alive) return;
-        if (text === undefined) {
-          if (shown === undefined) setState({ kind: "missing" });
-          return;
-        }
-        setFileText(path, text);
-        diskRef.current = text;
-        if (editedRef.current === null) {
-          setState((prev) => (prev.kind === "text" && prev.text === text ? prev : { kind: "text", text }));
-        } else if (editedRef.current === text) {
-          // The pending edit is already on disk (saved elsewhere): no longer pending.
-          clearFileEdit(path);
-        }
-      })
-      .catch(() => {
-        if (alive && shown === undefined) setState({ kind: "error" });
-      });
-    return () => {
-      alive = false;
-    };
-  }, [backend, path]);
-
   // Drop pending saves when the file (or the view) goes away.
   React.useEffect(
     () => () => {
@@ -184,6 +165,8 @@ export const FileView = (props: {
     },
     [],
   );
+
+  const conflicts = live?.conflicts ?? noConflicts;
 
   if (state.kind === "missing" || state.kind === "error") {
     return (
@@ -199,13 +182,34 @@ export const FileView = (props: {
     return (
       <>
         {state.kind === "text" ? (
-          <CodeEditor path={path} name={name} text={state.text} editable onChangeText={onChangeText} topInset={topInset + EDITOR_TOP_MARGIN} bottomInset={bottomInset} stickyFill={topInset + EDITOR_TOP_MARGIN} />
+          <CodeEditor
+            ref={editor}
+            path={path}
+            name={name}
+            text={state.text}
+            editable
+            onChangeText={onChangeText}
+            conflicts={conflicts}
+            topInset={topInset + EDITOR_TOP_MARGIN}
+            bottomInset={bottomInset}
+            stickyFill={topInset + EDITOR_TOP_MARGIN}
+          />
         ) : (
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}
         {state.kind === "text" ? (
           <View style={[styles.light, { top: topInset + 10 }]} pointerEvents="none">
             <StatusLight current={lightCurrent} />
+          </View>
+        ) : null}
+        {state.kind === "text" && conflicts.length > 0 ? (
+          <View style={[styles.conflictBar, { bottom: bottomInset + 8 }]}>
+            <ConflictBar
+              count={conflicts.length}
+              width={screenWidth - CONFLICT_BAR_INSET * 2}
+              onKeepMine={() => resolveLiveConflict(path, 0, "Mine")}
+              onKeepTheirs={() => resolveLiveConflict(path, 0, "Theirs")}
+            />
           </View>
         ) : null}
         {state.kind === "loading" ? (
@@ -258,6 +262,11 @@ const makeStyles = (text: TextColors) =>
     light: {
       position: "absolute",
       right: 14,
+    },
+    conflictBar: {
+      position: "absolute",
+      left: CONFLICT_BAR_INSET,
+      height: CONFLICT_BAR_HEIGHT,
     },
     message: {
       color: text.secondaryLabel,

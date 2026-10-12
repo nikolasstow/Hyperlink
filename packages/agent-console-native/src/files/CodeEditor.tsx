@@ -13,7 +13,8 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
-import { CodeEditorNativeView, type EditorTheme, type LineToken } from "../../modules/code-editor";
+import { canApplyChanges, CodeEditorNativeView, type CodeEditorHandle, type EditorTheme, type LineToken } from "../../modules/code-editor";
+import type { EditorUpdate, TextRange } from "./liveFile";
 import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
 import { stickyRanges } from "./stickyRanges";
 import { useCodeTheme } from "../useCodeTheme";
@@ -55,12 +56,22 @@ const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: Highligh
   };
 };
 
+/** What a ref on the editor offers. */
+export interface CodeEditorApi {
+  /** Take a change made outside (an agent's): applied in place where the
+   * build can, else as a whole new text. */
+  readonly apply: (update: EditorUpdate) => void;
+}
+
 export const CodeEditor = (props: {
   readonly path: string;
   readonly name: string;
   readonly text: string;
   readonly editable: boolean;
   readonly onChangeText?: (text: string) => void;
+  /** Lines in conflict, lit until settled. */
+  readonly conflicts?: ReadonlyArray<TextRange>;
+  readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
   /** Room below it (the bottom bar + safe area), so the last lines aren't hidden under it. */
@@ -82,7 +93,32 @@ export const CodeEditor = (props: {
   // exact bg/fg when present) so the editor paints right on the first frame; the
   // async tokenise below only refines them.
   const [editorTheme, setEditorTheme] = React.useState<EditorTheme>(() => editorThemeOf(theme, initialHighlight));
-  const { text } = props;
+  // The text handed to the native view (it owns the text once mounted), and
+  // the text tokenised. Both follow `props.text`; an outside change moves the
+  // tokenised text, and the native one only where the build cannot apply a
+  // change in place.
+  const [nativeText, setNativeText] = React.useState(props.text);
+  const [text, setText] = React.useState(props.text);
+  React.useEffect(() => {
+    setNativeText(props.text);
+    setText(props.text);
+  }, [props.text]);
+  const native = React.useRef<CodeEditorHandle>(null);
+  React.useImperativeHandle(
+    props.ref,
+    () => ({
+      apply: (update) => {
+        setText(update.text);
+        if (canApplyChanges && native.current !== null) {
+          void native.current.applyChanges(JSON.stringify(update.changes), update.text.length, JSON.stringify(update.highlights));
+          return;
+        }
+        setNativeText(update.text);
+      },
+    }),
+    [],
+  );
+  const conflictsJson = React.useMemo(() => JSON.stringify(props.conflicts ?? []), [props.conflicts]);
   // The first tokenise is immediate (no flash); only re-tokenising while typing
   // is debounced.
   const firstRun = React.useRef(true);
@@ -123,8 +159,10 @@ export const CodeEditor = (props: {
     // coloured gap behind the native view before it draws its own.
     <View style={[styles.fill, editorTheme.background === undefined ? null : { backgroundColor: editorTheme.background }]}>
       <CodeEditorNativeView
+        ref={native}
         style={styles.fill}
-        text={props.text}
+        text={nativeText}
+        conflictRangesJson={conflictsJson}
         editable={props.editable}
         tokensJson={tokensJson}
         stickyRangesJson={stickyJson}

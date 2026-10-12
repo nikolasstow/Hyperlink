@@ -16,7 +16,8 @@
  * - Home's last layout, for the launch screen (its own prefix);
  * - where Files is, per repo (its own prefix);
  * - the pages open when the app was last used (its own prefix);
- * - Home's favorites (their own prefix).
+ * - Home's favorites (their own prefix);
+ * - files kept in step with the file hub (live file sync).
  *
  * No per-server state lives in the layers' construction (servers are passed
  * to each call), so the runtime never needs rebuilding on reconnect.
@@ -28,6 +29,7 @@ import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { Conversations } from "../conversations/Conversations";
 import { Favorites } from "../favorites/Favorites";
 import { FileNav } from "../files/FileNav";
+import { LiveFiles } from "../files/LiveFiles";
 import { HomeLayoutStore } from "../home/HomeLayoutStore";
 import { SessionBackgrounds } from "../sessions/SessionBackgrounds";
 import { Opencode } from "../opencode/Opencode";
@@ -56,6 +58,7 @@ const AppLayer = Layer.mergeAll(
   FileNav.layer.pipe(Layer.provide(asyncStorageLayer(FILES_STORAGE_PREFIX))),
   KeptNav.layer.pipe(Layer.provide(asyncStorageLayer(NAV_STORAGE_PREFIX))),
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
+  LiveFiles.layer,
 ).pipe(
   Layer.provideMerge(Reachability.layer),
   Layer.provideMerge(Opencode.layer),

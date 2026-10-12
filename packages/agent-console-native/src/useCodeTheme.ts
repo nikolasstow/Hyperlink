@@ -88,7 +88,7 @@ export const useResolvedCodeTheme = (enabled: CodeTheme | undefined, scheme: Sch
     return () => {
       cancelled = true;
     };
-  }, [apiBase, key, scheme, enabled]); // eslint-disable-line react-hooks/exhaustive-deps -- identity captured by key
+  }, [apiBase, key, scheme, enabled]);
 
   return value;
 };
