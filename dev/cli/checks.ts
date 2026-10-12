@@ -29,6 +29,7 @@ export const typecheck = () =>
     // error in either could reach a branch green.
     yield* run("tsc", ["--noEmit", "-p", "packages/agent-console/tsconfig.json"]);
     yield* run("tsc", ["--noEmit", "-p", "packages/agent-console-native/tsconfig.json"]);
+    yield* run("tsc", ["--noEmit", "-p", "packages/file-sync/tsconfig.json"]);
   });
 
 /** `vitest run` */

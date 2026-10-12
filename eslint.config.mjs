@@ -34,6 +34,7 @@ export default [
       "packages/last-ts/**/*.{ts,tsx}",
       "packages/agent-console/**/*.{ts,tsx}",
       "packages/agent-console-native/**/*.{ts,tsx}",
+      "packages/file-sync/**/*.{ts,tsx}",
       "docs/**/*.{ts,tsx}",
     ],
     languageOptions: {

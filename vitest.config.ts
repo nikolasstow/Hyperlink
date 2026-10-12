@@ -44,6 +44,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: "file-sync",
+          root: "./packages/file-sync",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+      {
+        test: {
           name: "spawn-serial",
           environment: "node",
           pool: "forks",
