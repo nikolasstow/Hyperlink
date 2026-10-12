@@ -18,8 +18,8 @@
  *
  * @internal
  */
-import { Host, HStack, Image, List, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scrollContentBackground, shapes } from "@expo/ui/swift-ui/modifiers";
+import { Host, HStack, Image, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, offset, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
@@ -116,85 +116,65 @@ export const DubzSessionArea = (props: {
     </HStack>
   );
 
-  // Row chrome so the glass pills float — clear background, no separators, no
-  // insets. One List, so adding/removing the expanded rows animates natively.
-  const rowMods = [
-    listRowBackground("#00000000"),
-    listRowSeparator("hidden"),
-    listRowInsets({ top: 0, bottom: 0, leading: 0, trailing: 0 }),
-  ];
   const viewAllWidth = Math.max(80, rowWidth - PILL - GAP);
   return (
     <Host style={{ flex: 1 }} ignoreSafeArea="all">
-      <List
-        modifiers={[
-          listStyle("plain"),
-          scrollContentBackground("hidden"),
-          listRowSpacing(GAP),
-          defaultScrollAnchor("bottom"),
-          animation(SLIDE, expanded),
-          frame({ maxWidth: FILL, maxHeight: FILL }),
-        ]}
-      >
-        {/* The most related session + the number/chevron toggle. */}
-        <HStack key="main" spacing={GAP} modifiers={[...rowMods, frame({ width: rowWidth, alignment: "leading" })]}>
-          {sessionPill(top, bigWidth)}
-          <HStack
-            spacing={5}
-            modifiers={[
-              frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
-              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-              contentShape(shapes.capsule()),
-              onTapGesture(() => setExpanded((e) => !e)),
-            ]}
-          >
-            {expanded ? (
-              <Image systemName="chevron.down" size={15} color={textColors.secondaryLabel} />
-            ) : (
-              <>
-                <Image systemName="bubble.left.and.bubble.right.fill" size={13} color={textColors.secondaryLabel} />
-                <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(sessions.length)}</UIText>
-              </>
-            )}
+      <ScrollView showsIndicators={false} modifiers={[defaultScrollAnchor("bottom"), frame({ maxWidth: FILL, maxHeight: FILL, alignment: "bottom" })]}>
+        <VStack alignment="leading" spacing={GAP} modifiers={[padding({ bottom: 14 }), frame({ width: rowWidth, alignment: "bottomLeading" }), animation(SLIDE, expanded)]}>
+          {/* The most related session + the number/chevron toggle. */}
+          <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
+            {sessionPill(top, bigWidth)}
+            <HStack
+              spacing={5}
+              modifiers={[
+                frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
+                glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                contentShape(shapes.capsule()),
+                onTapGesture(() => setExpanded((e) => !e)),
+              ]}
+            >
+              {expanded ? (
+                <Image systemName="chevron.down" size={15} color={textColors.secondaryLabel} />
+              ) : (
+                <>
+                  <Image systemName="bubble.left.and.bubble.right.fill" size={13} color={textColors.secondaryLabel} />
+                  <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(sessions.length)}</UIText>
+                </>
+              )}
+            </HStack>
           </HStack>
-        </HStack>
-        {/* Extra sessions, below the main one — inserted/removed (animated) on
-         * expand/collapse; the bottom anchor pushes the main row up. */}
-        {expanded
-          ? extras.map((session) => (
-              <HStack key={session.id} modifiers={[...rowMods, frame({ width: rowWidth, alignment: "leading" })]}>
-                {sessionPill(session, rowWidth)}
+          {expanded ? (
+            <>
+              {extras.map((session) => sessionPill(session, rowWidth))}
+              {/* ( + ) ( View All > ) */}
+              <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
+                <HStack
+                  modifiers={[
+                    frame({ width: PILL, height: PILL, alignment: "center" }),
+                    glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                    contentShape(shapes.capsule()),
+                  ]}
+                >
+                  <Image systemName="plus" size={16} color={textColors.label} />
+                </HStack>
+                <HStack
+                  spacing={6}
+                  modifiers={[
+                    padding({ horizontal: 16 }),
+                    frame({ width: viewAllWidth, height: PILL, alignment: "center" }),
+                    glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                    contentShape(shapes.capsule()),
+                    onTapGesture(props.onViewAll),
+                  ]}
+                >
+                  <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>View All</UIText>
+                  <Image systemName="chevron.right" size={13} color={textColors.secondaryLabel} />
+                </HStack>
               </HStack>
-            ))
-          : null}
-        {/* ( + ) ( View All > ) */}
-        {expanded ? (
-          <HStack key="actions" spacing={GAP} modifiers={[...rowMods, frame({ width: rowWidth, alignment: "leading" })]}>
-            <HStack
-              modifiers={[
-                frame({ width: PILL, height: PILL, alignment: "center" }),
-                glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-                contentShape(shapes.capsule()),
-              ]}
-            >
-              <Image systemName="plus" size={16} color={textColors.label} />
-            </HStack>
-            <HStack
-              spacing={6}
-              modifiers={[
-                padding({ horizontal: 16 }),
-                frame({ width: viewAllWidth, height: PILL, alignment: "center" }),
-                glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-                contentShape(shapes.capsule()),
-                onTapGesture(props.onViewAll),
-              ]}
-            >
-              <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>View All</UIText>
-              <Image systemName="chevron.right" size={13} color={textColors.secondaryLabel} />
-            </HStack>
-          </HStack>
-        ) : null}
-      </List>
+            </>
+          ) : null}
+        </VStack>
+      </ScrollView>
     </Host>
   );
 };
