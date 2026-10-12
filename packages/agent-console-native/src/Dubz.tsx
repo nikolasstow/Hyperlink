@@ -112,6 +112,25 @@ const setDraft = (text: string): void => {
   draftListeners.forEach((listener) => listener());
 };
 
+// ── The sub-page open inside the Dubz window ─────────────────────────────────
+
+/** A page open inside the Dubz window (its own navigation): a session's chat,
+ * or the View All list. Dubz state, NOT the app page's — it is held here at the
+ * module so it survives closing the window and navigating the app behind it.
+ * The app page only feeds Dubz its context; it does not control what is open. */
+export type DubzSub = { readonly kind: "session"; readonly session: DubzOpenSession } | { readonly kind: "list"; readonly file: FileRef };
+
+let dubzSub: DubzSub | undefined = undefined;
+const subListeners = new Set<() => void>();
+const subscribeSub = (listener: () => void): (() => void) => {
+  subListeners.add(listener);
+  return () => subListeners.delete(listener);
+};
+const setDubzSub = (next: DubzSub | undefined): void => {
+  dubzSub = next;
+  subListeners.forEach((listener) => listener());
+};
+
 // ── The detent last left ────────────────────────────────────────────────────
 
 // Shared by every screen's page; persisted across launches.
@@ -180,15 +199,19 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   // through the slide-out, then unmounted); `shifted` is the push state the
   // SwiftUI pieces animate to. The persistent back button goes back (or closes
   // at home); full-screen opens the session's proper page.
-  type Sub = { readonly kind: "session"; readonly session: DubzOpenSession } | { readonly kind: "list"; readonly file: FileRef };
-  const [sub, setSub] = React.useState<Sub | undefined>(undefined);
-  const [shifted, setShifted] = React.useState(false);
+  // The open sub-page is Dubz state, held at the module (subscribeSub) so it
+  // survives closing the window and navigating the app — closing Dubz keeps it;
+  // only the in-window back button returns to the main suggestions.
+  const sub = React.useSyncExternalStore(subscribeSub, () => dubzSub);
+  // `shifted` starts shown when a sub-page is already open (reopened Dubz), so
+  // it's there immediately; a freshly-opened sub-page slides in (false→true).
+  const [shifted, setShifted] = React.useState(() => dubzSub !== undefined);
   const exitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Mount at the off-screen offset, then flip `shifted` after the off-screen
   // frame has actually painted (two rAFs) so SwiftUI reliably animates the push
   // in — a single rAF sometimes applied both states together and it popped.
   React.useEffect(() => {
-    if (sub === undefined) return undefined;
+    if (sub === undefined || shifted) return undefined;
     let f2: number | undefined;
     const f1 = requestAnimationFrame(() => {
       f2 = requestAnimationFrame(() => setShifted(true));
@@ -197,22 +220,21 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       cancelAnimationFrame(f1);
       if (f2 !== undefined) cancelAnimationFrame(f2);
     };
-  }, [sub]);
-  const show = React.useCallback((next: Sub) => {
+  }, [sub, shifted]);
+  const show = React.useCallback((next: DubzSub) => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);
-    setSub(next);
+    setDubzSub(next);
   }, []);
   const openSession = React.useCallback((session: DubzOpenSession) => show({ kind: "session", session }), [show]);
   const openViewAll = React.useCallback((file: FileRef) => show({ kind: "list", file }), [show]);
   const toMain = React.useCallback(() => {
     setShifted(false);
-    exitTimer.current = setTimeout(() => setSub(undefined), SLIDE_MS);
+    exitTimer.current = setTimeout(() => setDubzSub(undefined), SLIDE_MS);
   }, []);
+  // Closing the window keeps the open sub-page, so reopening shows it again.
   const close = React.useCallback(() => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
-    setShifted(false);
-    setSub(undefined);
     onClose();
   }, [onClose]);
   const onOpenSessionPage = props.onOpenSessionPage;
@@ -220,7 +242,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     const id = sub?.kind === "session" ? sub.session.id : undefined;
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);
-    setSub(undefined);
+    setDubzSub(undefined);
     onClose();
     if (id !== undefined) onOpenSessionPage?.(id);
   }, [sub, onClose, onOpenSessionPage]);
