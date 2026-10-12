@@ -1,13 +1,20 @@
 /**
- * The session row Dubz shows on a page that publishes an editable document: one
- * row, all SwiftUI (so nothing React renders inside the window's glass) — a big
- * pill with the most related session and a number pill with how many sessions
- * live in that file's worktree, stretched to fit the window. Tapping opens the
- * session's proper full-screen page.
+ * Sessions inside the Dubz window, all SwiftUI (so nothing React renders in the
+ * window's glass) fed by React data.
  *
- * The in-window session view was removed: it pulled heavy React (a live
- * transcript) into the glass window and destabilised it. It comes back later as
- * native, once the row is solid.
+ * - DubzSessionArea: the session row. Collapsed, a big pill (most related
+ *   session) + a number pill (chat icon + count in the file's worktree). Tap the
+ *   number to expand: four more sessions animate in, the number becomes a
+ *   chevron to collapse, and a ( + )( View All ) row appears. View All opens the
+ *   full list page.
+ * - DubzSessionPage: a session open in the window — a session-style glass title
+ *   pill header + a full-screen button, over the transcript (native Text rows in
+ *   a native ScrollView, from the kept/preview conversation).
+ * - DubzSessionListPage: every worktree session by recency, as glass rows.
+ * - DubzTopBack: the window's persistent top-left glass back button.
+ *
+ * Transitions and the expand are SwiftUI's own (animation + offset), UI thread,
+ * no Reanimated.
  *
  * @internal
  */
@@ -18,20 +25,36 @@ import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
 import type { FileRef } from "../dubzSuggestions";
 import { cachedSessionsNow } from "../sessionCache";
+import type { SessionSummary } from "../sessions/sessionList";
 import { useSessionPreview } from "../sessionPreview";
 import { useTextColors } from "../theme";
 import type { TranscriptMessage } from "../useSessionStream";
 import { sessionsForFile } from "./sessionsForFile";
 
-/** The session a row opens. */
+/** The session a row/list opens. */
 export interface DubzOpenSession {
   readonly id: string;
   readonly title: string;
   readonly updated: number;
 }
 
-/** The readable text of a transcript message: its text parts, skipping the
- * synthetic ones (attached file contents). */
+const PILL = 44;
+const GAP = 8;
+const NUMBER_WIDTH = 60;
+/** The window's side margin (BarWindow) + the suggestions' padding, per side. */
+const WINDOW_SIDE = 12 + 16;
+/** Space the page title clears for the window's persistent back button. */
+const BACK_INSET = PILL + 10;
+/** How many extra sessions the expand reveals. */
+const EXTRA = 4;
+/** SwiftUI's own animation (UI thread), no Reanimated. */
+const SLIDE = Animation.easeInOut({ duration: 0.28 });
+export const SLIDE_MS = 280;
+/** Stands in for SwiftUI `.infinity` so a frame fills. */
+const FILL = 100000;
+
+const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated });
+
 const messageText = (message: TranscriptMessage): string =>
   [...message.parts.values()]
     .filter((part) => part.type === "text" && part.synthetic !== true)
@@ -39,106 +62,148 @@ const messageText = (message: TranscriptMessage): string =>
     .join("")
     .trim();
 
-const ROW_HEIGHT = 44;
-const NUMBER_WIDTH = 52;
-const ROW_GAP = 8;
-/** The window's side margin (BarWindow) plus the suggestions' padding, per side:
- * the row stretches to exactly this, so it never overflows the window. */
-const WINDOW_SIDE = 12 + 16;
-/** The push transition — SwiftUI's own animation (UI thread), no Reanimated. */
-const SLIDE = Animation.easeInOut({ duration: 0.28 });
-/** Match SLIDE's duration (ms) for timing an unmount after a slide-out. */
-export const SLIDE_MS = 280;
-
-/**
- * The session suggestion: one native row — a big pill (most related session) and
- * a number pill (sessions in the file's worktree), filling the window width.
- */
-export const DubzSessionRow = (props: {
-  readonly file: FileRef;
-  readonly onOpen: (session: DubzOpenSession) => void;
-  /** True while a page is open over the window: the row slides out to the left. */
-  readonly shifted?: boolean;
-}): React.ReactElement | null => {
-  const textColors = useTextColors();
-  const { width } = useWindowDimensions();
-  const { related, all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
-  const top = related[0] ?? all[0];
-  if (top === undefined) return null;
-  const rowWidth = width - WINDOW_SIDE * 2;
-  const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - ROW_GAP);
-  const shifted = props.shifted === true;
-  const open = (): void => props.onOpen({ id: top.id, title: top.title, updated: top.time.updated });
-  return (
-    <Host style={{ width: rowWidth, height: ROW_HEIGHT }} ignoreSafeArea="all">
-      <HStack spacing={ROW_GAP} modifiers={[offset({ x: shifted ? -width : 0 }), animation(SLIDE, shifted)]}>
-        <HStack
-          spacing={8}
-          modifiers={[
-            padding({ horizontal: 16 }),
-            frame({ width: bigWidth, height: ROW_HEIGHT, alignment: "leading" }),
-            glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
-            contentShape(shapes.capsule()),
-            onTapGesture(open),
-          ]}
-        >
-          <Image systemName="bubble.left.and.bubble.right.fill" size={14} color={textColors.secondaryLabel} />
-          <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{top.title}</UIText>
-        </HStack>
-        <HStack
-          modifiers={[
-            frame({ width: NUMBER_WIDTH, height: ROW_HEIGHT, alignment: "center" }),
-            glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
-            contentShape(shapes.capsule()),
-            onTapGesture(open),
-          ]}
-        >
-          <UIText modifiers={[font({ size: 17, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(related.length)}</UIText>
-        </HStack>
-      </HStack>
-    </Host>
-  );
-};
-
-const BUTTON = 36;
-/** Space the title clears for the window's persistent top-left back button. */
-const BACK_INSET = BUTTON + 10;
-
-/** The glass back button that stays at the Dubz window's top-left: on a page it
- * goes back, at Dubz home it closes Dubz. Shared so both read identically. */
+/** The window's persistent top-left glass back button. */
 export const DubzTopBack = (props: { readonly onPress: () => void }): React.ReactElement => {
   const textColors = useTextColors();
   return (
-    <Host style={{ width: BUTTON, height: BUTTON }} ignoreSafeArea="all">
+    <Host style={{ width: PILL, height: PILL }} ignoreSafeArea="all">
       <HStack
         modifiers={[
-          frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
+          frame({ width: PILL, height: PILL, alignment: "center" }),
           glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
           contentShape(shapes.capsule()),
           onTapGesture(props.onPress),
         ]}
       >
-        <Image systemName="chevron.left" size={15} color={textColors.label} />
+        <Image systemName="chevron.left" size={17} color={textColors.label} />
       </HStack>
     </Host>
   );
 };
 
-/** A large value standing in for SwiftUI's `.infinity` so a frame fills. */
-const FILL = 100000;
+/** The session row, collapsed or expanded. */
+export const DubzSessionArea = (props: {
+  readonly file: FileRef;
+  readonly onOpen: (session: DubzOpenSession) => void;
+  readonly onViewAll: () => void;
+}): React.ReactElement | null => {
+  const textColors = useTextColors();
+  const { width } = useWindowDimensions();
+  const { related, all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
+  const sessions = related.length > 0 ? related : all;
+  const [expanded, setExpanded] = React.useState(false);
+  const top = sessions[0];
+  if (top === undefined) return null;
+  const rowWidth = width - WINDOW_SIDE * 2;
+  const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - GAP);
+  const extras = sessions.slice(1, 1 + EXTRA);
 
-/**
- * A session open inside the Dubz window, rendered natively: a glass header (the
- * title, clearing the window's persistent back button, and a full-screen button
- * to the proper page) over the transcript — SwiftUI `Text` rows in a native
- * `ScrollView`, fed by the kept/preview conversation. Nothing React renders in
- * the glass, so the window stays stable. The whole page slides in natively
- * (offset + animation) with `shifted`.
- */
-export const DubzSessionPlaceholder = (props: {
+  // A full-width glass pill for a session (the expanded rows, and the big one).
+  const sessionPill = (session: SessionSummary, pillWidth: number): React.ReactElement => (
+    <HStack
+      key={session.id}
+      spacing={8}
+      modifiers={[
+        padding({ horizontal: 16 }),
+        frame({ width: pillWidth, height: PILL, alignment: "leading" }),
+        glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+        contentShape(shapes.capsule()),
+        onTapGesture(() => props.onOpen(toOpen(session))),
+      ]}
+    >
+      <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{session.title}</UIText>
+    </HStack>
+  );
+
+  return (
+    <Host style={{ width: rowWidth }} matchContents={{ vertical: true, horizontal: false }} ignoreSafeArea="all">
+      <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" }), animation(SLIDE, expanded)]}>
+        {expanded ? (
+          <>
+            <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
+              <HStack
+                modifiers={[
+                  frame({ width: PILL, height: PILL, alignment: "center" }),
+                  glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                  contentShape(shapes.capsule()),
+                ]}
+              >
+                <Image systemName="plus" size={16} color={textColors.secondaryLabel} />
+              </HStack>
+              <HStack
+                modifiers={[
+                  frame({ width: rowWidth - PILL - GAP, height: PILL, alignment: "center" }),
+                  glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                  contentShape(shapes.capsule()),
+                  onTapGesture(props.onViewAll),
+                ]}
+              >
+                <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label)]}>View All</UIText>
+              </HStack>
+            </HStack>
+            {extras.map((session) => sessionPill(session, rowWidth))}
+          </>
+        ) : null}
+        <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
+          {sessionPill(top, bigWidth)}
+          <HStack
+            spacing={5}
+            modifiers={[
+              frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
+              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+              contentShape(shapes.capsule()),
+              onTapGesture(() => setExpanded((e) => !e)),
+            ]}
+          >
+            {expanded ? (
+              <Image systemName="chevron.down" size={15} color={textColors.secondaryLabel} />
+            ) : (
+              <>
+                <Image systemName="bubble.left.and.bubble.right.fill" size={13} color={textColors.secondaryLabel} />
+                <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(sessions.length)}</UIText>
+              </>
+            )}
+          </HStack>
+        </HStack>
+      </VStack>
+    </Host>
+  );
+};
+
+/** A session-style glass title pill + a full-screen button, matching the chat's
+ * top bar. The back button is the window's persistent one. */
+const PageHeader = (props: { readonly title: string; readonly width: number; readonly onFullScreen: () => void }): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
+    <HStack spacing={10} alignment="center" modifiers={[frame({ width: props.width, height: PILL })]}>
+      <HStack
+        modifiers={[
+          padding({ leading: BACK_INSET, trailing: 16 }),
+          frame({ height: PILL, alignment: "center" }),
+          glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+        ]}
+      >
+        <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+      </HStack>
+      <Spacer />
+      <HStack
+        modifiers={[
+          frame({ width: PILL, height: PILL, alignment: "center" }),
+          glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+          contentShape(shapes.capsule()),
+          onTapGesture(props.onFullScreen),
+        ]}
+      >
+        <Image systemName="arrow.up.left.and.arrow.down.right" size={15} color={textColors.label} />
+      </HStack>
+    </HStack>
+  );
+};
+
+/** A session open in the window: the header pill, then the transcript. */
+export const DubzSessionPage = (props: {
   readonly session: DubzOpenSession;
   readonly onFullScreen: () => void;
-  /** Drives the native slide-in from the right (false = off-screen right). */
   readonly shifted?: boolean;
 }): React.ReactElement => {
   const textColors = useTextColors();
@@ -163,29 +228,58 @@ export const DubzSessionPlaceholder = (props: {
     <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
         <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
-          <HStack spacing={10} alignment="center" modifiers={[frame({ width: pageWidth, height: BUTTON })]}>
-            <UIText modifiers={[padding({ leading: BACK_INSET }), font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.session.title}</UIText>
-            <Spacer />
-            <HStack
-              modifiers={[
-                frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
-                glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-                contentShape(shapes.capsule()),
-                onTapGesture(props.onFullScreen),
-              ]}
-            >
-              <Image systemName="arrow.up.left.and.arrow.down.right" size={14} color={textColors.label} />
-            </HStack>
-          </HStack>
+          <PageHeader title={props.session.title} width={pageWidth} onFullScreen={props.onFullScreen} />
           <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
             <VStack alignment="leading" spacing={12} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
               {messages.map((message) => (
-                <UIText
-                  key={message.id}
-                  modifiers={[font({ size: 14 }), foregroundStyle(message.role === "user" ? textColors.label : textColors.secondaryLabel)]}
-                >
+                <UIText key={message.id} modifiers={[font({ size: 14 }), foregroundStyle(message.role === "user" ? textColors.label : textColors.secondaryLabel)]}>
                   {message.text}
                 </UIText>
+              ))}
+            </VStack>
+          </ScrollView>
+        </VStack>
+      </Host>
+    </View>
+  );
+};
+
+/** View All: every worktree session by recency, as glass rows. */
+export const DubzSessionListPage = (props: {
+  readonly file: FileRef;
+  readonly onOpen: (session: DubzOpenSession) => void;
+  readonly shifted?: boolean;
+}): React.ReactElement => {
+  const textColors = useTextColors();
+  const { width } = useWindowDimensions();
+  const pageWidth = width - WINDOW_SIDE * 2;
+  const shifted = props.shifted === true;
+  const { all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
+  return (
+    <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
+      <Host style={{ flex: 1 }} ignoreSafeArea="all">
+        <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
+          <HStack modifiers={[frame({ width: pageWidth, height: PILL })]}>
+            <HStack modifiers={[padding({ leading: BACK_INSET, trailing: 16 }), frame({ height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
+              <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label)]}>Sessions</UIText>
+            </HStack>
+            <Spacer />
+          </HStack>
+          <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
+            <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
+              {all.map((session) => (
+                <HStack
+                  key={session.id}
+                  modifiers={[
+                    padding({ horizontal: 16 }),
+                    frame({ width: pageWidth, height: PILL, alignment: "leading" }),
+                    glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+                    contentShape(shapes.capsule()),
+                    onTapGesture(() => props.onOpen(toOpen(session))),
+                  ]}
+                >
+                  <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{session.title}</UIText>
+                </HStack>
               ))}
             </VStack>
           </ScrollView>

@@ -20,8 +20,8 @@ import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentBut
 import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
-import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
-import { DubzSessionPlaceholder, DubzSessionRow, DubzTopBack, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
+import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -169,40 +169,43 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   // through the slide-out, then unmounted); `shifted` is the push state the
   // SwiftUI pieces animate to. The persistent back button goes back (or closes
   // at home); full-screen opens the session's proper page.
-  const [openedSession, setOpenedSession] = React.useState<DubzOpenSession | undefined>(undefined);
+  type Sub = { readonly kind: "session"; readonly session: DubzOpenSession } | { readonly kind: "list"; readonly file: FileRef };
+  const [sub, setSub] = React.useState<Sub | undefined>(undefined);
   const [shifted, setShifted] = React.useState(false);
   const exitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // Mount at the off-screen offset, then flip `shifted` next frame so SwiftUI
   // animates the push in rather than the page appearing already in place.
   React.useEffect(() => {
-    if (openedSession === undefined) return undefined;
+    if (sub === undefined) return undefined;
     const frame = requestAnimationFrame(() => setShifted(true));
     return () => cancelAnimationFrame(frame);
-  }, [openedSession]);
-  const openSession = React.useCallback((session: DubzOpenSession) => {
+  }, [sub]);
+  const show = React.useCallback((next: Sub) => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);
-    setOpenedSession(session);
+    setSub(next);
   }, []);
+  const openSession = React.useCallback((session: DubzOpenSession) => show({ kind: "session", session }), [show]);
+  const openViewAll = React.useCallback((file: FileRef) => show({ kind: "list", file }), [show]);
   const toMain = React.useCallback(() => {
     setShifted(false);
-    exitTimer.current = setTimeout(() => setOpenedSession(undefined), SLIDE_MS);
+    exitTimer.current = setTimeout(() => setSub(undefined), SLIDE_MS);
   }, []);
   const close = React.useCallback(() => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);
-    setOpenedSession(undefined);
+    setSub(undefined);
     onClose();
   }, [onClose]);
   const onOpenSessionPage = props.onOpenSessionPage;
   const fullScreen = React.useCallback(() => {
-    const id = openedSession?.id;
+    const id = sub?.kind === "session" ? sub.session.id : undefined;
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);
-    setOpenedSession(undefined);
+    setSub(undefined);
     onClose();
     if (id !== undefined) onOpenSessionPage?.(id);
-  }, [openedSession, onClose, onOpenSessionPage]);
+  }, [sub, onClose, onOpenSessionPage]);
 
   // Swipe right, where the composer is beside it, to slide back to it. Only a
   // clear sideways drag pages. The page's own work (focus, state) waits until
@@ -257,30 +260,34 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
         <>
-          {/* Main suggestions, pinned to the body's bottom (just above the
-           * pill) by absolute position — not flex — so the glass container's
-           * layout can't push them up. Slides out left (natively) as a page
-           * comes in. */}
-          <View style={styles.pinned} pointerEvents={openedSession !== undefined ? "none" : "box-none"}>
-            {suggestions.map((suggestion) =>
-              suggestion._tag === "Sessions" ? (
-                <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} shifted={shifted} />
-              ) : (
-                <Suggestion key={suggestion._tag} suggestion={suggestion} />
-              ),
-            )}
-          </View>
-          {/* The page, mounted while shown (kept through the slide-out, then
-           * unmounted); it slides in from the right natively. */}
-          {openedSession !== undefined ? (
-            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-              <DubzSessionPlaceholder session={openedSession} onFullScreen={fullScreen} shifted={shifted} />
+          {sub === undefined ? (
+            // Main suggestions, pinned to the body's bottom (just above the
+            // pill) by absolute position — not flex — so the glass container's
+            // layout can't push them up.
+            <View style={styles.pinned} pointerEvents="box-none">
+              {suggestions.map((suggestion) =>
+                suggestion._tag === "Sessions" ? (
+                  <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} />
+                ) : (
+                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
+                ),
+              )}
             </View>
-          ) : null}
+          ) : sub.kind === "session" ? (
+            // A session, slid in from the right natively; kept through the
+            // slide-out, then unmounted.
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <DubzSessionPage session={sub.session} onFullScreen={fullScreen} shifted={shifted} />
+            </View>
+          ) : (
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <DubzSessionListPage file={sub.file} onOpen={openSession} shifted={shifted} />
+            </View>
+          )}
           {/* The persistent back button, top-left: it goes back from a page, and
            * closes Dubz at home (nothing to go back to). */}
           <View style={styles.topBack}>
-            <DubzTopBack onPress={openedSession !== undefined ? toMain : close} />
+            <DubzTopBack onPress={sub !== undefined ? toMain : close} />
           </View>
         </>
       }
