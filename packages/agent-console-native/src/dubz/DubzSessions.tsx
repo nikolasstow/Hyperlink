@@ -44,6 +44,7 @@ import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
 import type { TranscriptMessage } from "../useSessionStream";
 import { useSessionActivity } from "../useSessionActivity";
+import { hasNativeSwiftUIBlur, VariableBlurSwiftUI } from "../../modules/variable-blur";
 import { sessionsForFile } from "./sessionsForFile";
 
 /** The session a row/list opens. */
@@ -76,6 +77,8 @@ export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
 const BOTTOM_CLEARANCE = PILL_AREA;
+/** The top feather's height — covers the header zone plus a fading tail. */
+const TOP_BLUR_HEIGHT = HEADER_CLEARANCE + 20;
 
 const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated });
 
@@ -349,6 +352,15 @@ const DubzScrollPage = (props: {
               {props.children}
             </VStack>
           </ScrollView>
+          {/* Native feathered blur over the scroll's top, under the header pill
+           * (a ZStack layer between them — no RN view in the glass, no hoist).
+           * Inert until the native build ships the SwiftUI blur view. */}
+          {hasNativeSwiftUIBlur ? (
+            <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" })]}>
+              <VariableBlurSwiftUI direction="down" blurRadius={2} height={TOP_BLUR_HEIGHT} />
+              <Spacer />
+            </VStack>
+          ) : null}
           {/* The header floats over the scroll's top (a Spacer fills the rest,
            * so only the pills hit-test and the scroll shows through). */}
           <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), padding({ top: TOP_INSET })]}>

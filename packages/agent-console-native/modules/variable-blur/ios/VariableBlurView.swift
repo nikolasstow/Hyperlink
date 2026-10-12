@@ -1,6 +1,7 @@
 import ExpoModulesCore
 import UIKit
 import QuartzCore
+import SwiftUI
 
 /// Progressive backdrop blur via private `CAFilter.variableBlur`.
 ///
@@ -154,5 +155,55 @@ private final class VariableBlurUIView: UIVisualEffectView {
       renderer.cgContext.drawLinearGradient(gradient, start: start, end: end, options: [])
     }
     return image.cgImage!
+  }
+}
+
+// MARK: - SwiftUI variant (for @expo/ui Hosts)
+
+/// Props for the SwiftUI variable-blur view. Extends `ExpoSwiftUI.ViewProps`
+/// (no @expo/ui dependency); the view sizes itself and is positioned by a
+/// wrapping SwiftUI stack on the JS side.
+public final class VariableBlurSwiftUIProps: ExpoSwiftUI.ViewProps {
+  @Field var blurRadius: Double = 20
+  @Field var direction: String = "up"
+  @Field var height: Double = 80
+}
+
+/// The variable blur as a SwiftUI view, so it can sit natively inside an
+/// `@expo/ui` `Host` (e.g. between a scroll and a floating header pill in Dubz)
+/// — no RN view inside the glass, no layer hoist.
+public struct VariableBlurSwiftUIView: ExpoSwiftUI.View {
+  @ObservedObject public var props: VariableBlurSwiftUIProps
+
+  public init(props: VariableBlurSwiftUIProps) {
+    self.props = props
+  }
+
+  public var body: some View {
+    VariableBlurRepresentable(
+      maxBlurRadius: CGFloat(props.blurRadius),
+      direction: props.direction == "down" ? .blurredBottomClearTop : .blurredTopClearBottom
+    )
+    .frame(maxWidth: .infinity)
+    .frame(height: CGFloat(props.height))
+    .allowsHitTesting(false)
+  }
+}
+
+/// Bridges the UIKit `VariableBlurUIView` into SwiftUI.
+private struct VariableBlurRepresentable: UIViewRepresentable {
+  let maxBlurRadius: CGFloat
+  let direction: VariableBlurView.Direction
+
+  func makeUIView(context: Context) -> VariableBlurUIView {
+    let view = VariableBlurUIView()
+    view.maxBlurRadius = maxBlurRadius
+    view.direction = direction
+    return view
+  }
+
+  func updateUIView(_ uiView: VariableBlurUIView, context: Context) {
+    uiView.maxBlurRadius = maxBlurRadius
+    uiView.direction = direction
   }
 }
