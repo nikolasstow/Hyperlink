@@ -18,8 +18,8 @@
  *
  * @internal
  */
-import { Button, ContextMenu, Host, HStack, Image, List, ScrollView, Section, Spacer, Text as UIText, VStack, ZStack } from "@expo/ui/swift-ui";
-import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
+import { Button, ContextMenu, Host, HStack, Image, List, Menu, ScrollView, Section, Spacer, Text as UIText, Toggle, VStack, ZStack } from "@expo/ui/swift-ui";
+import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, menuActionDismissBehavior, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
@@ -240,18 +240,73 @@ export const DubzSessionArea = (props: {
   );
 };
 
+/** A round glass icon button (PILL), the page bar's trailing control. */
+const GlassIconButton = (props: { readonly systemName: React.ComponentProps<typeof Image>["systemName"]; readonly onPress: () => void }): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
+    <HStack
+      modifiers={[
+        frame({ width: PILL, height: PILL, alignment: "center" }),
+        glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+        contentShape(shapes.capsule()),
+        onTapGesture(props.onPress),
+      ]}
+    >
+      <Image systemName={props.systemName} size={15} color={textColors.label} />
+    </HStack>
+  );
+};
+
+/** How the View All list is ordered. It's one worktree, so there's little to
+ * sort by — recency (the default) or the title. */
+type SortKey = "recent" | "name";
+
+/** The View All sort/filter menu (its trailing control): order by recency or
+ * name, and an unread-only filter. A glass pill trigger over a native menu. */
+const SortMenu = (props: {
+  readonly sort: SortKey;
+  readonly onSort: (sort: SortKey) => void;
+  readonly unreadOnly: boolean;
+  readonly onUnreadOnly: (on: boolean) => void;
+}): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
+    <Menu
+      label={
+        <HStack
+          modifiers={[
+            frame({ width: PILL, height: PILL, alignment: "center" }),
+            glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+            contentShape(shapes.capsule()),
+          ]}
+        >
+          <Image systemName="line.3.horizontal.decrease" size={15} color={textColors.label} />
+        </HStack>
+      }
+    >
+      <Section title="Sort by">
+        <Toggle label="Recent" systemImage="clock" isOn={props.sort === "recent"} onIsOnChange={(on) => { if (on) props.onSort("recent"); }} modifiers={[menuActionDismissBehavior("disabled")]} />
+        <Toggle label="Name" systemImage="textformat" isOn={props.sort === "name"} onIsOnChange={(on) => { if (on) props.onSort("name"); }} modifiers={[menuActionDismissBehavior("disabled")]} />
+      </Section>
+      <Section title="Show">
+        <Toggle label="Unread only" systemImage="circlebadge.fill" isOn={props.unreadOnly} onIsOnChange={props.onUnreadOnly} modifiers={[menuActionDismissBehavior("disabled")]} />
+      </Section>
+    </Menu>
+  );
+};
+
 /** The shared Dubz page top bar: a centred glass title pill (like the app's
- * HeaderTitlePill), with the full-screen button trailing when given. The back
- * button is the window's persistent one (top-left), so the pill reads centred
- * between them. Used by every Dubz page so they're consistent. */
-const PageHeader = (props: { readonly title: string; readonly width: number; readonly onFullScreen?: () => void }): React.ReactElement => {
+ * HeaderTitlePill), with an optional trailing control (full-screen, a menu).
+ * The back button is the window's persistent one (top-left), so the pill reads
+ * centred between them. Used by every Dubz page so they're consistent. */
+const PageHeader = (props: { readonly title: string; readonly width: number; readonly trailing?: React.ReactNode }): React.ReactElement => {
   const textColors = useTextColors();
   return (
     <ZStack modifiers={[frame({ width: props.width, height: PILL })]}>
       {/* Centred title pill. A transparent wrapper caps the width at a button's
        * room each side; the glass pill inside hugs its text, which truncates
        * only when it would exceed the cap — so a short title keeps a small pill,
-       * a long one stops before the back (left) and full-screen (right) buttons. */}
+       * a long one stops before the back (left) and trailing (right) buttons. */}
       <HStack modifiers={[frame({ maxWidth: props.width - 2 * (PILL + GAP), height: PILL, alignment: "center" })]}>
         <HStack
           modifiers={[
@@ -263,21 +318,8 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
           <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
         </HStack>
       </HStack>
-      {/* Trailing full-screen button, overlaid at the right. */}
-      {props.onFullScreen !== undefined ? (
-        <HStack modifiers={[frame({ width: props.width, height: PILL, alignment: "trailing" })]}>
-          <HStack
-            modifiers={[
-              frame({ width: PILL, height: PILL, alignment: "center" }),
-              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-              contentShape(shapes.capsule()),
-              onTapGesture(props.onFullScreen),
-            ]}
-          >
-            <Image systemName="arrow.up.left.and.arrow.down.right" size={15} color={textColors.label} />
-          </HStack>
-        </HStack>
-      ) : null}
+      {/* Trailing control, overlaid at the right. */}
+      {props.trailing !== undefined ? <HStack modifiers={[frame({ width: props.width, height: PILL, alignment: "trailing" })]}>{props.trailing}</HStack> : null}
     </ZStack>
   );
 };
@@ -291,7 +333,7 @@ const DubzScrollPage = (props: {
   readonly shifted: boolean;
   readonly title: string;
   readonly spacing: number;
-  readonly onFullScreen?: () => void;
+  readonly trailing?: React.ReactNode;
   readonly children: React.ReactNode;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
@@ -310,7 +352,7 @@ const DubzScrollPage = (props: {
           {/* The header floats over the scroll's top (a Spacer fills the rest,
            * so only the pills hit-test and the scroll shows through). */}
           <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), padding({ top: TOP_INSET })]}>
-            <PageHeader title={props.title} width={props.pageWidth} onFullScreen={props.onFullScreen} />
+            <PageHeader title={props.title} width={props.pageWidth} trailing={props.trailing} />
             <Spacer />
           </VStack>
         </ZStack>
@@ -344,7 +386,7 @@ export const DubzSessionPage = (props: {
     [transcript],
   );
   return (
-    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={12} onFullScreen={props.onFullScreen}>
+    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={12} trailing={<GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
       {messages.map((message) => (
         <UIText key={message.id} modifiers={[font({ size: 14 }), foregroundStyle(message.role === "user" ? textColors.label : textColors.secondaryLabel)]}>
           {message.text}
@@ -462,10 +504,17 @@ export const DubzSessionListPage = (props: {
   const isUnread = (session: SessionSummary): boolean =>
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
 
+  // Sort/filter from the header menu. `all` is already newest-first, so recency
+  // is the list as-is; name sorts by title. Unread-only keeps the rest out.
+  const [sort, setSort] = React.useState<SortKey>("recent");
+  const [unreadOnly, setUnreadOnly] = React.useState(false);
+  const filtered = unreadOnly ? all.filter(isUnread) : all;
+  const visible = sort === "name" ? [...filtered].sort((a, b) => a.title.localeCompare(b.title)) : filtered;
+
   return (
     <FavoriteScopeProvider value={favScope}>
-      <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title="Sessions" spacing={GAP}>
-        {all.map((session) => (
+      <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title="Sessions" spacing={GAP} trailing={<SortMenu sort={sort} onSort={setSort} unreadOnly={unreadOnly} onUnreadOnly={setUnreadOnly} />}>
+        {visible.map((session) => (
           <DubzSessionCard
             key={session.id}
             session={session}
