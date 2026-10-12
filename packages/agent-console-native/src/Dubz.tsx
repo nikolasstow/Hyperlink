@@ -21,7 +21,7 @@ import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
-import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -214,6 +214,12 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     if (id !== undefined) onOpenSessionPage?.(id);
   }, [sub, onClose, onOpenSessionPage]);
 
+  // The pill floats over the body (which then fills the window), held in place
+  // (0), so a page's scroll passes behind it at the window's bottom — the same
+  // floating-pill mode ModelPicker uses. The main suggestions are padded to
+  // clear it (styles.mainArea).
+  const pillFloat = useSharedValue(0);
+
   // Swipe right, where the composer is beside it, to slide back to it. Only a
   // clear sideways drag pages. The page's own work (focus, state) waits until
   // the slide has finished, so nothing on the JS side competes with its frames.
@@ -262,6 +268,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // The page behind Dubz stays interactive; Dubz closes by its back button,
       // the pill, or the keyboard — never a tap outside.
       dismissOnTapOutside={false}
+      pillLowered={pillFloat}
       bodyGesture={paging}
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
@@ -392,8 +399,9 @@ const makeStyles = (text: TextColors) =>
     top: 12,
     left: 16,
   },
-  // The main suggestions area: fills the body, padded so the session rows have
-  // margins from the window edges and a gap above the pill.
+  // The main suggestions area: fills the body (which now spans the whole window
+  // under the floating pill), padded so the session rows have margins from the
+  // window edges and sit clear of the floating pill at the bottom.
   mainArea: {
     position: "absolute",
     top: 12,
@@ -401,7 +409,7 @@ const makeStyles = (text: TextColors) =>
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingBottom: 14,
+    paddingBottom: PILL_AREA,
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {

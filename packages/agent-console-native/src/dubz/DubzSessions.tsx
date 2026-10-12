@@ -23,6 +23,7 @@ import { Animation, animation, contentShape, defaultScrollAnchor, font, foregrou
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
+import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 import { lastSummary } from "../chat/model";
 import { useKeptConversation } from "../conversations/useConversations";
 import { usePreloadConversation } from "../conversations/usePreloadConversation";
@@ -68,10 +69,13 @@ const FILL = 100000;
 const TOP_INSET = 12;
 /** The horizontal padding inside the title pill (PageHeader). */
 const TITLE_PILL_PAD = 14;
-/** Scroll content clears the overlaid header at the top, and the composer pill
- * at the bottom, so it passes BEHIND both bars as it scrolls. */
+/** The floating composer pill's space at the window's bottom: the pill, its
+ * inset (BarWindow COMPOSER_INSET), and a gap. */
+export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
+/** Scroll content clears the overlaid header at the top, and the floating
+ * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
-const BOTTOM_CLEARANCE = 16;
+const BOTTOM_CLEARANCE = PILL_AREA;
 
 const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated });
 
@@ -244,18 +248,20 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
   const textColors = useTextColors();
   return (
     <ZStack modifiers={[frame({ width: props.width, height: PILL })]}>
-      {/* Centred title pill. The title is capped so a long one truncates rather
-       * than growing the pill over the back (left) and full-screen (right)
-       * buttons: the pill hugs the (capped) text, leaving a button's room each
-       * side. */}
-      <HStack
-        modifiers={[
-          padding({ horizontal: TITLE_PILL_PAD }),
-          frame({ height: PILL, alignment: "center" }),
-          glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
-        ]}
-      >
-        <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1), frame({ maxWidth: props.width - 2 * (PILL + GAP) - 2 * TITLE_PILL_PAD })]}>{props.title}</UIText>
+      {/* Centred title pill. A transparent wrapper caps the width at a button's
+       * room each side; the glass pill inside hugs its text, which truncates
+       * only when it would exceed the cap — so a short title keeps a small pill,
+       * a long one stops before the back (left) and full-screen (right) buttons. */}
+      <HStack modifiers={[frame({ maxWidth: props.width - 2 * (PILL + GAP), height: PILL, alignment: "center" })]}>
+        <HStack
+          modifiers={[
+            padding({ horizontal: TITLE_PILL_PAD }),
+            frame({ height: PILL, alignment: "center" }),
+            glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
+          ]}
+        >
+          <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+        </HStack>
       </HStack>
       {/* Trailing full-screen button, overlaid at the right. */}
       {props.onFullScreen !== undefined ? (
