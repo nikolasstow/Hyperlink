@@ -14,6 +14,11 @@
  *   - an `app-variant.json` next to this file: `{ "variant": "<name>" }`
  *     (uncommitted, per-worktree; see scripts/worktree-setup.ts).
  *
+ * The marker may also name the worktree's own API server port, `"apiPort"`, for
+ * a variant whose branch changes the server: it lands in `extra.apiPort`, which
+ * settings.ts reads (the shared server's 5199 otherwise). A dev client reads it
+ * from its Metro, so changing it needs no rebuild.
+ *
  * Variants are a CLEAN CORE app: the native extensions (widgets / Live Activity /
  * Siri intents / notification-service via @bacons/apple-targets + withAppIntents)
  * and the shared App Group are dropped. Those are all hardcoded to the base App
@@ -23,6 +28,20 @@
 const fs = require("fs");
 const path = require("path");
 const { slugify, variantIconFile, variantMarkerFile } = require("./variant");
+
+/** The variant marker's contents, or undefined when there is none. */
+const readMarker = () => {
+  const file = path.join(__dirname, variantMarkerFile);
+  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : undefined;
+};
+
+/** The worktree's own API server port from the marker, if it names one. */
+const resolveApiPort = () => {
+  const value = readMarker()?.apiPort;
+  if (value === undefined) return undefined;
+  if (!Number.isInteger(value) || value <= 0) throw new Error(`${variantMarkerFile} "apiPort" must be a port number, got: ${JSON.stringify(value)}`);
+  return value;
+};
 
 /** The variant from the environment, or from an uncommitted app-variant.json. A
  * MISSING file means "base build" (expected); a MALFORMED file throws loudly. */
@@ -82,5 +101,9 @@ module.exports = ({ config }) => {
     icon: variantIcon,
     ios,
     plugins,
+    extra: {
+      ...config.extra,
+      ...(resolveApiPort() === undefined ? {} : { apiPort: resolveApiPort() }),
+    },
   };
 };

@@ -19,6 +19,7 @@
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import type { PermissionMode } from "./sessionPermissions";
 
 const SERVER_ADDRESS_KEY = "agent-console-native:serverAddress";
@@ -253,14 +254,18 @@ export const getBackendAddress = async (serverAddress: string): Promise<string> 
 };
 
 /** The off-vite Effect API server's port (`pnpm serve`), same host as opencode
- * — where extensions + synced config live, distinct from the vite backend. */
+ * — where extensions + synced config live, distinct from the vite backend. A
+ * variant whose branch changes the server runs its own and names its port
+ * (`extra.apiPort`, from app.config.js). */
 const DEFAULT_API_PORT = 5199;
+const variantApiPort: unknown = Constants.expoConfig?.extra?.apiPort;
+const API_PORT = typeof variantApiPort === "number" ? variantApiPort : DEFAULT_API_PORT;
 
 /** Base URL of the Effect API server, derived from the opencode server host. */
 export const getApiAddress = (serverAddress: string): string => {
   try {
     const url = new URL(serverAddress);
-    return `${url.protocol}//${url.hostname}:${DEFAULT_API_PORT}`;
+    return `${url.protocol}//${url.hostname}:${API_PORT}`;
   } catch {
     return serverAddress;
   }

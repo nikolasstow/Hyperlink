@@ -146,9 +146,12 @@ plugin.
 - Tests: rebase (incl. randomized), hub (real watcher, stale writes, agent
   attribution, rename-saves), the fold, and the app service against a real hub
   over a WebSocket.
-- Deploy note: the app reaches the hub on the API server (:5199). A server
-  without `/files/sync` leaves files the device has never kept unopenable, so
-  restart :5199 from this branch before running this build.
+- Deploy note: the app reaches the hub on the API server. A server without
+  `/files/sync` leaves files the device has never kept unopenable. Until this
+  merges, the `eta` worktree runs its own: API server on :5299 (tmux `eta-api`,
+  state copied from epsilon's) and Metro on :8082 (tmux `eta-metro`); its
+  variant marker sets `"apiPort": 5299`, so only the eta app uses it. The
+  shared :5199/:5195/:8081 (epsilon) are untouched.
 
 ## Open
 
