@@ -10,12 +10,15 @@ struct ConflictNative: Decodable {
     let mineTokens: [[ShikiToken]]?
 }
 
-/// Draws conflicts inside the document, like a merge editor sized for a
-/// phone: the user's lines in space opened above the agent's, the agent's
-/// lines (the real text) tinted, and a glass panel with two glass buttons —
-/// Mine and Theirs — in space opened below them. Colours come from the theme
-/// (VS Code's merge colours). The space comes from Runestone line insets, so
-/// the lines below move down to make room and it all scrolls with the code.
+/// Draws conflicts inside the document, like VS Code's inline merge, sized
+/// for a phone: the user's lines in space opened above the agent's, the
+/// agent's lines (the real text) tinted, and a glass panel with Mine and
+/// Theirs in space opened below them. Colours are the theme's (mergeColors.ts
+/// on the JS side). The space comes from Runestone line insets, so the lines
+/// below move down to make room and it all scrolls with the code.
+///
+/// A conflict opens by growing its space, pushing the lines below down, and
+/// closes the same way back up; a choice is sent once its conflict has closed.
 final class ConflictZones {
     /// Keep mine or keep theirs.
     enum Choice: String {
@@ -23,32 +26,36 @@ final class ConflictZones {
         case theirs = "Theirs"
     }
 
-    /// The theme's merge colours.
+    /// The theme's colours for conflicts.
     struct Colors {
         /// Behind the user's lines, and behind the agent's.
-        var mineLines = UIColor.systemGreen.withAlphaComponent(0.16)
-        var theirsLines = UIColor.systemBlue.withAlphaComponent(0.16)
-        /// The Mine and Theirs buttons' tints.
-        var mineButton = UIColor.systemGreen
-        var theirsButton = UIColor.systemBlue
-        /// The panel holding the buttons.
+        var mineLines = UIColor(red: 0.25, green: 0.78, blue: 0.68, alpha: 0.2)
+        var theirsLines = UIColor(red: 0.25, green: 0.65, blue: 1, alpha: 0.2)
+        /// The Mine and Theirs buttons.
+        var mineButton = UIColor(red: 0.25, green: 0.78, blue: 0.68, alpha: 0.5)
+        var theirsButton = UIColor(red: 0.25, green: 0.65, blue: 1, alpha: 0.5)
+        /// The panel holding the buttons, and its edge.
         var panel = UIColor.secondarySystemBackground
-        /// Button labels: the editor's background on a light tint, its
-        /// foreground on a dark one.
-        var editorBackground = UIColor.black
-        var editorForeground = UIColor.white
-    }
-
-    /// Set when the theme changes; redraws the conflicts in the new colours.
-    var colors = Colors() {
-        didSet {
-            set(conflicts)
-        }
+        var panelBorder = UIColor.separator
+        /// The buttons' labels.
+        var label = UIColor.label
     }
 
     var rowHeight: () -> CGFloat = { 17 }
     var styledLine: (String, [ShikiToken]) -> NSAttributedString = { text, _ in NSAttributedString(string: text) }
     var onChoice: (Int, Choice) -> Void = { _, _ in }
+
+    /// Set when the theme changes; the conflicts take the new colours.
+    var colors = Colors() {
+        didSet {
+            for zone in zones {
+                zone.views.removeFromSuperview()
+                zone.views = makeViews(for: zone)
+            }
+            textView?.viewsAboveGutter = zones.flatMap(\.views.all)
+            layout()
+        }
+    }
 
     private static let buttonHeight: CGFloat = 40
     private static let buttonSpacing: CGFloat = 6
@@ -60,118 +67,167 @@ final class ConflictZones {
     private static var panelHeight: CGFloat {
         buttonHeight + panelPadding * 2
     }
+    private static var belowHeight: CGFloat {
+        panelHeight + actionsPadding.top + actionsPadding.bottom
+    }
+    /// How long a conflict takes to open or close.
+    private static let duration: CFTimeInterval = 0.28
 
-    private final class Zone {
+    /// What is on screen for one conflict.
+    private final class Views {
         let mine = UIView()
         let mineLabel = UILabel()
         let theirs = UIView()
-        let actions: UIVisualEffectView
-        let buttons = UIStackView()
+        /// Clips the panel to the space below as it opens and closes.
+        let below = UIView()
+        let panel: UIVisualEffectView
 
         init(panel: UIVisualEffectView) {
-            actions = panel
+            self.panel = panel
+        }
+
+        var all: [UIView] {
+            [mine, theirs, below]
+        }
+
+        func removeFromSuperview() {
+            all.forEach { $0.removeFromSuperview() }
+        }
+    }
+
+    /// One conflict, as long as it is on screen: opening, open, or closing.
+    private final class Zone {
+        /// Which conflict this is across updates from JS (its positions move).
+        let key: String
+        var conflict: ConflictNative
+        var views: Views!
+        /// 0 closed, 1 open; `target` is where it is heading.
+        var progress: CGFloat = 0
+        var target: CGFloat = 1
+        /// Tapped: sent once closed.
+        var choice: Choice?
+
+        init(key: String, conflict: ConflictNative) {
+            self.key = key
+            self.conflict = conflict
         }
     }
 
     private weak var textView: TextView?
-    private var conflicts: [ConflictNative] = []
     private var zones: [Zone] = []
+    /// The keys of the conflicts JS sent last, in its order (a choice names its
+    /// index there).
+    private var order: [String] = []
+    private var displayLink: CADisplayLink?
+    private var lastFrame: CFTimeInterval = 0
 
     init(textView: TextView) {
         self.textView = textView
     }
 
+    /// The conflicts JS has now. New ones open; ones no longer listed close.
     func set(_ conflicts: [ConflictNative]) {
-        self.conflicts = conflicts
-        for zone in zones {
-            zone.mine.removeFromSuperview()
-            zone.theirs.removeFromSuperview()
-            zone.actions.removeFromSuperview()
+        var seen: [String: Int] = [:]
+        let keyed = conflicts.map { conflict -> (String, ConflictNative) in
+            let count = seen[conflict.mine, default: 0]
+            seen[conflict.mine] = count + 1
+            return ("\(count)|\(conflict.mine)", conflict)
         }
-        zones = conflicts.enumerated().map { makeZone(index: $0.offset, conflict: $0.element) }
-        // Over the gutter too: the colours run the full width and the buttons
-        // sit clear of the line numbers. The tints are see-through, so the
-        // agent's line numbers still show.
-        textView?.viewsAboveGutter = zones.flatMap { [$0.mine, $0.theirs, $0.actions] }
+        order = keyed.map(\.0)
+        for zone in zones where !order.contains(zone.key) {
+            zone.target = 0
+        }
+        for (key, conflict) in keyed {
+            if let zone = zones.first(where: { $0.key == key }) {
+                zone.conflict = conflict
+                if zone.choice == nil {
+                    zone.target = 1
+                }
+            } else {
+                let zone = Zone(key: key, conflict: conflict)
+                zone.views = makeViews(for: zone)
+                zones.append(zone)
+            }
+        }
+        textView?.viewsAboveGutter = zones.flatMap(\.views.all)
         textView?.setNeedsLayout()
         layout()
+        animateIfNeeded()
     }
 
-    /// Open the space for every conflict and put its views in it. Called when
-    /// the conflicts, the text, the size or the font change.
+    /// The text is about to change at `range` (typing, or an outside change
+    /// applied in place): move the conflicts with their lines, so the zones
+    /// stay put until JS sends the conflicts again.
+    func textWillChange(in range: NSRange, replacementLength: Int) {
+        let delta = replacementLength - range.length
+        let end = range.location + range.length
+        for zone in zones {
+            var moved = zone.conflict
+            if end <= moved.from {
+                // Before the conflict (or inserted right at its start).
+                moved.from += delta
+                moved.to += delta
+            } else if range.location > moved.to {
+                // After it: nothing moves.
+            } else {
+                // Inside, across, or at the end of it: it grows or shrinks.
+                moved.from = min(moved.from, range.location)
+                moved.to = max(moved.from, moved.to + delta)
+            }
+            zone.conflict = moved
+        }
+    }
+
+    /// Open the space for every conflict, as far as each is open, and put its
+    /// views in it. Called when the conflicts, the text, the size, the font or
+    /// an animation frame change.
     func layout() {
         guard let textView else {
             return
         }
-        let rows = conflicts.map { conflict -> (first: Int, last: Int)? in
-            guard let first = textView.row(containing: conflict.from), let last = textView.row(containing: max(conflict.from, conflict.to)) else {
+        let rows = zones.map { zone -> (first: Int, last: Int)? in
+            guard let first = textView.row(containing: zone.conflict.from),
+                  let last = textView.row(containing: max(zone.conflict.from, zone.conflict.to)) else {
                 return nil
             }
             return (first, last)
         }
         var insets: [Int: LineInsets] = [:]
-        for (conflict, span) in zip(conflicts, rows) {
+        for (zone, span) in zip(zones, rows) {
             guard let span else {
                 continue
             }
-            insets[span.first, default: .zero].above = mineHeight(conflict)
-            insets[span.last, default: .zero].below = Self.panelHeight + Self.actionsPadding.top + Self.actionsPadding.bottom
+            let open = Self.eased(zone.progress)
+            insets[span.first, default: .zero].above += (mineHeight(zone.conflict) * open).rounded()
+            insets[span.last, default: .zero].below += (Self.belowHeight * open).rounded()
         }
-        textView.lineInsets = insets
+        textView.lineInsets = insets.filter { $0.value != .zero }
 
         let width = textView.bounds.width
         let x = textView.contentOffset.x
+        let textX = textView.gutterWidth + textView.textContainerInset.left
         for (zone, span) in zip(zones, rows) {
+            let views = zone.views!
             guard let span, let first = textView.lineFrame(ofLine: span.first), let last = textView.lineFrame(ofLine: span.last) else {
-                zone.mine.isHidden = true
-                zone.theirs.isHidden = true
-                zone.actions.isHidden = true
+                views.all.forEach { $0.isHidden = true }
                 continue
             }
-            zone.mine.isHidden = false
-            zone.theirs.isHidden = false
-            zone.actions.isHidden = false
-            zone.mine.frame = CGRect(x: x, y: first.top, width: width, height: first.insets.above)
-            let textX = textView.gutterWidth + textView.textContainerInset.left
-            zone.mineLabel.frame = CGRect(
-                x: textX,
-                y: 0,
-                width: max(0, width - textX),
-                height: first.insets.above
-            )
+            views.all.forEach { $0.isHidden = zone.progress == 0 }
+            let open = Self.eased(zone.progress)
+            views.mine.frame = CGRect(x: x, y: first.top, width: width, height: first.insets.above)
+            views.mineLabel.frame = CGRect(x: textX, y: 0, width: max(0, width - textX), height: mineHeight(zone.conflict))
             let theirsTop = first.top + first.insets.above
             let theirsBottom = last.top + last.height - last.insets.below
-            zone.theirs.frame = CGRect(x: x, y: theirsTop, width: width, height: max(0, theirsBottom - theirsTop))
-            zone.actions.frame = CGRect(
-                x: x + Self.actionsPadding.left,
-                y: theirsBottom + Self.actionsPadding.top,
+            views.theirs.frame = CGRect(x: x, y: theirsTop, width: width, height: max(0, theirsBottom - theirsTop))
+            views.theirs.alpha = open
+            views.below.frame = CGRect(x: x, y: theirsBottom, width: width, height: last.insets.below)
+            views.panel.frame = CGRect(
+                x: Self.actionsPadding.left,
+                y: Self.actionsPadding.top,
                 width: max(0, width - Self.actionsPadding.left - Self.actionsPadding.right),
                 height: Self.panelHeight
             )
-            zone.buttons.frame = zone.actions.bounds.insetBy(dx: Self.panelPadding, dy: Self.panelPadding)
-        }
-    }
-
-    /// The text is about to change at `range` (typing, or an outside change
-    /// applied in place): move the conflicts with their lines, so the zones stay
-    /// put until JS sends the conflicts again.
-    func textWillChange(in range: NSRange, replacementLength: Int) {
-        let delta = replacementLength - range.length
-        let end = range.location + range.length
-        conflicts = conflicts.map { conflict in
-            var moved = conflict
-            if end <= conflict.from {
-                // Before the conflict (or inserted right at its start).
-                moved.from += delta
-                moved.to += delta
-            } else if range.location > conflict.to {
-                // After it: nothing moves.
-            } else {
-                // Inside, across, or at the end of it: it grows or shrinks.
-                moved.from = min(conflict.from, range.location)
-                moved.to = max(moved.from, conflict.to + delta)
-            }
-            return moved
+            views.panel.alpha = open
         }
     }
 
@@ -182,11 +238,74 @@ final class ConflictZones {
         }
         let x = textView.contentOffset.x
         for zone in zones {
-            zone.mine.frame.origin.x = x
-            zone.theirs.frame.origin.x = x
-            zone.actions.frame.origin.x = x + Self.actionsPadding.left
+            zone.views.mine.frame.origin.x = x
+            zone.views.theirs.frame.origin.x = x
+            zone.views.below.frame.origin.x = x
         }
     }
+
+    // MARK: - Opening and closing
+
+    /// Ease in and out: slow at both ends, so the lines glide.
+    private static func eased(_ progress: CGFloat) -> CGFloat {
+        let t = min(max(progress, 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+
+    private func choose(_ zone: Zone, _ choice: Choice) {
+        guard zone.choice == nil else {
+            return
+        }
+        zone.choice = choice
+        zone.target = 0
+        zone.views.below.isUserInteractionEnabled = false
+        animateIfNeeded()
+    }
+
+    private func animateIfNeeded() {
+        guard displayLink == nil, zones.contains(where: { $0.progress != $0.target }) else {
+            return
+        }
+        let link = CADisplayLink(target: DisplayLinkTarget { [weak self] link in self?.step(link) }, selector: #selector(DisplayLinkTarget.tick(_:)))
+        lastFrame = CACurrentMediaTime()
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    private func step(_ link: CADisplayLink) {
+        let now = CACurrentMediaTime()
+        let advance = CGFloat((now - lastFrame) / Self.duration)
+        lastFrame = now
+        for zone in zones {
+            if zone.progress < zone.target {
+                zone.progress = min(zone.target, zone.progress + advance)
+            } else if zone.progress > zone.target {
+                zone.progress = max(zone.target, zone.progress - advance)
+            }
+        }
+        layout()
+        // Closed after a tap: send the choice.
+        for zone in zones where zone.progress == 0 && zone.target == 0 {
+            if let choice = zone.choice, let index = order.firstIndex(of: zone.key) {
+                zone.choice = nil
+                onChoice(index, choice)
+            }
+        }
+        // Closed and no longer listed by JS: let go of it.
+        let closed = zones.filter { $0.progress == 0 && $0.target == 0 && !order.contains($0.key) }
+        if !closed.isEmpty {
+            closed.forEach { $0.views.removeFromSuperview() }
+            zones.removeAll { zone in closed.contains { $0 === zone } }
+            textView?.viewsAboveGutter = zones.flatMap(\.views.all)
+            layout()
+        }
+        if !zones.contains(where: { $0.progress != $0.target }) {
+            link.invalidate()
+            displayLink = nil
+        }
+    }
+
+    // MARK: - Views
 
     private func mineLines(_ conflict: ConflictNative) -> [String] {
         conflict.mine.components(separatedBy: "\n")
@@ -196,32 +315,53 @@ final class ConflictZones {
         CGFloat(mineLines(conflict).count) * rowHeight()
     }
 
-    private func makeZone(index: Int, conflict: ConflictNative) -> Zone {
-        let zone = Zone(panel: panel())
-        zone.mine.backgroundColor = colors.mineLines
-        zone.mine.isUserInteractionEnabled = false
-        zone.mineLabel.numberOfLines = 0
-        zone.mineLabel.lineBreakMode = .byClipping
-        zone.mineLabel.attributedText = mineText(conflict)
-        zone.mine.addSubview(zone.mineLabel)
+    private func makeViews(for zone: Zone) -> Views {
+        let views = Views(panel: panel())
+        views.mine.backgroundColor = colors.mineLines
+        views.mine.isUserInteractionEnabled = false
+        // Opening, the lines show from the top as the space grows.
+        views.mine.clipsToBounds = true
+        views.mineLabel.numberOfLines = 0
+        views.mineLabel.lineBreakMode = .byClipping
+        views.mineLabel.attributedText = mineText(zone.conflict)
+        views.mine.addSubview(views.mineLabel)
 
-        zone.theirs.backgroundColor = colors.theirsLines
-        zone.theirs.isUserInteractionEnabled = false
+        views.theirs.backgroundColor = colors.theirsLines
+        views.theirs.isUserInteractionEnabled = false
 
-        zone.buttons.axis = .horizontal
-        zone.buttons.spacing = Self.buttonSpacing
-        zone.buttons.distribution = .fillEqually
-        zone.buttons.addArrangedSubview(button(title: "Mine", tint: colors.mineButton) { [weak self] in self?.onChoice(index, .mine) })
-        zone.buttons.addArrangedSubview(button(title: "Theirs", tint: colors.theirsButton) { [weak self] in self?.onChoice(index, .theirs) })
-        zone.actions.contentView.addSubview(zone.buttons)
+        views.below.clipsToBounds = true
+        let buttons = UIStackView()
+        buttons.axis = .horizontal
+        buttons.spacing = Self.buttonSpacing
+        buttons.distribution = .fillEqually
+        buttons.translatesAutoresizingMaskIntoConstraints = false
+        buttons.addArrangedSubview(button(title: "Mine", tint: colors.mineButton) { [weak self, weak zone] in
+            guard let self, let zone else {
+                return
+            }
+            self.choose(zone, .mine)
+        })
+        buttons.addArrangedSubview(button(title: "Theirs", tint: colors.theirsButton) { [weak self, weak zone] in
+            guard let self, let zone else {
+                return
+            }
+            self.choose(zone, .theirs)
+        })
+        views.panel.contentView.addSubview(buttons)
+        NSLayoutConstraint.activate([
+            buttons.leadingAnchor.constraint(equalTo: views.panel.contentView.leadingAnchor, constant: Self.panelPadding),
+            buttons.trailingAnchor.constraint(equalTo: views.panel.contentView.trailingAnchor, constant: -Self.panelPadding),
+            buttons.topAnchor.constraint(equalTo: views.panel.contentView.topAnchor, constant: Self.panelPadding),
+            buttons.bottomAnchor.constraint(equalTo: views.panel.contentView.bottomAnchor, constant: -Self.panelPadding),
+        ])
+        views.below.addSubview(views.panel)
 
-        textView?.addSubview(zone.mine)
-        textView?.addSubview(zone.theirs)
-        textView?.addSubview(zone.actions)
-        return zone
+        views.all.forEach { textView?.addSubview($0) }
+        return views
     }
 
-    /// The glass rectangle holding the buttons, tinted with the theme.
+    /// The glass rectangle holding the buttons, in the theme's editor-widget
+    /// colours.
     private func panel() -> UIVisualEffectView {
         let effect: UIVisualEffect
         if #available(iOS 26.0, *) {
@@ -232,28 +372,20 @@ final class ConflictZones {
             effect = UIBlurEffect(style: .systemThinMaterial)
         }
         let view = UIVisualEffectView(effect: effect)
+        if #unavailable(iOS 26.0) {
+            view.contentView.backgroundColor = colors.panel
+        }
         view.layer.cornerRadius = Self.panelRadius
         view.layer.cornerCurve = .continuous
+        view.layer.borderWidth = 1
+        view.layer.borderColor = colors.panelBorder.cgColor
         view.clipsToBounds = true
         return view
     }
 
     /// A glass button tinted with the theme's colour for its side.
     private func button(title: String, tint: UIColor, action: @escaping () -> Void) -> UIControl {
-        GlassButton(title: title, tint: tint, label: labelColor(on: tint), cornerRadius: Self.panelRadius - Self.panelPadding, action: action)
-    }
-
-    /// Whichever of the editor's two text colours reads on `tint`.
-    private func labelColor(on tint: UIColor) -> UIColor {
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
-        guard tint.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
-            return colors.editorForeground
-        }
-        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-        return luminance > 0.55 ? colors.editorBackground : colors.editorForeground
+        GlassButton(title: title, tint: tint, label: colors.label, cornerRadius: Self.panelRadius - Self.panelPadding, action: action)
     }
 
     /// The user's lines, styled like the code: same font, Shiki colours when
@@ -274,9 +406,17 @@ final class ConflictZones {
     }
 }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
+/// CADisplayLink holds its target strongly; this keeps that from holding the
+/// zones.
+private final class DisplayLinkTarget {
+    private let onTick: (CADisplayLink) -> Void
+
+    init(_ onTick: @escaping (CADisplayLink) -> Void) {
+        self.onTick = onTick
+    }
+
+    @objc func tick(_ link: CADisplayLink) {
+        onTick(link)
     }
 }
 
@@ -330,5 +470,11 @@ private final class GlassButton: UIControl {
         didSet {
             alpha = isHighlighted ? 0.7 : 1
         }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

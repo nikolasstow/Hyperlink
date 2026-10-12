@@ -359,8 +359,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             caret = value
         }
         var conflictColors = conflictZones.colors
-        conflictColors.editorBackground = background
-        conflictColors.editorForeground = foreground
         if let value = theme.mergeCurrentContent.flatMap({ UIColor(shikiHex: $0) }) {
             conflictColors.mineLines = value
         }
@@ -373,8 +371,14 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         if let value = theme.mergeIncomingHeader.flatMap({ UIColor(shikiHex: $0) }) {
             conflictColors.theirsButton = value
         }
-        if let value = theme.mergeCommonHeader.flatMap({ UIColor(shikiHex: $0) }) {
+        if let value = theme.widgetBackground.flatMap({ UIColor(shikiHex: $0) }) {
             conflictColors.panel = value
+        }
+        if let value = theme.widgetBorder.flatMap({ UIColor(shikiHex: $0) }) {
+            conflictColors.panelBorder = value
+        }
+        if let value = theme.mergeLabel.flatMap({ UIColor(shikiHex: $0) }) {
+            conflictColors.label = value
         }
         conflictZones.colors = conflictColors
         applyTheme()

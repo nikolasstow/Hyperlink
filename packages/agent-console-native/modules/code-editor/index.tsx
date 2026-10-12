@@ -34,13 +34,16 @@ export interface EditorTheme {
   readonly currentLine?: string;
   readonly selection?: string;
   readonly caret?: string;
-  /** VS Code's merge colours, for conflicts: behind your lines and the
-   * agent's, the Mine/Theirs buttons, and the panel holding them. */
+  /** A conflict's colours, from the theme (mergeColors.ts): behind your
+   * lines and the agent's, the Mine/Theirs buttons, the panel holding them
+   * (editor widget colours), and the buttons' labels. */
   readonly mergeCurrentContent?: string;
   readonly mergeIncomingContent?: string;
   readonly mergeCurrentHeader?: string;
   readonly mergeIncomingHeader?: string;
-  readonly mergeCommonHeader?: string;
+  readonly widgetBackground?: string;
+  readonly widgetBorder?: string;
+  readonly mergeLabel?: string;
 }
 
 export interface CodeEditorNativeProps extends ViewProps {

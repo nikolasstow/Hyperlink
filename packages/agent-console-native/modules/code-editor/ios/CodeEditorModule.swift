@@ -10,13 +10,16 @@ struct ThemeRecord: Record {
     @Field var currentLine: String?
     @Field var selection: String?
     @Field var caret: String?
-    /// VS Code's merge colours: behind your lines and the agent's in a
-    /// conflict, the two buttons' tints, and the panel holding them.
+    /// A conflict's colours, from the theme (mergeColors.ts): behind your lines
+    /// and the agent's, the Mine/Theirs buttons, the panel holding them (the
+    /// editor widget colours), and the buttons' labels.
     @Field var mergeCurrentContent: String?
     @Field var mergeIncomingContent: String?
     @Field var mergeCurrentHeader: String?
     @Field var mergeIncomingHeader: String?
-    @Field var mergeCommonHeader: String?
+    @Field var widgetBackground: String?
+    @Field var widgetBorder: String?
+    @Field var mergeLabel: String?
 
     init() {}
 }
