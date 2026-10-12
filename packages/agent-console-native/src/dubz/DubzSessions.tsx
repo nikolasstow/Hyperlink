@@ -19,7 +19,7 @@
  * @internal
  */
 import { Host, HStack, Image, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { Animation, animation, contentShape, font, foregroundStyle, frame, glassEffect, lineLimit, offset, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
+import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, offset, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
@@ -81,7 +81,9 @@ export const DubzTopBack = (props: { readonly onPress: () => void }): React.Reac
   );
 };
 
-/** The session row, collapsed or expanded. */
+/** The session row, collapsed or expanded. Lives in a bottom-anchored native
+ * scroll, so the content always sits just above the pill and expanding grows it
+ * upward (and scrolls if it runs past the window). */
 export const DubzSessionArea = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
@@ -98,7 +100,6 @@ export const DubzSessionArea = (props: {
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - GAP);
   const extras = sessions.slice(1, 1 + EXTRA);
 
-  // A full-width glass pill for a session (the expanded rows, and the big one).
   const sessionPill = (session: SessionSummary, pillWidth: number): React.ReactElement => (
     <HStack
       key={session.id}
@@ -116,56 +117,67 @@ export const DubzSessionArea = (props: {
   );
 
   return (
-    <Host style={{ width: rowWidth }} matchContents={{ vertical: true, horizontal: false }} ignoreSafeArea="all">
-      <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" }), animation(SLIDE, expanded)]}>
-        {expanded ? (
-          <>
-            <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
-              <HStack
-                modifiers={[
-                  frame({ width: PILL, height: PILL, alignment: "center" }),
-                  glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-                  contentShape(shapes.capsule()),
-                ]}
-              >
-                <Image systemName="plus" size={16} color={textColors.secondaryLabel} />
-              </HStack>
-              <HStack
-                modifiers={[
-                  frame({ width: rowWidth - PILL - GAP, height: PILL, alignment: "center" }),
-                  glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-                  contentShape(shapes.capsule()),
-                  onTapGesture(props.onViewAll),
-                ]}
-              >
-                <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label)]}>View All</UIText>
-              </HStack>
+    <Host style={{ flex: 1 }} ignoreSafeArea="all">
+      <ScrollView showsIndicators={false} modifiers={[defaultScrollAnchor("bottom"), frame({ maxWidth: FILL, maxHeight: FILL, alignment: "bottom" })]}>
+        <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "bottomLeading" }), animation(SLIDE, expanded)]}>
+          {/* The most related session + the number/chevron toggle. Stays here;
+           * the rest appears below and pushes this up. */}
+          <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
+            {sessionPill(top, bigWidth)}
+            <HStack
+              spacing={5}
+              modifiers={[
+                frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
+                glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                contentShape(shapes.capsule()),
+                onTapGesture(() => setExpanded((e) => !e)),
+              ]}
+            >
+              {expanded ? (
+                <Image systemName="chevron.down" size={15} color={textColors.secondaryLabel} />
+              ) : (
+                <>
+                  <Image systemName="bubble.left.and.bubble.right.fill" size={13} color={textColors.secondaryLabel} />
+                  <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(sessions.length)}</UIText>
+                </>
+              )}
             </HStack>
-            {extras.map((session) => sessionPill(session, rowWidth))}
-          </>
-        ) : null}
-        <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
-          {sessionPill(top, bigWidth)}
-          <HStack
-            spacing={5}
-            modifiers={[
-              frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
-              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-              contentShape(shapes.capsule()),
-              onTapGesture(() => setExpanded((e) => !e)),
-            ]}
-          >
-            {expanded ? (
-              <Image systemName="chevron.down" size={15} color={textColors.secondaryLabel} />
-            ) : (
-              <>
-                <Image systemName="bubble.left.and.bubble.right.fill" size={13} color={textColors.secondaryLabel} />
-                <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(sessions.length)}</UIText>
-              </>
-            )}
           </HStack>
-        </HStack>
-      </VStack>
+          {expanded ? (
+            <>
+              {extras.map((session) => sessionPill(session, rowWidth))}
+              {/* ( + New Session ) ( View All > ) */}
+              <HStack spacing={GAP} modifiers={[frame({ width: rowWidth })]}>
+                <HStack
+                  spacing={6}
+                  modifiers={[
+                    padding({ horizontal: 16 }),
+                    frame({ maxWidth: FILL, height: PILL, alignment: "center" }),
+                    glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                    contentShape(shapes.capsule()),
+                  ]}
+                >
+                  <Image systemName="plus" size={15} color={textColors.label} />
+                  <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>New Session</UIText>
+                </HStack>
+                <HStack
+                  spacing={6}
+                  modifiers={[
+                    padding({ horizontal: 16 }),
+                    frame({ maxWidth: FILL, height: PILL, alignment: "center" }),
+                    glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+                    contentShape(shapes.capsule()),
+                    onTapGesture(props.onViewAll),
+                  ]}
+                >
+                  <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>View All</UIText>
+                  <Image systemName="chevron.right" size={13} color={textColors.secondaryLabel} />
+                </HStack>
+              </HStack>
+            </>
+          ) : null}
+        </VStack>
+      </ScrollView>
     </Host>
   );
 };
@@ -175,10 +187,10 @@ export const DubzSessionArea = (props: {
 const PageHeader = (props: { readonly title: string; readonly width: number; readonly onFullScreen: () => void }): React.ReactElement => {
   const textColors = useTextColors();
   return (
-    <HStack spacing={10} alignment="center" modifiers={[frame({ width: props.width, height: PILL })]}>
+    <HStack spacing={10} alignment="center" modifiers={[padding({ leading: BACK_INSET }), frame({ width: props.width, height: PILL, alignment: "leading" })]}>
       <HStack
         modifiers={[
-          padding({ leading: BACK_INSET, trailing: 16 }),
+          padding({ horizontal: 14 }),
           frame({ height: PILL, alignment: "center" }),
           glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
         ]}
@@ -259,8 +271,8 @@ export const DubzSessionListPage = (props: {
     <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
         <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
-          <HStack modifiers={[frame({ width: pageWidth, height: PILL })]}>
-            <HStack modifiers={[padding({ leading: BACK_INSET, trailing: 16 }), frame({ height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
+          <HStack modifiers={[padding({ leading: BACK_INSET }), frame({ width: pageWidth, height: PILL, alignment: "leading" })]}>
+            <HStack modifiers={[padding({ horizontal: 14 }), frame({ height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
               <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label)]}>Sessions</UIText>
             </HStack>
             <Spacer />
