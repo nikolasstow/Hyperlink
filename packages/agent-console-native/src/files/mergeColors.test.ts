@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeColorsOf, transparent } from "./mergeColors";
+import { isLightTheme, mergeColorsOf, transparent } from "./mergeColors";
 
 describe("mergeColors", () => {
   it("makes a colour more transparent the way VS Code does", () => {
@@ -10,16 +10,14 @@ describe("mergeColors", () => {
   });
 
   it("uses VS Code's defaults where the theme sets nothing", () => {
-    expect(mergeColorsOf(undefined, false)).toEqual({
+    expect(mergeColorsOf(undefined, undefined, false)).toEqual({
       currentHeader: "#40C8AE80",
       incomingHeader: "#40A6FF80",
       currentContent: "#40C8AE33",
       incomingContent: "#40A6FF33",
-      widgetBackground: "#252526",
-      widgetBorder: "#454545",
       label: "#BBBBBB",
     });
-    expect(mergeColorsOf(undefined, true).widgetBackground).toBe("#F3F3F3");
+    expect(mergeColorsOf(undefined, undefined, true).label).toBe("#333333");
   });
 
   it("takes the theme's own colours, deriving content from its headers", () => {
@@ -27,15 +25,21 @@ describe("mergeColors", () => {
       {
         "merge.currentHeaderBackground": "#A6E3A180",
         "merge.incomingContentBackground": "#89B4FA22",
-        "editorWidget.background": "#181825",
-        "editor.foreground": "#CDD6F4",
       },
-      false,
+      "#24292E",
+      true,
     );
-    expect(colors.currentHeader).toBe("#A6E3A180");
     expect(colors.currentContent).toBe("#A6E3A133");
     expect(colors.incomingContent).toBe("#89B4FA22");
-    expect(colors.widgetBackground).toBe("#181825");
-    expect(colors.label).toBe("#CDD6F4");
+    expect(colors.label).toBe("#24292E");
+  });
+
+  it("tells a light theme by its type, else by its background", () => {
+    expect(isLightTheme("light", "#000000")).toBe(true);
+    expect(isLightTheme("dark", "#FFFFFF")).toBe(false);
+    expect(isLightTheme(undefined, "#FFFFFF")).toBe(true);
+    expect(isLightTheme(undefined, "#FAFBFC")).toBe(true);
+    expect(isLightTheme(undefined, "#1E1E1E")).toBe(false);
+    expect(isLightTheme(undefined, undefined)).toBe(false);
   });
 });

@@ -17,7 +17,7 @@ import { canApplyChanges, canShowConflicts, canVersionTokens, CodeEditorNativeVi
 import type { Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
 import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
-import { mergeColorsOf } from "./mergeColors";
+import { isLightTheme, mergeColorsOf } from "./mergeColors";
 import { stickyRanges } from "./stickyRanges";
 import { useCodeTheme } from "../useCodeTheme";
 
@@ -58,15 +58,15 @@ const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: Highligh
   const colors = typeof theme === "string" ? undefined : theme.colors;
   const background = highlight?.background ?? colors?.["editor.background"];
   const foreground = highlight?.foreground ?? colors?.["editor.foreground"];
-  const merge = mergeColorsOf(colors, typeof theme !== "string" && theme.type === "light");
+  const light = isLightTheme(typeof theme === "string" ? undefined : theme.type, background);
+  const merge = mergeColorsOf(colors, foreground, light);
   return {
     mergeCurrentHeader: merge.currentHeader,
     mergeIncomingHeader: merge.incomingHeader,
     mergeCurrentContent: merge.currentContent,
     mergeIncomingContent: merge.incomingContent,
-    widgetBackground: merge.widgetBackground,
-    widgetBorder: merge.widgetBorder,
     mergeLabel: merge.label,
+    light,
     background,
     foreground,
     gutterBackground: colors?.["editorGutter.background"] ?? background,

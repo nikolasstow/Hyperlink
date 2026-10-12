@@ -371,11 +371,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         if let value = theme.mergeIncomingHeader.flatMap({ UIColor(shikiHex: $0) }) {
             conflictColors.theirsButton = value
         }
-        if let value = theme.widgetBackground.flatMap({ UIColor(shikiHex: $0) }) {
-            conflictColors.panel = value
-        }
-        if let value = theme.widgetBorder.flatMap({ UIColor(shikiHex: $0) }) {
-            conflictColors.panelBorder = value
+        if let value = theme.light {
+            conflictColors.light = value
         }
         if let value = theme.mergeLabel.flatMap({ UIColor(shikiHex: $0) }) {
             conflictColors.label = value

@@ -11,15 +11,14 @@ struct ThemeRecord: Record {
     @Field var selection: String?
     @Field var caret: String?
     /// A conflict's colours, from the theme (mergeColors.ts): behind your lines
-    /// and the agent's, the Mine/Theirs buttons, the panel holding them (the
-    /// editor widget colours), and the buttons' labels.
+    /// and the agent's, the Mine/Theirs buttons, and their labels.
     @Field var mergeCurrentContent: String?
     @Field var mergeIncomingContent: String?
     @Field var mergeCurrentHeader: String?
     @Field var mergeIncomingHeader: String?
-    @Field var widgetBackground: String?
-    @Field var widgetBorder: String?
     @Field var mergeLabel: String?
+    /// Whether the theme is light: glass in the editor takes this appearance.
+    @Field var light: Bool?
 
     init() {}
 }

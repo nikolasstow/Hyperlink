@@ -34,11 +34,11 @@ final class ConflictZones {
         /// The Mine and Theirs buttons.
         var mineButton = UIColor(red: 0.25, green: 0.78, blue: 0.68, alpha: 0.5)
         var theirsButton = UIColor(red: 0.25, green: 0.65, blue: 1, alpha: 0.5)
-        /// The panel holding the buttons, and its edge.
-        var panel = UIColor.secondarySystemBackground
-        var panelBorder = UIColor.separator
         /// The buttons' labels.
         var label = UIColor.label
+        /// Whether the theme is light: the glass takes the theme's appearance,
+        /// not the phone's.
+        var light = false
     }
 
     var rowHeight: () -> CGFloat = { 17 }
@@ -356,29 +356,26 @@ final class ConflictZones {
         ])
         views.below.addSubview(views.panel)
 
-        views.all.forEach { textView?.addSubview($0) }
+        let style: UIUserInterfaceStyle = colors.light ? .light : .dark
+        views.all.forEach {
+            $0.overrideUserInterfaceStyle = style
+            textView?.addSubview($0)
+        }
         return views
     }
 
-    /// The glass rectangle holding the buttons, in the theme's editor-widget
-    /// colours.
+    /// The glass rectangle holding the buttons: plain, untinted glass (only the
+    /// buttons carry colour).
     private func panel() -> UIVisualEffectView {
         let effect: UIVisualEffect
         if #available(iOS 26.0, *) {
-            let glass = UIGlassEffect(style: .regular)
-            glass.tintColor = colors.panel
-            effect = glass
+            effect = UIGlassEffect(style: .regular)
         } else {
             effect = UIBlurEffect(style: .systemThinMaterial)
         }
         let view = UIVisualEffectView(effect: effect)
-        if #unavailable(iOS 26.0) {
-            view.contentView.backgroundColor = colors.panel
-        }
         view.layer.cornerRadius = Self.panelRadius
         view.layer.cornerCurve = .continuous
-        view.layer.borderWidth = 1
-        view.layer.borderColor = colors.panelBorder.cgColor
         view.clipsToBounds = true
         return view
     }

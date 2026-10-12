@@ -35,15 +35,15 @@ export interface EditorTheme {
   readonly selection?: string;
   readonly caret?: string;
   /** A conflict's colours, from the theme (mergeColors.ts): behind your
-   * lines and the agent's, the Mine/Theirs buttons, the panel holding them
-   * (editor widget colours), and the buttons' labels. */
+   * lines and the agent's, the Mine/Theirs buttons, and their labels. */
   readonly mergeCurrentContent?: string;
   readonly mergeIncomingContent?: string;
   readonly mergeCurrentHeader?: string;
   readonly mergeIncomingHeader?: string;
-  readonly widgetBackground?: string;
-  readonly widgetBorder?: string;
   readonly mergeLabel?: string;
+  /** Whether the theme is light: glass drawn in the editor takes this
+   * appearance, not the phone's. */
+  readonly light?: boolean;
 }
 
 export interface CodeEditorNativeProps extends ViewProps {
