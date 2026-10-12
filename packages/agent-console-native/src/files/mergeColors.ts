@@ -7,7 +7,9 @@
  * - the Mine / Theirs buttons: `merge.currentHeaderBackground` /
  *   `merge.incomingHeaderBackground` (VS Code puts a conflict's actions on its
  *   header rows); by default `#40C8AE` / `#40A6FF` at 50%, light or dark;
- * - their labels: the editor's text colour.
+ * - their labels: black or white, picked by the app's own contrast rule
+ *   (`textFor`, theme.tsx) on each button's colour as seen over the editor,
+ *   one colour for both, white where the two would differ.
  *
  * The panel holding the buttons is plain glass, untinted; it only follows
  * whether the theme is light or dark (`isLightTheme`).
@@ -20,7 +22,6 @@ export interface MergeColors {
   readonly incomingContent: string;
   readonly currentHeader: string;
   readonly incomingHeader: string;
-  readonly label: string;
 }
 
 /** VS Code's defaults (src/vs/platform/theme/common/colors/editorColors.ts). */
@@ -28,12 +29,6 @@ const CURRENT_HEADER = "#40C8AE80";
 const INCOMING_HEADER = "#40A6FF80";
 /** A merge content colour is its header made this much more transparent. */
 const CONTENT_TRANSPARENCY = 0.4;
-/** VS Code's default editor text colours, for a theme that names none. */
-const FOREGROUND = {
-  dark: "#BBBBBB",
-  light: "#333333",
-} as const;
-
 /** The six or eight hex digits of `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa`. */
 const hexDigits = (hex: string): string | undefined => {
   const digits = hex.trim().replace(/^#/, "");
@@ -67,9 +62,22 @@ export const isLightTheme = (type: string | undefined, background: string | unde
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.5;
 };
 
-/** A theme's merge colours. `colors` is the theme's `colors`; `foreground`
- * the editor's text colour as resolved for it. */
-export const mergeColorsOf = (colors: Readonly<Record<string, string>> | undefined, foreground: string | undefined, light: boolean): MergeColors => {
+/** A translucent hex colour as seen over an opaque one, as opaque `#RRGGBB`;
+ * undefined if either isn't a hex colour. */
+export const seenOver = (color: string, background: string): string | undefined => {
+  const over = hexDigits(color);
+  const under = hexDigits(background);
+  if (over === undefined || under === undefined) return undefined;
+  const alpha = over.length === 8 ? parseInt(over.slice(6), 16) / 255 : 1;
+  const channel = (at: number): string =>
+    Math.round(parseInt(over.slice(at, at + 2), 16) * alpha + parseInt(under.slice(at, at + 2), 16) * (1 - alpha))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(0)}${channel(2)}${channel(4)}`.toUpperCase();
+};
+
+/** A theme's merge colours, from its `colors`. */
+export const mergeColorsOf = (colors: Readonly<Record<string, string>> | undefined): MergeColors => {
   const currentHeader = colors?.["merge.currentHeaderBackground"] ?? CURRENT_HEADER;
   const incomingHeader = colors?.["merge.incomingHeaderBackground"] ?? INCOMING_HEADER;
   return {
@@ -77,6 +85,5 @@ export const mergeColorsOf = (colors: Readonly<Record<string, string>> | undefin
     incomingHeader,
     currentContent: colors?.["merge.currentContentBackground"] ?? transparent(currentHeader, CONTENT_TRANSPARENCY) ?? currentHeader,
     incomingContent: colors?.["merge.incomingContentBackground"] ?? transparent(incomingHeader, CONTENT_TRANSPARENCY) ?? incomingHeader,
-    label: foreground ?? colors?.["editor.foreground"] ?? (light ? FOREGROUND.light : FOREGROUND.dark),
   };
 };

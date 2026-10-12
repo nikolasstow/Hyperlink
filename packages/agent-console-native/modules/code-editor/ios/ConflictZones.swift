@@ -228,6 +228,9 @@ final class ConflictZones {
                 height: Self.panelHeight
             )
             views.panel.alpha = open
+            // Clipped only while it opens or closes (so the panel slides in
+            // under the lines); open, the glass's shadow shows in full.
+            views.below.clipsToBounds = zone.progress < 1
         }
     }
 
@@ -374,9 +377,7 @@ final class ConflictZones {
             effect = UIBlurEffect(style: .systemThinMaterial)
         }
         let view = UIVisualEffectView(effect: effect)
-        view.layer.cornerRadius = Self.panelRadius
-        view.layer.cornerCurve = .continuous
-        view.clipsToBounds = true
+        roundCorners(of: view, radius: Self.panelRadius)
         return view
     }
 
@@ -400,6 +401,18 @@ final class ConflictZones {
         }
         text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
         return text
+    }
+}
+
+/// Round glass without clipping it, where the system can (iOS 26), so its
+/// shadow and edge light are drawn in full; earlier, round by clipping.
+private func roundCorners(of view: UIVisualEffectView, radius: CGFloat) {
+    if #available(iOS 26.0, *) {
+        view.cornerConfiguration = .corners(radius: .fixed(radius))
+    } else {
+        view.layer.cornerRadius = radius
+        view.layer.cornerCurve = .continuous
+        view.clipsToBounds = true
     }
 }
 
@@ -438,9 +451,7 @@ private final class GlassButton: UIControl {
         }
         super.init(frame: .zero)
         body.isUserInteractionEnabled = false
-        body.layer.cornerRadius = cornerRadius
-        body.layer.cornerCurve = .continuous
-        body.clipsToBounds = true
+        roundCorners(of: body, radius: cornerRadius)
         addSubview(body)
         label.text = title
         label.font = UIFont.systemFont(ofSize: 15, weight: .semibold)

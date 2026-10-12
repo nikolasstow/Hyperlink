@@ -17,8 +17,9 @@ import { canApplyChanges, canShowConflicts, canVersionTokens, CodeEditorNativeVi
 import type { Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
 import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
-import { isLightTheme, mergeColorsOf } from "./mergeColors";
+import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
 import { stickyRanges } from "./stickyRanges";
+import { textFor } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
 
 /** Matches the chat code blocks and the file previews, so every surface scales alike. */
@@ -54,18 +55,26 @@ const toLineTokens = (result: HighlightResult): ReadonlyArray<ReadonlyArray<Line
 
 /** The editor's base colours from the active VS Code theme, with the token
  * background/foreground Shiki already resolved taking precedence. */
+/** The Mine/Theirs labels: the app's black-or-white text rule (`textFor`) on
+ * each button as seen over the editor; one colour for both, white when they
+ * would differ. */
+const buttonLabel = (merge: MergeColors, background: string): string => {
+  const labels = [merge.currentHeader, merge.incomingHeader].map((tint) => textFor(seenOver(tint, background) ?? tint).label);
+  return labels[0] === labels[1] && typeof labels[0] === "string" ? labels[0] : "#FFFFFF";
+};
+
 const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: HighlightResult | undefined): EditorTheme => {
   const colors = typeof theme === "string" ? undefined : theme.colors;
   const background = highlight?.background ?? colors?.["editor.background"];
   const foreground = highlight?.foreground ?? colors?.["editor.foreground"];
   const light = isLightTheme(typeof theme === "string" ? undefined : theme.type, background);
-  const merge = mergeColorsOf(colors, foreground, light);
+  const merge = mergeColorsOf(colors);
   return {
     mergeCurrentHeader: merge.currentHeader,
     mergeIncomingHeader: merge.incomingHeader,
     mergeCurrentContent: merge.currentContent,
     mergeIncomingContent: merge.incomingContent,
-    mergeLabel: merge.label,
+    mergeLabel: buttonLabel(merge, background ?? (light ? "#FFFFFF" : "#000000")),
     light,
     background,
     foreground,
