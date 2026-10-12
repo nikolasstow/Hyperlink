@@ -39,7 +39,7 @@ export type FsListing = typeof FsListing.Type;
 
 /** Text reads are for source/config files and `.git` metadata; a hard cap keeps
  * a stray multi-gigabyte file from being slurped into memory. */
-const MAX_READ_BYTES = 5_000_000;
+export const MAX_READ_BYTES = 5_000_000;
 
 const fsRoot = (): string => process.env.AGENT_CONSOLE_FS_ROOT ?? homedir();
 

@@ -16,12 +16,13 @@ import { Rpc, RpcGroup } from "effect/unstable/rpc";
 import { TextChange } from "./TextChange";
 
 /**
- * An agent session wrote the change (opencode's edit/write tools).
+ * An agent wrote the change (opencode's edit/write tools). `sessionID` when
+ * the hub saw which session's tool call wrote it.
  *
  * @since 0.0.1
  */
 export class Agent extends Schema.TaggedClass<Agent>()("Agent", {
-  sessionID: Schema.String,
+  sessionID: Schema.optional(Schema.String),
 }) {}
 
 /**
