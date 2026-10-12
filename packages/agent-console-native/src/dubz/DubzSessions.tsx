@@ -18,7 +18,7 @@
  *
  * @internal
  */
-import { Host, HStack, Image, List, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Host, HStack, Image, List, ScrollView, Text as UIText, VStack, ZStack } from "@expo/ui/swift-ui";
 import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
@@ -216,12 +216,15 @@ export const DubzSessionArea = (props: {
   );
 };
 
-/** A session-style glass title pill + a full-screen button, matching the chat's
- * top bar. The back button is the window's persistent one. */
-const PageHeader = (props: { readonly title: string; readonly width: number; readonly onFullScreen: () => void }): React.ReactElement => {
+/** The shared Dubz page top bar: a centred glass title pill (like the app's
+ * HeaderTitlePill), with the full-screen button trailing when given. The back
+ * button is the window's persistent one (top-left), so the pill reads centred
+ * between them. Used by every Dubz page so they're consistent. */
+const PageHeader = (props: { readonly title: string; readonly width: number; readonly onFullScreen?: () => void }): React.ReactElement => {
   const textColors = useTextColors();
   return (
-    <HStack spacing={10} alignment="center" modifiers={[padding({ leading: BACK_INSET }), frame({ width: props.width, height: PILL, alignment: "leading" })]}>
+    <ZStack modifiers={[frame({ width: props.width, height: PILL })]}>
+      {/* Centred title pill. */}
       <HStack
         modifiers={[
           padding({ horizontal: 14 }),
@@ -231,18 +234,22 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
       >
         <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
       </HStack>
-      <Spacer />
-      <HStack
-        modifiers={[
-          frame({ width: PILL, height: PILL, alignment: "center" }),
-          glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-          contentShape(shapes.capsule()),
-          onTapGesture(props.onFullScreen),
-        ]}
-      >
-        <Image systemName="arrow.up.left.and.arrow.down.right" size={15} color={textColors.label} />
-      </HStack>
-    </HStack>
+      {/* Trailing full-screen button, overlaid at the right. */}
+      {props.onFullScreen !== undefined ? (
+        <HStack modifiers={[frame({ width: props.width, height: PILL, alignment: "trailing" })]}>
+          <HStack
+            modifiers={[
+              frame({ width: PILL, height: PILL, alignment: "center" }),
+              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+              contentShape(shapes.capsule()),
+              onTapGesture(props.onFullScreen),
+            ]}
+          >
+            <Image systemName="arrow.up.left.and.arrow.down.right" size={15} color={textColors.label} />
+          </HStack>
+        </HStack>
+      ) : null}
+    </ZStack>
   );
 };
 
@@ -305,12 +312,7 @@ export const DubzSessionListPage = (props: {
     <View style={styles.page} pointerEvents={shifted ? "auto" : "none"}>
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
         <VStack alignment="leading" spacing={10} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), offset({ x: shifted ? 0 : width }), animation(SLIDE, shifted)]}>
-          <HStack modifiers={[padding({ leading: BACK_INSET }), frame({ width: pageWidth, height: PILL, alignment: "leading" })]}>
-            <HStack modifiers={[padding({ horizontal: 14 }), frame({ height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
-              <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label)]}>Sessions</UIText>
-            </HStack>
-            <Spacer />
-          </HStack>
+          <PageHeader title="Sessions" width={pageWidth} />
           <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" })]}>
             <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: pageWidth, alignment: "leading" })]}>
               {all.map((session) => (
