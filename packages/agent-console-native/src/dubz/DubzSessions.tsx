@@ -46,7 +46,7 @@ import { useSessionPreview } from "../sessionPreview";
 import { getApiAddress } from "../settings";
 import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
-import { PILL_FONT_SIZE, titlePillWidth } from "../titlePillStyle";
+import { PILL_FONT_SIZE, PILL_PAD_H, titlePillWidth } from "../titlePillStyle";
 import type { TranscriptMessage } from "../useSessionStream";
 import { useSessionActivity } from "../useSessionActivity";
 import { EdgeBlurBars } from "../EdgeBlurBars";
@@ -324,10 +324,11 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
   const pillWidth = Math.min(Math.max(titlePillWidth(props.title, false), TITLE_PILL_MIN), props.width - 2 * (PILL + GAP));
   return (
     <ZStack modifiers={[frame({ width: props.width, height: PILL })]}>
-      {/* Centred title pill at its computed width (which already includes the
-       * horizontal padding — so no extra padding modifier, or it double-pads
-       * and over-widens). The title centres and truncates within. */}
-      <HStack modifiers={[frame({ width: pillWidth, height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
+      {/* Centred title pill. Padding is applied BEFORE the frame so it sits
+       * INSIDE the computed width (pillWidth already includes PILL_PAD_H*2): a
+       * long title truncates with x-padding, not edge to edge; a short one
+       * keeps its padding and the pill isn't double-widened. */}
+      <HStack modifiers={[padding({ horizontal: PILL_PAD_H }), frame({ width: pillWidth, height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular" }, shape: "capsule" })]}>
         <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
       </HStack>
       {/* The resize grabber, just inside the pill's top (top-centre), overlaid so
@@ -448,9 +449,9 @@ const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text:
       <HStack modifiers={[frame({ width: props.width, alignment: "trailing" })]}>
         <HStack modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 })]}>
           <RNHostView matchContents>
-            <View style={{ maxWidth: maxBubble }}>
-              <RNText style={styles.outbound}>{props.text}</RNText>
-            </View>
+            {/* Text (not a View) so it's content-sized — hugs up to maxWidth,
+             * wraps beyond; a wrapping View stretched to the full width. */}
+            <RNText style={[styles.outbound, { maxWidth: maxBubble }]}>{props.text}</RNText>
           </RNHostView>
         </HStack>
       </HStack>
