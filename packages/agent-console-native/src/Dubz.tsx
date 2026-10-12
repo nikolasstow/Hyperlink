@@ -21,7 +21,7 @@ import { BarWindow, detentMemory } from "./BarWindow";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion } from "./dubzSuggestions";
-import { DubzSessionPlaceholder, DubzSessionRow, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DubzSessionPlaceholder, DubzSessionRow, DubzTopBack, type DubzOpenSession } from "./dubz/DubzSessions";
 import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -163,9 +163,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { width: screenW } = useWindowDimensions();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
-  // Tapping the session row opens a placeholder page over the window, with a
-  // back button here and a full-screen button to the session's proper page.
-  // Closing the window returns to the main view.
+  // Tapping the session row opens a placeholder page over the window, with the
+  // persistent back button here and a full-screen button to the session's
+  // proper page. Instant swap for now — the native transition comes once the
+  // chat inside is native (so it isn't throwaway work). Closing returns to main.
   const [openedSession, setOpenedSession] = React.useState<DubzOpenSession | undefined>(undefined);
   const toMain = React.useCallback(() => setOpenedSession(undefined), []);
   const openSession = React.useCallback((session: DubzOpenSession) => setOpenedSession(session), []);
@@ -226,28 +227,38 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // the field raises it (only auto-focuses if the keyboard is already up).
       raiseKeyboardOnOpen={false}
       closeLabel={`Close ${AGENT_NAME}`}
+      // The page behind Dubz stays interactive; Dubz closes by its back button,
+      // the pill, or the keyboard — never a tap outside.
+      dismissOnTapOutside={false}
       bodyGesture={paging}
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
-        openedSession !== undefined ? (
-          <View style={StyleSheet.absoluteFill}>
-            <DubzSessionPlaceholder title={openedSession.title} onBack={toMain} onFullScreen={fullScreen} />
+        <>
+          {/* Main suggestions, pinned to the body's bottom (just above the
+           * pill) by absolute position — not flex — so the glass container's
+           * layout can't push them up. */}
+          {openedSession === undefined ? (
+            <View style={styles.pinned} pointerEvents="box-none">
+              {suggestions.map((suggestion) =>
+                suggestion._tag === "Sessions" ? (
+                  <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} />
+                ) : (
+                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
+                ),
+              )}
+            </View>
+          ) : (
+            <View style={StyleSheet.absoluteFill}>
+              <DubzSessionPlaceholder title={openedSession.title} onFullScreen={fullScreen} />
+            </View>
+          )}
+          {/* The persistent back button, top-left: it goes back from a page, and
+           * closes Dubz at home (nothing to go back to). */}
+          <View style={styles.topBack}>
+            <DubzTopBack onPress={openedSession !== undefined ? toMain : close} />
           </View>
-        ) : (
-          // Pinned to the bottom of the body (just above the pill) by absolute
-          // position — not flex — so the glass container's layout can't defeat
-          // it. Its bottom edge is the body's bottom; content grows upward.
-          <View style={styles.pinned} pointerEvents="box-none">
-            {suggestions.map((suggestion) =>
-              suggestion._tag === "Sessions" ? (
-                <DubzSessionRow key={suggestion._tag} file={suggestion.file} onOpen={openSession} />
-              ) : (
-                <Suggestion key={suggestion._tag} suggestion={suggestion} />
-              ),
-            )}
-          </View>
-        )
+        </>
       }
       pill={
         <>
@@ -337,6 +348,13 @@ const makeStyles = (text: TextColors) =>
     paddingHorizontal: 16,
     paddingBottom: 16,
     gap: 16,
+  },
+  // The persistent back button, top-left of the window (aligned with a page's
+  // header). Over both sliding layers so it never moves.
+  topBack: {
+    position: "absolute",
+    top: 12,
+    left: 16,
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {

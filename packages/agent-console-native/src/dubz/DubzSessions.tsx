@@ -81,16 +81,38 @@ export const DubzSessionRow = (props: {
 };
 
 const BUTTON = 36;
+/** Space the title clears for the window's persistent top-left back button. */
+const BACK_INSET = BUTTON + 10;
+
+/** The glass back button that stays at the Dubz window's top-left: on a page it
+ * goes back, at Dubz home it closes Dubz. Shared so both read identically. */
+export const DubzTopBack = (props: { readonly onPress: () => void }): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
+    <Host style={{ width: BUTTON, height: BUTTON }} ignoreSafeArea="all">
+      <HStack
+        modifiers={[
+          frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
+          glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+          contentShape(shapes.capsule()),
+          onTapGesture(props.onPress),
+        ]}
+      >
+        <Image systemName="chevron.left" size={15} color={textColors.label} />
+      </HStack>
+    </Host>
+  );
+};
 
 /**
- * A placeholder session page inside the Dubz window — a native glass header (a
- * back button to the main view, the title, a full-screen button to the proper
- * page) over an empty body. It stands in for the real chat so the transition
- * and the glass buttons can be got right before the heavy chat goes in.
+ * A placeholder session page inside the Dubz window — a native glass header (the
+ * title, clearing the window's persistent back button, and a full-screen button
+ * to the proper page) over an empty body. It stands in for the real chat so the
+ * transition and the glass buttons can be got right before the heavy chat goes
+ * in. The back button is the window's persistent one (DubzTopBack).
  */
 export const DubzSessionPlaceholder = (props: {
   readonly title: string;
-  readonly onBack: () => void;
   readonly onFullScreen: () => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
@@ -101,17 +123,7 @@ export const DubzSessionPlaceholder = (props: {
     <View style={styles.page}>
       <Host style={{ width: headerWidth, height: BUTTON }} ignoreSafeArea="all">
         <HStack spacing={10} alignment="center">
-          <HStack
-            modifiers={[
-              frame({ width: BUTTON, height: BUTTON, alignment: "center" }),
-              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-              contentShape(shapes.capsule()),
-              onTapGesture(props.onBack),
-            ]}
-          >
-            <Image systemName="chevron.left" size={15} color={textColors.label} />
-          </HStack>
-          <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+          <UIText modifiers={[padding({ leading: BACK_INSET }), font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
           <Spacer />
           <HStack
             modifiers={[
@@ -141,6 +153,7 @@ const makeStyles = (text: TextColors) =>
       right: 0,
       bottom: 0,
       paddingHorizontal: 16,
+      paddingTop: 12,
       paddingBottom: 16,
     },
     placeholderBody: {

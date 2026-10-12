@@ -117,6 +117,10 @@ export interface BarWindowProps {
   readonly hiddenCollapsed?: boolean;
   /** The tap-outside catcher's label. */
   readonly closeLabel: string;
+  /** Whether a tap outside the window closes it (and blocks the content behind).
+   * Off for Dubz, so the page behind stays interactive with Dubz open — it is
+   * closed by its back button, the pill, or the keyboard instead. Default true. */
+  readonly dismissOnTapOutside?: boolean;
   /** Above the pill, cropped to the window. */
   readonly body: React.ReactNode;
   /** The pill's row, on its glass. */
@@ -453,8 +457,10 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   return (
     <View style={drawn ? styles.page : [styles.parked, { width: screenW }]} pointerEvents={drawn ? "box-none" : "none"}>
       {/* Tap outside to collapse (at full height; lowered, touches pass through
-       * to what's behind). Reaches up over the screen from the bar. */}
-      {open && !lowered ? (
+       * to what's behind). Reaches up over the screen from the bar. Off when
+       * `dismissOnTapOutside` is false (Dubz), so the page behind stays
+       * interactive and nothing is dismissed by a tap. */}
+      {open && !lowered && props.dismissOnTapOutside !== false ? (
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityRole="button" accessibilityLabel={props.closeLabel} />
       ) : null}
 
