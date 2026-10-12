@@ -166,6 +166,32 @@ window.**
 - "Create a Session" suggestion after repeated change requests; promotion to a
   real opencode session.
 
+## Directions (owner, in-flight)
+
+- **Native, not React, inside the glass window.** Mixing React content into the
+  Dubz glass window destabilised it (window vanishing / slow, broken glass). The
+  session row and the page chrome are SwiftUI (`@expo/ui` Host + glassEffect).
+  The in-window session view is a **native placeholder** for now.
+- **Build the chat in Dubz as native, then make the session page match.** Rather
+  than embed the React chat (MessageBubble) — which can't be natively
+  transitioned and broke the window — build a native (SwiftUI) chat in Dubz.
+  Once it's native, add the transition (native `animation`/`offset`, UI-thread,
+  no Reanimated) and make the full-screen session page match.
+- **Dubz does not dismiss on a tap outside** (`BarWindow.dismissOnTapOutside`
+  = false) — the page behind stays interactive; close via the back button, the
+  pill, or the keyboard.
+- **Transitions are native only.** `@expo/ui` exposes SwiftUI `animation` +
+  `offset`/`opacity`; these animate SwiftUI content on the UI thread. A
+  Reanimated transform on the glass parent risks the glass not rendering, so it
+  is avoided here.
+
+## Near-term feature: live file updates
+
+When a file open in the app is changed by an agent or in another editor, the
+view should update to the new contents — **without clobbering the user mid-edit**.
+Reconcile: apply external changes only when the local buffer isn't dirty / not
+focused; when it is, defer or merge rather than overwrite. Design before build.
+
 ## Touch points
 
 - `src/Dubz.tsx` — the window, the suggestions area, the `Suggestion` switch.
