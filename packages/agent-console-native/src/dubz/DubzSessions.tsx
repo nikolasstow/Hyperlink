@@ -43,7 +43,6 @@ import { CardBody, sessionCardActions, summaryLabel } from "../SessionCard";
 import { getSetupDate, loadReads } from "../sessionReads";
 import type { SessionSummary } from "../sessions/sessionList";
 import { useSessionPreview } from "../sessionPreview";
-import { getApiAddress } from "../settings";
 import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
 import { PILL_FONT_SIZE, PILL_PAD_H, titlePillWidth } from "../titlePillStyle";
@@ -556,7 +555,7 @@ export const DubzSessionListPage = (props: {
   const { width } = useWindowDimensions();
   const pageWidth = width - WINDOW_SIDE * 2;
   const shifted = props.shifted === true;
-  const { client, address } = useAppContext();
+  const { client, server } = useAppContext();
   // Favoriting from this list pins to the file's repo scope (as the repo's own
   // session list does), not Home.
   const favScope = React.useMemo(() => repoScope(props.file.repo), [props.file.repo]);
@@ -599,8 +598,8 @@ export const DubzSessionListPage = (props: {
       onRename={() => promptRenameSession(client, session.id, session.title, bump)}
       onStop={() => abortSession(client, session.id, bump)}
       onDelete={() => confirmDeleteSession(client, session.id, session.title, bump)}
-      onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
-      onMute={() => toggleMute(getApiAddress(address), session.id)}
+      onArchive={() => archiveWithUndo(server, session.id)}
+      onMute={() => toggleMute(server, session.id)}
     />
   );
 
