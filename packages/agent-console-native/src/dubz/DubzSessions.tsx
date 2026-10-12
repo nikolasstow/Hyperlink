@@ -45,6 +45,7 @@ import { relativeTime } from "../time";
 import type { TranscriptMessage } from "../useSessionStream";
 import { useSessionActivity } from "../useSessionActivity";
 import { hasNativeSwiftUIBlur, VariableBlurSwiftUI } from "../../modules/variable-blur";
+import { groupSessions } from "./groupSessions";
 import { sessionsForFile } from "./sessionsForFile";
 
 /** The session a row/list opens. */
@@ -260,8 +261,16 @@ const GlassIconButton = (props: { readonly systemName: React.ComponentProps<type
   );
 };
 
+/** A section header in the grouped list (Unread / Today / N days ago …). */
+const SectionHeader = (props: { readonly title: string }): React.ReactElement => {
+  const textColors = useTextColors();
+  return (
+    <UIText modifiers={[font({ size: 13, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel), padding({ top: 6, leading: 6 })]}>{props.title}</UIText>
+  );
+};
+
 /** How the View All list is ordered. It's one worktree, so there's little to
- * sort by — recency (the default) or the title. */
+ * sort by — recency (grouped by read status + age, the default) or the title. */
 type SortKey = "recent" | "name";
 
 /** The View All sort/filter menu (its trailing control): order by recency or
@@ -516,32 +525,42 @@ export const DubzSessionListPage = (props: {
   const isUnread = (session: SessionSummary): boolean =>
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
 
-  // Sort/filter from the header menu. `all` is already newest-first, so recency
-  // is the list as-is; name sorts by title. Unread-only keeps the rest out.
+  // Sort/filter from the header menu. Recent groups by read status + age
+  // (Unread, Today, Yesterday, N days/months/years ago); Name is a flat A–Z
+  // list. Unread-only keeps the rest out.
   const [sort, setSort] = React.useState<SortKey>("recent");
   const [unreadOnly, setUnreadOnly] = React.useState(false);
   const filtered = unreadOnly ? all.filter(isUnread) : all;
-  const visible = sort === "name" ? [...filtered].sort((a, b) => a.title.localeCompare(b.title)) : filtered;
+
+  const renderCard = (session: SessionSummary): React.ReactElement => (
+    <DubzSessionCard
+      key={session.id}
+      session={session}
+      width={pageWidth}
+      running={busy.has(session.id)}
+      unread={isUnread(session)}
+      muted={mutedSet.has(session.id)}
+      onOpen={() => props.onOpen(toOpen(session))}
+      onRename={() => promptRenameSession(client, session.id, session.title, bump)}
+      onStop={() => abortSession(client, session.id, bump)}
+      onDelete={() => confirmDeleteSession(client, session.id, session.title, bump)}
+      onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
+      onMute={() => toggleMute(getApiAddress(address), session.id)}
+    />
+  );
+
+  const rows =
+    sort === "name"
+      ? [...filtered].sort((a, b) => a.title.localeCompare(b.title)).map(renderCard)
+      : groupSessions(filtered, isUnread, Date.now()).flatMap((group) => [
+          <SectionHeader key={`section:${group.title}`} title={group.title} />,
+          ...group.sessions.map(renderCard),
+        ]);
 
   return (
     <FavoriteScopeProvider value={favScope}>
       <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title="Sessions" spacing={GAP} trailing={<SortMenu sort={sort} onSort={setSort} unreadOnly={unreadOnly} onUnreadOnly={setUnreadOnly} />}>
-        {visible.map((session) => (
-          <DubzSessionCard
-            key={session.id}
-            session={session}
-            width={pageWidth}
-            running={busy.has(session.id)}
-            unread={isUnread(session)}
-            muted={mutedSet.has(session.id)}
-            onOpen={() => props.onOpen(toOpen(session))}
-            onRename={() => promptRenameSession(client, session.id, session.title, bump)}
-            onStop={() => abortSession(client, session.id, bump)}
-            onDelete={() => confirmDeleteSession(client, session.id, session.title, bump)}
-            onArchive={() => archiveWithUndo(getApiAddress(address), session.id)}
-            onMute={() => toggleMute(getApiAddress(address), session.id)}
-          />
-        ))}
+        {rows}
       </DubzScrollPage>
     </FavoriteScopeProvider>
   );
