@@ -98,6 +98,7 @@ export const DubzSessionArea = (props: {
   if (top === undefined) return null;
   const rowWidth = width - WINDOW_SIDE * 2;
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - GAP);
+  const halfWidth = Math.max(80, (rowWidth - GAP) / 2);
   const extras = sessions.slice(1, 1 + EXTRA);
 
   const sessionPill = (session: SessionSummary, pillWidth: number): React.ReactElement => (
@@ -119,7 +120,7 @@ export const DubzSessionArea = (props: {
   return (
     <Host style={{ flex: 1 }} ignoreSafeArea="all">
       <ScrollView showsIndicators={false} modifiers={[defaultScrollAnchor("bottom"), frame({ maxWidth: FILL, maxHeight: FILL, alignment: "bottom" })]}>
-        <VStack alignment="leading" spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "bottomLeading" }), animation(SLIDE, expanded)]}>
+        <VStack alignment="leading" spacing={GAP} modifiers={[padding({ bottom: 14 }), frame({ width: rowWidth, alignment: "bottomLeading" }), animation(SLIDE, expanded)]}>
           {/* The most related session + the number/chevron toggle. Stays here;
            * the rest appears below and pushes this up. */}
           <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
@@ -146,13 +147,13 @@ export const DubzSessionArea = (props: {
           {expanded ? (
             <>
               {extras.map((session) => sessionPill(session, rowWidth))}
-              {/* ( + New Session ) ( View All > ) */}
-              <HStack spacing={GAP} modifiers={[frame({ width: rowWidth })]}>
+              {/* ( + New Session ) ( View All > ) — two equal halves filling the row. */}
+              <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
                 <HStack
                   spacing={6}
                   modifiers={[
                     padding({ horizontal: 16 }),
-                    frame({ maxWidth: FILL, height: PILL, alignment: "center" }),
+                    frame({ width: halfWidth, height: PILL, alignment: "center" }),
                     glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
                     contentShape(shapes.capsule()),
                   ]}
@@ -164,7 +165,7 @@ export const DubzSessionArea = (props: {
                   spacing={6}
                   modifiers={[
                     padding({ horizontal: 16 }),
-                    frame({ maxWidth: FILL, height: PILL, alignment: "center" }),
+                    frame({ width: halfWidth, height: PILL, alignment: "center" }),
                     glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
                     contentShape(shapes.capsule()),
                     onTapGesture(props.onViewAll),
