@@ -19,10 +19,12 @@
  * @internal
  */
 import { Button, ContextMenu, Host, HStack, Image, List, Menu, ScrollView, Section, Spacer, Text as UIText, Toggle, VStack, ZStack } from "@expo/ui/swift-ui";
-import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, menuActionDismissBehavior, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
+import { Animation, animation, background, contentShape, cornerRadius, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, menuActionDismissBehavior, offset, onTapGesture, padding, scaleEffect, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
+import { GestureDetector } from "react-native-gesture-handler";
 import { useAppContext } from "../AppContext";
+import { BarWindowResizeContext } from "../BarWindow";
 import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 import { lastSummary } from "../chat/model";
 import { useKeptConversation } from "../conversations/useConversations";
@@ -327,7 +329,16 @@ const PageHeader = (props: { readonly title: string; readonly width: number; rea
             glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
           ]}
         >
-          <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+          {/* Title centred, with the resize grabber just inside the pill's top
+           * (the pill itself is the grab area — see DubzScrollPage). */}
+          <ZStack modifiers={[frame({ height: PILL })]}>
+            <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{props.title}</UIText>
+            <HStack modifiers={[frame({ maxHeight: FILL, alignment: "top" }), padding({ top: 6 })]}>
+              <HStack modifiers={[frame({ width: 32, height: 5 }), background("rgba(120,120,128,0.55)"), cornerRadius(3)]}>
+                <Spacer />
+              </HStack>
+            </HStack>
+          </ZStack>
         </HStack>
       </HStack>
       {/* Trailing control, overlaid at the right. */}
@@ -349,6 +360,9 @@ const DubzScrollPage = (props: {
   readonly children: React.ReactNode;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
+  // The window's resize gesture, so the title pill is the grab area (the top
+  // grabber is hidden on sub-pages — see BarWindow grabberHidden).
+  const resize = React.useContext(BarWindowResizeContext);
   return (
     <View style={styles.page} pointerEvents={props.shifted ? "auto" : "none"}>
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
@@ -378,6 +392,16 @@ const DubzScrollPage = (props: {
           </VStack>
         </ZStack>
       </Host>
+      {/* The title pill IS the resize grab area: a transparent pan zone over the
+       * pill (centred, its max width — clear of the leading/trailing buttons)
+       * driving the window's own resize gesture. */}
+      {resize !== undefined ? (
+        <View style={styles.grabZone} pointerEvents="box-none">
+          <GestureDetector gesture={resize}>
+            <View style={{ width: props.pageWidth - 2 * (PILL + GAP), height: PILL }} />
+          </GestureDetector>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -576,5 +600,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
+  },
+  // The pan zone over the title pill (centred at the header's top).
+  grabZone: {
+    position: "absolute",
+    top: TOP_INSET,
+    left: 0,
+    right: 0,
+    alignItems: "center",
   },
 });

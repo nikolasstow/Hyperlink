@@ -270,6 +270,8 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // the pill, or the keyboard — never a tap outside.
       dismissOnTapOutside={false}
       pillLowered={pillFloat}
+      // A sub-page moves the grabber onto its title pill, so hide the top one.
+      grabberHidden={sub !== undefined}
       bodyGesture={paging}
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
