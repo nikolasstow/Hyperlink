@@ -450,7 +450,7 @@ const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text:
           glassEffect({ glass: mine ? { variant: "regular", tint: colors.tint } : { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 18 }),
         ]}
       >
-        <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle(textColors.label)]}>{props.text}</UIText>
+        <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle(mine ? "#FFFFFF" : textColors.label)]}>{props.text}</UIText>
       </HStack>
     </HStack>
   );
