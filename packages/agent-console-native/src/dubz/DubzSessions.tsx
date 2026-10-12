@@ -18,8 +18,8 @@
  *
  * @internal
  */
-import { Host, HStack, Image, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
-import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, offset, onTapGesture, padding, shapes } from "@expo/ui/swift-ui/modifiers";
+import { Host, HStack, Image, List, ScrollView, Spacer, Text as UIText, VStack } from "@expo/ui/swift-ui";
+import { Animation, animation, contentShape, defaultScrollAnchor, font, foregroundStyle, frame, glassEffect, lineLimit, listRowBackground, listRowInsets, listRowSeparator, listRowSpacing, listStyle, offset, onTapGesture, padding, scrollContentBackground, shapes, tag } from "@expo/ui/swift-ui/modifiers";
 import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
@@ -117,44 +117,44 @@ export const DubzSessionArea = (props: {
   );
 
   const viewAllWidth = Math.max(80, rowWidth - PILL - GAP);
-  return (
-    <Host style={{ flex: 1 }} ignoreSafeArea="all">
-      <ScrollView showsIndicators={false} modifiers={[defaultScrollAnchor("bottom"), frame({ maxWidth: FILL, maxHeight: FILL, alignment: "bottom" })]}>
-        <VStack alignment="leading" spacing={GAP} modifiers={[padding({ bottom: 14 }), frame({ width: rowWidth, alignment: "bottomLeading" }), animation(SLIDE, expanded)]}>
-          {/* The most related session + the number/chevron toggle. */}
-          <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
-            {sessionPill(top, bigWidth)}
-            <HStack
-              spacing={5}
-              modifiers={[
-                frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
-                glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-                contentShape(shapes.capsule()),
-                onTapGesture(() => setExpanded((e) => !e)),
-              ]}
-            >
-              {expanded ? (
-                <Image systemName="chevron.down" size={15} color={textColors.secondaryLabel} />
-              ) : (
-                <>
-                  <Image systemName="bubble.left.and.bubble.right.fill" size={13} color={textColors.secondaryLabel} />
-                  <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(sessions.length)}</UIText>
-                </>
-              )}
-            </HStack>
-          </HStack>
-          {expanded ? (
-            <>
-              {extras.map((session) => sessionPill(session, rowWidth))}
-              {/* ( + ) ( View All > ) */}
+  // Row chrome so the glass pills float in the List — clear background, no
+  // separators, no insets.
+  const rowMods = [listRowBackground("#00000000"), listRowSeparator("hidden"), listRowInsets({ top: 0, bottom: 0, leading: 0, trailing: 0 })];
+
+  const toggle = (
+    <HStack
+      spacing={5}
+      modifiers={[
+        frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
+        glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
+        contentShape(shapes.capsule()),
+        onTapGesture(() => setExpanded((e) => !e)),
+      ]}
+    >
+      {expanded ? (
+        <Image systemName="chevron.down" size={15} color={textColors.secondaryLabel} />
+      ) : (
+        <>
+          <Image systemName="bubble.left.and.bubble.right.fill" size={13} color={textColors.secondaryLabel} />
+          <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.secondaryLabel)]}>{String(sessions.length)}</UIText>
+        </>
+      )}
+    </HStack>
+  );
+
+  // One row each, as proper List items (tagged for identity) so SwiftUI animates
+  // them in/out one at a time. Order top→bottom; bottom-anchored, so expanding
+  // adds the extras + actions below and pushes the main row up.
+  const rows: ReadonlyArray<{ readonly id: string; readonly content: React.ReactNode }> = [
+    { id: "main", content: (<HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>{sessionPill(top, bigWidth)}{toggle}</HStack>) },
+    ...(expanded ? extras.map((session) => ({ id: session.id, content: sessionPill(session, rowWidth) })) : []),
+    ...(expanded
+      ? [
+          {
+            id: "actions",
+            content: (
               <HStack spacing={GAP} modifiers={[frame({ width: rowWidth, alignment: "leading" })]}>
-                <HStack
-                  modifiers={[
-                    frame({ width: PILL, height: PILL, alignment: "center" }),
-                    glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
-                    contentShape(shapes.capsule()),
-                  ]}
-                >
+                <HStack modifiers={[frame({ width: PILL, height: PILL, alignment: "center" }), glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }), contentShape(shapes.capsule())]}>
                   <Image systemName="plus" size={16} color={textColors.label} />
                 </HStack>
                 <HStack
@@ -171,10 +171,32 @@ export const DubzSessionArea = (props: {
                   <Image systemName="chevron.right" size={13} color={textColors.secondaryLabel} />
                 </HStack>
               </HStack>
-            </>
-          ) : null}
-        </VStack>
-      </ScrollView>
+            ),
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <Host style={{ flex: 1 }} ignoreSafeArea="all">
+      <List
+        modifiers={[
+          listStyle("plain"),
+          scrollContentBackground("hidden"),
+          listRowSpacing(GAP),
+          defaultScrollAnchor("bottom"),
+          animation(SLIDE, rows.length),
+          frame({ maxWidth: FILL, maxHeight: FILL }),
+        ]}
+      >
+        <List.ForEach>
+          {rows.map((row) => (
+            <HStack key={row.id} modifiers={[tag(row.id), ...rowMods, frame({ width: rowWidth, alignment: "leading" })]}>
+              {row.content}
+            </HStack>
+          ))}
+        </List.ForEach>
+      </List>
     </Host>
   );
 };
