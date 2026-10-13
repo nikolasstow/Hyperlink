@@ -49,6 +49,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     let onStickyDebug = EventDispatcher()
     /// A choice on a conflict's buttons: `{index, keep: "Mine" | "Theirs"}`.
     let onConflictAction = EventDispatcher()
+    /// Open session on an agent change's popover: `{sessionID}`.
+    let onOpenSession = EventDispatcher()
 
     /// True while we set `text` programmatically, so the delegate's change
     /// callback never echoes a prop back up as an edit.
@@ -89,8 +91,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // Theme inputs, held so any one changing rebuilds the whole theme.
     private var fontSize: CGFloat = 14
     private var foreground = UIColor(shikiHex: "#D4D4D4") ?? .label
-    private var background = UIColor(shikiHex: "#1E1E1E") ?? .systemBackground
-    private var gutterBackground = UIColor(shikiHex: "#1E1E1E") ?? .systemBackground
+    // Clear until the theme comes: the view paints nothing of its own rather
+    // than a dark default that shows for a frame before the theme's colours.
+    private var background = UIColor.clear
+    private var gutterBackground = UIColor.clear
     private var gutterForeground = UIColor(shikiHex: "#858585") ?? .secondaryLabel
     private var currentLine = UIColor(shikiHex: "#2A2D2E") ?? .systemGray5
     private var selection = UIColor(shikiHex: "#264F78") ?? .systemBlue
@@ -121,11 +125,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         ])
         sticky.isHidden = true
         addSubview(sticky)
+        textView.addGestureRecognizer(popoverDismissal)
         applyTheme()
     }
 
-    /// Lines an agent just changed, lit briefly (Runestone highlighted ranges).
-    private var flashedRanges: [HighlightedRange] = []
     /// Conflicts drawn in the document (ConflictZones.swift).
     private lazy var conflictZones: ConflictZones = {
         let zones = ConflictZones(textView: textView)
@@ -136,10 +139,49 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         zones.onChoice = { [weak self] index, choice in
             self?.onConflictAction(["index": index, "keep": choice.rawValue])
         }
+        zones.onViewsChanged = { [weak self] in
+            self?.keepAboveGutter()
+        }
         return zones
     }()
+    /// Lines agents changed, marked in the gutter (ChangeMarks.swift).
+    private lazy var changeMarks: ChangeMarks = {
+        let marks = ChangeMarks(textView: textView)
+        marks.rowHeight = { [weak self] in self?.stickyRowHeight() ?? 17 }
+        marks.onOpenSession = { [weak self] sessionID in
+            self?.onOpenSession(["sessionID": sessionID])
+        }
+        marks.onViewsChanged = { [weak self] in
+            self?.keepAboveGutter()
+        }
+        return marks
+    }()
+    /// Closes a change's popover on a tap anywhere else.
+    private lazy var popoverDismissal: UITapGestureRecognizer = {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tappedEditor(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delegate = self
+        return tap
+    }()
+
+    private func keepAboveGutter() {
+        textView.viewsAboveGutter = conflictZones.views + changeMarks.views
+        textView.setNeedsLayout()
+    }
+
+    @objc private func tappedEditor(_ tap: UITapGestureRecognizer) {
+        changeMarks.tapped(at: tap.location(in: textView))
+    }
     private var flashGeneration = 0
-    private static let flashDuration: TimeInterval = 1.6
+    /// The flash holds, then fades out.
+    private static let flashHold: TimeInterval = 0.6
+    private static let flashFade: TimeInterval = 1.4
+    /// Room kept between the caret's line and whatever covers the bottom.
+    private static let caretMargin: CGFloat = 8
+    /// The theme's colour for lines as they land.
+    private var flashColor = UIColor(red: 0.61, green: 0.73, blue: 0.33, alpha: 0.2)
+    /// The lines lit now.
+    private var flashViews: [UIView] = []
 
     // MARK: - Functions
 
@@ -184,6 +226,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         }
         rebuildHighlights()
         conflictZones.layout()
+        changeMarks.layout()
         flash(decodeJson([TextRangeNative].self, highlightJson) ?? [])
         if (textView.text as NSString).length != expectedLength {
             onTextChange(["text": textView.text])
@@ -209,26 +252,45 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         return location + shift
     }
 
+    /// Mark lines an agent changed (`[{kind,from,to,sessionID?,title?,at}]`
+    /// against the current text), until the file is closed.
+    func markChanges(_ marksJson: String) {
+        changeMarks.add(decodeJson([ChangeMarkNative].self, marksJson) ?? [])
+    }
+
+    /// Light the lines of `ranges` across the editor's full width, behind
+    /// the text, in the theme's colour for lines landing; then fade them.
     private func flash(_ ranges: [TextRangeNative]) {
         guard !ranges.isEmpty else {
             return
         }
-        let color = textView.selectionHighlightColor.withAlphaComponent(0.3)
-        flashedRanges = ranges.map { HighlightedRange(range: NSRange(location: $0.from, length: max(0, $0.to - $0.from)), color: color, cornerRadius: 3) }
         flashGeneration += 1
         let generation = flashGeneration
-        showHighlightedRanges()
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.flashDuration) { [weak self] in
-            guard let self, self.flashGeneration == generation else {
-                return
+        let width = max(textView.contentSize.width, textView.bounds.width)
+        let lit = ranges.compactMap { range -> UIView? in
+            guard let first = textView.row(containing: range.from),
+                  let last = textView.row(containing: max(range.from, range.to)),
+                  let top = textView.lineFrame(ofLine: first),
+                  let bottom = textView.lineFrame(ofLine: last) else {
+                return nil
             }
-            self.flashedRanges = []
-            self.showHighlightedRanges()
+            let topY = top.top + top.insets.above
+            let view = UIView(frame: CGRect(x: 0, y: topY, width: width, height: bottom.top + bottom.height - bottom.insets.below - topY))
+            view.backgroundColor = flashColor
+            view.isUserInteractionEnabled = false
+            textView.insertBehindText(view)
+            return view
         }
-    }
-
-    private func showHighlightedRanges() {
-        textView.highlightedRanges = flashedRanges
+        flashViews.forEach { $0.removeFromSuperview() }
+        flashViews = lit
+        UIView.animate(withDuration: Self.flashFade, delay: Self.flashHold, options: [.curveEaseIn, .allowUserInteraction], animations: {
+            lit.forEach { $0.alpha = 0 }
+        }, completion: { [weak self] _ in
+            lit.forEach { $0.removeFromSuperview() }
+            if self?.flashGeneration == generation {
+                self?.flashViews = []
+            }
+        })
     }
 
     private func decodeJson<T: Decodable>(_ type: T.Type, _ json: String) -> T? {
@@ -255,6 +317,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         guard text != textView.text else {
             return
         }
+        // A whole new text: the marks no longer point at their lines.
+        changeMarks.clear()
         isApplyingText = true
         textView.text = text
         isApplyingText = false
@@ -314,8 +378,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     }
 
     func setBottomInset(_ value: Double) {
+        let grew = CGFloat(value) > bottomInset
         bottomInset = CGFloat(value)
         applyInsets()
+        if grew {
+            keepCaretAboveBottom()
+        }
     }
 
     func setStickyFill(_ value: Double) {
@@ -378,6 +446,26 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             conflictColors.label = value
         }
         conflictZones.colors = conflictColors
+        var markColors = changeMarks.colors
+        if let value = theme.changeAdded.flatMap({ UIColor(shikiHex: $0) }) {
+            markColors.added = value
+        }
+        if let value = theme.changeModified.flatMap({ UIColor(shikiHex: $0) }) {
+            markColors.modified = value
+        }
+        if let value = theme.changeDeleted.flatMap({ UIColor(shikiHex: $0) }) {
+            markColors.deleted = value
+        }
+        if let value = theme.changeLabel.flatMap({ UIColor(shikiHex: $0) }) {
+            markColors.label = value
+        }
+        if let value = theme.light {
+            markColors.light = value
+        }
+        changeMarks.colors = markColors
+        if let value = theme.changeFlash.flatMap({ UIColor(shikiHex: $0) }) {
+            flashColor = value
+        }
         applyTheme()
     }
 
@@ -391,6 +479,24 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.contentInset = insets
         textView.verticalScrollIndicatorInsets = insets
         updateSticky()
+    }
+
+    /// While editing, a grown bottom inset (the bar window opening over the
+    /// editor) can cover the caret's line; scroll it back up into view.
+    private func keepCaretAboveBottom() {
+        guard textView.isEditing, let end = textView.selectedTextRange?.end else {
+            return
+        }
+        let caret = textView.caretRect(for: end)
+        let visibleBottom = textView.contentOffset.y + textView.bounds.height - bottomInset
+        let overlap = caret.maxY + Self.caretMargin - visibleBottom
+        guard overlap > 0 else {
+            return
+        }
+        let minY = -textView.adjustedContentInset.top
+        let maxY = max(minY, textView.contentSize.height + textView.adjustedContentInset.bottom - textView.bounds.height)
+        let y = min(max(textView.contentOffset.y + overlap, minY), maxY)
+        textView.setContentOffset(CGPoint(x: textView.contentOffset.x, y: y), animated: true)
     }
 
     private func applyTheme() {
@@ -640,6 +746,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         conflictZones.layout()
+        changeMarks.layout()
         updateSticky()
     }
 
@@ -647,6 +754,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         conflictZones.followHorizontalScroll()
+        changeMarks.followHorizontalScroll()
         updateSticky()
     }
 
@@ -654,6 +762,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         conflictZones.textWillChange(in: range, replacementLength: (text as NSString).length)
+        changeMarks.textWillChange(in: range, replacementLength: (text as NSString).length)
         tokenStore.textWillChange(in: range, replacement: text)
         return true
     }
@@ -666,6 +775,17 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         // line starts sticky scroll reads are refreshed.
         lineStarts = lineStartOffsets(textView.text as NSString)
         conflictZones.layout()
+        changeMarks.layout()
         onTextChange(["text": textView.text])
+    }
+}
+
+// MARK: - UIGestureRecognizerDelegate
+
+extension CodeEditorView: UIGestureRecognizerDelegate {
+    /// The tap that closes a change's popover watches alongside the editor's
+    /// own gestures, never instead of them.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        gestureRecognizer === popoverDismissal
     }
 }

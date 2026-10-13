@@ -37,7 +37,6 @@ import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
-import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import {
@@ -47,6 +46,7 @@ import {
   type SessionTarget,
   TARGET_PICKERS_HEIGHT,
 } from "./HomeTargetPickers";
+import { useBarCover } from "./dubz/useBarWindow";
 import type { DubzContext } from "./dubzSuggestions";
 import { prefetchTaskCounts } from "./taskCounts";
 import type { ModelOption } from "./models";
@@ -425,8 +425,9 @@ export const HomeScreen = (props: Props): React.ReactElement => {
   // exactly; the list padding / blur keep the plain number (behind the keyboard).
   const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
   // The bar floats over the list (so its glass has content behind it), so
-  // the list reserves the bar's height itself: a constant
-  // (COMPOSER_BAR_HEIGHT), never a measurement.
+  // the list reserves what the bar and its window cover (keyboard included),
+  // derived from their geometry, never a measurement.
+  const barCover = useBarCover();
 
   return (
     <View style={styles.root}>
@@ -564,7 +565,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
             />
           );
         }}
-        contentContainerStyle={[styles.content, { paddingTop: navBarHeight + HOME_CONTENT_TOP_GAP, paddingBottom: COMPOSER_BAR_HEIGHT + keyboardHeight + 16 }]}
+        contentContainerStyle={[styles.content, { paddingTop: navBarHeight + HOME_CONTENT_TOP_GAP, paddingBottom: barCover + 16 }]}
       />
       </ScrollViewMarker>
       <EdgeBlurBars />

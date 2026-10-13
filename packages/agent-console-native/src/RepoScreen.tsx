@@ -38,12 +38,12 @@ import { useAppContext } from "./AppContext";
 import { AGENT } from "./client";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
-import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { HomeTargetPickers, sessionDirectory, type SessionTarget, TARGET_PICKERS_HEIGHT } from "./HomeTargetPickers";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
 import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
+import { useBarCover } from "./dubz/useBarWindow";
 import type { DubzContext } from "./dubzSuggestions";
 import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 import { symbolForIcon } from "./codicons";
@@ -215,6 +215,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
   const [sending, setSending] = React.useState(false);
   const keyboardHeight = useKeyboardHeight();
+  const barCover = useBarCover();
   const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
   // Dubz here is about this repo; a workspace (not a repo) has no tasks.
   const dubzContext = React.useMemo(
@@ -602,9 +603,9 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           // otherwise the header could stop half-collapsed.
           minHeight: windowHeight + collapseDistance,
           paddingTop: expandedH + 12,
-          // Reserve room for the floating composer (measured) so the last session
-          // clears it, plus the keyboard when it's up.
-          paddingBottom: COMPOSER_BAR_HEIGHT + keyboardHeight + 24,
+          // Reserve what the floating composer and its window cover (keyboard
+          // included) so the last session clears them.
+          paddingBottom: barCover + 24,
         }}
       >
         <FavoriteScopeProvider value={favScope}>

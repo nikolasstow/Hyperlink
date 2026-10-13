@@ -17,6 +17,14 @@ struct ThemeRecord: Record {
     @Field var mergeCurrentHeader: String?
     @Field var mergeIncomingHeader: String?
     @Field var mergeLabel: String?
+    /// An agent's change, from the theme (changeColors.ts): the gutter
+    /// stripes for added and changed lines, the deletion wedge, the flash as
+    /// it lands, and the label on the popover's button.
+    @Field var changeAdded: String?
+    @Field var changeModified: String?
+    @Field var changeDeleted: String?
+    @Field var changeFlash: String?
+    @Field var changeLabel: String?
     /// Whether the theme is light: glass in the editor takes this appearance.
     @Field var light: Bool?
 
@@ -35,12 +43,14 @@ public final class CodeEditorModule: Module {
         // 5: `applyChanges` (outside edits in place).
         // 6: conflicts drawn in the document (`conflictsJson`, `onConflictAction`).
         // 7: `tokensJson` may be `{length, lines}`; colours move with edits.
+        // 8: an agent's changes marked in the gutter (`markChanges`,
+        //    `onOpenSession`).
         Constants([
-            "apiVersion": 7,
+            "apiVersion": 8,
         ])
 
         View(CodeEditorView.self) {
-            Events("onTextChange", "onStickyDebug", "onConflictAction")
+            Events("onTextChange", "onStickyDebug", "onConflictAction", "onOpenSession")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)
@@ -81,6 +91,10 @@ public final class CodeEditorModule: Module {
 
             AsyncFunction("applyChanges") { (view: CodeEditorView, changesJson: String, expectedLength: Int, highlightJson: String) in
                 view.applyChanges(changesJson, expectedLength, highlightJson)
+            }.runOnQueue(.main)
+
+            AsyncFunction("markChanges") { (view: CodeEditorView, marksJson: String) in
+                view.markChanges(marksJson)
             }.runOnQueue(.main)
         }
     }

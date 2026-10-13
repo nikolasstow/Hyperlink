@@ -38,6 +38,7 @@ import Reanimated, { Easing, interpolate, runOnJS, type SharedValue, useAnimated
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { warmCodeSurfaces } from "../../modules/code-surface";
 import { codeSurfaceUri } from "../codeSurfaceAsset";
+import { useBarCover } from "../dubz/useBarWindow";
 import type { DubzContext } from "../dubzSuggestions";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { HeaderTitlePill, headerTitlePillWidth } from "../HeaderTitlePill";
@@ -108,8 +109,10 @@ const SWIPE_TURN = 0.33;
 const SWIPE_FLING = 800;
 /** Room under the overview's grid for its bar. */
 const OVERVIEW_ROOM = 90;
-/** Room under a listing for the bar, and how far the bar drops to hide. */
-const BAR_ROOM = NAV_BAR_HEIGHT + 20;
+/** How far the bar drops to hide. */
+const BAR_HIDE = NAV_BAR_HEIGHT + 20;
+/** Room kept between a page's last line and the bar window. */
+const BOTTOM_ROOM = 20;
 
 /** The top bar's side margin, and the least room between its pieces. */
 const TOP_SIDE = 16;
@@ -259,7 +262,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const tabsBackMax = (screen.width - filterWidth) / 2 - TOP_SIDE - TOP_GAP;
 
   // The bar drops away as a listing scrolls down; a new page brings it back.
-  const barHide = useScrollHide(BAR_ROOM + insets.bottom + 10);
+  // What the bar window covers, so a page's last line scrolls above it.
+  const barCover = useBarCover();
+  const barHide = useScrollHide(BAR_HIDE + insets.bottom + 10);
   const { show: showBar } = barHide;
   React.useEffect(() => showBar(), [current.path, showBar]);
 
@@ -390,7 +395,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const topAway = insets.top * 2 + HOME_HEADER_HEIGHT * 2;
   const topSlide = useAnimatedStyle(() => ({ top: insets.top - Math.max(zoom.value, paging.value) * topAway }));
   const blurFade = useAnimatedStyle(() => ({ opacity: 1 - Math.max(zoom.value, paging.value) }));
-  const barDistance = BAR_ROOM + insets.bottom + 10;
+  const barDistance = BAR_HIDE + insets.bottom + 10;
   const scrolledAway = barHide.hidden;
   const barHidden = useDerivedValue(() => Math.max(scrolledAway.value, zoom.value * barDistance));
 
@@ -704,13 +709,13 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   repo={repo}
                   dir={current.path}
                   topInset={headerHeight}
-                  bottomInset={insets.bottom + BAR_ROOM + 20}
+                  bottomInset={barCover + BOTTOM_ROOM}
                   onOpen={open}
                   onOpenInNewTab={openInNewTab}
                   onScroll={barHide.onScroll}
                 />
               ) : (
-                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={insets.bottom + BAR_ROOM + 20} />
+                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} />
               )}
               {cover === undefined ? null : (
                 <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">

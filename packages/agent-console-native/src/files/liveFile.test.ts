@@ -39,6 +39,33 @@ describe("liveFile", () => {
     expect(after.slice(lit.from, lit.to)).toBe("const y = 3");
   });
 
+  it("marks the lines an agent changed for the gutter", () => {
+    const after = original.replace("const y = 2", "const y = 3");
+    const received = LiveFile.changed(open(), agentChange(original, after, 1), "me");
+    expect(received?.editor?.marks).toEqual([
+      {
+        kind: "modified",
+        from: after.indexOf("const y = 3"),
+        to: after.indexOf("const y = 3") + "const y = 3".length,
+      },
+    ]);
+  });
+
+  it("marks nothing for a change that was not an agent's", () => {
+    const after = original.replace("const y = 2", "const y = 3");
+    const received = LiveFile.changed(
+      open(),
+      new FileSync.Changed({
+        version: 1,
+        changes: TextChange.diff(original, after),
+        author: new FileSync.External({}),
+      }),
+      "me",
+    );
+    expect(received?.editor?.text).toBe(after);
+    expect(received?.editor?.marks).toEqual([]);
+  });
+
   it("keeps my typing on another line when an agent changes the file", () => {
     const typed = LiveFile.edited(open(), original.replace("const x = 1", "const x = 10"));
     const after = original.replace("const y = 2", "const y = 3");

@@ -44,6 +44,13 @@ final class ConflictZones {
     var rowHeight: () -> CGFloat = { 17 }
     var styledLine: (String, [ShikiToken]) -> NSAttributedString = { text, _ in NSAttributedString(string: text) }
     var onChoice: (Int, Choice) -> Void = { _, _ in }
+    /// The zones' views changed: the editor keeps them above the gutter.
+    var onViewsChanged: () -> Void = {}
+
+    /// Every view on screen for the zones.
+    var views: [UIView] {
+        zones.flatMap(\.views.all)
+    }
 
     /// Set when the theme changes; the conflicts take the new colours.
     var colors = Colors() {
@@ -52,7 +59,7 @@ final class ConflictZones {
                 zone.views.removeFromSuperview()
                 zone.views = makeViews(for: zone)
             }
-            textView?.viewsAboveGutter = zones.flatMap(\.views.all)
+            onViewsChanged()
             layout()
         }
     }
@@ -149,7 +156,7 @@ final class ConflictZones {
                 zones.append(zone)
             }
         }
-        textView?.viewsAboveGutter = zones.flatMap(\.views.all)
+        onViewsChanged()
         textView?.setNeedsLayout()
         layout()
         animateIfNeeded()
@@ -299,7 +306,7 @@ final class ConflictZones {
         if !closed.isEmpty {
             closed.forEach { $0.views.removeFromSuperview() }
             zones.removeAll { zone in closed.contains { $0 === zone } }
-            textView?.viewsAboveGutter = zones.flatMap(\.views.all)
+            onViewsChanged()
             layout()
         }
         if !zones.contains(where: { $0.progress != $0.target }) {
@@ -406,7 +413,7 @@ final class ConflictZones {
 
 /// Round glass without clipping it, where the system can (iOS 26), so its
 /// shadow and edge light are drawn in full; earlier, round by clipping.
-private func roundCorners(of view: UIVisualEffectView, radius: CGFloat) {
+func roundCorners(of view: UIVisualEffectView, radius: CGFloat) {
     if #available(iOS 26.0, *) {
         view.cornerConfiguration = .corners(radius: .fixed(radius))
     } else {
@@ -418,7 +425,7 @@ private func roundCorners(of view: UIVisualEffectView, radius: CGFloat) {
 
 /// CADisplayLink holds its target strongly; this keeps that from holding the
 /// zones.
-private final class DisplayLinkTarget {
+final class DisplayLinkTarget {
     private let onTick: (CADisplayLink) -> Void
 
     init(_ onTick: @escaping (CADisplayLink) -> Void) {
@@ -433,7 +440,7 @@ private final class DisplayLinkTarget {
 /// A button made of tinted, interactive glass with a plain label on top. UIKit's
 /// glass button configurations restyle their label (vibrancy) whatever colour
 /// it is given; this keeps the label exactly the theme's colour.
-private final class GlassButton: UIControl {
+final class GlassButton: UIControl {
     private let action: () -> Void
     private let body: UIVisualEffectView
     private let label = UILabel()
@@ -479,6 +486,18 @@ private final class GlassButton: UIControl {
             alpha = isHighlighted ? 0.7 : 1
         }
     }
+
+    /// A tap here is the button's, not the editor's (which would place the
+    /// cursor behind it).
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        tapBelongsHere(gestureRecognizer, self)
+    }
+}
+
+/// Whether a gesture over `view` may begin: taps belong to the view itself,
+/// not to the editor under it; drags still scroll.
+func tapBelongsHere(_ gestureRecognizer: UIGestureRecognizer, _ view: UIView) -> Bool {
+    !(gestureRecognizer is UITapGestureRecognizer) || gestureRecognizer.view === view
 }
 
 private extension Array {

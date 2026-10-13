@@ -21,7 +21,7 @@ export const FileViewerScreen = (props: Props): React.ReactElement => {
   const { path, name, line } = props.route.params;
   return (
     <View style={styles.root}>
-      <FileView path={path} name={name} {...(line === undefined ? {} : { line })} topInset={headerHeight} bottomInset={insets.bottom} />
+      <FileView path={path} name={name} {...(line === undefined ? {} : { line })} topInset={headerHeight} bottomInset={insets.bottom} onOpenSession={(sessionID) => props.navigation.navigate("Chat", { sessionID })} />
       <EdgeBlurBars variant="top" />
     </View>
   );
