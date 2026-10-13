@@ -50,8 +50,10 @@ public final class CodeEditorModule: Module {
         // 11: the code font (`fontFamily`), custom fonts installed from files
         //     (`registerFont`, `unregisterFont`), and text drawn to an image in
         //     it (`textImage`).
+        // 12: previews drawn by the editor itself (`renderPreview`), and the
+        //     code resting where it was left (`initialOffset`, `onScrollRest`).
         Constants([
-            "apiVersion": 11,
+            "apiVersion": 12,
         ])
 
         AsyncFunction("registerFont") { (uri: String) -> [String] in
@@ -66,6 +68,10 @@ public final class CodeEditorModule: Module {
             try TextImage.render(text: text, family: family, size: size, width: width, height: height, color: color)
         }.runOnQueue(.main)
 
+        AsyncFunction("renderPreview") { (options: EditorPreviewOptions) -> String in
+            try EditorPreview.render(options, appContext: self.appContext)
+        }.runOnQueue(.main)
+
         AsyncFunction("hideKeyboard") { () -> Bool in
             CodeEditorView.hideKeyboard()
         }.runOnQueue(.main)
@@ -75,7 +81,7 @@ public final class CodeEditorModule: Module {
         }.runOnQueue(.main)
 
         View(CodeEditorView.self) {
-            Events("onTextChange", "onStickyDebug", "onConflictAction", "onOpenSession", "onLineChange")
+            Events("onTextChange", "onStickyDebug", "onConflictAction", "onOpenSession", "onLineChange", "onScrollRest")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)
@@ -112,6 +118,9 @@ public final class CodeEditorModule: Module {
             }
             Prop("wrapLines") { (view: CodeEditorView, value: Bool) in
                 view.setWrapLines(value)
+            }
+            Prop("initialOffset") { (view: CodeEditorView, value: Double) in
+                view.setInitialOffset(value)
             }
             Prop("conflictsJson") { (view: CodeEditorView, value: String) in
                 view.setConflictsJson(value)

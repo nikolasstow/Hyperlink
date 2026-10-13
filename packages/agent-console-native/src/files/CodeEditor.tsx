@@ -32,7 +32,7 @@ const RETOKENIZE_MS = 150;
 /** Each line's coloured runs as offset ranges (what the native view wants) from
  * Shiki's per-line content tokens. UTF-16 lengths, since JS string length is UTF-16. */
 /** Tokens for the native view: with the text's length where it can check it. */
-const tokensJsonOf = (text: string, result: HighlightResult): string =>
+export const tokensJsonOf = (text: string, result: HighlightResult): string =>
   JSON.stringify(
     canVersionTokens
       ? {
@@ -71,7 +71,7 @@ const changeLabel = (change: ChangeColors, background: string): string => {
   return labels.every((label) => label === labels[0]) && typeof labels[0] === "string" ? labels[0] : "#FFFFFF";
 };
 
-const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: HighlightResult | undefined): EditorTheme => {
+export const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: HighlightResult | undefined): EditorTheme => {
   const colors = typeof theme === "string" ? undefined : theme.colors;
   const background = highlight?.background ?? colors?.["editor.background"];
   const foreground = highlight?.foreground ?? colors?.["editor.foreground"];
@@ -123,6 +123,10 @@ export const CodeEditor = (props: {
    * change (breadcrumbs.ts), and whether the line moved on down the file
    * (else back up). */
   readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>, onward: boolean) => void;
+  /** Where the code rests once laid out, points from its top. */
+  readonly initialOffset?: number;
+  /** Where the code came to rest after a scroll. */
+  readonly onScrollRest?: (offset: number) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -297,6 +301,8 @@ export const CodeEditor = (props: {
         stickyFill={props.stickyFill}
         fontSize={codeFontSizeOf(appTheme)}
         fontFamily={appTheme.codeFont}
+        {...(props.initialOffset === undefined ? {} : { initialOffset: props.initialOffset })}
+        {...(props.onScrollRest === undefined ? {} : { onScrollRest: (event) => props.onScrollRest?.(event.nativeEvent.offset) })}
         showLineNumbers
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}

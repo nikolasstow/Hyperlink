@@ -17,6 +17,7 @@
  * - the extension code themes fetched, for the first frame after a launch
  *   (their own prefix);
  * - the custom code fonts installed on the device (their own prefix);
+ * - where each file was left (its own prefix);
  * - where Files is, per repo (its own prefix);
  * - the pages open when the app was last used (its own prefix);
  * - Home's favorites (their own prefix);
@@ -33,6 +34,7 @@ import { Conversations } from "../conversations/Conversations";
 import { BarWindowStore } from "../dubz/BarWindowStore";
 import { Favorites } from "../favorites/Favorites";
 import { FileNav } from "../files/FileNav";
+import { FileScrolls } from "../files/FileScrolls";
 import { LiveFiles } from "../files/LiveFiles";
 import { HomeLayoutStore } from "../home/HomeLayoutStore";
 import { CodeFonts } from "../fonts/CodeFonts";
@@ -52,6 +54,7 @@ const SESSIONS_STORAGE_PREFIX = "agent-console-native:sessions:";
 const HOME_STORAGE_PREFIX = "agent-console-native:home:";
 const THEMES_STORAGE_PREFIX = "agent-console-native:themes:";
 const FONTS_STORAGE_PREFIX = "agent-console-native:fonts:";
+const SCROLLS_STORAGE_PREFIX = "agent-console-native:scrolls:";
 const FILES_STORAGE_PREFIX = "agent-console-native:files:";
 const NAV_STORAGE_PREFIX = "agent-console-native:nav:";
 const FAVORITES_STORAGE_PREFIX = "agent-console-native:favorites:";
@@ -66,6 +69,7 @@ const AppLayer = Layer.mergeAll(
   HomeLayoutStore.layer.pipe(Layer.provide(asyncStorageLayer(HOME_STORAGE_PREFIX))),
   KeptThemes.layer.pipe(Layer.provide(asyncStorageLayer(THEMES_STORAGE_PREFIX))),
   CodeFonts.layer.pipe(Layer.provide(asyncStorageLayer(FONTS_STORAGE_PREFIX))),
+  FileScrolls.layer.pipe(Layer.provide(asyncStorageLayer(SCROLLS_STORAGE_PREFIX))),
   FileNav.layer.pipe(Layer.provide(asyncStorageLayer(FILES_STORAGE_PREFIX))),
   KeptNav.layer.pipe(Layer.provide(asyncStorageLayer(NAV_STORAGE_PREFIX))),
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),

@@ -52,6 +52,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     let onOpenSession = EventDispatcher()
     /// The line you are at, when it changes: `{line}` (0-based).
     let onLineChange = EventDispatcher()
+    /// Where the code came to rest after a scroll: `{offset}`, points from the
+    /// code's top (0 at the top, whatever the insets).
+    let onScrollRest = EventDispatcher()
+    /// Where to rest the code once it is laid out (a file reopening where it
+    /// was left); applied once.
+    private var pendingOffset: CGFloat?
     private var reportedLine = -1
 
     /// True while we set `text` programmatically, so the delegate's change
@@ -335,6 +341,23 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         isApplyingText = false
         rebuildHighlights()
         reportLine()
+    }
+
+    /// Rest the code `offset` points from its top, once it is laid out.
+    func setInitialOffset(_ offset: Double) {
+        pendingOffset = CGFloat(offset)
+        setNeedsLayout()
+    }
+
+    /// The code `offset` points from its top, now (kept within the text).
+    func scrollToOffset(_ offset: CGFloat) {
+        let minY = -textView.adjustedContentInset.top
+        let maxY = max(minY, textView.contentSize.height + textView.adjustedContentInset.bottom - textView.bounds.height)
+        textView.contentOffset.y = min(max(offset - topInset, minY), maxY)
+    }
+
+    private func reportScrollRest() {
+        onScrollRest(["offset": Double(textView.contentOffset.y + topInset)])
     }
 
     func setEditable(_ editable: Bool) {
@@ -805,6 +828,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        if let pendingOffset, bounds.height > 0, textView.contentSize.height > 0 {
+            self.pendingOffset = nil
+            textView.layoutIfNeeded()
+            scrollToOffset(pendingOffset)
+        }
         conflictZones.layout()
         changeMarks.layout()
         updateSticky()
@@ -817,6 +845,20 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         changeMarks.followHorizontalScroll()
         updateSticky()
         reportLine()
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            reportScrollRest()
+        }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        reportScrollRest()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        reportScrollRest()
     }
 
     // MARK: - TextViewDelegate

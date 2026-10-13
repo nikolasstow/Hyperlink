@@ -25,7 +25,9 @@ import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor, type CodeEditorApi } from "./CodeEditor";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
-import { clearFileEdit, getFileEditSync, setFileEdit } from "./fileEdits";
+import { EDITOR_TOP_MARGIN, shownTextOf } from "./editorLayout";
+import { keepScrollOffset, scrollOffsetOf } from "./useFileScrolls";
+import { clearFileEdit, setFileEdit } from "./fileEdits";
 import { registerSave, unregisterSave } from "./fileSave";
 import { getFileTextSync } from "./fileTextCache";
 import { flashFile } from "./saveLight";
@@ -45,9 +47,6 @@ type State =
   | { readonly kind: "error" };
 
 const noConflicts: ReadonlyArray<Rebase.Conflict> = [];
-
-/** Extra breathing room between the top bar and the first line of code. */
-const EDITOR_TOP_MARGIN = 24;
 
 /** Only a link someone could have meant to open leaves the app. */
 const openLink = (url: string): void => {
@@ -73,6 +72,8 @@ export const FileView = (props: {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { path, name, line, repo, topInset, bottomInset, onOpenSession, onScopes } = props;
+  // Opens where it was left (and its tab's preview shows the same place).
+  const [initialOffset] = React.useState(() => scrollOffsetOf(path));
   // Followed while on screen (and before, when it is open in a tab or kept).
   useOnScreen(path);
   const live = useLiveFile(path);
@@ -82,11 +83,11 @@ export const FileView = (props: {
   // nothing was kept; after that the editor owns the text and outside changes
   // arrive as changes (`useLiveFileEvents`).
   const [state, setState] = React.useState<State>(() => {
-    const shown = liveFileNow(path)?.text ?? getFileEditSync(path) ?? getFileTextSync(path);
+    const shown = shownTextOf(path);
     return shown === undefined ? { kind: "loading" } : { kind: "text", text: shown };
   });
   React.useEffect(() => {
-    const shown = liveFileNow(path)?.text ?? getFileEditSync(path) ?? getFileTextSync(path);
+    const shown = shownTextOf(path);
     setState(shown === undefined ? { kind: "loading" } : { kind: "text", text: shown });
   }, [path]);
   // Nothing was kept: the hub's text, once it comes (or why it can't).
@@ -201,6 +202,8 @@ export const FileView = (props: {
             onConflictChoice={(index, keep) => resolveLiveConflict(path, index, keep)}
             {...(onOpenSession === undefined ? {} : { onOpenSession })}
             {...(onScopes === undefined ? {} : { onScopes })}
+            initialOffset={initialOffset}
+            onScrollRest={(offset) => keepScrollOffset(path, offset)}
             topInset={topInset + EDITOR_TOP_MARGIN}
             bottomInset={bottomInset}
             stickyFill={topInset + EDITOR_TOP_MARGIN}

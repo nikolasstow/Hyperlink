@@ -68,6 +68,7 @@ import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, openOrSelectFileTab, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
 import { pathCrumbs } from "./breadcrumbs";
+import { EDITOR_BOTTOM_ROOM } from "./editorLayout";
 import { useFontSizeIcons } from "./fontSizeIcons";
 import { BreadcrumbPill } from "./BreadcrumbPill";
 import type { RollDirection } from "./crumbRoll";
@@ -118,8 +119,6 @@ const SWIPE_FLING = 800;
 const OVERVIEW_ROOM = 90;
 /** How far the bar drops to hide. */
 const BAR_HIDE = NAV_BAR_HEIGHT + 20;
-/** Room kept between a page's last line and the bar window. */
-const BOTTOM_ROOM = 20;
 
 /** The top bar's side margin, and the least room between its pieces. */
 const TOP_SIDE = 16;
@@ -748,13 +747,13 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   repo={repo}
                   dir={current.path}
                   topInset={headerHeight}
-                  bottomInset={barCover + BOTTOM_ROOM}
+                  bottomInset={barCover + EDITOR_BOTTOM_ROOM}
                   onOpen={open}
                   onOpenInNewTab={openInNewTab}
                   onScroll={barHide.onScroll}
                 />
               ) : (
-                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} onScopes={(next, onward) => {
+                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + EDITOR_BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} onScopes={(next, onward) => {
                     crumbRoll.value = onward ? 1 : -1;
                     setScopes({ path: current.path, scopes: next });
                   }} />

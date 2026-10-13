@@ -9,6 +9,7 @@ import { conversationsReadBack } from "./src/conversations/useConversations";
 import { homeLayoutReadBack } from "./src/home/useHomeLayout";
 import { keptThemesReadBack } from "./src/useCodeTheme";
 import { codeFontsReadBack, syncCodeFonts } from "./src/fonts/useCodeFonts";
+import { fileScrollsReadBack } from "./src/files/useFileScrolls";
 import { keptNavReadBack } from "./src/navigation/useKeptNav";
 import { favoritesReadBack } from "./src/favorites/useFavorites";
 import { reposReadBack } from "./src/repoScanCache";
@@ -96,7 +97,7 @@ const AppInner = (): React.ReactElement => {
       // Never longer than READ_BACK_WAIT_MS: a store that cannot be read must
       // not hold the app on the launch screen.
       const readBack = Promise.race([
-        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack]),
+        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack, fileScrollsReadBack]),
         new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS)),
       ]);
       primeDefaultPermissionMode(await getDefaultPermissionMode());
