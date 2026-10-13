@@ -124,6 +124,9 @@ const TOP_GAP = 8;
 /** The narrowest a back button with a name is drawn (else just the
  * chevron). */
 const BACK_MIN_NAMED = HOME_HEADER_HEIGHT + 40;
+/** A file tab's back button at most: its title cut short, so the
+ * breadcrumbs get the rest of the bar. */
+const FILE_BACK_MAX = 120;
 
 const lastSegment = (path: string, fallback: string): string => path.split("/").filter(Boolean).pop() ?? fallback;
 
@@ -256,8 +259,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       : primary.primary !== undefined
         ? worktreePickerWidth(current.name, currentWt !== undefined ? worktreeName(currentWt) : "", screen.width)
         : headerTitlePillWidth(current.name, false, screen.width);
-  // A file tab's back is just its chevron: the breadcrumbs take the room.
-  const topBackMax = current.kind === "file" ? HOME_HEADER_HEIGHT : (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
+  // A file tab's back keeps its title, cut shorter: the breadcrumbs take the
+  // rest of the bar.
+  const topBackMax = current.kind === "file" ? FILE_BACK_MAX : (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
   // Where you are in the file: its path from the worktree, then the scopes
   // the editor reports for the line you are at (this file's only).
   const [scopes, setScopes] = React.useState<{ readonly path: string; readonly scopes: ReadonlyArray<ScopeSymbol> } | undefined>(undefined);
