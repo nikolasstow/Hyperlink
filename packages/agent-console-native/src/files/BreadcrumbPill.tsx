@@ -8,8 +8,9 @@
  * resting at the end (where you are): the scroll view is mirrored, so its
  * start is the pill's right edge, and the row of crumbs inside it is mirrored
  * back — nothing is measured. Shorter, the crumbs sit at the left. Crumbs
- * running past either end fade out into it (a gradient mask as wide as the
- * crumbs' padding, so crumbs that fit are never faded).
+ * running past either end fade out into it: a gradient mask on that end,
+ * shown only while crumbs are hidden past it (from the scroll's own numbers,
+ * on the UI thread), so crumbs that fit are never faded.
  *
  * The path is there on the first frame; the scopes come once the file is
  * parsed and the editor says where you are. As they change they roll, the
@@ -22,8 +23,8 @@ import MaskedView from "@react-native-masked-view/masked-view";
 import { GlassView } from "expo-glass-effect";
 import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
-import { ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
-import Reanimated, { LinearTransition, type SharedValue } from "react-native-reanimated";
+import { StyleSheet, Text, useColorScheme, View } from "react-native";
+import Reanimated, { interpolate, LinearTransition, type SharedValue, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { Codicon } from "../Codicon";
 import { iconForFile } from "../fileIcon";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
@@ -34,9 +35,10 @@ import type { ScopeSymbol } from "./stickyRanges";
 import { type RollDirection, rollIn, rollOut } from "./crumbRoll";
 import { crumbColorOf, symbolLookOf } from "./symbolLooks";
 
-/** Room between the crumbs and the pill's ends, which is also how far the
- * crumbs fade as they run past them. */
+/** Room between the crumbs and the pill's ends. */
 const PAD_H = 22;
+/** How far crumbs fade as they run past an end. */
+const FADE_W = 40;
 const TEXT_SIZE = 15;
 const ICON_SIZE = 16;
 const CHEVRON_SIZE = 14;
@@ -59,6 +61,21 @@ export const BreadcrumbPill = (props: {
   const { roll } = props;
   const crumbIn = React.useMemo(() => rollIn(roll), [roll]);
   const crumbOut = React.useMemo(() => rollOut(roll), [roll]);
+
+  // How much of the crumbs is hidden past each end: the scroll view's start
+  // is the right end (mirrored), so what it has scrolled is hidden on the
+  // right and the rest of what overflows on the left. An end fades only as
+  // far as crumbs are hidden past it.
+  const offset = useSharedValue(0);
+  const content = useSharedValue(0);
+  const viewport = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    offset.value = event.contentOffset.x;
+    content.value = event.contentSize.width;
+    viewport.value = event.layoutMeasurement.width;
+  });
+  const leftSolid = useAnimatedStyle(() => ({ opacity: interpolate(content.value - viewport.value - offset.value, [0, FADE_W], [1, 0], "clamp") }));
+  const rightSolid = useAnimatedStyle(() => ({ opacity: interpolate(offset.value, [0, FADE_W], [1, 0], "clamp") }));
 
   const chevron = (
     <View style={styles.chevron}>
@@ -91,15 +108,43 @@ export const BreadcrumbPill = (props: {
     <View style={styles.shadow} accessibilityRole="header" accessibilityLabel={[...props.path, ...props.symbols.map((symbol) => symbol.name)].join(", ")}>
       <View style={styles.clip}>
         <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
-        <MaskedView style={styles.fill} maskElement={fadeMask}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mirrored} contentContainerStyle={styles.content}>
+        <MaskedView
+          style={styles.fill}
+          maskElement={
+            <View style={maskStyles.mask}>
+              <View style={maskStyles.edge}>
+                <LinearGradient colors={FADE_IN} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                <Reanimated.View style={[maskStyles.solid, leftSolid]} />
+              </View>
+              <View style={maskStyles.middle} />
+              <View style={maskStyles.edge}>
+                <LinearGradient colors={FADE_OUT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                <Reanimated.View style={[maskStyles.solid, rightSolid]} />
+              </View>
+            </View>
+          }
+        >
+          <Reanimated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.mirrored}
+            contentContainerStyle={styles.content}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            onLayout={(event) => {
+              viewport.value = event.nativeEvent.layout.width;
+            }}
+            onContentSizeChange={(width) => {
+              content.value = width;
+            }}
+          >
             {/* Its size eases to the new one, so the crumbs before a scope
               * that changed width slide over rather than jump. */}
             <Reanimated.View style={[styles.row, styles.mirrored]} layout={crumbMove}>
               {pathCrumbs}
               {symbolCrumbs}
             </Reanimated.View>
-          </ScrollView>
+          </Reanimated.ScrollView>
         </MaskedView>
       </View>
     </View>
@@ -112,24 +157,23 @@ const maskStyles = StyleSheet.create({
     flexDirection: "row",
   },
   edge: {
-    width: PAD_H,
+    width: FADE_W,
   },
   middle: {
     flex: 1,
     backgroundColor: "#000000",
   },
+  // Over an end's gradient: shows the crumbs whole there while none are
+  // hidden past it.
+  solid: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "#000000",
+  },
 });
 
-/** Opaque in the middle, clear at the ends: what shows of the crumbs. */
+/** Clear at the outer edge to opaque: the fade at each end. */
 const FADE_IN: readonly [string, string] = ["#00000000", "#000000"];
 const FADE_OUT: readonly [string, string] = ["#000000", "#00000000"];
-const fadeMask = (
-  <View style={maskStyles.mask}>
-    <LinearGradient colors={FADE_IN} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={maskStyles.edge} />
-    <View style={maskStyles.middle} />
-    <LinearGradient colors={FADE_OUT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={maskStyles.edge} />
-  </View>
-);
 
 const styles = StyleSheet.create({
   fill: {
