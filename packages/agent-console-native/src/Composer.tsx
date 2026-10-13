@@ -31,6 +31,7 @@
  *
  * @internal
  */
+import { useRoute } from "@react-navigation/native";
 import * as React from "react";
 import { Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -81,6 +82,7 @@ export const Composer = (props: {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { client, address } = useAppContext();
+  const routeKey = useRoute().key;
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
@@ -398,7 +400,7 @@ export const Composer = (props: {
       </View>
       {withDubz ? (
         <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
-          <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} onOpenSessionPage={props.onOpenSessionPage} pageBack={pageBack} />
+          <DubzPage open={dubzOpen} instant={dubzInstant} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} onOpenSessionPage={props.onOpenSessionPage} pageBack={pageBack} routeKey={routeKey} />
         </Reanimated.View>
       ) : null}
     </View>
