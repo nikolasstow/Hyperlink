@@ -415,10 +415,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// The code's font: the chosen family when it is installed (a custom one
     /// once it is registered), else the system's monospace.
     private func codeFont() -> UIFont {
-        if let fontFamily, UIFont.familyNames.contains(fontFamily) {
-            return UIFont(descriptor: UIFontDescriptor(fontAttributes: [.family: fontFamily]), size: fontSize)
-        }
-        return UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        TextImage.codeFont(family: fontFamily ?? "", size: fontSize)
     }
 
     func setShowLineNumbers(_ show: Bool) {

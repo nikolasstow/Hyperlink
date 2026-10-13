@@ -137,6 +137,7 @@ const nativeModule =
         readonly showKeyboard?: () => Promise<boolean>;
         readonly registerFont?: (uri: string) => Promise<ReadonlyArray<string>>;
         readonly unregisterFont?: (uri: string) => Promise<void>;
+        readonly textImage?: (text: string, family: string, size: number, width: number, height: number, color: string) => Promise<string>;
       }>("CodeEditor")
     : null;
 const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.apiVersion : 0;
@@ -181,6 +182,13 @@ export const registerFont = (uri: string): Promise<ReadonlyArray<string>> =>
 /** Unregister the font file at `uri` (a font being removed). */
 export const unregisterFont = (uri: string): Promise<void> =>
   canInstallFonts && nativeModule?.unregisterFont !== undefined ? nativeModule.unregisterFont(uri) : Promise.resolve();
+
+/** `text` drawn in the code font for `family` (the system's monospace while
+ * it is not installed) at `size` points, bottom-centred in a `width` ×
+ * `height` box, in `color`: the image file's URI. Undefined on a build that
+ * cannot (`apiVersion` 11). */
+export const textImage = (text: string, family: string, size: number, width: number, height: number, color: string): Promise<string | undefined> =>
+  canInstallFonts && nativeModule?.textImage !== undefined ? nativeModule.textImage(text, family, size, width, height, color) : Promise.resolve(undefined);
 
 /** Bring the keyboard back to a file kept editing without it. False when
  * there is none. */

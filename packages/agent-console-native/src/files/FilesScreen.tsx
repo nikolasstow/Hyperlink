@@ -53,7 +53,7 @@ import { SystemIcon } from "../SystemIcon";
 import { codeFontSizeOf, stepCodeFontSize } from "../settings";
 import { useScreenBackground, useTextColors, useTheme } from "../theme";
 import { GlassView } from "expo-glass-effect";
-import { Button, ControlGroup, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
+import { Button, ControlGroup, Host, Image, Label, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
@@ -68,6 +68,7 @@ import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, openOrSelectFileTab, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
 import { pathCrumbs } from "./breadcrumbs";
+import { useFontSizeIcons } from "./fontSizeIcons";
 import { BreadcrumbPill } from "./BreadcrumbPill";
 import type { RollDirection } from "./crumbRoll";
 import type { ScopeSymbol } from "./stickyRanges";
@@ -889,6 +890,7 @@ const MoreMenu = (props: {
   const { theme: appTheme, setTheme } = useTheme();
   const fontSize = codeFontSizeOf(appTheme);
   const stepFontSize = (step: -1 | 1): void => setTheme({ ...appTheme, codeFontSize: stepCodeFontSize(fontSize, step) });
+  const fontSizeIcons = useFontSizeIcons(appTheme.codeFont, scheme);
   return (
     <Host
       style={styles.more}
@@ -913,8 +915,22 @@ const MoreMenu = (props: {
         {/* The code's size, side by side: a step smaller or larger. */}
         {file === undefined ? null : (
           <ControlGroup key="font-size">
-            <Button label="Smaller" systemImage="textformat.size.smaller" onPress={() => stepFontSize(-1)} />
-            <Button label="Larger" systemImage="textformat.size.larger" onPress={() => stepFontSize(1)} />
+            {/* "Aa" in the code's own font; iOS's text size symbols until the
+              * images are drawn (or on a build that cannot draw them). */}
+            {fontSizeIcons === undefined ? (
+              <Button label="Smaller" systemImage="textformat.size.smaller" onPress={() => stepFontSize(-1)} />
+            ) : (
+              <Button onPress={() => stepFontSize(-1)}>
+                <Label title="Smaller" icon={<Image uiImage={fontSizeIcons.smaller} />} />
+              </Button>
+            )}
+            {fontSizeIcons === undefined ? (
+              <Button label="Larger" systemImage="textformat.size.larger" onPress={() => stepFontSize(1)} />
+            ) : (
+              <Button onPress={() => stepFontSize(1)}>
+                <Label title="Larger" icon={<Image uiImage={fontSizeIcons.larger} />} />
+              </Button>
+            )}
           </ControlGroup>
         )}
         {file === undefined ? null : <Button key="save" label="Save" systemImage="square.and.arrow.down" onPress={() => saveFileNow(file.path)} />}
