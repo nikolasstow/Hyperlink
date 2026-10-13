@@ -162,7 +162,9 @@ export const BreadcrumbPill = (props: {
 
   return (
     <View
-      style={props.slotStyle}
+      // The bar's height: the pill floats in it (to drop out of it), so it
+      // gives the slot no height of its own.
+      style={[props.slotStyle, styles.slot]}
       onLayout={(event) => {
         slotX.value = event.nativeEvent.layout.x;
         slotW.value = event.nativeEvent.layout.width;
@@ -242,6 +244,9 @@ const FADE_IN: readonly [string, string] = ["#00000000", "#000000"];
 const FADE_OUT: readonly [string, string] = ["#000000", "#00000000"];
 
 const styles = StyleSheet.create({
+  slot: {
+    height: HOME_HEADER_HEIGHT,
+  },
   fill: {
     flex: 1,
   },
