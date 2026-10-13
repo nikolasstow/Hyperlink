@@ -88,11 +88,14 @@ const TITLE_PILL_MIN = 56;
 /** The floating composer pill's space at the window's bottom: the pill, its
  * inset (BarWindow COMPOSER_INSET), and a gap. */
 export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
-/** The window height that shows exactly one suggestion row above the floating
- * pill: the pill area, a gap, one row, and the grab handle's clearance at the
- * top (so the grabber has room above the row). The Dubz "drag-anywhere" low
- * anchor and the window's default before the user has ever dragged it. */
-export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL + HANDLE_CLEARANCE;
+/** The window height that shows `rows` suggestion rows above the floating pill:
+ * the pill area, a gap, the rows (each PILL tall, GAP between them), and the
+ * grab handle's clearance at the top (so the grabber has room). */
+export const suggestionAreaHeight = (rows: number): number =>
+  PILL_AREA + GAP + (rows * PILL + Math.max(rows - 1, 0) * GAP) + HANDLE_CLEARANCE;
+/** One suggestion row: the Dubz "drag-anywhere" low anchor, and the window's
+ * default before the user has ever dragged it. */
+export const SINGLE_SUGGESTION_HEIGHT = suggestionAreaHeight(1);
 /** Scroll content clears the overlaid header at the top, and the floating
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
@@ -144,12 +147,30 @@ export const DubzSessionArea = (props: {
   readonly onViewAll: () => void;
   /** True while a sub-page is open: the area slides out to the left. */
   readonly shifted?: boolean;
+  /** Report the height Dubz should grow to while expanded (undefined when it
+   * claims none — collapsed or empty), so the window grows if it needs to. */
+  readonly onActiveHeight?: (height: number | undefined) => void;
 }): React.ReactElement | null => {
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
   const { related, all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
   const sessions = related.length > 0 ? related : all;
   const expanded = React.useSyncExternalStore(subscribeAreaExpanded, () => areaExpanded);
+  // Expanded, the area claims the height to show its rows (main + extras + the
+  // actions row), so the window grows to it. Collapsed or empty, it claims
+  // nothing and the window falls back to its default. Reported through a ref so
+  // the effect's identity stays stable, and deactivated on unmount.
+  const onActiveHeightRef = React.useRef(props.onActiveHeight);
+  onActiveHeightRef.current = props.onActiveHeight;
+  React.useEffect(() => {
+    if (expanded && sessions.length > 0) {
+      const extraCount = Math.min(sessions.length - 1, EXTRA);
+      onActiveHeightRef.current?.(suggestionAreaHeight(1 + extraCount + 1));
+    } else {
+      onActiveHeightRef.current?.(undefined);
+    }
+  }, [expanded, sessions.length]);
+  React.useEffect(() => () => onActiveHeightRef.current?.(undefined), []);
   const top = sessions[0];
   if (top === undefined) return null;
   const rowWidth = width - WINDOW_SIDE * 2;

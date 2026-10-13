@@ -211,6 +211,12 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     else if (!open && winState.phase === "open") dispatch({ _tag: "closeRequested", reason: "dismiss" });
   }, [open, winState.phase, dispatch]);
   const requestedHeight = requestedHeightOf(winState);
+  // A suggestion claims a height (the session area, expanded): the window grows
+  // to it if it needs to, and falls back to the default when it claims none.
+  const onSuggestionActiveHeight = React.useCallback(
+    (height: number | undefined) => dispatch(height === undefined ? { _tag: "componentDeactivated" } : { _tag: "componentActivated", height }),
+    [dispatch],
+  );
 
   // Tapping the session row pushes a placeholder page in over the window (main
   // row slides left, page slides in from the right — SwiftUI's own animation,
@@ -388,7 +394,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <View style={styles.mainArea} pointerEvents={sub === undefined ? "box-none" : "none"}>
             {suggestions.map((suggestion) =>
               suggestion._tag === "Sessions" ? (
-                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} />
+                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} />
               ) : (
                 <Suggestion key={suggestion._tag} suggestion={suggestion} />
               ),
