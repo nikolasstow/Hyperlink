@@ -24,7 +24,7 @@ import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useAppContext } from "../AppContext";
-import { BarWindowResizeContext } from "../BarWindow";
+import { BarWindowResizeContext, HANDLE_CLEARANCE } from "../BarWindow";
 import { colors } from "../colors";
 import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 import { chatMessageOfV1 } from "../chat/fromV1";
@@ -89,9 +89,10 @@ const TITLE_PILL_MIN = 56;
  * inset (BarWindow COMPOSER_INSET), and a gap. */
 export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
 /** The window height that shows exactly one suggestion row above the floating
- * pill: the pill area, a gap, one row, and a gap. The Dubz "drag-anywhere" low
+ * pill: the pill area, a gap, one row, and the grab handle's clearance at the
+ * top (so the grabber has room above the row). The Dubz "drag-anywhere" low
  * anchor and the window's default before the user has ever dragged it. */
-export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL + GAP;
+export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL + HANDLE_CLEARANCE;
 /** Scroll content clears the overlaid header at the top, and the floating
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
