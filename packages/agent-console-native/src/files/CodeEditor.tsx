@@ -22,11 +22,9 @@ import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
 import { scopesAt } from "./breadcrumbs";
 import { type ScopeSymbol, type StickyRange, stickyRanges } from "./stickyRanges";
-import { textFor } from "../theme";
+import { codeFontSizeOf } from "../settings";
+import { textFor, useTheme } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
-
-/** Matches the chat code blocks and the file previews, so every surface scales alike. */
-const FONT_SIZE = 12.5;
 
 /** Re-tokenise no more than this often while typing. */
 const RETOKENIZE_MS = 150;
@@ -143,6 +141,8 @@ export const CodeEditor = (props: {
   const initialHighlight = React.useMemo(() => cachedHighlightSync({ code: props.text, lang, theme }), []);
   const [tokensJson, setTokensJson] = React.useState<string>(() => (initialHighlight === undefined ? "[]" : tokensJsonOf(props.text, initialHighlight)));
   const [stickyJson, setStickyJson] = React.useState<string>("[]");
+  // The code's font size, from the theme (the file menu's smaller / larger).
+  const { theme: appTheme } = useTheme();
   // The parsed scopes and the line you are at, for the breadcrumbs: the
   // scopes reported only when they change.
   const ranges = React.useRef<ReadonlyArray<StickyRange>>([]);
@@ -300,7 +300,7 @@ export const CodeEditor = (props: {
         topInset={props.topInset}
         bottomInset={props.bottomInset}
         stickyFill={props.stickyFill}
-        fontSize={FONT_SIZE}
+        fontSize={codeFontSizeOf(appTheme)}
         showLineNumbers
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}

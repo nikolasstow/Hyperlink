@@ -37,6 +37,7 @@ import {
 } from "./codeSurfaceProtocol";
 import { codeSurfaceUri } from "./codeSurfaceAsset";
 import { useCodeTheme } from "./useCodeTheme";
+import { codeFontSizeOf } from "./settings";
 import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 
 /**
@@ -45,9 +46,6 @@ import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./the
  * we're building, not this. Kept a clean viewer until then.
  */
 const READ_ONLY = true;
-
-/** Matches the chat code blocks, so the two surfaces sit at the same scale. */
-const FONT_SIZE = 12.5;
 
 /**
  * How long the surface may take to say `ready` before the host calls it a
@@ -216,8 +214,8 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
     // No `source`: a custom code font needs `expo-font` before the rest of the
     // app can render one, and this surface has to match the chat blocks rather
     // than get ahead of them. The protocol carries the bytes when that lands.
-    apply({ kind: "setFont", family: appTheme.codeFont, size: FONT_SIZE });
-  }, [appTheme.codeFont, apply]);
+    apply({ kind: "setFont", family: appTheme.codeFont, size: codeFontSizeOf(appTheme) });
+  }, [appTheme, apply]);
 
   React.useEffect(() => {
     apply({ kind: "setReadOnly", readOnly: READ_ONLY });

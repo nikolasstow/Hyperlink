@@ -305,6 +305,8 @@ export type Theme = {
    * dark mode, switching with the OS. Off, `code` is used in both. */
   readonly codeDual?: boolean;
   readonly codeFont: string;
+  /** The code's font size (pt); unset, {@link DEFAULT_CODE_FONT_SIZE}. */
+  readonly codeFontSize?: number;
   /** The screens' background in light mode, when not the system's. A hex colour,
    * or the sentinel {@link THEME_BACKGROUND} to track the enabled theme's
    * background live (so changing the theme updates it). */
@@ -328,6 +330,21 @@ export const THEME_BACKGROUND = "theme";
 /** Default code font — a guaranteed-present iOS monospace. */
 export const DEFAULT_CODE_FONT = "Menlo";
 
+/** The code's font size by default, the least and most it goes to, and each
+ * step of the menu's smaller / larger buttons (pt). */
+export const DEFAULT_CODE_FONT_SIZE = 12.5;
+export const CODE_FONT_SIZE_MIN = 8.5;
+export const CODE_FONT_SIZE_MAX = 24.5;
+export const CODE_FONT_SIZE_STEP = 1;
+
+/** The theme's code font size. */
+export const codeFontSizeOf = (theme: Theme): number => theme.codeFontSize ?? DEFAULT_CODE_FONT_SIZE;
+
+/** The code font size a step smaller (-1) or larger (1), kept within its
+ * range. */
+export const stepCodeFontSize = (size: number, step: -1 | 1): number =>
+  Math.min(CODE_FONT_SIZE_MAX, Math.max(CODE_FONT_SIZE_MIN, size + step * CODE_FONT_SIZE_STEP));
+
 /** Placeholder accent defaults — systemGreen / systemBlue; no code theme (the
  * highlighter falls back to a bundled theme) and the default code font. */
 export const DEFAULT_THEME: Theme = {
@@ -344,6 +361,7 @@ export const parseTheme = (parsed: unknown): Theme | undefined => {
   const { primary, secondary } = parsed;
   if (typeof primary !== "string" || typeof secondary !== "string") return undefined;
   const codeFont = "codeFont" in parsed && typeof parsed.codeFont === "string" ? parsed.codeFont : DEFAULT_CODE_FONT;
+  const codeFontSize = "codeFontSize" in parsed && typeof parsed.codeFontSize === "number" ? parsed.codeFontSize : undefined;
   const code = "code" in parsed ? parseCodeTheme(parsed.code) : undefined;
   const codeDark = "codeDark" in parsed ? parseCodeTheme(parsed.codeDark) : undefined;
   const codeDual = "codeDual" in parsed && typeof parsed.codeDual === "boolean" ? parsed.codeDual : undefined;
@@ -366,6 +384,7 @@ export const parseTheme = (parsed: unknown): Theme | undefined => {
     primary,
     secondary,
     codeFont,
+    ...(codeFontSize === undefined ? {} : { codeFontSize }),
     ...(code === undefined ? {} : { code }),
     ...(codeDark === undefined ? {} : { codeDark }),
     ...(codeDual === undefined ? {} : { codeDual }),

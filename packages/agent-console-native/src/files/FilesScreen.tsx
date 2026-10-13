@@ -50,9 +50,10 @@ import type { RootStackParamList } from "../RootNavigator";
 import { useScrollHide } from "../scrollHide";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
 import { SystemIcon } from "../SystemIcon";
-import { useScreenBackground, useTextColors } from "../theme";
+import { codeFontSizeOf, stepCodeFontSize } from "../settings";
+import { useScreenBackground, useTextColors, useTheme } from "../theme";
 import { GlassView } from "expo-glass-effect";
-import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
+import { Button, ControlGroup, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
@@ -872,6 +873,9 @@ const MoreMenu = (props: {
   const file = props.file;
   const isKept = file !== undefined && kept.has(file.path);
   const autosaveOn = file !== undefined && resolveAutosave(autosaveSettings, { path: file.path, repo: props.repo });
+  const { theme: appTheme, setTheme } = useTheme();
+  const fontSize = codeFontSizeOf(appTheme);
+  const stepFontSize = (step: -1 | 1): void => setTheme({ ...appTheme, codeFontSize: stepCodeFontSize(fontSize, step) });
   return (
     <Host
       style={styles.more}
@@ -893,6 +897,13 @@ const MoreMenu = (props: {
         }
         modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
       >
+        {/* The code's size, side by side: a step smaller or larger. */}
+        {file === undefined ? null : (
+          <ControlGroup key="font-size">
+            <Button label="Smaller" systemImage="textformat.size.smaller" onPress={() => stepFontSize(-1)} />
+            <Button label="Larger" systemImage="textformat.size.larger" onPress={() => stepFontSize(1)} />
+          </ControlGroup>
+        )}
         {file === undefined ? null : <Button key="save" label="Save" systemImage="square.and.arrow.down" onPress={() => saveFileNow(file.path)} />}
         {file === undefined ? null : (
           <Button
