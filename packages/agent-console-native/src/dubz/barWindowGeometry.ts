@@ -86,18 +86,24 @@ export const clampRequested = (requested: number, frame: ScreenFrame, keyboard: 
 };
 
 /** Where a drag release settles, in visible-height points — assuming it is not
- * a dismiss (the caller decides that first, below `minOpen`). With `freeAbove`
- * (Dubz) it rests exactly where it was let go, floored at `minOpen` and capped
- * at `max` — a free-for-all between the one low anchor and the top. Without it
- * (the model picker) it snaps to the nearer of the two anchors, `minOpen` and
- * `max`. `projected` folds in a little release momentum. */
+ * a dismiss (the caller decides that first). With `freeAbove` (Dubz) there are
+ * two low anchors — the pill (`MIN_HEIGHT`, the bar) and `minOpen` (one
+ * suggestion); below `minOpen` it snaps to the nearer of those two, at or above
+ * it rests exactly where it was let go, capped at `max` (a free-for-all between
+ * `minOpen` and the top). Without `freeAbove` (the model picker) it snaps to
+ * the nearer of `minOpen` and `max`. `projected` folds in a little release
+ * momentum. */
 export const snapOpenHeight = (release: number, projected: number, minOpen: number, max: number, freeAbove: boolean): number => {
   "worklet";
   if (!freeAbove) {
     const mid = (minOpen + max) / 2;
     return projected < mid ? minOpen : max;
   }
-  return release < minOpen ? minOpen : release > max ? max : release;
+  if (projected < minOpen) {
+    const mid = (MIN_HEIGHT + minOpen) / 2;
+    return projected < mid ? MIN_HEIGHT : minOpen;
+  }
+  return release > max ? max : release;
 };
 
 /** Points from the screen's bottom to the window's top — what a scroll view

@@ -32,7 +32,7 @@ import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
-import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -136,11 +136,6 @@ const setDubzSub = (next: DubzSub | undefined): void => {
 };
 
 // ── The remembered default height ────────────────────────────────────────────
-
-/** The lowest open height: the pill area and one session suggestion above it.
- * A design constant (never measured) — tune on device. Also the window's
- * default before the user has ever dragged it. */
-export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + 176;
 
 // The user's remembered default height, read once at launch and seeded into
 // each screen's window (before any drag it is the single-suggestion height).

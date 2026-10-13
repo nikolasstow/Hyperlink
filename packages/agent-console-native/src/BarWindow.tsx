@@ -302,14 +302,16 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
         })
         .onUpdate((e) => {
           const max = geometryMaxHeight(frame, kbHeight.value);
+          // The lowest rest: the pill (the bar) for Dubz, the stop otherwise.
+          const floor = freeAbove ? MIN_HEIGHT : minOpenHeight;
           // The finger lifts the top: height grows as it moves up.
           let next = dragStart.value - e.translationY;
           if (next > max) next = max;
-          // Below the lowest anchor it gives less and less, like iOS's rubber
+          // Below the lowest rest it gives less and less, like iOS's rubber
           // band, toward the dismiss.
-          if (next < minOpenHeight) {
-            const below = minOpenHeight - next;
-            next = minOpenHeight - DISMISS_ZONE * (1 - 1 / ((below * RUBBER_BAND) / DISMISS_ZONE + 1));
+          if (next < floor) {
+            const below = floor - next;
+            next = floor - DISMISS_ZONE * (1 - 1 / ((below * RUBBER_BAND) / DISMISS_ZONE + 1));
           }
           requested.value = next;
           const low = next < max - 4;
@@ -320,8 +322,9 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
         })
         .onEnd((e) => {
           const max = geometryMaxHeight(frame, kbHeight.value);
-          // Flung down hard, or released below the lowest anchor → dismiss.
-          if (e.velocityY > FLING_VELOCITY || requested.value < minOpenHeight - DISMISS_MARGIN) {
+          const floor = freeAbove ? MIN_HEIGHT : minOpenHeight;
+          // Flung down hard, or released below the lowest rest → dismiss.
+          if (e.velocityY > FLING_VELOCITY || requested.value < floor - DISMISS_MARGIN) {
             runOnJS(dismiss)();
             return;
           }

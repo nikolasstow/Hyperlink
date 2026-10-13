@@ -31,12 +31,14 @@ describe("barWindowGeometry", () => {
     expect(clampRequested(10, FRAME, 0)).toBe(MIN_HEIGHT);
   });
 
-  it("snapOpenHeight rests free above minOpen (Dubz)", () => {
+  it("snapOpenHeight has two low anchors then rests free above minOpen (Dubz)", () => {
     const minOpen = 134;
     const max = 759;
-    // Free: where released, floored at minOpen, capped at max.
+    // Below minOpen: nearer of the pill (58) and minOpen (134); mid = 96.
+    expect(snapOpenHeight(80, 80, minOpen, max, true)).toBe(MIN_HEIGHT);
+    expect(snapOpenHeight(120, 120, minOpen, max, true)).toBe(minOpen);
+    // At or above minOpen: free, where released, capped at max.
     expect(snapOpenHeight(300, 300, minOpen, max, true)).toBe(300);
-    expect(snapOpenHeight(100, 100, minOpen, max, true)).toBe(minOpen);
     expect(snapOpenHeight(1000, 1000, minOpen, max, true)).toBe(max);
   });
 

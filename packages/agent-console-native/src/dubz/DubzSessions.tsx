@@ -88,6 +88,10 @@ const TITLE_PILL_MIN = 56;
 /** The floating composer pill's space at the window's bottom: the pill, its
  * inset (BarWindow COMPOSER_INSET), and a gap. */
 export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
+/** The window height that shows exactly one suggestion row above the floating
+ * pill: the pill area, a gap, one row, and a gap. The Dubz "drag-anywhere" low
+ * anchor and the window's default before the user has ever dragged it. */
+export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL + GAP;
 /** Scroll content clears the overlaid header at the top, and the floating
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
