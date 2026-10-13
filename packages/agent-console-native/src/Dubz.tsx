@@ -32,7 +32,7 @@ import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
-import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -137,11 +137,6 @@ const setDubzSub = (next: DubzSub | undefined): void => {
 
 // ── The remembered default height ────────────────────────────────────────────
 
-/** The lowest open height: the pill area and one session suggestion above it.
- * A design constant (never measured) — tune on device. Also the window's
- * default before the user has ever dragged it. */
-export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + 176;
-
 // The user's remembered default height, read once at launch and seeded into
 // each screen's window (before any drag it is the single-suggestion height).
 let cachedDefaultHeight: number | undefined = undefined;
@@ -216,6 +211,12 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     else if (!open && winState.phase === "open") dispatch({ _tag: "closeRequested", reason: "dismiss" });
   }, [open, winState.phase, dispatch]);
   const requestedHeight = requestedHeightOf(winState);
+  // A suggestion claims a height (the session area, expanded): the window grows
+  // to it if it needs to, and falls back to the default when it claims none.
+  const onSuggestionActiveHeight = React.useCallback(
+    (height: number | undefined) => dispatch(height === undefined ? { _tag: "componentDeactivated" } : { _tag: "componentActivated", height }),
+    [dispatch],
+  );
 
   // Tapping the session row pushes a placeholder page in over the window (main
   // row slides left, page slides in from the right — SwiftUI's own animation,
@@ -393,7 +394,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <View style={styles.mainArea} pointerEvents={sub === undefined ? "box-none" : "none"}>
             {suggestions.map((suggestion) =>
               suggestion._tag === "Sessions" ? (
-                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} />
+                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} />
               ) : (
                 <Suggestion key={suggestion._tag} suggestion={suggestion} />
               ),
