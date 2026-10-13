@@ -27,6 +27,7 @@
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { Conversations } from "../conversations/Conversations";
+import { BarWindowStore } from "../dubz/BarWindowStore";
 import { Favorites } from "../favorites/Favorites";
 import { FileNav } from "../files/FileNav";
 import { LiveFiles } from "../files/LiveFiles";
@@ -47,6 +48,7 @@ const HOME_STORAGE_PREFIX = "agent-console-native:home:";
 const FILES_STORAGE_PREFIX = "agent-console-native:files:";
 const NAV_STORAGE_PREFIX = "agent-console-native:nav:";
 const FAVORITES_STORAGE_PREFIX = "agent-console-native:favorites:";
+const BAR_WINDOW_STORAGE_PREFIX = "agent-console-native:barWindow:";
 
 const platform = Layer.mergeAll(FetchHttpClient.layer, deviceSignalsLayer, foldersLayer);
 
@@ -58,6 +60,7 @@ const AppLayer = Layer.mergeAll(
   FileNav.layer.pipe(Layer.provide(asyncStorageLayer(FILES_STORAGE_PREFIX))),
   KeptNav.layer.pipe(Layer.provide(asyncStorageLayer(NAV_STORAGE_PREFIX))),
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
+  BarWindowStore.layer.pipe(Layer.provide(asyncStorageLayer(BAR_WINDOW_STORAGE_PREFIX))),
   LiveFiles.layer,
 ).pipe(
   Layer.provideMerge(Reachability.layer),

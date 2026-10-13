@@ -37,9 +37,11 @@ import Reanimated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT } from "./composerBarSpec";
+import { COMPOSER_FIELD_PADDING } from "./composerBarSpec";
+import { BAR_GAP, type BarWindowState, MIN_HEIGHT, maxDragFor as geometryMaxDrag, sameBarWindowState, type ScreenFrame, stopDragFor as geometryStopDrag } from "./dubz/barWindowGeometry";
+import { forgetBarWindow, settleBarWindow } from "./dubz/useBarWindow";
 import { useKeyboardHeightValue } from "./keyboardHeight";
-import { composerRestingBottom } from "./useKeyboardSlide";
+import { useKeyboardHeight } from "./useKeyboardHeight";
 
 /** The window's resize gesture, offered to the body so a consumer can drive the
  * resize from its own handle (Dubz's title pill) when `grabberHidden`. */
@@ -47,12 +49,6 @@ export const BarWindowResizeContext = React.createContext<GestureType | undefine
 
 /** The bar's side inset (BottomBar's), and so the window's. */
 const MARGIN = 12;
-/** The bottom bar's gap under its pill (BottomBar's bottom padding). */
-const BAR_GAP = 8;
-/** The collapsed height: the bar's pill, and the smallest detent. */
-const MIN_HEIGHT = COMPOSER_PILL_HEIGHT;
-/** Gap between the window's top and the header at full height. */
-const TOP_GAP = 8;
 /** Corner radius of the window, and of the pill (the bar's). */
 export const WINDOW_RADIUS = 30;
 /** Grow/shrink duration (ms) for opening and collapsing. */
@@ -135,6 +131,11 @@ export interface BarWindowProps {
    * its own control via the resize gesture (BarWindowResizeContext) — Dubz's
    * sub-pages move the grabber onto their title pill. */
   readonly grabberHidden?: boolean;
+  /** The navigation route this window is on. Given it, the window reports its
+   * settled state to the BarWindowStore (keyed by it) so the screen's scroll
+   * views can pad for it, and forgets it on unmount. Omitted (e.g. the model
+   * picker) means the window doesn't report. */
+  readonly routeKey?: string;
   /** One stop below full, as a window height (pt), in place of half and the
    * pill: the window then rests at full or at this height, whatever the
    * keyboard does. */
@@ -177,9 +178,14 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   const glassScheme = scheme === "dark" ? "dark" : "light";
   // The app's one keyboard tracker (keyboardHeight.tsx).
   const kbHeight = useKeyboardHeightValue();
+  // The keyboard's settled height (JS, on willShow/Hide) — a settle this window
+  // reports to the store, so it is here in the state, never per frame.
+  const keyboardHeight = useKeyboardHeight();
   const { height: screenH, width: screenW } = useWindowDimensions();
-  const resting = composerRestingBottom(insets.bottom);
-  const windowTop = Math.max(headerHeight, insets.top) + TOP_GAP;
+  // The screen the window sits in; the geometry (barWindowGeometry.ts) is pure
+  // over it. Memoised so the worklets below stay stable (a fresh frame each
+  // render would rebuild the animated styles and hitch the drag).
+  const frame = React.useMemo<ScreenFrame>(() => ({ height: screenH, headerHeight, insetTop: insets.top, insetBottom: insets.bottom }), [screenH, headerHeight, insets.top, insets.bottom]);
 
   // `lowered` = below full; the tap-catcher then passes touches through.
   // `pillMode` = settled at the smallest detent (the handle's place follows it,
@@ -212,16 +218,16 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   const maxDragFor = React.useCallback(
     (kb: number): number => {
       "worklet";
-      return Math.max(screenH - windowTop - (Math.max(kb, resting) + BAR_GAP) - MIN_HEIGHT, 0);
+      return geometryMaxDrag(frame, kb);
     },
-    [screenH, windowTop, resting],
+    [frame],
   );
 
   /** With a stop: how far the top is lowered from full to rest there. */
   const stopDragFor = React.useCallback(
     (maxDrag: number): number => {
       "worklet";
-      return stop === undefined ? maxDrag : Math.max(maxDrag + MIN_HEIGHT - stop, 0);
+      return geometryStopDrag(maxDrag, stop);
     },
     [stop],
   );
@@ -309,6 +315,32 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
     handleT.value = withTiming(pillMode ? 1 : 0, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
   }, [pillMode, handleT]);
 
+  // Report the window's SETTLED state to the store, keyed by route, when it
+  // changes — on open/close, a snap (from the gesture, below) and a keyboard
+  // settle. Only when it actually changed; never per frame. `frac`/`kbFull`
+  // come from the (settled) detent memory, the keyboard from the JS height.
+  const { routeKey } = props;
+  const lastReported = React.useRef<BarWindowState | undefined>(undefined);
+  const report = React.useCallback(() => {
+    if (routeKey === undefined) return;
+    const next: BarWindowState = { open, frac: detent.frac(), kbFull: detent.kbFull(), keyboard: open ? keyboardHeight : 0 };
+    if (lastReported.current !== undefined && sameBarWindowState(lastReported.current, next)) return;
+    lastReported.current = next;
+    settleBarWindow(routeKey, next);
+  }, [routeKey, open, keyboardHeight, detent]);
+  // Open/close and keyboard settle run through the callback's deps; a snap calls
+  // report() from the gesture's onEnd.
+  React.useEffect(() => {
+    report();
+  }, [report]);
+  // Drop this route when the window unmounts.
+  React.useEffect(
+    () => () => {
+      if (routeKey !== undefined) forgetBarWindow(routeKey);
+    },
+    [routeKey],
+  );
+
   // Drag the handle to resize, snapping to detents like an iOS sheet, anchored
   // on the bar.
   const remember = detent.remember;
@@ -363,11 +395,12 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
           runOnJS(setLowered)(target > 4);
           runOnJS(setPillMode)(atPill);
           runOnJS(remember)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
+          runOnJS(report)();
         })
         .onFinalize(() => {
           resizing.value = false;
         }),
-    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, stopDragFor, stop, atStop, dismiss, remember],
+    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, stopDragFor, stop, atStop, dismiss, remember, report],
   );
 
   // Swipe DOWN on the pill to dismiss the keyboard. Only a clear downward drag

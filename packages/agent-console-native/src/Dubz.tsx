@@ -11,6 +11,7 @@
  *
  * @internal
  */
+import { useRoute } from "@react-navigation/native";
 import * as React from "react";
 import { Pressable, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
@@ -32,7 +33,8 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
-import { getBarPages, getDubzDetent, setBarPages, setDubzDetent, type BarPage } from "./settings";
+import { readDubzDetent, saveDubzDetent } from "./dubz/useBarWindow";
+import { getBarPages, setBarPages, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
@@ -133,11 +135,11 @@ const setDubzSub = (next: DubzSub | undefined): void => {
 
 // ── The detent last left ────────────────────────────────────────────────────
 
-// Shared by every screen's page; persisted across launches.
+// Shared by every screen's page; persisted across launches through the store.
 const dubzDetent = detentMemory(0, (frac, kbFull) =>
-  setDubzDetent({ frac, kbFull }).catch((error: unknown) => console.error("[dubz] saving the detent failed", error)),
+  saveDubzDetent({ frac, kbFull }).catch((error: unknown) => console.error("[dubz] saving the detent failed", error)),
 );
-getDubzDetent().then(
+readDubzDetent().then(
   (value) => {
     if (value !== undefined) dubzDetent.restore(value.frac, value.kbFull);
   },
@@ -176,6 +178,9 @@ export interface DubzPageProps {
   readonly onOpenSessionPage?: (sessionID: string) => void;
   /** Where the composer is beside it; omitted where Dubz is the only page. */
   readonly pageBack?: PageBack;
+  /** The navigation route this bar is on, so the window reports its cover for
+   * the screen (BarWindowStore). */
+  readonly routeKey?: string;
 }
 
 /** Clamp to [0, 1]. */
@@ -350,6 +355,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       pillLowered={pillFloat}
       // A sub-page moves the grabber onto its title pill, so hide the top one.
       grabberHidden={sub !== undefined}
+      routeKey={props.routeKey}
       bodyGesture={paging}
       body={
         // What Dubz suggests: its contents sit at the bottom, on the pill's
@@ -440,6 +446,7 @@ export const DubzBar = (props: { readonly context: DubzContext; readonly onOpenS
   const [open, setOpen] = React.useState(false);
   const inputRef = React.useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
+  const routeKey = useRoute().key;
   const slide = useKeyboardSlide(composerRestingBottom(insets.bottom));
   // Dubz is the only page here: nothing to remember.
   const onOpen = React.useCallback(() => setOpen(true), []);
@@ -447,7 +454,7 @@ export const DubzBar = (props: { readonly context: DubzContext; readonly onOpenS
   if (!visible) return null;
   return (
     <Reanimated.View style={[styles.standalone, slide]} pointerEvents="box-none">
-      <DubzPage open={open} instant={false} onOpen={onOpen} onClose={onClose} inputRef={inputRef} context={props.context} onOpenSessionPage={props.onOpenSessionPage} />
+      <DubzPage open={open} instant={false} onOpen={onOpen} onClose={onClose} inputRef={inputRef} context={props.context} onOpenSessionPage={props.onOpenSessionPage} routeKey={routeKey} />
     </Reanimated.View>
   );
 };
