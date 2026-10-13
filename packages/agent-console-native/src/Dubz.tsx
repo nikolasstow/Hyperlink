@@ -207,11 +207,13 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   // it's there immediately; a freshly-opened sub-page slides in (false→true).
   const [shifted, setShifted] = React.useState(() => dubzSub !== undefined);
   const exitTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // Mount at the off-screen offset, then flip `shifted` after the off-screen
-  // frame has actually painted (two rAFs) so SwiftUI reliably animates the push
-  // in — a single rAF sometimes applied both states together and it popped.
+  // When a sub-page becomes set, mount at the off-screen offset, then flip
+  // `shifted` after the off-screen frame has painted (two rAFs) so SwiftUI
+  // reliably animates the push in. Keyed on `sub` only — NOT `shifted` — so
+  // `toMain` (which sets shifted=false while sub is still set, until the slide
+  // finishes) doesn't re-trigger it and pull the sub-page back in.
   React.useEffect(() => {
-    if (sub === undefined || shifted) return undefined;
+    if (sub === undefined) return undefined;
     let f2: number | undefined;
     const f1 = requestAnimationFrame(() => {
       f2 = requestAnimationFrame(() => setShifted(true));
@@ -220,7 +222,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       cancelAnimationFrame(f1);
       if (f2 !== undefined) cancelAnimationFrame(f2);
     };
-  }, [sub, shifted]);
+  }, [sub]);
   const show = React.useCallback((next: DubzSub) => {
     if (exitTimer.current !== undefined) clearTimeout(exitTimer.current);
     setShifted(false);

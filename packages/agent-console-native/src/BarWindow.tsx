@@ -441,7 +441,10 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
           {/* The space above the pill, which alone is cropped (no glass in it;
            * nothing above the pill's glass ever clips it). */}
           <View style={props.pillLowered !== undefined ? styles.bodyUnder : styles.body} pointerEvents={open ? "box-none" : "none"}>
-            <BarWindowResizeContext.Provider value={drag}>{props.body}</BarWindowResizeContext.Provider>
+            {/* Offer the resize gesture to the body's own control only when the
+             * top grabber is actually hidden — never both, or `drag` would be
+             * attached to two detectors at once. */}
+            <BarWindowResizeContext.Provider value={props.grabberHidden === true && !pillMode ? drag : undefined}>{props.body}</BarWindowResizeContext.Provider>
           </View>
           {/* The pill sits at the window's bottom, a direct child of the
            * window's glass: the bar collapsed, the window's input open. */}
@@ -489,8 +492,10 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
 
         {/* The one grabber: a line inside the window top at larger detents,
          * floating over the tab at the smallest; gone collapsed. Hidden when a
-         * consumer moves it onto its own control (Dubz's title pill). */}
-        {props.grabberHidden === true ? null : (
+         * consumer moves it onto its own control (Dubz's title pill) — but kept
+         * at the smallest detent (pillMode), where that control is squeezed out
+         * and there'd be nothing to grab. */}
+        {props.grabberHidden === true && !pillMode ? null : (
           <GestureDetector gesture={drag}>
             <Reanimated.View style={[styles.grabHandle, handleStyle]} pointerEvents={open ? "auto" : "none"}>
               <View style={styles.grabber} />
