@@ -218,9 +218,9 @@ export const BreadcrumbPill = (props: {
               >
                 {/* Its size eases to the new one, so the crumbs before a scope
                   * that changed width slide over rather than jump. */}
-                {/* Laid out afresh after a drop without rolling its scopes in
-                  * again (they were already there). */}
-                <LayoutAnimationConfig key={rowKey} skipEntering>
+                {/* Laid out afresh after a drop, its scopes neither rolling out
+                  * of the old row nor into the new (they are the same). */}
+                <LayoutAnimationConfig key={rowKey} skipEntering skipExiting>
                   <Reanimated.View style={[styles.row, styles.mirrored]} layout={dropping ? undefined : crumbMove}>
                     {pathCrumbs}
                     {symbolCrumbs}
