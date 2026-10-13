@@ -949,10 +949,13 @@ const BackButton = (props: { readonly onPress: () => void; readonly label: strin
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const named = props.label !== undefined && props.maxWidth >= BACK_MIN_NAMED;
+  // The cap on every layer down to the title, so the title is what gives
+  // (cut short with an ellipsis) rather than the glass running past it.
+  const cap = { maxWidth: Math.max(HOME_HEADER_HEIGHT, props.maxWidth) };
   return (
-    <View style={[styles.backShadow, { maxWidth: Math.max(HOME_HEADER_HEIGHT, props.maxWidth) }]}>
-      <GlassView style={named ? styles.backNamed : styles.back} glassEffectStyle="regular" colorScheme={scheme}>
-        <Pressable style={named ? styles.backNamedHit : styles.backHit} accessibilityRole="button" accessibilityLabel={props.label === undefined ? "Back" : `Back to ${props.label}`} onPress={props.onPress}>
+    <View style={[styles.backShadow, cap]}>
+      <GlassView style={[named ? styles.backNamed : styles.back, cap]} glassEffectStyle="regular" colorScheme={scheme}>
+        <Pressable style={[named ? styles.backNamedHit : styles.backHit, cap]} accessibilityRole="button" accessibilityLabel={props.label === undefined ? "Back" : `Back to ${props.label}`} onPress={props.onPress}>
           <SystemIcon name="chevron.backward" size={18} weight="semibold" color={textColors.label} />
           {named ? (
             <Text style={[styles.backLabel, { color: textColors.label }]} numberOfLines={1}>
