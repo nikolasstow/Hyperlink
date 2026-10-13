@@ -505,6 +505,14 @@ final class TextInputView: UIView, UITextInput {
     override var canBecomeFirstResponder: Bool {
         true
     }
+    /// While set, editing goes on with no on-screen keyboard: an empty input
+    /// view takes its place, so the caret, selection and a hardware keyboard
+    /// stay.
+    var hidesKeyboard = false
+    private lazy var emptyInputView = UIView(frame: .zero)
+    override var inputView: UIView? {
+        hidesKeyboard ? emptyInputView : nil
+    }
     weak var gutterParentView: UIView? {
         get {
             layoutManager.gutterParentView

@@ -123,7 +123,14 @@ export interface CodeEditorHandle {
 // `apiVersion`, so we treat it as absent and fall back to the web surface —
 // which is why this fix takes effect over Metro, before a rebuild. `apiVersion`
 // 2 (the renamed `onTextChange` build) is the first that's safe to mount.
-const nativeModule = Platform.OS === "ios" ? requireOptionalNativeModule<{ readonly apiVersion?: number }>("CodeEditor") : null;
+const nativeModule =
+  Platform.OS === "ios"
+    ? requireOptionalNativeModule<{
+        readonly apiVersion?: number;
+        readonly hideKeyboard?: () => Promise<boolean>;
+        readonly showKeyboard?: () => Promise<boolean>;
+      }>("CodeEditor")
+    : null;
 const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.apiVersion : 0;
 const available = apiVersion >= 2;
 
@@ -148,3 +155,14 @@ export const canVersionTokens = apiVersion >= 7;
 
 /** Whether the editor marks an agent's changes in the gutter (`markChanges`). */
 export const canMarkChanges = apiVersion >= 8;
+
+/** Put the keyboard down but keep editing the file being edited (the caret
+ * stays; `apiVersion` 9). False when no file is being edited, or this build
+ * can't. */
+export const hideEditorKeyboard = (): Promise<boolean> =>
+  apiVersion >= 9 && nativeModule?.hideKeyboard !== undefined ? nativeModule.hideKeyboard() : Promise.resolve(false);
+
+/** Bring the keyboard back to a file kept editing without it. False when
+ * there is none. */
+export const showEditorKeyboard = (): Promise<boolean> =>
+  apiVersion >= 9 && nativeModule?.showKeyboard !== undefined ? nativeModule.showKeyboard() : Promise.resolve(false);

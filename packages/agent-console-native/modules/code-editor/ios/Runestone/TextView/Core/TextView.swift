@@ -794,6 +794,21 @@ open class TextView: UIScrollView {
         textInputView.insertSubview(view, at: 0)
     }
 
+    /// Keep editing with the on-screen keyboard down (the caret, selection
+    /// and a hardware keyboard stay), or bring it back.
+    var hidesKeyboard: Bool {
+        get {
+            textInputView.hidesKeyboard
+        }
+        set {
+            guard newValue != textInputView.hidesKeyboard else {
+                return
+            }
+            textInputView.hidesKeyboard = newValue
+            textInputView.reloadInputViews()
+        }
+    }
+
     /// Space kept above and below lines' text, by row (see `TextInputView.lineInsets`).
     var lineInsets: [Int: LineInsets] {
         get {

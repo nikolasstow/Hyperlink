@@ -31,11 +31,12 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { HashMap, Option, Predicate } from "effect";
 import * as React from "react";
 import type { NavigationRoute } from "@react-navigation/native";
-import { InteractionManager, Pressable, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
+import { InteractionManager, Keyboard, Pressable, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { cachedSessionTitle } from "../sessionCache";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { Easing, interpolate, runOnJS, type SharedValue, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { hideEditorKeyboard, showEditorKeyboard } from "../../modules/code-editor";
 import { warmCodeSurfaces } from "../../modules/code-surface";
 import { codeSurfaceUri } from "../codeSurfaceAsset";
 import { useBarCover } from "../dubz/useBarWindow";
@@ -593,19 +594,34 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           runOnJS(swipeTo)(toPrevious ? -1 : 1);
         });
       });
-    const up = Gesture.Pan()
+    // Up: the keyboard back to a file kept editing without it, else the tab
+    // overview. Down: the keyboard away, the file still being edited (the
+    // caret stays).
+    const vertical = Gesture.Pan()
       .activeOffsetY([-12, 12])
       .failOffsetX([-10, 10])
       .runOnJS(true)
       .onEnd((e) => {
-        if (e.translationY < -40 || e.velocityY < -500) openTabsLatest.current();
+        if (e.translationY < -40 || e.velocityY < -500) {
+          showEditorKeyboard()
+            .then((shown) => {
+              if (!shown) openTabsLatest.current();
+            })
+            .catch((error: unknown) => console.error("[files] bringing the keyboard back failed", error));
+        } else if (e.translationY > 40 || e.velocityY > 500) {
+          hideEditorKeyboard()
+            .then((hidden) => {
+              if (!hidden) Keyboard.dismiss();
+            })
+            .catch((error: unknown) => console.error("[files] putting the keyboard down failed", error));
+        }
       });
     const tap = Gesture.Tap()
       .runOnJS(true)
       .onEnd((_e, success) => {
         if (success) openTabsLatest.current();
       });
-    return Gesture.Race(sideways, up, tap);
+    return Gesture.Race(sideways, vertical, tap);
   }, [paging, swipe, cardStep, hasPrevious, hasNext, swipeTo]);
   const gutter = useCardGutter();
 

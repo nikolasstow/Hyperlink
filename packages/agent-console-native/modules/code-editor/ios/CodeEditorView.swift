@@ -469,6 +469,31 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         applyTheme()
     }
 
+    // MARK: - Keyboard
+
+    /// The editor being edited, if any: the bar's swipes act on it.
+    private static weak var editing: CodeEditorView?
+
+    /// Puts the keyboard down but keeps editing (the caret stays); false when
+    /// no editor is being edited.
+    static func hideKeyboard() -> Bool {
+        guard let editor = editing, editor.textView.isEditing else {
+            return false
+        }
+        editor.textView.hidesKeyboard = true
+        return true
+    }
+
+    /// Brings the keyboard back to an editor kept editing without it; false
+    /// when there is none.
+    static func showKeyboard() -> Bool {
+        guard let editor = editing, editor.textView.isEditing, editor.textView.hidesKeyboard else {
+            return false
+        }
+        editor.textView.hidesKeyboard = false
+        return true
+    }
+
     // MARK: - Internals
 
     /// The content runs full-bleed under the bars; inset it so the first line
@@ -765,6 +790,18 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         changeMarks.textWillChange(in: range, replacementLength: (text as NSString).length)
         tokenStore.textWillChange(in: range, replacement: text)
         return true
+    }
+
+    func textViewDidBeginEditing(_ textView: TextView) {
+        Self.editing = self
+    }
+
+    func textViewDidEndEditing(_ textView: TextView) {
+        // Editing again brings the keyboard with it.
+        textView.hidesKeyboard = false
+        if Self.editing === self {
+            Self.editing = nil
+        }
     }
 
     func textViewDidChange(_ textView: TextView) {

@@ -45,9 +45,18 @@ public final class CodeEditorModule: Module {
         // 7: `tokensJson` may be `{length, lines}`; colours move with edits.
         // 8: an agent's changes marked in the gutter (`markChanges`,
         //    `onOpenSession`).
+        // 9: editing with the keyboard down (`hideKeyboard`, `showKeyboard`).
         Constants([
-            "apiVersion": 8,
+            "apiVersion": 9,
         ])
+
+        AsyncFunction("hideKeyboard") { () -> Bool in
+            CodeEditorView.hideKeyboard()
+        }.runOnQueue(.main)
+
+        AsyncFunction("showKeyboard") { () -> Bool in
+            CodeEditorView.showKeyboard()
+        }.runOnQueue(.main)
 
         View(CodeEditorView.self) {
             Events("onTextChange", "onStickyDebug", "onConflictAction", "onOpenSession")
