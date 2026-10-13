@@ -27,7 +27,11 @@ import { useAppContext } from "../AppContext";
 import { BarWindowResizeContext } from "../BarWindow";
 import { colors } from "../colors";
 import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
-import { lastSummary } from "../chat/model";
+import { chatMessageOfV1 } from "../chat/fromV1";
+import { chatMessageOfQueued, pendingMessages, sameMessages } from "../chat/fromOutbox";
+import { lastSummary, textOf, type ChatMessage } from "../chat/model";
+import { useV2Transcript } from "../chat/useV2Transcript";
+import { runApp } from "../effect/runtime";
 import { useKeptConversation } from "../conversations/useConversations";
 import { usePreloadConversation } from "../conversations/usePreloadConversation";
 import type { FileRef } from "../dubzSuggestions";
@@ -35,18 +39,21 @@ import { repoScope, sessionTarget } from "../favorites/model";
 import { FavoriteScopeProvider, toggleFavorite, useFavoriteScope, useIsFavorited } from "../favorites/useFavorites";
 import { sessionCardHeight, summaryLines, titleLines } from "../home/homeLayout";
 import { Markdown } from "../Markdown";
+import { SessionID } from "../opencode/schema/session-id";
 import { serverAddressOf } from "../opencode/serverAddress";
+import type { Protocol } from "../outbox/model";
+import { useLane } from "../outbox/useOutbox";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "../sessionActions";
 import { archiveWithUndo, toggleMute, useMutedSessions } from "../sessionArchive";
 import { cachedSessionsNow } from "../sessionCache";
 import { CardBody, sessionCardActions, summaryLabel } from "../SessionCard";
 import { getSetupDate, loadReads } from "../sessionReads";
 import type { SessionSummary } from "../sessions/sessionList";
-import { useSessionPreview } from "../sessionPreview";
 import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
 import { PILL_FONT_SIZE, PILL_PAD_H, titlePillWidth } from "../titlePillStyle";
-import type { TranscriptMessage } from "../useSessionStream";
+import { sessionProtocol } from "../sessions/protocol";
+import { useSessionStream } from "../useSessionStream";
 import { useSessionActivity } from "../useSessionActivity";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { groupSessions } from "./groupSessions";
@@ -84,15 +91,24 @@ export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
 const BOTTOM_CLEARANCE = PILL_AREA;
+/** Stable empty transcript, so the live chat's memo keeps its reference. */
+const NO_MESSAGES: ReadonlyArray<ChatMessage> = [];
 
 const toOpen = (s: SessionSummary): DubzOpenSession => ({ id: s.id, title: s.title, updated: s.time.updated, directory: s.directory });
 
-const messageText = (message: TranscriptMessage): string =>
-  [...message.parts.values()]
-    .filter((part) => part.type === "text" && part.synthetic !== true)
-    .map((part) => (part.type === "text" ? part.text : ""))
-    .join("")
-    .trim();
+// Whether the session row is expanded — held at the module so it survives
+// opening a session and coming back (and Dubz close / app navigation), like
+// the open sub-page itself.
+let areaExpanded = false;
+const areaExpandedListeners = new Set<() => void>();
+const subscribeAreaExpanded = (listener: () => void): (() => void) => {
+  areaExpandedListeners.add(listener);
+  return () => areaExpandedListeners.delete(listener);
+};
+const setAreaExpanded = (next: boolean): void => {
+  areaExpanded = next;
+  areaExpandedListeners.forEach((listener) => listener());
+};
 
 /** The window's persistent top-left glass back button. */
 export const DubzTopBack = (props: { readonly onPress: () => void }): React.ReactElement => {
@@ -127,7 +143,7 @@ export const DubzSessionArea = (props: {
   const { width } = useWindowDimensions();
   const { related, all } = React.useMemo(() => sessionsForFile(cachedSessionsNow(), props.file.path), [props.file.path]);
   const sessions = related.length > 0 ? related : all;
-  const [expanded, setExpanded] = React.useState(false);
+  const expanded = React.useSyncExternalStore(subscribeAreaExpanded, () => areaExpanded);
   const top = sessions[0];
   if (top === undefined) return null;
   const rowWidth = width - WINDOW_SIDE * 2;
@@ -162,7 +178,7 @@ export const DubzSessionArea = (props: {
         frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
         glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
         contentShape(shapes.capsule()),
-        onTapGesture(() => setExpanded((e) => !e)),
+        onTapGesture(() => setAreaExpanded(!areaExpanded)),
       ]}
     >
       {expanded ? (
@@ -407,27 +423,62 @@ export const DubzSessionPage = (props: {
   readonly shifted?: boolean;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
-  const { client } = useAppContext();
+  const { client, address } = useAppContext();
   const pageWidth = width - WINDOW_SIDE * 2;
   const shifted = props.shifted === true;
-  const transcript = useSessionPreview(client, props.session.id, props.session.updated, true);
-  const messages = React.useMemo(
-    () =>
-      transcript === undefined
-        ? []
-        : transcript.order.flatMap((id) => {
-            const message = transcript.messages.get(id);
-            if (message === undefined) return [];
-            const text = messageText(message);
-            return text === "" ? [] : [{ id, role: message.role, text }];
-          }),
-    [transcript],
+  // Stream only while the page is shown (it's kept mounted through the slide).
+  const enabled = shifted;
+
+  // The live conversation — the same path SessionChatScreen uses, so sent
+  // messages and the agent's streaming reply appear live (not a snapshot):
+  // resolve the protocol, take the live transcript (v2 or v1), fall back to the
+  // kept conversation, then merge what's still in the outbox.
+  const server = React.useMemo(() => serverAddressOf(address), [address]);
+  const session = React.useMemo(() => SessionID.make(props.session.id), [props.session.id]);
+  const kept = useKeptConversation(server, props.session.id);
+  const [foundProtocol, setProtocol] = React.useState<Protocol | undefined>(undefined);
+  const protocol = foundProtocol ?? kept?.protocol;
+  React.useEffect(() => {
+    if (protocol !== undefined) return undefined;
+    let cancelled = false;
+    void runApp(sessionProtocol(server, session)).then((answer) => {
+      if (!cancelled) setProtocol(answer);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [server, session, protocol]);
+
+  const { transcript, loaded } = useSessionStream(client, props.session.id, address, enabled);
+  const v2Messages = useV2Transcript(server, session, protocol === "v2" && enabled);
+  const live = React.useMemo(
+    (): ReadonlyArray<ChatMessage> | undefined =>
+      protocol === "v2"
+        ? v2Messages
+        : protocol === "v1" && loaded
+          ? transcript.order.flatMap((id) => {
+              const message = transcript.messages.get(id);
+              return message === undefined ? [] : [chatMessageOfV1(message)];
+            })
+          : undefined,
+    [protocol, v2Messages, loaded, transcript],
   );
+  const delivered = live ?? kept?.messages ?? NO_MESSAGES;
+  const lane = useLane(server, session);
+  const [pending, setPending] = React.useState<ReadonlyArray<ChatMessage>>([]);
+  const nextPending = React.useMemo(
+    () => pendingMessages(pending, (lane?.messages ?? []).map(chatMessageOfQueued), new Set(delivered.map((message) => message.id))),
+    [pending, lane, delivered],
+  );
+  if (!sameMessages(nextPending, pending)) setPending(nextPending);
+  const messages = nextPending.length === 0 ? delivered : [...delivered, ...nextPending];
+
   return (
     <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={<GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
-      {messages.map((message) => (
-        <ChatBubble key={message.id} role={message.role} text={message.text} width={pageWidth} />
-      ))}
+      {messages.flatMap((message) => {
+        const text = textOf(message);
+        return text === "" ? [] : [<ChatBubble key={message.id} role={message.role} text={text} width={pageWidth} />];
+      })}
     </DubzScrollPage>
   );
 };
