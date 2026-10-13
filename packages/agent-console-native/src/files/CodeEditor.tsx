@@ -21,7 +21,7 @@ import { cachedSessionTitle } from "../sessionCache";
 import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
 import { scopesAt } from "./breadcrumbs";
-import { type ScopeSymbol, type StickyRange, stickyRanges } from "./stickyRanges";
+import { pinnable, type ScopeSymbol, type StickyRange, stickyRanges } from "./stickyRanges";
 import { codeFontSizeOf } from "../settings";
 import { textFor, useTheme } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
@@ -271,7 +271,7 @@ export const CodeEditor = (props: {
         .then((parsed) => {
           if (!alive) return;
           console.log(`[sticky] ${lang}: ${parsed.length} ranges`);
-          setStickyJson(JSON.stringify(parsed));
+          setStickyJson(JSON.stringify(pinnable(parsed)));
           ranges.current = parsed;
           reportScopesLatest.current();
         })
