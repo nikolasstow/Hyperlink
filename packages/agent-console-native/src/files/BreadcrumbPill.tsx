@@ -7,7 +7,9 @@
  * It fills the room the top bar gives it. Longer than that, it scrolls,
  * resting at the end (where you are): the scroll view is mirrored, so its
  * start is the pill's right edge, and the row of crumbs inside it is mirrored
- * back — nothing is measured. Shorter, the crumbs sit at the left.
+ * back — nothing is measured. Shorter, the crumbs sit at the left. Crumbs
+ * running past either end fade out into it (a gradient mask as wide as the
+ * crumbs' padding, so crumbs that fit are never faded).
  *
  * The path is there on the first frame; the scopes come once the file is
  * parsed and the editor says where you are. As they change they roll, the
@@ -16,7 +18,9 @@
  *
  * @internal
  */
+import MaskedView from "@react-native-masked-view/masked-view";
 import { GlassView } from "expo-glass-effect";
+import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
 import Reanimated, { LinearTransition, type SharedValue } from "react-native-reanimated";
@@ -30,8 +34,9 @@ import type { ScopeSymbol } from "./stickyRanges";
 import { type RollDirection, rollIn, rollOut } from "./crumbRoll";
 import { crumbColorOf, symbolLookOf } from "./symbolLooks";
 
-/** Room between the crumbs and the pill's ends. */
-const PAD_H = 16;
+/** Room between the crumbs and the pill's ends, which is also how far the
+ * crumbs fade as they run past them. */
+const PAD_H = 22;
 const TEXT_SIZE = 15;
 const ICON_SIZE = 16;
 const CHEVRON_SIZE = 14;
@@ -85,18 +90,48 @@ export const BreadcrumbPill = (props: {
     <View style={styles.shadow} accessibilityRole="header" accessibilityLabel={[...props.path, ...props.symbols.map((symbol) => symbol.name)].join(", ")}>
       <View style={styles.clip}>
         <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mirrored} contentContainerStyle={styles.content}>
-          <View style={[styles.row, styles.mirrored]}>
-            {pathCrumbs}
-            {symbolCrumbs}
-          </View>
-        </ScrollView>
+        <MaskedView style={styles.fill} maskElement={fadeMask}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mirrored} contentContainerStyle={styles.content}>
+            <View style={[styles.row, styles.mirrored]}>
+              {pathCrumbs}
+              {symbolCrumbs}
+            </View>
+          </ScrollView>
+        </MaskedView>
       </View>
     </View>
   );
 };
 
+const maskStyles = StyleSheet.create({
+  mask: {
+    ...StyleSheet.absoluteFill,
+    flexDirection: "row",
+  },
+  edge: {
+    width: PAD_H,
+  },
+  middle: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+});
+
+/** Opaque in the middle, clear at the ends: what shows of the crumbs. */
+const FADE_IN: readonly [string, string] = ["#00000000", "#000000"];
+const FADE_OUT: readonly [string, string] = ["#000000", "#00000000"];
+const fadeMask = (
+  <View style={maskStyles.mask}>
+    <LinearGradient colors={FADE_IN} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={maskStyles.edge} />
+    <View style={maskStyles.middle} />
+    <LinearGradient colors={FADE_OUT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={maskStyles.edge} />
+  </View>
+);
+
 const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
   shadow: {
     flex: 1,
     height: HOME_HEADER_HEIGHT,
