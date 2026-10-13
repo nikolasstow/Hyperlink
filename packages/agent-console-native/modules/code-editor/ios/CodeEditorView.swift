@@ -176,6 +176,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// The flash holds, then fades out.
     private static let flashHold: TimeInterval = 0.6
     private static let flashFade: TimeInterval = 1.4
+    /// Room kept between the caret's line and whatever covers the bottom.
+    private static let caretMargin: CGFloat = 8
     /// The theme's colour for lines as they land.
     private var flashColor = UIColor(red: 0.61, green: 0.73, blue: 0.33, alpha: 0.2)
     /// The lines lit now.
@@ -376,8 +378,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     }
 
     func setBottomInset(_ value: Double) {
+        let grew = CGFloat(value) > bottomInset
         bottomInset = CGFloat(value)
         applyInsets()
+        if grew {
+            keepCaretAboveBottom()
+        }
     }
 
     func setStickyFill(_ value: Double) {
@@ -473,6 +479,24 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.contentInset = insets
         textView.verticalScrollIndicatorInsets = insets
         updateSticky()
+    }
+
+    /// While editing, a grown bottom inset (the bar window opening over the
+    /// editor) can cover the caret's line; scroll it back up into view.
+    private func keepCaretAboveBottom() {
+        guard textView.isEditing, let end = textView.selectedTextRange?.end else {
+            return
+        }
+        let caret = textView.caretRect(for: end)
+        let visibleBottom = textView.contentOffset.y + textView.bounds.height - bottomInset
+        let overlap = caret.maxY + Self.caretMargin - visibleBottom
+        guard overlap > 0 else {
+            return
+        }
+        let minY = -textView.adjustedContentInset.top
+        let maxY = max(minY, textView.contentSize.height + textView.adjustedContentInset.bottom - textView.bounds.height)
+        let y = min(max(textView.contentOffset.y + overlap, minY), maxY)
+        textView.setContentOffset(CGPoint(x: textView.contentOffset.x, y: y), animated: true)
     }
 
     private func applyTheme() {
