@@ -51,6 +51,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     let onConflictAction = EventDispatcher()
     /// Open session on an agent change's popover: `{sessionID}`.
     let onOpenSession = EventDispatcher()
+    /// The line you are at, when it changes: `{line}` (0-based).
+    let onLineChange = EventDispatcher()
+    private var reportedLine = -1
 
     /// True while we set `text` programmatically, so the delegate's change
     /// callback never echoes a prop back up as an edit.
@@ -323,6 +326,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.text = text
         isApplyingText = false
         rebuildHighlights()
+        reportLine()
     }
 
     func setEditable(_ editable: Bool) {
@@ -612,6 +616,18 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         return textView.lineIndex(atContentY: textView.contentOffset.y + topInset + bias)
     }
 
+    /// The line you are at: the caret's while editing, else the top of the
+    /// visible code. Reported when it changes (the breadcrumbs follow it).
+    private func reportLine() {
+        let caret = textView.isEditing ? textView.textLocation(at: textView.selectedRange.location) : nil
+        let line = caret?.lineNumber ?? topVisibleLine()
+        guard line != reportedLine else {
+            return
+        }
+        reportedLine = line
+        onLineChange(["line": line])
+    }
+
     private func hideSticky() {
         if !sticky.isHidden {
             sticky.isHidden = true
@@ -781,6 +797,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         conflictZones.followHorizontalScroll()
         changeMarks.followHorizontalScroll()
         updateSticky()
+        reportLine()
     }
 
     // MARK: - TextViewDelegate
@@ -794,6 +811,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     func textViewDidBeginEditing(_ textView: TextView) {
         Self.editing = self
+        reportLine()
+    }
+
+    func textViewDidChangeSelection(_ textView: TextView) {
+        reportLine()
     }
 
     func textViewDidEndEditing(_ textView: TextView) {
@@ -802,6 +824,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         if Self.editing === self {
             Self.editing = nil
         }
+        reportLine()
     }
 
     func textViewDidChange(_ textView: TextView) {

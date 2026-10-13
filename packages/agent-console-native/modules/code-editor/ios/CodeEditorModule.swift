@@ -46,8 +46,9 @@ public final class CodeEditorModule: Module {
         // 8: an agent's changes marked in the gutter (`markChanges`,
         //    `onOpenSession`).
         // 9: editing with the keyboard down (`hideKeyboard`, `showKeyboard`).
+        // 10: the line you are at (`onLineChange`), for breadcrumbs.
         Constants([
-            "apiVersion": 9,
+            "apiVersion": 10,
         ])
 
         AsyncFunction("hideKeyboard") { () -> Bool in
@@ -59,7 +60,7 @@ public final class CodeEditorModule: Module {
         }.runOnQueue(.main)
 
         View(CodeEditorView.self) {
-            Events("onTextChange", "onStickyDebug", "onConflictAction", "onOpenSession")
+            Events("onTextChange", "onStickyDebug", "onConflictAction", "onOpenSession", "onLineChange")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)

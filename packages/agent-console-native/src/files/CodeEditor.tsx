@@ -20,7 +20,8 @@ import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCo
 import { cachedSessionTitle } from "../sessionCache";
 import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
-import { stickyRanges } from "./stickyRanges";
+import { scopesAt } from "./breadcrumbs";
+import { type StickyRange, stickyRanges } from "./stickyRanges";
 import { textFor } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
 
@@ -120,6 +121,9 @@ export const CodeEditor = (props: {
   readonly onConflictChoice?: (index: number, keep: ConflictChoice) => void;
   /** Open the session that made a change (from its popover in the gutter). */
   readonly onOpenSession?: (sessionID: string) => void;
+  /** The named scopes the line you are at is in, outermost first, when they
+   * change (breadcrumbs.ts). */
+  readonly onScopes?: (scopes: ReadonlyArray<string>) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -138,6 +142,24 @@ export const CodeEditor = (props: {
   const initialHighlight = React.useMemo(() => cachedHighlightSync({ code: props.text, lang, theme }), []);
   const [tokensJson, setTokensJson] = React.useState<string>(() => (initialHighlight === undefined ? "[]" : tokensJsonOf(props.text, initialHighlight)));
   const [stickyJson, setStickyJson] = React.useState<string>("[]");
+  // The parsed scopes and the line you are at, for the breadcrumbs: the
+  // scopes reported only when they change.
+  const ranges = React.useRef<ReadonlyArray<StickyRange>>([]);
+  const atLine = React.useRef(0);
+  const reportedScopes = React.useRef<string | undefined>(undefined);
+  const { onScopes } = props;
+  const reportScopes = React.useCallback(() => {
+    const scopes = scopesAt(ranges.current, atLine.current);
+    const key = scopes.join("\n");
+    if (key === reportedScopes.current) return;
+    reportedScopes.current = key;
+    onScopes?.(scopes);
+  }, [onScopes]);
+  // As of the latest render, for the parse below (which runs on the text).
+  const reportScopesLatest = React.useRef(reportScopes);
+  React.useEffect(() => {
+    reportScopesLatest.current = reportScopes;
+  });
   // Base colours resolve synchronously from the theme (and the cached highlight's
   // exact bg/fg when present) so the editor paints right on the first frame; the
   // async tokenise below only refines them.
@@ -237,10 +259,12 @@ export const CodeEditor = (props: {
         })
         .catch(() => undefined);
       void stickyRanges(text, lang)
-        .then((ranges) => {
+        .then((parsed) => {
           if (!alive) return;
-          console.log(`[sticky] ${lang}: ${ranges.length} ranges`);
-          setStickyJson(JSON.stringify(ranges));
+          console.log(`[sticky] ${lang}: ${parsed.length} ranges`);
+          setStickyJson(JSON.stringify(parsed));
+          ranges.current = parsed;
+          reportScopesLatest.current();
         })
         .catch((error: unknown) => console.warn(`[sticky] ${lang} structure failed`, error));
     }, delay);
@@ -271,6 +295,10 @@ export const CodeEditor = (props: {
         showLineNumbers
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}
+        onLineChange={(event) => {
+          atLine.current = event.nativeEvent.line;
+          reportScopes();
+        }}
         onTextChange={(event) => {
           // Re-colour what was typed, once typing pauses (the tokenise below is
           // debounced); the native view keeps the colours in step meanwhile.

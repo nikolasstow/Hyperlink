@@ -66,10 +66,12 @@ export const FileView = (props: {
   readonly bottomInset: number;
   /** Open the session that made a change (from its popover in the gutter). */
   readonly onOpenSession?: (sessionID: string) => void;
+  /** The named scopes the line you are at is in, when they change. */
+  readonly onScopes?: (scopes: ReadonlyArray<string>) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { path, name, line, repo, topInset, bottomInset, onOpenSession } = props;
+  const { path, name, line, repo, topInset, bottomInset, onOpenSession, onScopes } = props;
   // Followed while on screen (and before, when it is open in a tab or kept).
   useOnScreen(path);
   const live = useLiveFile(path);
@@ -197,6 +199,7 @@ export const FileView = (props: {
             conflicts={conflicts}
             onConflictChoice={(index, keep) => resolveLiveConflict(path, index, keep)}
             {...(onOpenSession === undefined ? {} : { onOpenSession })}
+            {...(onScopes === undefined ? {} : { onScopes })}
             topInset={topInset + EDITOR_TOP_MARGIN}
             bottomInset={bottomInset}
             stickyFill={topInset + EDITOR_TOP_MARGIN}

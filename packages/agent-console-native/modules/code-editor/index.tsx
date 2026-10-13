@@ -94,6 +94,9 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly onOpenSession?: (event: NativeSyntheticEvent<{ readonly sessionID: string }>) => void;
   /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
   readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
+  /** The line you are at (0-based), when it changes: the caret's while
+   * editing, else the top of the visible code (`apiVersion` 10). */
+  readonly onLineChange?: (event: NativeSyntheticEvent<{ readonly line: number }>) => void;
 }
 
 /** How a conflict is settled: your lines, or the agent's. */

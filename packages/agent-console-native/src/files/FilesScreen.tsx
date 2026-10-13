@@ -66,6 +66,8 @@ import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
 import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, openOrSelectFileTab, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
+import { pathCrumbs } from "./breadcrumbs";
+import { BreadcrumbPill } from "./BreadcrumbPill";
 import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
 import { useAppContext } from "../AppContext";
 import { useCodeTheme } from "../useCodeTheme";
@@ -253,7 +255,12 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       : primary.primary !== undefined
         ? worktreePickerWidth(current.name, currentWt !== undefined ? worktreeName(currentWt) : "", screen.width)
         : headerTitlePillWidth(current.name, false, screen.width);
-  const topBackMax = (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
+  // A file tab's back is just its chevron: the breadcrumbs take the room.
+  const topBackMax = current.kind === "file" ? HOME_HEADER_HEIGHT : (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
+  // Where you are in the file: its path from the worktree, then the scopes
+  // the editor reports for the line you are at (this file's only).
+  const [scopes, setScopes] = React.useState<{ readonly path: string; readonly scopes: ReadonlyArray<string> } | undefined>(undefined);
+  const crumbs = [...pathCrumbs(current.path, currentWt?.path ?? primary.dir), ...(scopes?.path === current.path ? scopes.scopes : [])];
   // The tab view's filter is centered, search/history fixed at the right:
   // keep the filter clear of both (symmetric), and back clear of the filter.
   const filterLabel = repoFilter.kind === "all" ? "All Repos" : repoFilter.repo;
@@ -731,7 +738,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   onScroll={barHide.onScroll}
                 />
               ) : (
-                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} />
+                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} onScopes={(next) => setScopes({ path: current.path, scopes: next })} />
               )}
               {cover === undefined ? null : (
                 <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">
@@ -754,7 +761,13 @@ export const FilesScreen = (props: Props): React.ReactElement => {
             * picker at the root, else what is showing). */}
           <Reanimated.View style={[styles.top, topSlide]} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
             <BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={topBackMax} />
-            <View style={styles.topSpacer} pointerEvents="none" />
+            {current.kind === "file" ? (
+              <View style={styles.crumbs}>
+                <BreadcrumbPill crumbs={crumbs} />
+              </View>
+            ) : (
+              <View style={styles.topSpacer} pointerEvents="none" />
+            )}
             <MoreMenu
               worktrees={current.kind === "file" ? primary.worktrees : []}
               selected={currentWt?.path}
@@ -983,6 +996,11 @@ const styles = StyleSheet.create({
   },
   topSpacer: {
     flex: 1,
+  },
+  crumbs: {
+    flex: 1,
+    flexDirection: "row",
+    marginHorizontal: TOP_GAP,
   },
   more: {
     width: HOME_HEADER_HEIGHT,
