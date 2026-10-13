@@ -31,13 +31,11 @@ import Reanimated from "react-native-reanimated";
 import { ContextMenuView, type MenuAction } from "../modules/context-menu";
 import { ROW_GUTTER } from "./layout";
 import { type Arrival, BUBBLE_PADDING_HORIZONTAL, BUBBLE_PADDING_VERTICAL, glassArrival, textArrival } from "./messageArrival";
-import { Markdown } from "./Markdown";
-import { ReasoningBlock } from "./ReasoningBlock";
+import { MessageParts } from "./chat/MessageParts";
 import { useTextColors, useTheme } from "./theme";
 import { colors } from "./colors";
 import { dateHeaderLabel } from "./chat/dateHeaders";
 import { type Receipt, receiptTimeLabel } from "./chat/receipt";
-import { ToolCallBubble } from "./ToolCallBubble";
 import { type ChatMessage, textOf } from "./chat/model";
 
 const MENU: ReadonlyArray<MenuAction> = [
@@ -93,16 +91,7 @@ const MessageBubbleImpl = (props: {
   React.useLayoutEffect(() => {
     arrival?.onMounted();
   }, [arrival]);
-  const parts = props.message.parts.map((part) => {
-    switch (part.kind) {
-      case "text":
-        return <Markdown key={part.id} text={part.text} width={textWidth} />;
-      case "reasoning":
-        return <ReasoningBlock key={part.id} part={part} />;
-      case "tool":
-        return <ToolCallBubble key={part.id} part={part} />;
-    }
-  });
+  const parts = <MessageParts parts={props.message.parts} textWidth={textWidth} />;
   return (
     <>
       {props.dateHeader !== undefined ? <DateHeader at={props.dateHeader} /> : null}

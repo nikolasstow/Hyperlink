@@ -1,12 +1,23 @@
 /**
  * The bar window's geometry, as pure worklet-safe math — the single source of
- * truth for how tall the window is at a detent and how much of the screen it
- * covers. BarWindow's worklets call it (the detent stops, the window height),
- * and `coverOf` is what scroll views pad their bottom by so their last line
- * clears the window. Nothing here is measured; it is all design constants, the
- * detent fraction and the keyboard.
+ * truth for how tall the window is and how much of the screen it covers.
  *
- * Extracted from BarWindow unchanged: the numbers match what BarWindow drew.
+ * The model (agreed with the owner):
+ * - The window has a REQUESTED height: the user's remembered default, or an
+ *   active component's height when that is taller. The keyboard NEVER changes
+ *   the requested height.
+ * - The VISIBLE height is the requested height CLAMPED to the space available
+ *   above the keyboard (`maxHeightFor`). So the keyboard only moves the clamp:
+ *   it shows less when the keyboard is up, and returns to the full requested
+ *   height when the keyboard goes down. The window never hides behind the
+ *   keyboard.
+ * - Resting (drag release): two low anchors — the pill (the bar) and
+ *   `minOpenHeight` (one suggestion) — and free rest anywhere between
+ *   `minOpenHeight` and the max.
+ *
+ * `coverOf` is what scroll views pad their bottom by (through `useBarCover`) so
+ * their last line clears the window. Nothing here is measured; it is all design
+ * constants, the settled height and the keyboard.
  *
  * @internal
  */
@@ -16,18 +27,16 @@ import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 export const BAR_GAP = 8;
 /** The gap between the window's top and the header at full height. */
 export const TOP_GAP = 8;
-/** The collapsed height: the composer pill, and the smallest detent. */
+/** The collapsed height: the composer pill — the bar, and the lowest the open
+ * window ever reports (the pill alone). */
 export const MIN_HEIGHT = COMPOSER_PILL_HEIGHT;
 
-/** The settled bar window at a moment: open or the bar, its detent, and the
- * keyboard (the full height the detents are sized from, and the settled live
- * height the window rides). */
+/** The settled bar window at a moment, for the cover a screen pads by: open or
+ * the bar, its settled visible height (pill up), and the settled keyboard. */
 export interface BarWindowState {
   readonly open: boolean;
-  /** 0 = full height … 1 = the pill. */
-  readonly frac: number;
-  /** The full keyboard height the detents are computed from (0 if never up). */
-  readonly kbFull: number;
+  /** The settled visible height, from the pill's bottom up (>= MIN_HEIGHT). */
+  readonly height: number;
   /** The keyboard's settled height, 0 when down. */
   readonly keyboard: number;
 }
@@ -53,30 +62,50 @@ const fullTop = (frame: ScreenFrame): number => {
   return Math.max(frame.headerHeight, frame.insetTop) + TOP_GAP;
 };
 
-/** How far the top is lowered from full to the pill, for a keyboard height —
- * the drag range. The detents live inside it. */
-export const maxDragFor = (frame: ScreenFrame, keyboard: number): number => {
+/** Points from the screen's bottom to the window's bottom: the keyboard (or the
+ * resting inset when it is down), and the window's gap above the bar. */
+const windowBottomFor = (keyboard: number, frame: ScreenFrame): number => {
   "worklet";
-  return Math.max(frame.height - fullTop(frame) - (Math.max(keyboard, restingBottom(frame.insetBottom)) + BAR_GAP) - MIN_HEIGHT, 0);
+  return Math.max(keyboard, restingBottom(frame.insetBottom)) + BAR_GAP;
 };
 
-/** With a stop (a fixed rest height in place of half + pill): how far the top
- * is lowered from full to rest there. */
-export const stopDragFor = (maxDrag: number, stop: number | undefined): number => {
+/** The tallest the VISIBLE window can be for a keyboard height — the space from
+ * its bottom up to the full-height top. This is the clamp: the keyboard moves
+ * it, never the requested height, so the window always stays above the keyboard. */
+export const maxHeightFor = (frame: ScreenFrame, keyboard: number): number => {
   "worklet";
-  return stop === undefined ? maxDrag : Math.max(maxDrag + MIN_HEIGHT - stop, 0);
+  return Math.max(frame.height - fullTop(frame) - windowBottomFor(keyboard, frame), MIN_HEIGHT);
+};
+
+/** The requested height made visible: at least the pill, at most the space above
+ * the keyboard. The keyboard only tightens the clamp; the request is unchanged. */
+export const clampRequested = (requested: number, frame: ScreenFrame, keyboard: number): number => {
+  "worklet";
+  const max = maxHeightFor(frame, keyboard);
+  return requested < MIN_HEIGHT ? MIN_HEIGHT : requested > max ? max : requested;
+};
+
+/** Where a drag release settles, in visible-height points — assuming it is not
+ * a dismiss (the caller decides that first, below `minOpen`). With `freeAbove`
+ * (Dubz) it rests exactly where it was let go, floored at `minOpen` and capped
+ * at `max` — a free-for-all between the one low anchor and the top. Without it
+ * (the model picker) it snaps to the nearer of the two anchors, `minOpen` and
+ * `max`. `projected` folds in a little release momentum. */
+export const snapOpenHeight = (release: number, projected: number, minOpen: number, max: number, freeAbove: boolean): number => {
+  "worklet";
+  if (!freeAbove) {
+    const mid = (minOpen + max) / 2;
+    return projected < mid ? minOpen : max;
+  }
+  return release < minOpen ? minOpen : release > max ? max : release;
 };
 
 /** Points from the screen's bottom to the window's top — what a scroll view
- * pads its bottom by. Collapsed, it is just the pill at rest; open, the pill
- * plus the detent's share of the drag range, both lifted by where the window
- * rests above the bottom (the live keyboard, or the resting inset). */
+ * pads its bottom by. The settled visible height over the window's bottom; the
+ * pill alone when collapsed. */
 export const coverOf = (state: BarWindowState, frame: ScreenFrame): number => {
   "worklet";
-  const windowBottom = Math.max(state.keyboard, restingBottom(frame.insetBottom)) + BAR_GAP;
-  if (!state.open) return windowBottom + MIN_HEIGHT;
-  const windowHeight = MIN_HEIGHT + maxDragFor(frame, state.kbFull) * (1 - state.frac);
-  return windowBottom + windowHeight;
+  return windowBottomFor(state.keyboard, frame) + (state.open ? state.height : MIN_HEIGHT);
 };
 
 /** The window's top, from the screen's top (the inverse of the cover). */
@@ -88,4 +117,4 @@ export const windowTop = (state: BarWindowState, frame: ScreenFrame): number => 
 /** Whether two settled states are the same — so a report is skipped when
  * nothing moved (React never re-renders for an unchanged window). */
 export const sameBarWindowState = (a: BarWindowState, b: BarWindowState): boolean =>
-  a.open === b.open && a.frac === b.frac && a.kbFull === b.kbFull && a.keyboard === b.keyboard;
+  a.open === b.open && a.height === b.height && a.keyboard === b.keyboard;

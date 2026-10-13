@@ -3,8 +3,8 @@
  * (once, at launch) mirrors the route→state map; `useBarCover` turns this
  * screen's own route into the points its scroll views pad their bottom by;
  * BarWindow reports and forgets through `settleBarWindow` / `forgetBarWindow`;
- * the Dubz detent memory is read and kept through `readDubzDetent` /
- * `saveDubzDetent`.
+ * the Dubz default height is read and kept through `readDubzDefaultHeight` /
+ * `saveDubzDefaultHeight`.
  *
  * Follows useHomeLayout: a module mirror of the store's changes, exposed to
  * React with useSyncExternalStore.
@@ -18,8 +18,8 @@ import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { forkApp, runApp } from "../effect/runtime";
-import { type BarWindowState, coverOf, type ScreenFrame } from "./barWindowGeometry";
-import { barWindowChanges, BarWindowStore, type DubzDetent } from "./BarWindowStore";
+import { type BarWindowState, coverOf, MIN_HEIGHT, type ScreenFrame } from "./barWindowGeometry";
+import { barWindowChanges, BarWindowStore } from "./BarWindowStore";
 
 let states: ReadonlyMap<string, BarWindowState> = new Map();
 const listeners = new Set<() => void>();
@@ -50,7 +50,7 @@ export const startBarWindow = (): void => {
 const useStates = (): ReadonlyMap<string, BarWindowState> => React.useSyncExternalStore(subscribe, () => states);
 
 /** The collapsed pill — what a route with no settled window covers. */
-const COLLAPSED: BarWindowState = { open: false, frac: 0, kbFull: 0, keyboard: 0 };
+const COLLAPSED: BarWindowState = { open: false, height: MIN_HEIGHT, keyboard: 0 };
 
 /** The points this screen should pad its scroll bottom by: its own route's
  * settled bar window through coverOf, or the collapsed pill when it has none.
@@ -83,18 +83,19 @@ export const forgetBarWindow = (routeKey: string): void => {
   );
 };
 
-/** The detent the Dubz window was last left at (replaces getDubzDetent). */
-export const readDubzDetent = (): Promise<DubzDetent | undefined> =>
+/** The default height the Dubz window was last left at (undefined before the
+ * user has ever dragged it). */
+export const readDubzDefaultHeight = (): Promise<number | undefined> =>
   runApp(
     Effect.gen(function* () {
-      return yield* (yield* BarWindowStore).detent.get;
+      return yield* (yield* BarWindowStore).defaultHeight.get;
     }),
   );
 
-/** Keep the detent the Dubz window was just left at (replaces setDubzDetent). */
-export const saveDubzDetent = (detent: DubzDetent): Promise<void> =>
+/** Keep the default height a drag just set. */
+export const saveDubzDefaultHeight = (height: number): Promise<void> =>
   runApp(
     Effect.gen(function* () {
-      yield* (yield* BarWindowStore).detent.set(detent);
+      yield* (yield* BarWindowStore).defaultHeight.set(height);
     }),
   );

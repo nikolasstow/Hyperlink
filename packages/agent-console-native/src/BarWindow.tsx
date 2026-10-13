@@ -2,15 +2,20 @@
  * The window that grows up out of the bottom bar: Dubz's, and the model
  * picker's. One component with two states, animated between, never swapped:
  * - **collapsed**: the bar's pill, in the bar's spot;
- * - **expanded**: the window. It grows up out of the pill to its detent; the
- *   pill stays at its bottom, inset, as the window's input. Its own glass comes
- *   in above the smallest detent; at the smallest it has none, and the pill
- *   fills it, so there it is the bar again (with a grab handle while the
- *   keyboard is up; the keyboard going down there closes it).
+ * - **expanded**: the window. It grows up out of the pill to its requested
+ *   height; the pill stays at its bottom, inset, as the window's input.
  *
- * It sits where the bar does, so it rides the keyboard as the bar does. Drag
- * the handle to resize (full, half, the pill), fling or drag it down past the
- * pill to close, tap outside at full height to close.
+ * The height model (barWindowGeometry.ts is the math):
+ * - The owner gives a REQUESTED height. The window renders it CLAMPED to the
+ *   space above the keyboard (`clampRequested`). The keyboard only moves the
+ *   clamp — it never changes the request — so the window stays above the
+ *   keyboard and returns to its full height when the keyboard goes.
+ * - Drag the grab handle to resize. A release rests anywhere between
+ *   `minOpenHeight` and the top (Dubz, `freeAbove`), or snaps to the nearer of
+ *   those two anchors (the model picker). A drag below `minOpenHeight`, or a
+ *   fling down, dismisses.
+ *
+ * It sits where the bar does, so it rides the keyboard as the bar does.
  *
  * Glass invariants (learned the hard way):
  * - Round the GlassView via `borderRadius` on the GlassView itself (native
@@ -30,15 +35,15 @@ import { Gesture, GestureDetector, type GestureType } from "react-native-gesture
 import Reanimated, {
   Easing,
   runOnJS,
-  useAnimatedReaction,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COMPOSER_FIELD_PADDING } from "./composerBarSpec";
-import { BAR_GAP, type BarWindowState, MIN_HEIGHT, maxDragFor as geometryMaxDrag, sameBarWindowState, type ScreenFrame, stopDragFor as geometryStopDrag } from "./dubz/barWindowGeometry";
+import { BAR_GAP, type BarWindowState, clampRequested, maxHeightFor as geometryMaxHeight, MIN_HEIGHT, sameBarWindowState, type ScreenFrame, snapOpenHeight } from "./dubz/barWindowGeometry";
 import { forgetBarWindow, settleBarWindow } from "./dubz/useBarWindow";
 import { useKeyboardHeightValue } from "./keyboardHeight";
 import { useKeyboardHeight } from "./useKeyboardHeight";
@@ -59,45 +64,37 @@ const ANIM_MS = 320;
 const FADE_S = (ANIM_MS * 0.55) / 1000;
 /** The pill's inset inside the expanded window; none collapsed. */
 const COMPOSER_INSET = 12;
-/** Drag distance (px before the smallest detent) over which the pill's inset
- * closes, so it eases into the bar instead of snapping. */
+/** Height range (above the pill) over which the pill's inset closes, so it eases
+ * into the bar instead of snapping as the window shrinks toward the pill. */
 const COMPOSER_INSET_RANGE = 110;
 /** The pill's padding: the bar's collapsed; a little tighter expanded (the
  * window's input). */
 const PILL_PAD_V_EXPANDED = 7;
 const PILL_PAD_H_EXPANDED = 8;
-/** The handle's top at larger detents (a line just inside the window top: its
- * 10pt top padding puts the line 7pt down). */
+/** The handle's top (a line just inside the window top: its 10pt top padding
+ * puts the line 7pt down). */
 const GRABBER_TOP_EXPANDED = -3;
 /** Below the handle's line (7pt down, 5pt tall), the space before the
  * window's content: where a body's content starts. */
 export const HANDLE_CLEARANCE = GRABBER_TOP_EXPANDED + 10 + 5 + 18;
-/** The handle lifts to this (above the pill) at the smallest detent, over the
- * glass tab. */
-const TAB_TOP = -24;
-/** Snap-to-detent duration on drag release. */
+/** Snap-to-rest duration on drag release. */
 const SNAP_MS = 240;
 /** Fling-down velocity (px/s) that collapses the window. */
 const FLING_VELOCITY = 1400;
-/** How far past the lowest detent the window can be pulled (it gives less the
+/** How far below the lowest anchor the window can be pulled (it gives less the
  * farther it goes, never reaching this), and the release point past which
- * (lowest detent + margin) it collapses instead of snapping back. */
+ * (lowest anchor − margin) it dismisses instead of snapping back. */
 const DISMISS_ZONE = 120;
 const DISMISS_MARGIN = 48;
-/** The pull's resistance past the lowest detent (iOS's rubber band is 0.55). */
+/** The pull's resistance below the lowest anchor (iOS's rubber band is 0.55). */
 const RUBBER_BAND = 0.55;
+/** A release's momentum, folded into where it is heading. */
+const PROJECT = 0.08;
 
-/** Where a window opens, and keeping where a drag leaves it: a fraction of the
- * drag range (0 = full, 0.5 = half, 1 = the smallest) plus the keyboard height
- * then, so an open sizes the detent before the keyboard settles. */
-export interface DetentMemory {
-  readonly frac: () => number;
-  readonly kbFull: () => number;
-  readonly remember: (frac: number, kbFull: number) => void;
-}
+const SNAP_EASING = Easing.out(Easing.cubic);
 
-/** Why the window closed: the keyboard went down at the smallest detent, or it
- * was dismissed (tap outside, fling, dragged away). */
+/** Why the window closed: a tap outside, a fling, or a drag below the lowest
+ * anchor. */
 export type CloseReason = "keyboard" | "dismiss";
 
 export interface BarWindowProps {
@@ -107,19 +104,31 @@ export interface BarWindowProps {
   readonly onClose: (reason: CloseReason) => void;
   /** Focused once it starts to open; blurred as it closes. */
   readonly inputRef: React.RefObject<TextInput | null>;
-  /** The window's glass above the smallest detent. */
+  /** The window's glass while open. */
   readonly glass: "clear" | "regular";
   /** Tints the window's glass material. */
   readonly tintColor?: string;
-  readonly detent: DetentMemory;
+  /** The height the window wants (pt, from the pill up). Rendered clamped to the
+   * space above the keyboard; the keyboard never changes it. */
+  readonly requestedHeight: number;
+  /** The lowest open rest height — one suggestion for Dubz, the stop for the
+   * model picker. A drag below it dismisses. */
+  readonly minOpenHeight: number;
+  /** Rest anywhere between `minOpenHeight` and the max (Dubz), or snap to the
+   * nearer of those two anchors (the model picker). */
+  readonly freeAbove: boolean;
+  /** A drag settled at this height — the owner updates its requested height. */
+  readonly onResize: (height: number) => void;
+  /** The keyboard settled up (`true`) or down (`false`), on willShow/willHide. */
+  readonly onKeyboardSettle?: (up: boolean) => void;
   /** Out of sight collapsed (it is not the bar itself): parked off-screen,
    * still mounted, so opening never builds its contents. */
   readonly hiddenCollapsed?: boolean;
   /** The tap-outside catcher's label. */
   readonly closeLabel: string;
   /** Whether a tap outside the window closes it (and blocks the content behind).
-   * Off for Dubz, so the page behind stays interactive with Dubz open — it is
-   * closed by its back button, the pill, or the keyboard instead. Default true. */
+   * Off for Dubz, so the page behind stays interactive with Dubz open. Default
+   * true. */
   readonly dismissOnTapOutside?: boolean;
   /** Above the pill, cropped to the window. */
   readonly body: React.ReactNode;
@@ -136,10 +145,6 @@ export interface BarWindowProps {
    * views can pad for it, and forgets it on unmount. Omitted (e.g. the model
    * picker) means the window doesn't report. */
   readonly routeKey?: string;
-  /** One stop below full, as a window height (pt), in place of half and the
-   * pill: the window then rests at full or at this height, whatever the
-   * keyboard does. */
-  readonly stop?: number;
   /** The pill floats over the body (which then fills the window), lowered by
    * this much (pt; 0 in place) — the model window slides it away as its list
    * scrolls. */
@@ -152,34 +157,27 @@ export interface BarWindowProps {
   readonly raiseKeyboardOnOpen?: boolean;
 }
 
-const atPillFrac = (frac: number): boolean => frac >= 0.98;
-
-/** Clamp to [0, 1]. */
-const unit = (value: number): number => {
+/** How near the pill a height is, over the inset range: 0 above it, 1 at the
+ * pill. The pill's inset and padding follow it, so it is the bar at 1. */
+const pillProgress = (visible: number): number => {
   "worklet";
-  return value < 0 ? 0 : value > 1 ? 1 : value;
-};
-
-/** How near the smallest detent a drag is: 0 above the pill's inset range, 1
- * at it. */
-const pillProgress = (drag: number, maxDrag: number): number => {
-  "worklet";
-  const start = Math.max(maxDrag - COMPOSER_INSET_RANGE, 0);
-  const span = maxDrag - start;
-  return span <= 0 ? 0 : unit((drag - start) / span);
+  const over = visible - MIN_HEIGHT;
+  return over >= COMPOSER_INSET_RANGE ? 0 : over <= 0 ? 1 : 1 - over / COMPOSER_INSET_RANGE;
 };
 
 export const BarWindow = (props: BarWindowProps): React.ReactElement => {
-  const { open, instant, onClose, inputRef, detent, stop } = props;
+  const { open, instant, onClose, inputRef, requestedHeight, minOpenHeight, freeAbove } = props;
   const raiseKeyboardOnOpen = props.raiseKeyboardOnOpen ?? true;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const scheme = useColorScheme();
   const glassScheme = scheme === "dark" ? "dark" : "light";
-  // The app's one keyboard tracker (keyboardHeight.tsx).
+  // The app's one keyboard tracker (keyboardHeight.tsx): the live height for the
+  // per-frame clamp.
   const kbHeight = useKeyboardHeightValue();
-  // The keyboard's settled height (JS, on willShow/Hide) — a settle this window
-  // reports to the store, so it is here in the state, never per frame.
+  // The keyboard's settled height (JS, on willShow/Hide): what this window
+  // reports to the store, and tells the owner (so it can track it, never per
+  // frame).
   const keyboardHeight = useKeyboardHeight();
   const { height: screenH, width: screenW } = useWindowDimensions();
   // The screen the window sits in; the geometry (barWindowGeometry.ts) is pure
@@ -187,77 +185,42 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   // render would rebuild the animated styles and hitch the drag).
   const frame = React.useMemo<ScreenFrame>(() => ({ height: screenH, headerHeight, insetTop: insets.top, insetBottom: insets.bottom }), [screenH, headerHeight, insets.top, insets.bottom]);
 
-  // `lowered` = below full; the tap-catcher then passes touches through.
-  // `pillMode` = settled at the smallest detent (the handle's place follows it,
-  // on release). `abovePill` = off the smallest detent right now, live during
-  // a drag, so the window's glass comes in as it leaves the pill rather than
-  // when the drag is let go.
-  const [lowered, setLowered] = React.useState(() => detent.frac() > 0.02);
-  const [pillMode, setPillMode] = React.useState(() => atPillFrac(detent.frac()));
-  const [abovePill, setAbovePill] = React.useState(() => !atPillFrac(detent.frac()));
+  // 0 collapsed → 1 open, by layout (height), never a transform.
+  const grow = useSharedValue(0);
+  // The requested height the window rides. A drag writes it directly; the owner
+  // writes it (a new default, an active component) through the prop effect
+  // below. The renderer clamps it per frame, so the keyboard never touches it.
+  const requested = useSharedValue(requestedHeight);
+  // The visible height: the request clamped to the space above the keyboard,
+  // computed once per frame and read by every style.
+  const visible = useDerivedValue(() => clampRequested(requested.value, frame, kbHeight.value));
+  // True while a resize drag is down, so the owner's prop changes don't fight
+  // the finger, and the pill's swipe-down never doubles as a resize.
+  const resizing = useSharedValue(false);
+  // Whether the window is settled below full — the tap-catcher passes touches
+  // through when it is.
+  const loweredSV = useSharedValue(false);
+  const [lowered, setLowered] = React.useState(false);
   // In sight: always, unless hidden collapsed (then from opening until the
   // collapse has finished; parked off-screen otherwise).
   const [drawn, setDrawn] = React.useState(open || props.hiddenCollapsed !== true);
-  const abovePillNow = useSharedValue(!atPillFrac(detent.frac()));
-  // 0 collapsed → 1 open, by layout (height), never a transform.
-  const grow = useSharedValue(0);
-  // How far the top is lowered from full height.
-  const dragY = useSharedValue(0);
-  const dragStart = useSharedValue(0);
-  // The full keyboard height, the running max of the live height: the window's
-  // height is computed from it, so the detents are the same with the keyboard
-  // up or down (the window just rides down with the bar when it goes).
-  const kbFull = useSharedValue(detent.kbFull());
-  // The handle: 0 = a line inside the window top, 1 = lifted over the glass tab.
-  const handleT = useSharedValue(atPillFrac(detent.frac()) ? 1 : 0);
-  // True while a resize drag is down, so the pill's swipe-down (keyboard
-  // dismiss) never doubles as one.
-  const resizing = useSharedValue(false);
-
-  /** The drag range for a keyboard height: full height down to the pill. */
-  const maxDragFor = React.useCallback(
-    (kb: number): number => {
-      "worklet";
-      return geometryMaxDrag(frame, kb);
-    },
-    [frame],
-  );
-
-  /** With a stop: how far the top is lowered from full to rest there. */
-  const stopDragFor = React.useCallback(
-    (maxDrag: number): number => {
-      "worklet";
-      return geometryStopDrag(maxDrag, stop);
-    },
-    [stop],
-  );
-  // Resting at the stop: kept there, in points, as the keyboard's height moves
-  // the drag range.
-  const atStop = useSharedValue(false);
 
   const dismiss = React.useCallback(() => onClose("dismiss"), [onClose]);
 
-  // The keyboard going down at the smallest detent closes it: it is the bar
-  // with a handle, and without the keyboard just the bar.
-  const openNow = React.useRef(open);
-  const pillNow = React.useRef(pillMode);
-  React.useEffect(() => {
-    openNow.current = open;
-    pillNow.current = pillMode;
-  }, [open, pillMode]);
-  const keyboardDown = React.useCallback(() => {
-    if (openNow.current && pillNow.current) onClose("keyboard");
-  }, [onClose]);
-  useAnimatedReaction(
-    () => kbHeight.value,
-    (h, previous) => {
-      if (h > kbFull.value) {
-        kbFull.value = h;
-        if (atStop.value) dragY.value = stopDragFor(maxDragFor(h));
-      }
-      if (h === 0 && previous !== null && previous > 0) runOnJS(keyboardDown)();
-    },
-  );
+  // Report the window's SETTLED state to the store, keyed by route, when it
+  // changes — on open/close, a snap and a keyboard settle. Only when it actually
+  // changed; never per frame. The settled visible height is the request clamped
+  // for the settled keyboard.
+  const { routeKey } = props;
+  const lastReported = React.useRef<BarWindowState | undefined>(undefined);
+  const report = React.useCallback(() => {
+    if (routeKey === undefined) return;
+    const height = open ? clampRequested(requestedHeight, frame, keyboardHeight) : MIN_HEIGHT;
+    const next: BarWindowState = { open, height, keyboard: keyboardHeight };
+    if (lastReported.current !== undefined && sameBarWindowState(lastReported.current, next)) return;
+    lastReported.current = next;
+    settleBarWindow(routeKey, next);
+  }, [routeKey, open, keyboardHeight, requestedHeight, frame]);
 
   // Open and collapse, acting only on a change of `open`.
   const onHidden = props.onHidden;
@@ -282,58 +245,41 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
       return undefined;
     }
     setDrawn(true);
-    // Land at the detent last left, sized from the keyboard height then (the
-    // keyboard may not be up yet).
-    const frac = detent.frac();
-    // With a stop, never the pill: full, or the stop.
-    const pill = stop === undefined && atPillFrac(frac);
-    kbFull.value = Math.max(kbFull.value, detent.kbFull());
-    const resting = stop !== undefined && frac > 0.02;
-    atStop.value = resting;
-    dragY.value = stop === undefined ? frac * maxDragFor(detent.kbFull()) : resting ? stopDragFor(maxDragFor(kbFull.value)) : 0;
-    handleT.value = pill ? 1 : 0;
-    abovePillNow.value = !pill;
-    setLowered(frac > 0.02);
-    setPillMode(pill);
-    setAbovePill(!pill);
+    // Land at the requested height.
+    requested.value = requestedHeight;
+    setLowered(requestedHeight < geometryMaxHeight(frame, keyboardHeight) - 4);
     if (instant) {
       grow.value = 1;
+      if (raiseKeyboardOnOpen || Keyboard.isVisible()) inputRef.current?.focus();
       return undefined;
     }
     // On the next frame: starting mid-mount dropped the first frames.
-    const frame = requestAnimationFrame(() => {
+    const raf = requestAnimationFrame(() => {
       grow.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
-      // Raise the keyboard on open only when asked (the composer), or when it
-      // is already up (so Dubz doesn't deploy it unprompted).
       if (raiseKeyboardOnOpen || Keyboard.isVisible()) inputRef.current?.focus();
     });
-    return () => cancelAnimationFrame(frame);
-  }, [open, instant, inputRef, grow, dragY, kbFull, handleT, abovePillNow, maxDragFor, stopDragFor, stop, atStop, detent, hide, raiseKeyboardOnOpen]);
+    return () => cancelAnimationFrame(raf);
+  }, [open, instant, inputRef, grow, requested, requestedHeight, frame, keyboardHeight, hide, raiseKeyboardOnOpen]);
 
-  // Slide the handle to its new spot only after a drag settles.
+  // The owner moved the requested height while open (a new default, an active
+  // component): animate to it — but never while a drag owns the height.
   React.useEffect(() => {
-    handleT.value = withTiming(pillMode ? 1 : 0, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-  }, [pillMode, handleT]);
+    if (!open || resizing.value) return;
+    requested.value = withTiming(requestedHeight, { duration: SNAP_MS, easing: SNAP_EASING });
+  }, [requestedHeight, open, requested, resizing]);
 
-  // Report the window's SETTLED state to the store, keyed by route, when it
-  // changes — on open/close, a snap (from the gesture, below) and a keyboard
-  // settle. Only when it actually changed; never per frame. `frac`/`kbFull`
-  // come from the (settled) detent memory, the keyboard from the JS height:
-  // open or not, the window rests on it.
-  const { routeKey } = props;
-  const lastReported = React.useRef<BarWindowState | undefined>(undefined);
-  const report = React.useCallback(() => {
-    if (routeKey === undefined) return;
-    const next: BarWindowState = { open, frac: detent.frac(), kbFull: detent.kbFull(), keyboard: keyboardHeight };
-    if (lastReported.current !== undefined && sameBarWindowState(lastReported.current, next)) return;
-    lastReported.current = next;
-    settleBarWindow(routeKey, next);
-  }, [routeKey, open, keyboardHeight, detent]);
-  // Open/close and keyboard settle run through the callback's deps; a snap calls
-  // report() from the gesture's onEnd.
+  // Report on open/close, a snap (from the gesture), and a keyboard settle (the
+  // deps carry those changes through the callback).
   React.useEffect(() => {
     report();
   }, [report]);
+  // Tell the owner the keyboard settled (so it tracks it), without re-firing on
+  // unrelated renders.
+  const onKeyboardSettleRef = React.useRef(props.onKeyboardSettle);
+  onKeyboardSettleRef.current = props.onKeyboardSettle;
+  React.useEffect(() => {
+    onKeyboardSettleRef.current?.(keyboardHeight > 0);
+  }, [keyboardHeight]);
   // Drop this route when the window unmounts.
   React.useEffect(
     () => () => {
@@ -342,9 +288,9 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
     [routeKey],
   );
 
-  // Drag the handle to resize, snapping to detents like an iOS sheet, anchored
-  // on the bar.
-  const remember = detent.remember;
+  // Drag the handle to resize, in visible-height points, anchored on the bar.
+  const onResize = props.onResize;
+  const dragStart = useSharedValue(0);
   const drag = React.useMemo(
     () =>
       Gesture.Pan()
@@ -352,56 +298,46 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
           resizing.value = true;
         })
         .onStart(() => {
-          dragStart.value = dragY.value;
+          dragStart.value = visible.value;
         })
         .onUpdate((e) => {
-          const maxDrag = maxDragFor(kbFull.value);
-          // Past the lowest detent it gives less and less, like iOS's rubber
-          // band: never more than DISMISS_ZONE, however far the finger goes.
-          const lowest = stopDragFor(maxDrag);
-          const next = dragStart.value + e.translationY;
-          const past = next - lowest;
-          dragY.value =
-            next < 0 ? 0 : past > 0 ? lowest + DISMISS_ZONE * (1 - 1 / ((past * RUBBER_BAND) / DISMISS_ZONE + 1)) : next;
-          const above = stop !== undefined || dragY.value < maxDrag - 4;
-          if (above !== abovePillNow.value) {
-            abovePillNow.value = above;
-            runOnJS(setAbovePill)(above);
+          const max = geometryMaxHeight(frame, kbHeight.value);
+          // The finger lifts the top: height grows as it moves up.
+          let next = dragStart.value - e.translationY;
+          if (next > max) next = max;
+          // Below the lowest anchor it gives less and less, like iOS's rubber
+          // band, toward the dismiss.
+          if (next < minOpenHeight) {
+            const below = minOpenHeight - next;
+            next = minOpenHeight - DISMISS_ZONE * (1 - 1 / ((below * RUBBER_BAND) / DISMISS_ZONE + 1));
+          }
+          requested.value = next;
+          const low = next < max - 4;
+          if (low !== loweredSV.value) {
+            loweredSV.value = low;
+            runOnJS(setLowered)(low);
           }
         })
         .onEnd((e) => {
-          const maxDrag = maxDragFor(kbFull.value);
-          // Flung down hard, or released past the last detent → collapse.
-          if (e.velocityY > FLING_VELOCITY || dragY.value > stopDragFor(maxDrag) + DISMISS_MARGIN) {
+          const max = geometryMaxHeight(frame, kbHeight.value);
+          // Flung down hard, or released below the lowest anchor → dismiss.
+          if (e.velocityY > FLING_VELOCITY || requested.value < minOpenHeight - DISMISS_MARGIN) {
             runOnJS(dismiss)();
             return;
           }
-          const detents = stop === undefined ? [0, maxDrag * 0.5, maxDrag] : [0, stopDragFor(maxDrag)];
-          const projected = dragY.value + e.velocityY * 0.08;
-          let target = 0;
-          let best = 1e9;
-          for (const candidate of detents) {
-            const diff = projected - candidate;
-            const dist = diff < 0 ? -diff : diff;
-            if (dist < best) {
-              best = dist;
-              target = candidate;
-            }
-          }
-          dragY.value = withTiming(target, { duration: SNAP_MS, easing: Easing.out(Easing.cubic) });
-          atStop.value = stop !== undefined && target > 0;
-          const atPill = stop === undefined && maxDrag > 0 && target >= maxDrag - 4;
-          abovePillNow.value = !atPill;
-          runOnJS(setAbovePill)(!atPill);
-          runOnJS(setLowered)(target > 4);
-          runOnJS(setPillMode)(atPill);
-          runOnJS(remember)(maxDrag > 0 ? target / maxDrag : 0, kbFull.value);
+          const projected = requested.value - e.velocityY * PROJECT;
+          const snapped = snapOpenHeight(requested.value, projected, minOpenHeight, max, freeAbove);
+          requested.value = withTiming(snapped, { duration: SNAP_MS, easing: SNAP_EASING });
+          const low = snapped < max - 4;
+          loweredSV.value = low;
+          runOnJS(setLowered)(low);
+          runOnJS(onResize)(snapped);
           runOnJS(report)();
         })
         .onFinalize(() => {
           resizing.value = false;
         }),
-    [dragY, dragStart, resizing, kbFull, abovePillNow, maxDragFor, stopDragFor, stop, atStop, dismiss, remember, report],
+    [frame, minOpenHeight, freeAbove, requested, visible, dragStart, resizing, loweredSV, kbHeight, dismiss, onResize, report],
   );
 
   // Swipe DOWN on the pill to dismiss the keyboard. Only a clear downward drag
@@ -421,24 +357,19 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
     [open, dismissKeyboard, resizing],
   );
 
-  // The window's height: the bar's collapsed, growing to the detent open.
-  // Computed right here, from shared values and the memoized maxDragFor only:
-  // a helper function made fresh each render, called from this style, made
-  // Reanimated rebuild the style on every re-render (the screens behind
-  // re-render all the time), and every rebuild hitched the drag.
-  const windowStyle = useAnimatedStyle(() => {
-    const maxDrag = maxDragFor(kbFull.value);
-    const height = Math.max(maxDrag + MIN_HEIGHT - dragY.value, MIN_HEIGHT);
-    return { height: MIN_HEIGHT + (height - MIN_HEIGHT) * grow.value };
-  });
+  // The window's height: the bar's collapsed, growing to the visible height
+  // open. Computed right here, from shared values only (a helper made fresh each
+  // render made Reanimated rebuild the style every render and hitched the drag).
+  const windowStyle = useAnimatedStyle(() => ({
+    height: MIN_HEIGHT + (visible.value - MIN_HEIGHT) * grow.value,
+  }));
 
-  // How open the window reads: 0 collapsed or at the smallest detent (the
-  // bar), 1 open above the pill's inset range. The pill's inset and padding
-  // follow it, so it is the bar at 0 and the window's input at 1.
+  // The pill's inset and padding follow how open the window reads: the bar at 0
+  // (the pill fills it), the window's input at 1.
   const inPlace = useSharedValue(0);
   const pillDrop = props.pillLowered ?? inPlace;
   const pillWrapStyle = useAnimatedStyle(() => {
-    const openness = grow.value * (1 - pillProgress(dragY.value, maxDragFor(kbFull.value)));
+    const openness = grow.value * (1 - pillProgress(visible.value));
     return {
       paddingHorizontal: COMPOSER_INSET * openness,
       paddingBottom: COMPOSER_INSET * openness,
@@ -447,7 +378,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
     };
   });
   const pillStyle = useAnimatedStyle(() => {
-    const openness = grow.value * (1 - pillProgress(dragY.value, maxDragFor(kbFull.value)));
+    const openness = grow.value * (1 - pillProgress(visible.value));
     return {
       paddingVertical: COMPOSER_FIELD_PADDING + (PILL_PAD_V_EXPANDED - COMPOSER_FIELD_PADDING) * openness,
       paddingHorizontal: COMPOSER_FIELD_PADDING + (PILL_PAD_H_EXPANDED - COMPOSER_FIELD_PADDING) * openness,
@@ -455,20 +386,16 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   });
 
   // The handle: a plain line (not glass), so it may fade with the grow.
-  const handleStyle = useAnimatedStyle(() => ({
-    top: GRABBER_TOP_EXPANDED + (TAB_TOP - GRABBER_TOP_EXPANDED) * handleT.value,
-    opacity: grow.value,
-  }));
+  const handleStyle = useAnimatedStyle(() => ({ opacity: grow.value }));
 
   const content = (
     <View style={styles.fill}>
       <GlassContainer style={styles.fill}>
         <GlassView
           style={styles.glass}
-          // The window's glass while open above the smallest detent; none
-          // collapsed and at the pill, where the pill fills it and is the bar.
-          // Faded by the native animate, never opacity.
-          glassEffectStyle={{ style: open && abovePill ? props.glass : "none", animate: true, animationDuration: FADE_S }}
+          // The window's glass while open; none collapsed, where the pill fills
+          // it and is the bar. Faded by the native animate, never opacity.
+          glassEffectStyle={{ style: open ? props.glass : "none", animate: true, animationDuration: FADE_S }}
           tintColor={props.tintColor}
           colorScheme={glassScheme}
         >
@@ -476,9 +403,9 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
            * nothing above the pill's glass ever clips it). */}
           <View style={props.pillLowered !== undefined ? styles.bodyUnder : styles.body} pointerEvents={open ? "box-none" : "none"}>
             {/* Offer the resize gesture to the body's own control only when the
-             * top grabber is actually hidden — never both, or `drag` would be
-             * attached to two detectors at once. */}
-            <BarWindowResizeContext.Provider value={props.grabberHidden === true && !pillMode ? drag : undefined}>{props.body}</BarWindowResizeContext.Provider>
+             * top grabber is hidden — never both, or `drag` would be attached to
+             * two detectors at once. */}
+            <BarWindowResizeContext.Provider value={props.grabberHidden === true ? drag : undefined}>{props.body}</BarWindowResizeContext.Provider>
           </View>
           {/* The pill sits at the window's bottom, a direct child of the
            * window's glass: the bar collapsed, the window's input open. */}
@@ -502,9 +429,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   return (
     <View style={drawn ? styles.page : [styles.parked, { width: screenW }]} pointerEvents={drawn ? "box-none" : "none"}>
       {/* Tap outside to collapse (at full height; lowered, touches pass through
-       * to what's behind). Reaches up over the screen from the bar. Off when
-       * `dismissOnTapOutside` is false (Dubz), so the page behind stays
-       * interactive and nothing is dismissed by a tap. */}
+       * to what's behind). Off when `dismissOnTapOutside` is false (Dubz). */}
       {open && !lowered && props.dismissOnTapOutside !== false ? (
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityRole="button" accessibilityLabel={props.closeLabel} />
       ) : null}
@@ -514,22 +439,9 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
          * bar: over the bar it competed with the resize drag. */}
         {props.bodyGesture !== undefined ? <GestureDetector gesture={props.bodyGesture}>{content}</GestureDetector> : content}
 
-        {/* Glass tab above the pill at the smallest detent, open only: it
-         * comes and goes by the native animate (none ↔ regular). */}
-        <View style={styles.tabGlassWrap} pointerEvents="none">
-          <GlassView
-            style={styles.tabGlass}
-            glassEffectStyle={{ style: open && pillMode ? "regular" : "none", animate: true, animationDuration: FADE_S }}
-            colorScheme={glassScheme}
-          />
-        </View>
-
-        {/* The one grabber: a line inside the window top at larger detents,
-         * floating over the tab at the smallest; gone collapsed. Hidden when a
-         * consumer moves it onto its own control (Dubz's title pill) — but kept
-         * at the smallest detent (pillMode), where that control is squeezed out
-         * and there'd be nothing to grab. */}
-        {props.grabberHidden === true && !pillMode ? null : (
+        {/* The grab handle: a line inside the window top; gone collapsed. Hidden
+         * when a consumer moves it onto its own control (Dubz's title pill). */}
+        {props.grabberHidden === true ? null : (
           <GestureDetector gesture={drag}>
             <Reanimated.View style={[styles.grabHandle, handleStyle]} pointerEvents={open ? "auto" : "none"}>
               <View style={styles.grabber} />
@@ -539,31 +451,6 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
       </Reanimated.View>
     </View>
   );
-};
-
-/** A detent memory held for the app's run: `save` persists what a drag
- * leaves; `restore` puts back what was persisted (without saving it again). */
-export const detentMemory = (
-  initialFrac: number,
-  save?: (frac: number, kbFull: number) => void,
-): DetentMemory & { readonly restore: (frac: number, kbFull: number) => void } => {
-  const held = {
-    frac: initialFrac,
-    kbFull: 0,
-  };
-  return {
-    frac: () => held.frac,
-    kbFull: () => held.kbFull,
-    remember: (frac, kbFull) => {
-      held.frac = frac;
-      held.kbFull = kbFull;
-      save?.(frac, kbFull);
-    },
-    restore: (frac, kbFull) => {
-      held.frac = frac;
-      held.kbFull = kbFull;
-    },
-  };
 };
 
 const styles = StyleSheet.create({
@@ -628,21 +515,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
-  tabGlassWrap: {
-    position: "absolute",
-    alignSelf: "center",
-    top: TAB_TOP,
-    zIndex: 2,
-  },
-  tabGlass: {
-    width: 82,
-    height: -TAB_TOP,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
   grabHandle: {
     position: "absolute",
     alignSelf: "center",
+    top: GRABBER_TOP_EXPANDED,
     width: 82,
     paddingTop: 10,
     paddingBottom: 8,

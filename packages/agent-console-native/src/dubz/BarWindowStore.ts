@@ -1,10 +1,10 @@
 /**
- * Each screen's settled bar window, by navigation route key, and the detent the
- * Dubz window was last left at. BarWindow reports its settled state here when it
- * opens, closes, finishes a snap or the keyboard settles (never per frame), and
- * forgets its route on unmount; scroll views read the cover through
- * `useBarCover`. The detent memory moved here from `settings.ts`, persisted
- * through KeyValueStore with a Schema.
+ * Each screen's settled bar window, by navigation route key, and the Dubz
+ * window's remembered default height. BarWindow reports its settled state here
+ * when it opens, closes, finishes a snap or the keyboard settles (never per
+ * frame), and forgets its route on unmount; scroll views read the cover through
+ * `useBarCover`. The remembered height (the user's default, which a drag sets)
+ * is persisted through KeyValueStore with a Schema.
  *
  * Follows the app's store pattern (Context.Service over a SubscriptionRef + a
  * *Changes stream, layer in runtime.ts, React mirror via useSyncExternalStore),
@@ -16,17 +16,18 @@ import { Context, Effect, Layer, Option, Schema, Stream, SubscriptionRef } from 
 import { KeyValueStore } from "effect/unstable/persistence";
 import type { BarWindowState } from "./barWindowGeometry";
 
-const DETENT_KEY = "dubzDetent";
+const PREFS_KEY = "dubzWindow";
 
-/** The detent the Dubz window was last left at (replaces setDubzDetent). */
-export const DubzDetent = Schema.Struct({
-  frac: Schema.Number,
-  kbFull: Schema.Number,
+/** What the Dubz window remembers across launches: the user's default height
+ * (the height a drag release last set). The keyboard is NOT part of it — the
+ * keyboard only clamps the height, it never changes the request. */
+export const DubzWindowPrefs = Schema.Struct({
+  height: Schema.Number,
 });
-export type DubzDetent = typeof DubzDetent.Type;
+export type DubzWindowPrefs = typeof DubzWindowPrefs.Type;
 
 const make = Effect.gen(function* () {
-  const detentStore = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, DubzDetent);
+  const prefsStore = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, DubzWindowPrefs);
   const states = yield* SubscriptionRef.make<ReadonlyMap<string, BarWindowState>>(new Map());
   return {
     /** Each screen's settled window, by route key, as it changes. */
@@ -46,14 +47,16 @@ const make = Effect.gen(function* () {
         next.delete(routeKey);
         return next;
       }),
-    /** The persisted detent: read back at launch, kept whenever it changes. */
-    detent: {
-      get: detentStore.get(DETENT_KEY).pipe(
+    /** The persisted default height: read back at launch, kept whenever a drag
+     * sets a new one. */
+    defaultHeight: {
+      get: prefsStore.get(PREFS_KEY).pipe(
         Effect.map(Option.getOrUndefined),
-        Effect.catch((error) => Effect.logError("[bar window] the kept detent could not be read", error).pipe(Effect.as(undefined))),
+        Effect.map((prefs) => prefs?.height),
+        Effect.catch((error) => Effect.logError("[bar window] the kept height could not be read", error).pipe(Effect.as(undefined))),
       ),
-      set: (detent: DubzDetent) =>
-        detentStore.set(DETENT_KEY, detent).pipe(Effect.catch((error) => Effect.logError("[bar window] saving the detent failed", error))),
+      set: (height: number) =>
+        prefsStore.set(PREFS_KEY, { height }).pipe(Effect.catch((error) => Effect.logError("[bar window] saving the height failed", error))),
     },
   };
 });
