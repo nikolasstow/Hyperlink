@@ -54,7 +54,7 @@ import { codeFontSizeOf, stepCodeFontSize } from "../settings";
 import { useScreenBackground, useTextColors, useTheme } from "../theme";
 import { GlassView } from "expo-glass-effect";
 import { Button, ControlGroup, Host, Image, Label, Menu, RNHostView } from "@expo/ui/swift-ui";
-import { buttonStyle, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
+import { buttonStyle, menuActionDismissBehavior, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
 import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
@@ -914,7 +914,8 @@ const MoreMenu = (props: {
       >
         {/* The code's size, side by side: a step smaller or larger. */}
         {file === undefined ? null : (
-          <ControlGroup key="font-size">
+          // Stays open as the size steps, so it can be stepped again.
+          <ControlGroup key="font-size" modifiers={[menuActionDismissBehavior("disabled")]}>
             {/* "Aa" in the code's own font; iOS's text size symbols until the
               * images are drawn (or on a build that cannot draw them). */}
             {fontSizeIcons === undefined ? (
