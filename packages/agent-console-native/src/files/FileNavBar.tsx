@@ -21,6 +21,7 @@
  *
  * @internal
  */
+import { useRoute } from "@react-navigation/native";
 import { GlassContainer, GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { Pressable, StyleSheet, Text, TextInput, useColorScheme, useWindowDimensions, View, type ViewStyle } from "react-native";
@@ -253,6 +254,8 @@ export const FileNavBar = (props: {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const insets = useSafeAreaInsets();
+  // Dubz reports its window by this screen's route (useBarCover).
+  const routeKey = useRoute().key;
   // Rests where the composer rests, rides the keyboard, and drops away as the
   // page scrolls: all one `bottom`, on the UI thread (layout: it is glass).
   const keyboardHeight = useKeyboardHeightValue();
@@ -389,7 +392,7 @@ export const FileNavBar = (props: {
         </Reanimated.View>
         {withDubz ? (
           <Reanimated.View style={[styles.dubzPage, dubzSlide]} pointerEvents="box-none">
-            <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} onOpenSessionPage={props.onOpenSessionPage} pageBack={pageBack} />
+            <DubzPage open={dubzOpen} instant={false} onOpen={openDubz} onClose={closeDubz} inputRef={dubzInputRef} context={props.dubzContext} onOpenSessionPage={props.onOpenSessionPage} pageBack={pageBack} routeKey={routeKey} />
           </Reanimated.View>
         ) : null}
       </View>

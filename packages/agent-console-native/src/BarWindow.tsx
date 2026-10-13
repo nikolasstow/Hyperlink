@@ -318,12 +318,13 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   // Report the window's SETTLED state to the store, keyed by route, when it
   // changes — on open/close, a snap (from the gesture, below) and a keyboard
   // settle. Only when it actually changed; never per frame. `frac`/`kbFull`
-  // come from the (settled) detent memory, the keyboard from the JS height.
+  // come from the (settled) detent memory, the keyboard from the JS height:
+  // open or not, the window rests on it.
   const { routeKey } = props;
   const lastReported = React.useRef<BarWindowState | undefined>(undefined);
   const report = React.useCallback(() => {
     if (routeKey === undefined) return;
-    const next: BarWindowState = { open, frac: detent.frac(), kbFull: detent.kbFull(), keyboard: open ? keyboardHeight : 0 };
+    const next: BarWindowState = { open, frac: detent.frac(), kbFull: detent.kbFull(), keyboard: keyboardHeight };
     if (lastReported.current !== undefined && sameBarWindowState(lastReported.current, next)) return;
     lastReported.current = next;
     settleBarWindow(routeKey, next);
