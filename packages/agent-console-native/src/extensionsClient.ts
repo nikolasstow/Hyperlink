@@ -139,35 +139,40 @@ export const importLocalExtension = async (apiBase: string, path: string): Promi
     }),
   );
 
-const ThemeSetting = Schema.Struct({
+const themeSetting = Schema.Struct({
   name: Schema.optional(Schema.String),
   scope: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
   settings: Schema.Record(Schema.String, Schema.String),
 });
-const ThemeJsonSchema = Schema.Struct({
+/** A VS Code theme's JSON, as the extension server sends it (and the device
+ * keeps it: KeptThemes.ts). */
+export const themeJson = Schema.Struct({
   name: Schema.optional(Schema.String),
   displayName: Schema.optional(Schema.String),
   /** `light` / `dark` / an `hc` variant — which appearance the theme is for. */
   type: Schema.optional(Schema.String),
   colors: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-  tokenColors: Schema.optional(Schema.Array(ThemeSetting)),
+  tokenColors: Schema.optional(Schema.Array(themeSetting)),
   semanticTokenColors: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
-const decodeThemeJson = Schema.decodeUnknownSync(ThemeJsonSchema);
+const decodeThemeJson = Schema.decodeUnknownSync(themeJson);
 
-/**
- * Fetch a stored theme's JSON and shape it for Shiki (a `ThemeRegistrationRaw`).
- * VS Code themes carry `tokenColors`; Shiki's `RawTheme` requires `settings`
- * (the same array), so we mirror it there.
- */
-export const getThemeJson = async (apiBase: string, file: string): Promise<ThemeRegistrationRaw> => {
-  const decoded = decodeThemeJson(
+/** Fetch a stored theme's JSON, as the server has it. */
+export const fetchThemeJson = async (apiBase: string, file: string): Promise<typeof themeJson.Type> =>
+  decodeThemeJson(
     await request(`${base(apiBase)}/extensions/theme`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ file }),
     }),
   );
+
+/**
+ * A theme's JSON shaped for Shiki (a `ThemeRegistrationRaw`). VS Code themes
+ * carry `tokenColors`; Shiki's `RawTheme` requires `settings` (the same
+ * array), so we mirror it there.
+ */
+export const shikiThemeOfJson = (decoded: typeof themeJson.Type): ThemeRegistrationRaw => {
   // Rebuild with mutable copies — Schema yields readonly, Shiki wants mutable.
   const settings = (decoded.tokenColors ?? []).map((token) => ({
     name: token.name,
@@ -186,6 +191,9 @@ export const getThemeJson = async (apiBase: string, file: string): Promise<Theme
     settings,
   };
 };
+
+/** Fetch a stored theme's JSON, shaped for Shiki. */
+export const getThemeJson = async (apiBase: string, file: string): Promise<ThemeRegistrationRaw> => shikiThemeOfJson(await fetchThemeJson(apiBase, file));
 
 export const getRemoteConfig = async (apiBase: string): Promise<Record<string, unknown>> =>
   decodeConfig(await request(`${base(apiBase)}/config`));

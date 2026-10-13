@@ -16,7 +16,10 @@ import * as React from "react";
 import { useColorScheme } from "react-native";
 import { useAppContextOptional } from "./AppContext";
 import { getCreatedTheme } from "./createdThemes";
-import { getThemeJson } from "./extensionsClient";
+import { Effect } from "effect";
+import { forkApp, runApp } from "./effect/runtime";
+import { fetchThemeJson, shikiThemeOfJson } from "./extensionsClient";
+import { KeptThemes } from "./KeptThemes";
 import { type CodeTheme, type Theme } from "./settings";
 import { FALLBACK_THEME, shikiThemeOf } from "./shikiHighlighter";
 import { useTheme } from "./theme";
@@ -43,6 +46,40 @@ export const effectiveCode = (theme: Theme, scheme: Scheme): CodeTheme | undefin
  * instant and correctly themed. */
 const resolvedThemes = new Map<string, string | ThemeRegistrationRaw>();
 
+/** Extension themes kept on the device (KeptThemes.ts), by file: what an
+ * editor draws in before the server answers after a launch. */
+const keptByFile = new Map<string, ThemeRegistrationRaw>();
+
+let started = false;
+let readBack: () => void = () => undefined;
+/** Settles once the kept themes have been read back (the app waits for it,
+ * so the first file opened is drawn in its theme). */
+export const keptThemesReadBack = new Promise<void>((resolve) => {
+  readBack = resolve;
+});
+
+/** Reads back the kept themes (once, at launch). */
+export const startKeptThemes = (): void => {
+  if (started) return;
+  started = true;
+  forkApp(
+    Effect.gen(function* () {
+      return yield* (yield* KeptThemes).all;
+    }).pipe(
+      Effect.tap((all) =>
+        Effect.sync(() => {
+          for (const [file, theme] of Object.entries(all)) keptByFile.set(file, { ...shikiThemeOfJson(theme), name: file });
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => readBack())),
+    ),
+  );
+};
+
+/** The kept copy of an enabled extension theme, if the device has one. */
+const keptFor = (enabled: { readonly file?: string; readonly createdId?: string } | undefined): ThemeRegistrationRaw | undefined =>
+  enabled?.createdId === undefined && enabled?.file !== undefined ? keptByFile.get(enabled.file) : undefined;
+
 /** Resolve a specific enabled code theme for a specific scheme. The split
  * preview resolves both slots at once with this; `useCodeTheme` resolves the
  * effective one for the live appearance. */
@@ -57,12 +94,12 @@ export const useResolvedCodeTheme = (enabled: CodeTheme | undefined, scheme: Sch
 
   // Seed from the cache synchronously: if the theme's already resolved, the
   // first frame is correct — no default-then-correct flash.
-  const [value, setValue] = React.useState<string | ThemeRegistrationRaw>(() => resolvedThemes.get(key) ?? fallbackFor(scheme));
+  const [value, setValue] = React.useState<string | ThemeRegistrationRaw>(() => resolvedThemes.get(key) ?? keptFor(enabled) ?? fallbackFor(scheme));
 
   React.useEffect(() => {
     let cancelled = false;
     // On a theme switch (key change), show the cached resolution at once.
-    const cached = resolvedThemes.get(key);
+    const cached = resolvedThemes.get(key) ?? keptFor(enabled);
     if (cached !== undefined) setValue(cached);
 
     const remember = (resolved: string | ThemeRegistrationRaw): void => {
@@ -81,9 +118,19 @@ export const useResolvedCodeTheme = (enabled: CodeTheme | undefined, scheme: Sch
         .catch(() => undefined);
     } else if (apiBase !== undefined) {
       const file = enabled.file;
-      void getThemeJson(apiBase, file)
-        .then((json) => remember({ ...json, name: file }))
-        .catch(() => undefined);
+      // Kept on the device as it arrives, for the next launch.
+      void fetchThemeJson(apiBase, file)
+        .then((json) => {
+          const theme = { ...shikiThemeOfJson(json), name: file };
+          keptByFile.set(file, theme);
+          remember(theme);
+          return runApp(
+            Effect.gen(function* () {
+              yield* (yield* KeptThemes).keep(file, json);
+            }),
+          );
+        })
+        .catch((error: unknown) => console.warn("[themes] fetching the theme failed", error));
     }
     return () => {
       cancelled = true;

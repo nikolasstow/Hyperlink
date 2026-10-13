@@ -14,6 +14,8 @@
  * - the conversations kept on the device (their own prefix);
  * - each session's own chat background (its own prefix);
  * - Home's last layout, for the launch screen (its own prefix);
+ * - the extension code themes fetched, for the first frame after a launch
+ *   (their own prefix);
  * - where Files is, per repo (its own prefix);
  * - the pages open when the app was last used (its own prefix);
  * - Home's favorites (their own prefix);
@@ -32,6 +34,7 @@ import { Favorites } from "../favorites/Favorites";
 import { FileNav } from "../files/FileNav";
 import { LiveFiles } from "../files/LiveFiles";
 import { HomeLayoutStore } from "../home/HomeLayoutStore";
+import { KeptThemes } from "../KeptThemes";
 import { SessionBackgrounds } from "../sessions/SessionBackgrounds";
 import { Opencode } from "../opencode/Opencode";
 import { layer as foldersLayer } from "../outbox/foldersNative";
@@ -45,6 +48,7 @@ const OUTBOX_STORAGE_PREFIX = "agent-console-native:outbox:";
 const CONVERSATIONS_STORAGE_PREFIX = "agent-console-native:conversations:";
 const SESSIONS_STORAGE_PREFIX = "agent-console-native:sessions:";
 const HOME_STORAGE_PREFIX = "agent-console-native:home:";
+const THEMES_STORAGE_PREFIX = "agent-console-native:themes:";
 const FILES_STORAGE_PREFIX = "agent-console-native:files:";
 const NAV_STORAGE_PREFIX = "agent-console-native:nav:";
 const FAVORITES_STORAGE_PREFIX = "agent-console-native:favorites:";
@@ -57,6 +61,7 @@ const AppLayer = Layer.mergeAll(
   Conversations.layer.pipe(Layer.provide(asyncStorageLayer(CONVERSATIONS_STORAGE_PREFIX))),
   SessionBackgrounds.layer.pipe(Layer.provide(asyncStorageLayer(SESSIONS_STORAGE_PREFIX))),
   HomeLayoutStore.layer.pipe(Layer.provide(asyncStorageLayer(HOME_STORAGE_PREFIX))),
+  KeptThemes.layer.pipe(Layer.provide(asyncStorageLayer(THEMES_STORAGE_PREFIX))),
   FileNav.layer.pipe(Layer.provide(asyncStorageLayer(FILES_STORAGE_PREFIX))),
   KeptNav.layer.pipe(Layer.provide(asyncStorageLayer(NAV_STORAGE_PREFIX))),
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
