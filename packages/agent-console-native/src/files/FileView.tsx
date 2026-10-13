@@ -19,6 +19,7 @@ import * as React from "react";
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 import { isCodeEditorNative } from "../../modules/code-editor";
 import type { Rebase } from "file-sync";
+import type { ScopeSymbol } from "./stickyRanges";
 import { CodeSurface } from "../CodeSurface";
 import { langFromFilename } from "../shikiHighlighter";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
@@ -67,7 +68,7 @@ export const FileView = (props: {
   /** Open the session that made a change (from its popover in the gutter). */
   readonly onOpenSession?: (sessionID: string) => void;
   /** The named scopes the line you are at is in, when they change. */
-  readonly onScopes?: (scopes: ReadonlyArray<string>) => void;
+  readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();

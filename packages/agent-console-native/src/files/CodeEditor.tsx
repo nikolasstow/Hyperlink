@@ -21,7 +21,7 @@ import { cachedSessionTitle } from "../sessionCache";
 import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
 import { scopesAt } from "./breadcrumbs";
-import { type StickyRange, stickyRanges } from "./stickyRanges";
+import { type ScopeSymbol, type StickyRange, stickyRanges } from "./stickyRanges";
 import { textFor } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
 
@@ -123,7 +123,7 @@ export const CodeEditor = (props: {
   readonly onOpenSession?: (sessionID: string) => void;
   /** The named scopes the line you are at is in, outermost first, when they
    * change (breadcrumbs.ts). */
-  readonly onScopes?: (scopes: ReadonlyArray<string>) => void;
+  readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -150,7 +150,7 @@ export const CodeEditor = (props: {
   const { onScopes } = props;
   const reportScopes = React.useCallback(() => {
     const scopes = scopesAt(ranges.current, atLine.current);
-    const key = scopes.join("\n");
+    const key = scopes.map((scope) => `${scope.kind} ${scope.name}`).join("\n");
     if (key === reportedScopes.current) return;
     reportedScopes.current = key;
     onScopes?.(scopes);

@@ -68,6 +68,7 @@ import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFi
 import { HistorySheet } from "./HistorySheet";
 import { pathCrumbs } from "./breadcrumbs";
 import { BreadcrumbPill } from "./BreadcrumbPill";
+import type { ScopeSymbol } from "./stickyRanges";
 import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
 import { useAppContext } from "../AppContext";
 import { useCodeTheme } from "../useCodeTheme";
@@ -259,8 +260,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const topBackMax = current.kind === "file" ? HOME_HEADER_HEIGHT : (screen.width - pageMiddle) / 2 - TOP_SIDE - TOP_GAP;
   // Where you are in the file: its path from the worktree, then the scopes
   // the editor reports for the line you are at (this file's only).
-  const [scopes, setScopes] = React.useState<{ readonly path: string; readonly scopes: ReadonlyArray<string> } | undefined>(undefined);
-  const crumbs = [...pathCrumbs(current.path, currentWt?.path ?? primary.dir), ...(scopes?.path === current.path ? scopes.scopes : [])];
+  const [scopes, setScopes] = React.useState<{ readonly path: string; readonly scopes: ReadonlyArray<ScopeSymbol> } | undefined>(undefined);
+  const crumbPath = pathCrumbs(current.path, currentWt?.path ?? primary.dir);
+  const crumbSymbols = scopes?.path === current.path ? scopes.scopes : [];
   // The tab view's filter is centered, search/history fixed at the right:
   // keep the filter clear of both (symmetric), and back clear of the filter.
   const filterLabel = repoFilter.kind === "all" ? "All Repos" : repoFilter.repo;
@@ -763,7 +765,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
             <BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={topBackMax} />
             {current.kind === "file" ? (
               <View style={styles.crumbs}>
-                <BreadcrumbPill crumbs={crumbs} />
+                <BreadcrumbPill path={crumbPath} symbols={crumbSymbols} />
               </View>
             ) : (
               <View style={styles.topSpacer} pointerEvents="none" />

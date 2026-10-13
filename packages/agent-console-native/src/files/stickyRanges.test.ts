@@ -7,15 +7,15 @@ describe("stickyRanges — TypeScript", () => {
     const ranges = await stickyRanges(code, "typescript");
     const cls = ranges.find((r) => r.header === 0);
     const method = ranges.find((r) => r.header === 1);
-    expect(cls).toMatchObject({ start: 0, end: 5, depth: 0, label: "class A" });
-    expect(method).toMatchObject({ start: 1, end: 4, depth: 1, label: "run" });
+    expect(cls).toMatchObject({ start: 0, end: 5, depth: 0, symbol: { kind: "class", name: "A" } });
+    expect(method).toMatchObject({ start: 1, end: 4, depth: 1, symbol: { kind: "method", name: "run" } });
   });
 
-  it("labels a named arrow from its variable, and leaves bare blocks unlabelled", async () => {
+  it("names a named arrow from its variable, and leaves bare blocks unnamed", async () => {
     const code = ["const go = () => {", "  if (x) {", "    y();", "  }", "};"].join("\n");
     const ranges = await stickyRanges(code, "typescript");
-    expect(ranges.find((r) => r.header === 0)?.label).toBe("func go");
-    expect(ranges.find((r) => r.header === 1)?.label).toBeUndefined();
+    expect(ranges.find((r) => r.header === 0)?.symbol).toEqual({ kind: "function", name: "go" });
+    expect(ranges.find((r) => r.header === 1)?.symbol).toBeUndefined();
     // The arrow owns the sticky; the variable statement doesn't double up.
     expect(ranges.filter((r) => r.header === 0)).toHaveLength(1);
   });
@@ -23,13 +23,13 @@ describe("stickyRanges — TypeScript", () => {
   it("makes a const with a multi-line type/value its own sticky scope", async () => {
     const code = ["export const validate: {", "  (a: number): void", "  (a: string): void", "} = internal.validate;"].join("\n");
     const ranges = await stickyRanges(code, "typescript");
-    expect(ranges.find((r) => r.header === 0)).toMatchObject({ start: 0, end: 3, depth: 0, label: "const validate" });
+    expect(ranges.find((r) => r.header === 0)).toMatchObject({ start: 0, end: 3, depth: 0, symbol: { kind: "constant", name: "validate" } });
   });
 
   it("captures a type alias", async () => {
     const code = ["type Big = {", "  a: number", "  b: string", "};"].join("\n");
     const ranges = await stickyRanges(code, "typescript");
-    expect(ranges.find((r) => r.header === 0)).toMatchObject({ label: "type Big", depth: 0 });
+    expect(ranges.find((r) => r.header === 0)).toMatchObject({ symbol: { kind: "type", name: "Big" }, depth: 0 });
   });
 
   it("captures a multi-line if block", async () => {

@@ -26,10 +26,19 @@ export interface StickyRange {
   readonly start: number;
   readonly end: number;
   readonly depth: number;
-  /** A concise signature for the glass pill (`func doSomething`, `class Foo`, a
-   * heading's text). Absent for anonymous scopes (bare `if`/`for`/object
-   * literals), which don't earn a pill. */
-  readonly label?: string;
+  /** What the scope declares, for the breadcrumbs (`class Foo`, `function
+   * bar`, a heading). Absent for anonymous scopes (bare `if`/`for`/object
+   * literals). */
+  readonly symbol?: ScopeSymbol;
+}
+
+/** The kinds of symbol a scope can declare, as VS Code names them. */
+export type SymbolKind = "function" | "method" | "constructor" | "property" | "class" | "interface" | "enum" | "namespace" | "type" | "variable" | "constant" | "heading";
+
+/** A named scope: its kind and its name. */
+export interface ScopeSymbol {
+  readonly kind: SymbolKind;
+  readonly name: string;
 }
 
 /** `langFromFilename` hands us the raw extension (`ts`, `md`, …); map it to a
@@ -62,7 +71,7 @@ const loadTs = async (): Promise<typeof TS> => {
 };
 
 /** A `const`/`let`/`var` statement whose value is itself a function or class gets
- * its sticky from that inner node (labelled `func foo`/`class Foo`), so the
+ * its sticky from that inner node (named `foo`/`Foo`), so the
  * statement itself shouldn't double up. Everything else (`const x = { … }`,
  * `const x: { … } = …`, a long call, etc.) does earn one. */
 const initializerIsOwnScope = (ts: typeof TS, node: TS.VariableStatement): boolean => {
@@ -104,30 +113,29 @@ const isContainer = (ts: typeof TS, node: TS.Node): boolean => {
   }
 };
 
-/** A short pill label for a scope — kind + name — or undefined for anonymous
- * scopes that shouldn't get a pill. Uses `ts.isX` guards (no casts). */
-const labelFor = (ts: typeof TS, node: TS.Node): string | undefined => {
-  const named = (name: TS.Node | undefined): string | undefined =>
-    name !== undefined && ts.isIdentifier(name) ? name.text : undefined;
-  if (ts.isFunctionDeclaration(node)) return named(node.name) === undefined ? undefined : `func ${named(node.name)}`;
-  if (ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) return named(node.name);
-  if (ts.isConstructorDeclaration(node)) return "constructor";
-  if (ts.isGetAccessorDeclaration(node)) return named(node.name) === undefined ? undefined : `get ${named(node.name)}`;
-  if (ts.isSetAccessorDeclaration(node)) return named(node.name) === undefined ? undefined : `set ${named(node.name)}`;
-  if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return named(node.name) === undefined ? undefined : `class ${named(node.name)}`;
-  if (ts.isInterfaceDeclaration(node)) return `interface ${node.name.text}`;
-  if (ts.isEnumDeclaration(node)) return `enum ${node.name.text}`;
-  if (ts.isModuleDeclaration(node)) return `namespace ${node.name.getText()}`;
-  if (ts.isTypeAliasDeclaration(node)) return `type ${node.name.text}`;
+/** What a scope declares — its kind and name — or undefined for anonymous
+ * scopes. Uses `ts.isX` guards (no casts). */
+const symbolFor = (ts: typeof TS, node: TS.Node): ScopeSymbol | undefined => {
+  const of = (kind: SymbolKind, name: string | undefined): ScopeSymbol | undefined => (name === undefined ? undefined : { kind, name });
+  const named = (name: TS.Node | undefined): string | undefined => (name !== undefined && ts.isIdentifier(name) ? name.text : undefined);
+  if (ts.isFunctionDeclaration(node)) return of("function", named(node.name));
+  if (ts.isMethodDeclaration(node) || ts.isMethodSignature(node)) return of("method", named(node.name));
+  if (ts.isConstructorDeclaration(node)) return of("constructor", "constructor");
+  if (ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node)) return of("property", named(node.name));
+  if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return of("class", named(node.name));
+  if (ts.isInterfaceDeclaration(node)) return of("interface", node.name.text);
+  if (ts.isEnumDeclaration(node)) return of("enum", node.name.text);
+  if (ts.isModuleDeclaration(node)) return of("namespace", node.name.getText());
+  if (ts.isTypeAliasDeclaration(node)) return of("type", node.name.text);
   if (ts.isVariableStatement(node)) {
     const decl = node.declarationList.declarations[0];
-    const keyword = (node.declarationList.flags & ts.NodeFlags.Const) !== 0 ? "const" : (node.declarationList.flags & ts.NodeFlags.Let) !== 0 ? "let" : "var";
-    return decl !== undefined && ts.isIdentifier(decl.name) ? `${keyword} ${decl.name.text}` : undefined;
+    const constant = (node.declarationList.flags & ts.NodeFlags.Const) !== 0;
+    return decl !== undefined && ts.isIdentifier(decl.name) ? of(constant ? "constant" : "variable", decl.name.text) : undefined;
   }
   if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
     const parent = node.parent;
-    if (parent !== undefined && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return `func ${parent.name.text}`;
-    if (parent !== undefined && ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) return `func ${parent.name.text}`;
+    if (parent !== undefined && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return of("function", parent.name.text);
+    if (parent !== undefined && ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) return of("function", parent.name.text);
     return undefined;
   }
   return undefined;
@@ -143,8 +151,8 @@ const tsRanges = (ts: typeof TS, text: string, scriptKind: TS.ScriptKind): Reado
       const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line;
       // Only multi-line scopes are worth pinning.
       if (end > start) {
-        const label = labelFor(ts, node);
-        out.push(label === undefined ? { header: start, start, end, depth } : { header: start, start, end, depth, label });
+        const symbol = symbolFor(ts, node);
+        out.push(symbol === undefined ? { header: start, start, end, depth } : { header: start, start, end, depth, symbol });
         childDepth = depth + 1;
       }
     }
@@ -181,8 +189,8 @@ const markdownRanges = (text: string): ReadonlyArray<StickyRange> => {
       }
     }
     if (end > here.line) {
-      const label = lines[here.line].replace(/^#{1,6}\s+/, "").trim();
-      out.push({ header: here.line, start: here.line, end, depth: here.level - 1, label });
+      const name = lines[here.line].replace(/^#{1,6}\s+/, "").trim();
+      out.push({ header: here.line, start: here.line, end, depth: here.level - 1, symbol: { kind: "heading", name } });
     }
   }
   return out;

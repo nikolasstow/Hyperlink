@@ -8,7 +8,6 @@ private struct StickyRangeNative: Decodable {
     let start: Int
     let end: Int
     let depth: Int
-    let label: String?
 }
 
 /// Tokens with the length of the text they were made for (`apiVersion` 7).

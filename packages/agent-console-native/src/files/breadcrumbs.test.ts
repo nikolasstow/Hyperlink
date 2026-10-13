@@ -20,14 +20,15 @@ describe("breadcrumbs", () => {
   it("names the scopes a line is in, outermost first, skipping unnamed ones", async () => {
     const ranges = await stickyRanges(code, "typescript");
     const inner = scopesAt(ranges, 3);
-    expect(inner.length).toBe(2);
-    expect(inner[0]).toContain("Store");
-    expect(inner[1]).toContain("get");
+    expect(inner).toEqual([
+      { kind: "class", name: "Store" },
+      { kind: "method", name: "get" },
+    ]);
   });
 
   it("counts a scope's own header line as inside it", async () => {
     const ranges = await stickyRanges(code, "typescript");
-    expect(scopesAt(ranges, 1).at(-1)).toContain("get");
+    expect(scopesAt(ranges, 1).at(-1)).toEqual({ kind: "method", name: "get" });
   });
 
   it("has no scopes between them", async () => {
