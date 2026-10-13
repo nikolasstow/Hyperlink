@@ -271,6 +271,11 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const crumbSymbols = scopes?.path === current.path ? scopes.scopes : [];
   // Which way the scopes roll as they change: set before they do.
   const crumbRoll = useSharedValue<RollDirection>(1);
+  // The breadcrumbs dropped open below the top buttons; a new page, or the
+  // tab overview, closes it.
+  const [crumbsOpen, setCrumbsOpen] = React.useState(false);
+  const toggleCrumbs = React.useCallback(() => setCrumbsOpen((open) => !open), []);
+  React.useEffect(() => setCrumbsOpen(false), [current.path, overview.kind]);
   // The tab view's filter is centered, search/history fixed at the right:
   // keep the filter clear of both (symmetric), and back clear of the filter.
   const filterLabel = repoFilter.kind === "all" ? "All Repos" : repoFilter.repo;
@@ -770,14 +775,22 @@ export const FilesScreen = (props: Props): React.ReactElement => {
           <Reanimated.View style={[StyleSheet.absoluteFill, blurFade]} pointerEvents="none">
             <EdgeBlurBars variant="top" />
           </Reanimated.View>
+          {/* Open, the breadcrumbs close on a tap anywhere else. */}
+          {crumbsOpen ? <Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Close breadcrumbs" onPress={() => setCrumbsOpen(false)} /> : null}
           {/* The page's top: back to the repo, and its title (the worktree
             * picker at the root, else what is showing). */}
           <Reanimated.View style={[styles.top, topSlide]} pointerEvents={overview.kind === "closed" ? "box-none" : "none"}>
             <BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={topBackMax} />
             {current.kind === "file" ? (
-              <View style={styles.crumbs}>
-                <BreadcrumbPill path={crumbPath} symbols={crumbSymbols} roll={crumbRoll} />
-              </View>
+              <BreadcrumbPill
+                path={crumbPath}
+                symbols={crumbSymbols}
+                roll={crumbRoll}
+                expanded={crumbsOpen}
+                onToggle={toggleCrumbs}
+                expandedWidth={screen.width - TOP_SIDE * 2}
+                slotStyle={styles.crumbs}
+              />
             ) : (
               <View style={styles.topSpacer} pointerEvents="none" />
             )}

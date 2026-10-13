@@ -17,14 +17,20 @@
  * glass turning like a drum the way the line moved (crumbRoll.ts); the others
  * slide to make room.
  *
+ * Tapped, it drops below the top buttons and widens to the bar's full width
+ * (the room for more crumbs, and what comes under them), and back. It sits in
+ * its slot by plain layout; the slot's place, read as it is laid out, is only
+ * where the drop starts from, so nothing waits on a measurement.
+ *
  * @internal
  */
 import MaskedView from "@react-native-masked-view/masked-view";
 import { GlassView } from "expo-glass-effect";
 import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
-import { StyleSheet, Text, useColorScheme, View } from "react-native";
-import Reanimated, { interpolate, LinearTransition, type SharedValue, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { StyleSheet, Text, useColorScheme, View, type ViewStyle } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, { Easing, interpolate, LinearTransition, runOnJS, type SharedValue, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Codicon } from "../Codicon";
 import { iconForFile } from "../fileIcon";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
@@ -45,12 +51,22 @@ const CHEVRON_SIZE = 14;
 /** How long the others (and the row) take to make room for a scope that
  * changed. */
 const crumbMove = LinearTransition.duration(220);
+/** How far below the top buttons it drops, and how long it takes. */
+const DROP_GAP = 8;
+const DROP = { duration: 320, easing: Easing.out(Easing.cubic) };
 
 export const BreadcrumbPill = (props: {
   readonly path: ReadonlyArray<string>;
   readonly symbols: ReadonlyArray<ScopeSymbol>;
   /** Which way the scopes roll as they change. */
   readonly roll: SharedValue<RollDirection>;
+  /** Dropped below the top buttons, at the bar's full width. */
+  readonly expanded: boolean;
+  readonly onToggle: () => void;
+  /** The bar's width, what it widens to. */
+  readonly expandedWidth: number;
+  /** Its slot in the bar. */
+  readonly slotStyle: ViewStyle;
 }): React.ReactElement => {
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -61,6 +77,46 @@ export const BreadcrumbPill = (props: {
   const { roll } = props;
   const crumbIn = React.useMemo(() => rollIn(roll), [roll]);
   const crumbOut = React.useMemo(() => rollOut(roll), [roll]);
+
+  // Where its slot is in the bar (from the slot's own layout), for the drop
+  // to start from; at rest it simply fills the slot.
+  const slotX = useSharedValue(0);
+  const slotW = useSharedValue(0);
+  const open = useSharedValue(props.expanded ? 1 : 0);
+  const { expanded, expandedWidth } = props;
+  // While it drops or rises, the row's own slide is off: the row is resized
+  // every frame, and would chase it.
+  const [dropping, setDropping] = React.useState(false);
+  const isFirst = React.useRef(true);
+  React.useEffect(() => {
+    if (isFirst.current) {
+      isFirst.current = false;
+      return;
+    }
+    setDropping(true);
+    open.value = withTiming(expanded ? 1 : 0, DROP, (finished) => {
+      if (finished === true) runOnJS(setDropping)(false);
+    });
+  }, [expanded, open]);
+  const frame = useAnimatedStyle(() => {
+    const progress = open.value;
+    if (progress === 0 || slotW.value === 0) return { left: 0, top: 0, width: "100%" };
+    return {
+      left: -slotX.value * progress,
+      top: (HOME_HEADER_HEIGHT + DROP_GAP) * progress,
+      width: slotW.value + (expandedWidth - slotW.value) * progress,
+    };
+  });
+  const { onToggle } = props;
+  const tap = React.useMemo(
+    () =>
+      Gesture.Tap()
+        .runOnJS(true)
+        .onEnd((_event, success) => {
+          if (success) onToggle();
+        }),
+    [onToggle],
+  );
 
   // How much of the crumbs is hidden past each end: the scroll view's start
   // is the right end (mirrored), so what it has scrolled is hidden on the
@@ -105,48 +161,58 @@ export const BreadcrumbPill = (props: {
   });
 
   return (
-    <View style={styles.shadow} accessibilityRole="header" accessibilityLabel={[...props.path, ...props.symbols.map((symbol) => symbol.name)].join(", ")}>
-      <View style={styles.clip}>
-        <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
-        <MaskedView
-          style={styles.fill}
-          maskElement={
-            <View style={maskStyles.mask}>
-              <View style={maskStyles.edge}>
-                <LinearGradient colors={FADE_IN} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                <Reanimated.View style={[maskStyles.solid, leftSolid]} />
-              </View>
-              <View style={maskStyles.middle} />
-              <View style={maskStyles.edge}>
-                <LinearGradient colors={FADE_OUT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                <Reanimated.View style={[maskStyles.solid, rightSolid]} />
-              </View>
-            </View>
-          }
-        >
-          <Reanimated.ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.mirrored}
-            contentContainerStyle={styles.content}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
-            onLayout={(event) => {
-              viewport.value = event.nativeEvent.layout.width;
-            }}
-            onContentSizeChange={(width) => {
-              content.value = width;
-            }}
-          >
-            {/* Its size eases to the new one, so the crumbs before a scope
-              * that changed width slide over rather than jump. */}
-            <Reanimated.View style={[styles.row, styles.mirrored]} layout={crumbMove}>
-              {pathCrumbs}
-              {symbolCrumbs}
-            </Reanimated.View>
-          </Reanimated.ScrollView>
-        </MaskedView>
-      </View>
+    <View
+      style={props.slotStyle}
+      onLayout={(event) => {
+        slotX.value = event.nativeEvent.layout.x;
+        slotW.value = event.nativeEvent.layout.width;
+      }}
+    >
+      <GestureDetector gesture={tap}>
+        <Reanimated.View style={[styles.shadow, frame]} accessibilityRole="button" accessibilityLabel={[...props.path, ...props.symbols.map((symbol) => symbol.name)].join(", ")}>
+          <View style={styles.clip}>
+            <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
+            <MaskedView
+              style={styles.fill}
+              maskElement={
+                <View style={maskStyles.mask}>
+                  <View style={maskStyles.edge}>
+                    <LinearGradient colors={FADE_IN} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                    <Reanimated.View style={[maskStyles.solid, leftSolid]} />
+                  </View>
+                  <View style={maskStyles.middle} />
+                  <View style={maskStyles.edge}>
+                    <LinearGradient colors={FADE_OUT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                    <Reanimated.View style={[maskStyles.solid, rightSolid]} />
+                  </View>
+                </View>
+              }
+            >
+              <Reanimated.ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.mirrored}
+                contentContainerStyle={styles.content}
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+                onLayout={(event) => {
+                  viewport.value = event.nativeEvent.layout.width;
+                }}
+                onContentSizeChange={(width) => {
+                  content.value = width;
+                }}
+              >
+                {/* Its size eases to the new one, so the crumbs before a scope
+                  * that changed width slide over rather than jump. */}
+                <Reanimated.View style={[styles.row, styles.mirrored]} layout={dropping ? undefined : crumbMove}>
+                  {pathCrumbs}
+                  {symbolCrumbs}
+                </Reanimated.View>
+              </Reanimated.ScrollView>
+            </MaskedView>
+          </View>
+        </Reanimated.View>
+      </GestureDetector>
     </View>
   );
 };
@@ -180,7 +246,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   shadow: {
-    flex: 1,
+    position: "absolute",
     height: HOME_HEADER_HEIGHT,
     borderRadius: HOME_HEADER_HEIGHT / 2,
     shadowColor: "#000000",
