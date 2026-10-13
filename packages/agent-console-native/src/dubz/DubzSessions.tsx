@@ -30,6 +30,7 @@ import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 import { chatMessageOfV1 } from "../chat/fromV1";
 import { chatMessageOfQueued, pendingMessages, sameMessages } from "../chat/fromOutbox";
 import { lastSummary, textOf, type ChatMessage } from "../chat/model";
+import { MessageParts } from "../chat/MessageParts";
 import { useV2Transcript } from "../chat/useV2Transcript";
 import { runApp } from "../effect/runtime";
 import { useKeptConversation } from "../conversations/useConversations";
@@ -475,10 +476,9 @@ export const DubzSessionPage = (props: {
 
   return (
     <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={<GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
-      {messages.flatMap((message) => {
-        const text = textOf(message);
-        return text === "" ? [] : [<ChatBubble key={message.id} role={message.role} text={text} width={pageWidth} />];
-      })}
+      {messages.map((message) => (
+        <ChatBubble key={message.id} message={message} width={pageWidth} />
+      ))}
     </DubzScrollPage>
   );
 };
@@ -488,34 +488,36 @@ const BUBBLE_PAD_H = 14;
 
 /** One chat message as a glass bubble. Outbound (user) is a native, white,
  * inline-markdown bubble, trailing and constrained. Inbound (agent) is a
- * FULL-WIDTH glass bubble rendering the REAL markdown (code fences, lists, …)
- * via the app's Markdown in an RNHostView, so it uses all the space. */
-const ChatBubble = (props: { readonly role: "user" | "assistant"; readonly text: string; readonly width: number }): React.ReactElement => {
-  // RN content inside the glass (via RNHostView) so RN flexbox does the
-  // hug/cap/wrap — @expo/ui's frame(maxWidth) goes greedy and leaves dead space.
-  if (props.role === "user") {
+ * FULL-WIDTH glass bubble rendering the message's REAL parts (markdown, tool
+ * calls, reasoning) via the shared MessageParts in an RNHostView — same as the
+ * full-screen chat. Renders nothing when there is nothing to show. */
+const ChatBubble = (props: { readonly message: ChatMessage; readonly width: number }): React.ReactElement | null => {
+  if (props.message.role === "user") {
+    const text = textOf(props.message);
+    if (text === "") return null;
     // Compute the width (RNHostView fills to the content's max, and @expo/ui
     // frame(maxWidth) is greedy — both stretch short messages to full width).
     // titlePillWidth estimates the one-line width; cap it, then the text wraps
     // inside. Padding before the frame so it sits inside that width.
     const maxBubble = Math.round(props.width * 0.82);
-    const bubbleWidth = Math.min(titlePillWidth(props.text, false), maxBubble);
+    const bubbleWidth = Math.min(titlePillWidth(text, false), maxBubble);
     return (
       <HStack modifiers={[frame({ width: props.width, alignment: "trailing" })]}>
         <HStack modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), frame({ width: bubbleWidth, alignment: "leading" }), glassEffect({ glass: { variant: "regular", tint: colors.tint }, shape: "roundedRectangle", cornerRadius: 18 })]}>
-          <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle("#FFFFFF")]}>{props.text}</UIText>
+          <UIText markdownEnabled modifiers={[font({ size: 15 }), foregroundStyle("#FFFFFF")]}>{text}</UIText>
         </HStack>
       </HStack>
     );
   }
-  // Inbound: full-width glass bubble; the markdown wraps at an explicit inner
-  // width (without it the content doesn't wrap and is cut off on the right).
+  // Inbound: full-width glass bubble rendering the real parts. The content wraps
+  // at an explicit inner width (without it it doesn't wrap and is cut off).
+  if (props.message.parts.length === 0) return null;
   const inner = props.width - BUBBLE_PAD_H * 2;
   return (
     <VStack alignment="leading" modifiers={[padding({ horizontal: BUBBLE_PAD_H, vertical: 10 }), frame({ width: props.width, alignment: "leading" }), glassEffect({ glass: { variant: "regular" }, shape: "roundedRectangle", cornerRadius: 18 })]}>
       <RNHostView matchContents>
         <View style={{ width: inner }}>
-          <Markdown text={props.text} width={inner} />
+          <MessageParts parts={props.message.parts} textWidth={inner} />
         </View>
       </RNHostView>
     </VStack>
