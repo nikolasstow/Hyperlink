@@ -92,6 +92,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     // Theme inputs, held so any one changing rebuilds the whole theme.
     private var fontSize: CGFloat = 14
+    private var fontFamily: String?
     private var foreground = UIColor(shikiHex: "#D4D4D4") ?? .label
     // Clear until the theme comes: the view paints nothing of its own rather
     // than a dark default that shows for a frame before the theme's colours.
@@ -111,9 +112,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.showLineNumbers = true
         // More breathing room around the line numbers than Runestone's default
         // 3/3 — the gutter reads as its own column, not cramped against the edge
-        // or the code.
-        textView.gutterLeadingPadding = 16
-        textView.gutterTrailingPadding = 16
+        // or the code — but no more, as wider code fonts widen it already. The
+        // change marks' stripe sits 5pt in from its right edge, inside this.
+        textView.gutterLeadingPadding = 10
+        textView.gutterTrailingPadding = 10
         textView.isLineWrappingEnabled = false
         textView.alwaysBounceVertical = true
         textView.contentInsetAdjustmentBehavior = .never
@@ -128,6 +130,13 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         sticky.isHidden = true
         addSubview(sticky)
         textView.addGestureRecognizer(popoverDismissal)
+        applyTheme()
+        // A font installed while the file is open (CodeFonts.swift) is drawn
+        // in at once.
+        NotificationCenter.default.addObserver(self, selector: #selector(fontsChanged), name: CodeFonts.changed, object: nil)
+    }
+
+    @objc private func fontsChanged() {
         applyTheme()
     }
 
@@ -399,6 +408,17 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         applyTheme()
     }
 
+    func setFontFamily(_ family: String) {
+        fontFamily = family
+        applyTheme()
+    }
+
+    /// The code's font: the chosen family when it is installed (a custom one
+    /// once it is registered), else the system's monospace.
+    private func codeFont() -> UIFont {
+        TextImage.codeFont(family: fontFamily ?? "", size: fontSize)
+    }
+
     func setShowLineNumbers(_ show: Bool) {
         textView.showLineNumbers = show
     }
@@ -529,7 +549,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     private func applyTheme() {
         let theme = ShikiTheme(
-            fontSize: fontSize,
+            font: codeFont(),
             foreground: foreground,
             gutterBackground: gutterBackground,
             gutterForeground: gutterForeground,
@@ -546,7 +566,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             background: background,
             gutterBackground: gutterBackground,
             lineNumberColor: gutterForeground,
-            lineNumberFont: UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+            lineNumberFont: codeFont()
         )
         rebuildHighlights()
     }
@@ -599,7 +619,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // MARK: - Sticky scroll
 
     private func stickyRowHeight() -> CGFloat {
-        UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular).totalLineHeight * textView.lineHeightMultiplier
+        codeFont().totalLineHeight * textView.lineHeightMultiplier
     }
 
     /// The document line at the top edge of the visible code (just below the
@@ -758,7 +778,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// One line of code in the editor's font, coloured by its Shiki tokens
     /// (offsets local to the line).
     private func styledLine(_ lineText: String, tokens: [ShikiToken]) -> NSAttributedString {
-        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let font = codeFont()
         let attributed = NSMutableAttributedString(string: lineText, attributes: [.font: font, .foregroundColor: foreground])
         let fullLength = attributed.length
         for token in tokens {

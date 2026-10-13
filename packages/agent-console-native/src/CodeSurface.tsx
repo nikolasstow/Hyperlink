@@ -37,6 +37,8 @@ import {
 } from "./codeSurfaceProtocol";
 import { codeSurfaceUri } from "./codeSurfaceAsset";
 import { useCodeTheme } from "./useCodeTheme";
+import { File } from "expo-file-system";
+import { useInstalledCodeFonts } from "./fonts/useCodeFonts";
 import { codeFontSizeOf } from "./settings";
 import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 
@@ -210,12 +212,30 @@ export const CodeSurface = (props: CodeSurfaceProps): React.ReactElement => {
     apply({ kind: "setTheme", theme: surfaceTheme });
   }, [surfaceTheme, apply]);
 
+  // A custom code font is installed on the device as a file; the surface is a
+  // web page, so it gets the font's bytes to load.
+  const fontFile = useInstalledCodeFonts().get(appTheme.codeFont);
   React.useEffect(() => {
-    // No `source`: a custom code font needs `expo-font` before the rest of the
-    // app can render one, and this surface has to match the chat blocks rather
-    // than get ahead of them. The protocol carries the bytes when that lands.
-    apply({ kind: "setFont", family: appTheme.codeFont, size: codeFontSizeOf(appTheme) });
-  }, [appTheme, apply]);
+    const family = appTheme.codeFont;
+    const size = codeFontSizeOf(appTheme);
+    if (fontFile === undefined) {
+      apply({ kind: "setFont", family, size });
+      return undefined;
+    }
+    let alive = true;
+    new File(fontFile)
+      .base64()
+      .then((data) => {
+        if (alive) apply({ kind: "setFont", family, size, source: `data:font/ttf;base64,${data}` });
+      })
+      .catch((error: unknown) => {
+        console.error("[fonts] reading the code font for the surface failed", error);
+        if (alive) apply({ kind: "setFont", family, size });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [appTheme, fontFile, apply]);
 
   React.useEffect(() => {
     apply({ kind: "setReadOnly", readOnly: READ_ONLY });

@@ -21,14 +21,13 @@ final class ShikiTheme: Theme {
     let markedTextBackgroundColor: UIColor
 
     init(
-        fontSize: CGFloat,
+        font: UIFont,
         foreground: UIColor,
         gutterBackground: UIColor,
         gutterForeground: UIColor,
         currentLine: UIColor,
         selection: UIColor
     ) {
-        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         self.font = font
         self.lineNumberFont = font
         self.textColor = foreground

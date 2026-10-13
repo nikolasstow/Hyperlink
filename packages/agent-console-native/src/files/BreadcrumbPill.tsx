@@ -30,7 +30,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
 import { StyleSheet, Text, useColorScheme, View, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Reanimated, { Easing, interpolate, LinearTransition, runOnJS, type SharedValue, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Reanimated, { Easing, interpolate, LayoutAnimationConfig, LinearTransition, runOnJS, scrollTo, type SharedValue, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Codicon } from "../Codicon";
 import { iconForFile } from "../fileIcon";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
@@ -87,6 +87,14 @@ export const BreadcrumbPill = (props: {
   // While it drops or rises, the row's own slide is off: the row is resized
   // every frame, and would chase it.
   const [dropping, setDropping] = React.useState(false);
+  // Each drop ends with the row laid out afresh (its key), so nothing of the
+  // other width's layout stays with it, and resting on the end again.
+  const [rowKey, setRowKey] = React.useState(0);
+  const scroller = useAnimatedRef<Reanimated.ScrollView>();
+  const settled = React.useCallback(() => {
+    setDropping(false);
+    setRowKey((key) => key + 1);
+  }, []);
   const isFirst = React.useRef(true);
   React.useEffect(() => {
     if (isFirst.current) {
@@ -95,9 +103,12 @@ export const BreadcrumbPill = (props: {
     }
     setDropping(true);
     open.value = withTiming(expanded ? 1 : 0, DROP, (finished) => {
-      if (finished === true) runOnJS(setDropping)(false);
+      if (finished !== true) return;
+      // The scroll view's start is the pill's right end: where you are.
+      scrollTo(scroller, 0, 0, false);
+      runOnJS(settled)();
     });
-  }, [expanded, open]);
+  }, [expanded, open, scroller, settled]);
   const frame = useAnimatedStyle(() => {
     const progress = open.value;
     if (progress === 0 || slotW.value === 0) return { left: 0, top: 0, width: "100%" };
@@ -162,7 +173,9 @@ export const BreadcrumbPill = (props: {
 
   return (
     <View
-      style={props.slotStyle}
+      // The bar's height: the pill floats in it (to drop out of it), so it
+      // gives the slot no height of its own.
+      style={[props.slotStyle, styles.slot]}
       onLayout={(event) => {
         slotX.value = event.nativeEvent.layout.x;
         slotW.value = event.nativeEvent.layout.width;
@@ -189,6 +202,7 @@ export const BreadcrumbPill = (props: {
               }
             >
               <Reanimated.ScrollView
+                ref={scroller}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.mirrored}
@@ -204,10 +218,14 @@ export const BreadcrumbPill = (props: {
               >
                 {/* Its size eases to the new one, so the crumbs before a scope
                   * that changed width slide over rather than jump. */}
-                <Reanimated.View style={[styles.row, styles.mirrored]} layout={dropping ? undefined : crumbMove}>
-                  {pathCrumbs}
-                  {symbolCrumbs}
-                </Reanimated.View>
+                {/* Laid out afresh after a drop, its scopes neither rolling out
+                  * of the old row nor into the new (they are the same). */}
+                <LayoutAnimationConfig key={rowKey} skipEntering skipExiting>
+                  <Reanimated.View style={[styles.row, styles.mirrored]} layout={dropping ? undefined : crumbMove}>
+                    {pathCrumbs}
+                    {symbolCrumbs}
+                  </Reanimated.View>
+                </LayoutAnimationConfig>
               </Reanimated.ScrollView>
             </MaskedView>
           </View>
@@ -242,6 +260,9 @@ const FADE_IN: readonly [string, string] = ["#00000000", "#000000"];
 const FADE_OUT: readonly [string, string] = ["#000000", "#00000000"];
 
 const styles = StyleSheet.create({
+  slot: {
+    height: HOME_HEADER_HEIGHT,
+  },
   fill: {
     flex: 1,
   },

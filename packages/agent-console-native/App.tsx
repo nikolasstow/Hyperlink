@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
-import { Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider, useAppContext } from "./src/AppContext";
@@ -8,6 +8,7 @@ import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
 import { conversationsReadBack } from "./src/conversations/useConversations";
 import { homeLayoutReadBack } from "./src/home/useHomeLayout";
 import { keptThemesReadBack } from "./src/useCodeTheme";
+import { codeFontsReadBack, syncCodeFonts } from "./src/fonts/useCodeFonts";
 import { keptNavReadBack } from "./src/navigation/useKeptNav";
 import { favoritesReadBack } from "./src/favorites/useFavorites";
 import { reposReadBack } from "./src/repoScanCache";
@@ -95,7 +96,7 @@ const AppInner = (): React.ReactElement => {
       // Never longer than READ_BACK_WAIT_MS: a store that cannot be read must
       // not hold the app on the launch screen.
       const readBack = Promise.race([
-        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack]),
+        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack]),
         new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS)),
       ]);
       primeDefaultPermissionMode(await getDefaultPermissionMode());
@@ -232,6 +233,8 @@ const AppInner = (): React.ReactElement => {
           <LiveFilesFollower />
           {/* Makes this the app notifications go to whenever it is opened. */}
           <PushOnForeground />
+          {/* Installs the custom code fonts the server lists. */}
+          <CodeFontsInstaller />
           {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}
           <KeyboardHeightProvider>
             <RootNavigator />
@@ -241,6 +244,22 @@ const AppInner = (): React.ReactElement => {
       )}
     </View>
   );
+};
+
+/** Keeps the custom code fonts installed: at launch and on each foreground. */
+const CodeFontsInstaller = (): null => {
+  const { server } = useAppContext();
+  React.useEffect(() => {
+    const sync = (): void => {
+      syncCodeFonts(server).catch((error: unknown) => console.error("[fonts] syncing the custom fonts failed", error));
+    };
+    sync();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") sync();
+    });
+    return () => subscription.remove();
+  }, [server]);
+  return null;
 };
 
 /** Re-registers for pushes on each foreground (push.ts). */

@@ -41,6 +41,9 @@ export interface ScopeSymbol {
   readonly name: string;
 }
 
+/** The scopes sticky scroll pins: those over more than one line. */
+export const pinnable = (ranges: ReadonlyArray<StickyRange>): ReadonlyArray<StickyRange> => ranges.filter((range) => range.end > range.start);
+
 /** `langFromFilename` hands us the raw extension (`ts`, `md`, …); map it to a
  * canonical id the way the highlighter aliases do, so `.ts`/`.md` aren't missed. */
 const CANONICAL: Record<string, string> = {
@@ -149,9 +152,10 @@ const tsRanges = (ts: typeof TS, text: string, scriptKind: TS.ScriptKind): Reado
     if (isContainer(ts, node)) {
       const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
       const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line;
-      // Only multi-line scopes are worth pinning.
-      if (end > start) {
-        const symbol = symbolFor(ts, node);
+      // Multi-line scopes (worth pinning), and named one-liners (the
+      // breadcrumbs name them; sticky scroll leaves them: `pinnable`).
+      const symbol = symbolFor(ts, node);
+      if (end > start || symbol !== undefined) {
         out.push(symbol === undefined ? { header: start, start, end, depth } : { header: start, start, end, depth, symbol });
         childDepth = depth + 1;
       }

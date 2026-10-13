@@ -8,8 +8,9 @@
  *     it, Back (top-left) returns if it's the wrong font.
  *
  * Validating shows a spinner in the header and transitions to step 2 as soon as
- * the details are ready. Fonts live in the synced config (fontsClient.ts). File
- * import and rendering a custom font need `expo-font` (a build); URL works now.
+ * the details are ready. Fonts live in the synced config (fontsClient.ts) and
+ * are installed on the device from there (fonts/CodeFonts.ts). Import from
+ * File still needs a document picker (a build) and an upload endpoint.
  *
  * @internal
  */
@@ -19,6 +20,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { addCustomFont, importFontFile, inspectFont, type FontDetails } from "./fontsClient";
+import { syncCodeFonts } from "./fonts/useCodeFonts";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -80,7 +82,11 @@ export const FontImportScreen = ({ navigation }: Props): React.ReactElement => {
     // Convert + store on the server, then record the served path on the font.
     importFontFile(apiBase, savedUrl)
       .then(({ family, servedPath }) => addCustomFont(apiBase, { family, url: servedPath }))
-      .then(() => navigation.goBack())
+      .then(() => {
+        // Installed on the device at once, not at the next launch.
+        syncCodeFonts(apiBase).catch((e: unknown) => console.error("[fonts] installing the new font failed", e));
+        navigation.goBack();
+      })
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setImporting(false));
   }, [apiBase, details, savedUrl, navigation, importing]);

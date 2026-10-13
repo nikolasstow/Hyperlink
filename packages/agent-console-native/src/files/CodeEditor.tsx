@@ -21,7 +21,7 @@ import { cachedSessionTitle } from "../sessionCache";
 import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
 import { scopesAt } from "./breadcrumbs";
-import { type ScopeSymbol, type StickyRange, stickyRanges } from "./stickyRanges";
+import { pinnable, type ScopeSymbol, type StickyRange, stickyRanges } from "./stickyRanges";
 import { codeFontSizeOf } from "../settings";
 import { textFor, useTheme } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
@@ -168,11 +168,6 @@ export const CodeEditor = (props: {
   // exact bg/fg when present) so the editor paints right on the first frame; the
   // async tokenise below only refines them.
   const [editorTheme, setEditorTheme] = React.useState<EditorTheme>(() => editorThemeOf(theme, initialHighlight));
-  // DIAG (theme flash): what the editor's first frame is drawn in.
-  React.useEffect(() => {
-    console.log("[theme] editor mounts in", typeof theme === "string" ? `the fallback ${theme}` : theme.name, editorTheme.background ?? "(no background)");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- first frame only
-  }, []);
   // The text handed to the native view (it owns the text once mounted), and
   // the text tokenised. Both follow `props.text`; typing and outside changes
   // move the tokenised text (re-coloured once they pause), and the native one
@@ -271,7 +266,7 @@ export const CodeEditor = (props: {
         .then((parsed) => {
           if (!alive) return;
           console.log(`[sticky] ${lang}: ${parsed.length} ranges`);
-          setStickyJson(JSON.stringify(parsed));
+          setStickyJson(JSON.stringify(pinnable(parsed)));
           ranges.current = parsed;
           reportScopesLatest.current();
         })
@@ -301,6 +296,7 @@ export const CodeEditor = (props: {
         bottomInset={props.bottomInset}
         stickyFill={props.stickyFill}
         fontSize={codeFontSizeOf(appTheme)}
+        fontFamily={appTheme.codeFont}
         showLineNumbers
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}

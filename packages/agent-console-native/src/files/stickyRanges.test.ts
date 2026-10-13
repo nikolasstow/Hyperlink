@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stickyRanges } from "./stickyRanges";
+import { pinnable, stickyRanges } from "./stickyRanges";
 
 describe("stickyRanges — TypeScript", () => {
   it("nests a method inside a class, header on the declaration line", async () => {
@@ -38,10 +38,11 @@ describe("stickyRanges — TypeScript", () => {
     expect(ranges.some((r) => r.header === 1 && r.end === 3 && r.depth === 1)).toBe(true);
   });
 
-  it("ignores single-line scopes", async () => {
-    const code = ["const f = () => 1;", "const g = () => 2;"].join("\n");
+  it("names one-line declarations, but leaves them out of what sticky scroll pins", async () => {
+    const code = ["export function isFull(): boolean { return count >= limit; }", "if (x) { y(); }"].join("\n");
     const ranges = await stickyRanges(code, "typescript");
-    expect(ranges).toEqual([]);
+    expect(ranges.map((range) => range.symbol)).toEqual([{ kind: "function", name: "isFull" }]);
+    expect(pinnable(ranges)).toEqual([]);
   });
 
   it("parses tsx", async () => {

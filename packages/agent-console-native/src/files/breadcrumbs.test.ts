@@ -31,6 +31,11 @@ describe("breadcrumbs", () => {
     expect(scopesAt(ranges, 1).at(-1)).toEqual({ kind: "method", name: "get" });
   });
 
+  it("names a one-line function on its line", async () => {
+    const ranges = await stickyRanges("export function isFull(): boolean { return count >= limit; }", "typescript");
+    expect(scopesAt(ranges, 0)).toEqual([{ kind: "function", name: "isFull" }]);
+  });
+
   it("has no scopes between them", async () => {
     const ranges = await stickyRanges(code, "typescript");
     expect(scopesAt(ranges, 7)).toEqual([]);

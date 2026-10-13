@@ -55,8 +55,8 @@ const greet = (id: number) =>
 /** Good default accents (between the theme swatch and the custom picker). */
 const PRESETS = ["#34C759", "#30B0C7", "#007AFF", "#5856D6", "#AF52DE", "#FF2D55", "#FF9500", "#FFCC00"] as const;
 
-/** Monospace fonts guaranteed present on iOS. Bundled coding fonts (JetBrains
- * Mono, etc.) and custom uploads come later (need expo-font + a build). */
+/** Monospace fonts guaranteed present on iOS; the custom fonts (installed on
+ * the device, fonts/CodeFonts.ts) are listed after them. */
 const CODE_FONTS = ["Menlo", "Courier New", "Courier"];
 
 const eq = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
