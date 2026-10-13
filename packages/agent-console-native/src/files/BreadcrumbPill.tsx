@@ -40,7 +40,8 @@ const PAD_H = 22;
 const TEXT_SIZE = 15;
 const ICON_SIZE = 16;
 const CHEVRON_SIZE = 14;
-/** How long the others take to make room for a scope that changed. */
+/** How long the others (and the row) take to make room for a scope that
+ * changed. */
 const crumbMove = LinearTransition.duration(220);
 
 export const BreadcrumbPill = (props: {
@@ -92,10 +93,12 @@ export const BreadcrumbPill = (props: {
         <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
         <MaskedView style={styles.fill} maskElement={fadeMask}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mirrored} contentContainerStyle={styles.content}>
-            <View style={[styles.row, styles.mirrored]}>
+            {/* Its size eases to the new one, so the crumbs before a scope
+              * that changed width slide over rather than jump. */}
+            <Reanimated.View style={[styles.row, styles.mirrored]} layout={crumbMove}>
               {pathCrumbs}
               {symbolCrumbs}
-            </View>
+            </Reanimated.View>
           </ScrollView>
         </MaskedView>
       </View>
