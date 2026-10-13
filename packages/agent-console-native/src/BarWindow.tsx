@@ -52,6 +52,10 @@ import { useKeyboardHeight } from "./useKeyboardHeight";
  * resize from its own handle (Dubz's title pill) when `grabberHidden`. */
 export const BarWindowResizeContext = React.createContext<GestureType | undefined>(undefined);
 
+/** The window's live visible height (pt), offered to the body so a consumer can
+ * react to it (Dubz's compact mode) without owning the height itself. */
+export const BarWindowHeightContext = React.createContext<Readonly<SharedValue<number>> | undefined>(undefined);
+
 /** The bar's side inset (BottomBar's), and so the window's. */
 const MARGIN = 12;
 /** Corner radius of the window, and of the pill (the bar's). */
@@ -408,7 +412,9 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
             {/* Offer the resize gesture to the body's own control only when the
              * top grabber is hidden — never both, or `drag` would be attached to
              * two detectors at once. */}
-            <BarWindowResizeContext.Provider value={props.grabberHidden === true ? drag : undefined}>{props.body}</BarWindowResizeContext.Provider>
+            <BarWindowHeightContext.Provider value={visible}>
+              <BarWindowResizeContext.Provider value={props.grabberHidden === true ? drag : undefined}>{props.body}</BarWindowResizeContext.Provider>
+            </BarWindowHeightContext.Provider>
           </View>
           {/* The pill sits at the window's bottom, a direct child of the
            * window's glass: the bar collapsed, the window's input open. */}
