@@ -1,51 +1,75 @@
 import { describe, expect, it } from "vitest";
-import { type BarWindowState, coverOf, maxDragFor, MIN_HEIGHT, type ScreenFrame, stopDragFor, windowTop } from "./barWindowGeometry";
+import { type BarWindowState, clampRequested, coverOf, maxHeightFor, MIN_HEIGHT, type ScreenFrame, sameBarWindowState, snapOpenHeight, windowTop } from "./barWindowGeometry";
 
-// A concrete iPhone-ish screen; the numbers below are what BarWindow draws
-// today (MIN_HEIGHT = 58, fullTop = max(44,59)+8 = 67, resting = max(34-16,6) = 18).
+// A concrete iPhone-ish screen; the numbers below are what the window draws
+// (MIN_HEIGHT = 58, fullTop = max(44,59)+8 = 67, resting = max(34-16,6) = 18,
+// windowBottom = max(keyboard, 18) + 8).
 const FRAME: ScreenFrame = { height: 852, headerHeight: 44, insetTop: 59, insetBottom: 34 };
 const KB = 336;
 
-const state = (over: Partial<BarWindowState>): BarWindowState => ({ open: true, frac: 0, kbFull: KB, keyboard: 0, ...over });
+const state = (over: Partial<BarWindowState>): BarWindowState => ({ open: true, height: MIN_HEIGHT, keyboard: 0, ...over });
 
 describe("barWindowGeometry", () => {
   it("pins the pill height", () => {
     expect(MIN_HEIGHT).toBe(58);
   });
 
-  it("maxDragFor shrinks as the keyboard takes room", () => {
-    expect(maxDragFor(FRAME, KB)).toBe(383);
-    expect(maxDragFor(FRAME, 0)).toBe(701);
+  it("maxHeightFor shrinks as the keyboard takes room", () => {
+    expect(maxHeightFor(FRAME, KB)).toBe(441);
+    expect(maxHeightFor(FRAME, 0)).toBe(759);
   });
 
-  it("stopDragFor is the full range with no stop, else lowers to the stop", () => {
-    expect(stopDragFor(383, undefined)).toBe(383);
-    expect(stopDragFor(383, 200)).toBe(241);
+  it("the keyboard moves the clamp, never the requested height", () => {
+    // A request that fits under both: the same visible height, keyboard up or down.
+    expect(clampRequested(300, FRAME, 0)).toBe(300);
+    expect(clampRequested(300, FRAME, KB)).toBe(300);
+    // A tall request: full when the keyboard is down, clamped when it is up —
+    // the clamp accounts for the difference, the window stays above the keyboard.
+    expect(clampRequested(1000, FRAME, 0)).toBe(759);
+    expect(clampRequested(1000, FRAME, KB)).toBe(441);
+    // Never below the pill.
+    expect(clampRequested(10, FRAME, 0)).toBe(MIN_HEIGHT);
   });
 
-  it("at full detent, keyboard up, the window top is the full top (67)", () => {
-    expect(coverOf(state({ frac: 0, keyboard: KB }), FRAME)).toBe(785);
-    expect(windowTop(state({ frac: 0, keyboard: KB }), FRAME)).toBe(67);
+  it("snapOpenHeight rests free above minOpen (Dubz)", () => {
+    const minOpen = 134;
+    const max = 759;
+    // Free: where released, floored at minOpen, capped at max.
+    expect(snapOpenHeight(300, 300, minOpen, max, true)).toBe(300);
+    expect(snapOpenHeight(100, 100, minOpen, max, true)).toBe(minOpen);
+    expect(snapOpenHeight(1000, 1000, minOpen, max, true)).toBe(max);
   });
 
-  it("at full detent, keyboard down, the window rode down with the bar", () => {
-    expect(coverOf(state({ frac: 0, keyboard: 0 }), FRAME)).toBe(785 - (344 - 26));
-    expect(windowTop(state({ frac: 0, keyboard: 0 }), FRAME)).toBe(67 + (344 - 26));
+  it("snapOpenHeight snaps to the nearer of the two anchors (model picker)", () => {
+    const minOpen = 300;
+    const max = 759;
+    const mid = (minOpen + max) / 2; // 529.5
+    expect(snapOpenHeight(400, 400, minOpen, max, false)).toBe(minOpen);
+    expect(snapOpenHeight(600, 600, minOpen, max, false)).toBe(max);
+    // Momentum carries it over the midpoint.
+    expect(snapOpenHeight(500, mid + 1, minOpen, max, false)).toBe(max);
   });
 
-  it("at the half detent, keyboard down, covers the pill plus half the range", () => {
-    expect(coverOf(state({ frac: 0.5, keyboard: 0 }), FRAME)).toBe(275.5);
+  it("at full height the window top is the full top (67), keyboard up or down", () => {
+    expect(coverOf(state({ height: 441, keyboard: KB }), FRAME)).toBe(785);
+    expect(windowTop(state({ height: 441, keyboard: KB }), FRAME)).toBe(67);
+    expect(coverOf(state({ height: 759, keyboard: 0 }), FRAME)).toBe(785);
+    expect(windowTop(state({ height: 759, keyboard: 0 }), FRAME)).toBe(67);
   });
 
-  it("at the pill detent, covers just the pill at rest", () => {
-    expect(coverOf(state({ frac: 1, keyboard: 0 }), FRAME)).toBe(84);
+  it("a mid height covers its height over the window's bottom", () => {
+    expect(coverOf(state({ height: 300, keyboard: 0 }), FRAME)).toBe(26 + 300);
+    expect(coverOf(state({ height: 300, keyboard: KB }), FRAME)).toBe(344 + 300);
   });
 
-  it("collapsed covers the pill at rest, whatever the detent was", () => {
-    expect(coverOf(state({ open: false, frac: 0, keyboard: 0 }), FRAME)).toBe(84);
+  it("collapsed covers just the pill at rest, whatever the height was", () => {
+    expect(coverOf(state({ open: false, height: 500, keyboard: 0 }), FRAME)).toBe(84);
+    expect(coverOf(state({ open: false, height: 500, keyboard: KB }), FRAME)).toBe(344 + MIN_HEIGHT);
   });
 
-  it("with no keyboard ever (kbFull 0), the range is the taller one", () => {
-    expect(coverOf(state({ frac: 0, kbFull: 0, keyboard: 0 }), FRAME)).toBe(26 + MIN_HEIGHT + 701);
+  it("sameBarWindowState compares the settled fields", () => {
+    expect(sameBarWindowState(state({ height: 300 }), state({ height: 300 }))).toBe(true);
+    expect(sameBarWindowState(state({ height: 300 }), state({ height: 301 }))).toBe(false);
+    expect(sameBarWindowState(state({ keyboard: 0 }), state({ keyboard: KB }))).toBe(false);
   });
 });

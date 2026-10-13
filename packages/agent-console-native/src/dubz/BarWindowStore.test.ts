@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import type { BarWindowState } from "./barWindowGeometry";
 import { BarWindowStore } from "./BarWindowStore";
 
-const stateA: BarWindowState = { open: true, frac: 0, kbFull: 300, keyboard: 300 };
-const stateB: BarWindowState = { open: false, frac: 1, kbFull: 0, keyboard: 0 };
+const stateA: BarWindowState = { open: true, height: 500, keyboard: 300 };
+const stateB: BarWindowState = { open: false, height: 58, keyboard: 0 };
 
 const run = <A, E>(effect: Effect.Effect<A, E, BarWindowStore>): Promise<A> =>
   Effect.runPromise(effect.pipe(Effect.provide(BarWindowStore.layer), Effect.provide(KeyValueStore.layerMemory)));
@@ -39,24 +39,24 @@ describe("BarWindowStore", () => {
     expect(map.get("b")).toEqual(stateB);
   });
 
-  it("detent round-trips through the KeyValueStore", async () => {
-    const detent = await run(
+  it("the default height round-trips through the KeyValueStore", async () => {
+    const height = await run(
       Effect.gen(function* () {
         const store = yield* BarWindowStore;
-        yield* store.detent.set({ frac: 0.5, kbFull: 336 });
-        return yield* store.detent.get;
+        yield* store.defaultHeight.set(420);
+        return yield* store.defaultHeight.get;
       }),
     );
-    expect(detent).toEqual({ frac: 0.5, kbFull: 336 });
+    expect(height).toBe(420);
   });
 
-  it("detent is undefined before anything is saved", async () => {
-    const detent = await run(
+  it("the default height is undefined before anything is saved", async () => {
+    const height = await run(
       Effect.gen(function* () {
         const store = yield* BarWindowStore;
-        return yield* store.detent.get;
+        return yield* store.defaultHeight.get;
       }),
     );
-    expect(detent).toBeUndefined();
+    expect(height).toBeUndefined();
   });
 });

@@ -42,7 +42,7 @@ import * as React from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import Reanimated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { CapsuleTabs } from "../modules/capsule-tabs";
-import { BarWindow, type CloseReason, detentMemory, HANDLE_CLEARANCE } from "./BarWindow";
+import { BarWindow, type CloseReason, HANDLE_CLEARANCE } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
@@ -76,11 +76,11 @@ const TAB_SPRING = Animation.spring({ duration: 0.3, bounce: 0.15 });
 const SEARCH_LINE_HEIGHT = 21;
 
 /** The model window's one stop below full: its height, in points (about a
- * third of the screen). */
+ * third of the screen). It opens here, and rests here or at full. */
 const MODEL_STOP = 300;
-/** Where the model window opens (the stop, unless a drag left it at full),
- * for the app's run. */
-const modelDetent = detentMemory(1);
+/** "Full": a request taller than any screen, so it clamps to the available max
+ * every frame (and so stays full as the keyboard comes and goes). */
+const MODEL_FULL = 100000;
 
 /** One page of the list. */
 interface ModelTab {
@@ -217,6 +217,9 @@ export const ModelWindow = React.memo(function ModelWindow(props: {
     if (props.open) setLive(true);
   }, [props.open]);
   const onHidden = React.useCallback(() => setLive(false), []);
+  // Rests at the stop or at full; remembered for the app's run (this window
+  // stays mounted, hidden, between opens).
+  const [modelFull, setModelFull] = React.useState(false);
 
   // Each opening starts from an empty search.
   React.useEffect(() => {
@@ -310,10 +313,12 @@ export const ModelWindow = React.memo(function ModelWindow(props: {
       inputRef={inputRef}
       glass="regular"
       tintColor={cardTint}
-      detent={modelDetent}
+      requestedHeight={modelFull ? MODEL_FULL : MODEL_STOP}
+      minOpenHeight={MODEL_STOP}
+      freeAbove={false}
+      onResize={(height) => setModelFull(height > MODEL_STOP + 1)}
       hiddenCollapsed
       onHidden={onHidden}
-      stop={MODEL_STOP}
       closeLabel="Close models"
       pillLowered={barsDrop}
       body={

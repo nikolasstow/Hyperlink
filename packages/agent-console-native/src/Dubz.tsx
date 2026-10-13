@@ -19,7 +19,7 @@ import Reanimated, { Easing, runOnJS, useSharedValue, withTiming, type SharedVal
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { useAppContext } from "./AppContext";
-import { BarWindow, detentMemory } from "./BarWindow";
+import { BarWindow } from "./BarWindow";
 import { AGENT } from "./client";
 import { runApp } from "./effect/runtime";
 import { Agent } from "./opencode/schema/agent";
@@ -33,7 +33,9 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
-import { readDubzDetent, saveDubzDetent } from "./dubz/useBarWindow";
+import { requestedHeightOf } from "./dubz/dubzWindowMachine";
+import { readDubzDefaultHeight } from "./dubz/useBarWindow";
+import { useDubzWindow } from "./dubz/useDubzWindow";
 import { getBarPages, setBarPages, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -133,17 +135,21 @@ const setDubzSub = (next: DubzSub | undefined): void => {
   subListeners.forEach((listener) => listener());
 };
 
-// ── The detent last left ────────────────────────────────────────────────────
+// ── The remembered default height ────────────────────────────────────────────
 
-// Shared by every screen's page; persisted across launches through the store.
-const dubzDetent = detentMemory(0, (frac, kbFull) =>
-  saveDubzDetent({ frac, kbFull }).catch((error: unknown) => console.error("[dubz] saving the detent failed", error)),
-);
-readDubzDetent().then(
+/** The lowest open height: the pill area and one session suggestion above it.
+ * A design constant (never measured) — tune on device. Also the window's
+ * default before the user has ever dragged it. */
+export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + 176;
+
+// The user's remembered default height, read once at launch and seeded into
+// each screen's window (before any drag it is the single-suggestion height).
+let cachedDefaultHeight: number | undefined = undefined;
+readDubzDefaultHeight().then(
   (value) => {
-    if (value !== undefined) dubzDetent.restore(value.frac, value.kbFull);
+    cachedDefaultHeight = value;
   },
-  (error: unknown) => console.error("[dubz] reading the detent failed", error),
+  (error: unknown) => console.error("[dubz] reading the default height failed", error),
 );
 
 const noop = (): void => undefined;
@@ -197,6 +203,19 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const { width: screenW } = useWindowDimensions();
   const { address } = useAppContext();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
+
+  // The window's coordinator (dubzWindowMachine via useDubzWindow): the single
+  // owner of the window/keyboard/height coordination, every transition logged
+  // through Effect. The parent owns the open INTENT (`open` prop); this mirrors
+  // it, and the machine's terminal `closed` is what stops a late keyboard or
+  // focus event from reopening after a dismiss.
+  const routeKey = props.routeKey ?? "dubz";
+  const { state: winState, dispatch } = useDubzWindow(routeKey, cachedDefaultHeight ?? SINGLE_SUGGESTION_HEIGHT);
+  React.useEffect(() => {
+    if (open && winState.phase === "closed") dispatch({ _tag: "openRequested" });
+    else if (!open && winState.phase === "open") dispatch({ _tag: "closeRequested", reason: "dismiss" });
+  }, [open, winState.phase, dispatch]);
+  const requestedHeight = requestedHeightOf(winState);
 
   // Tapping the session row pushes a placeholder page in over the window (main
   // row slides left, page slides in from the right — SwiftUI's own animation,
@@ -336,7 +355,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
 
   return (
     <BarWindow
-      open={open}
+      // The machine owns the open phase; the parent's `open` is the intent it
+      // mirrors (so a dismiss can't be undone by a straggling keyboard event).
+      open={winState.phase === "open"}
       instant={instant}
       onClose={close}
       inputRef={inputRef}
@@ -344,13 +365,19 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // A slight dark tint (tints the glass material, not a solid fill) to give
       // the clear glass some body over bright content.
       tintColor="rgba(0,0,0,0.18)"
-      detent={dubzDetent}
+      // The requested height (user default, or an active component); one low
+      // anchor (one suggestion), free rest anywhere above it.
+      requestedHeight={requestedHeight}
+      minOpenHeight={SINGLE_SUGGESTION_HEIGHT}
+      freeAbove
+      onResize={(height) => dispatch({ _tag: "heightSettled", height })}
+      onKeyboardSettle={(up) => dispatch(up ? { _tag: "keyboardShown" } : { _tag: "keyboardHidden" })}
       // Dubz opens to its suggestions without deploying the keyboard; a tap on
       // the field raises it (only auto-focuses if the keyboard is already up).
       raiseKeyboardOnOpen={false}
       closeLabel={`Close ${AGENT_NAME}`}
       // The page behind Dubz stays interactive; Dubz closes by its back button,
-      // the pill, or the keyboard — never a tap outside.
+      // the pill, or a dismiss — never a tap outside.
       dismissOnTapOutside={false}
       pillLowered={pillFloat}
       // A sub-page moves the grabber onto its title pill, so hide the top one.
