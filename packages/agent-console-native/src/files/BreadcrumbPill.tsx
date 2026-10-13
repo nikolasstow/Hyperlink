@@ -10,15 +10,16 @@
  * back — nothing is measured. Shorter, the crumbs sit at the left.
  *
  * The path is there on the first frame; the scopes come once the file is
- * parsed and the editor says where you are, so they fade in (and out as you
- * leave them), the others sliding to make room.
+ * parsed and the editor says where you are. As they change they roll, the
+ * glass turning like a drum the way the line moved (crumbRoll.ts); the others
+ * slide to make room.
  *
  * @internal
  */
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, useColorScheme, View } from "react-native";
-import Reanimated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+import Reanimated, { LinearTransition, type SharedValue } from "react-native-reanimated";
 import { Codicon } from "../Codicon";
 import { iconForFile } from "../fileIcon";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
@@ -26,6 +27,7 @@ import { SetiIcon } from "../SetiIcon";
 import { useTextColors } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
 import type { ScopeSymbol } from "./stickyRanges";
+import { type RollDirection, rollIn, rollOut } from "./crumbRoll";
 import { crumbColorOf, symbolLookOf } from "./symbolLooks";
 
 /** Room between the crumbs and the pill's ends. */
@@ -33,20 +35,24 @@ const PAD_H = 16;
 const TEXT_SIZE = 15;
 const ICON_SIZE = 16;
 const CHEVRON_SIZE = 14;
-/** How long a scope takes to fade in or out, and the others to make room. */
-const CRUMB_MS = 180;
+/** How long the others take to make room for a scope that changed. */
+const crumbMove = LinearTransition.duration(220);
 
-const crumbIn = FadeIn.duration(CRUMB_MS);
-const crumbOut = FadeOut.duration(CRUMB_MS);
-const crumbMove = LinearTransition.duration(CRUMB_MS);
-
-export const BreadcrumbPill = (props: { readonly path: ReadonlyArray<string>; readonly symbols: ReadonlyArray<ScopeSymbol> }): React.ReactElement => {
+export const BreadcrumbPill = (props: {
+  readonly path: ReadonlyArray<string>;
+  readonly symbols: ReadonlyArray<ScopeSymbol>;
+  /** Which way the scopes roll as they change. */
+  readonly roll: SharedValue<RollDirection>;
+}): React.ReactElement => {
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = useCodeTheme();
   const colors = typeof theme === "string" ? undefined : theme.colors;
   const text = crumbColorOf(colors, textColors.label);
   const last = props.path.length - 1;
+  const { roll } = props;
+  const crumbIn = React.useMemo(() => rollIn(roll), [roll]);
+  const crumbOut = React.useMemo(() => rollOut(roll), [roll]);
 
   const chevron = (
     <View style={styles.chevron}>

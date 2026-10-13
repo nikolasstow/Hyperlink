@@ -68,7 +68,7 @@ export const FileView = (props: {
   /** Open the session that made a change (from its popover in the gutter). */
   readonly onOpenSession?: (sessionID: string) => void;
   /** The named scopes the line you are at is in, when they change. */
-  readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>) => void;
+  readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>, onward: boolean) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();

@@ -68,6 +68,7 @@ import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFi
 import { HistorySheet } from "./HistorySheet";
 import { pathCrumbs } from "./breadcrumbs";
 import { BreadcrumbPill } from "./BreadcrumbPill";
+import type { RollDirection } from "./crumbRoll";
 import type { ScopeSymbol } from "./stickyRanges";
 import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
 import { useAppContext } from "../AppContext";
@@ -267,6 +268,8 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const [scopes, setScopes] = React.useState<{ readonly path: string; readonly scopes: ReadonlyArray<ScopeSymbol> } | undefined>(undefined);
   const crumbPath = pathCrumbs(current.path, currentWt?.path ?? primary.dir);
   const crumbSymbols = scopes?.path === current.path ? scopes.scopes : [];
+  // Which way the scopes roll as they change: set before they do.
+  const crumbRoll = useSharedValue<RollDirection>(1);
   // The tab view's filter is centered, search/history fixed at the right:
   // keep the filter clear of both (symmetric), and back clear of the filter.
   const filterLabel = repoFilter.kind === "all" ? "All Repos" : repoFilter.repo;
@@ -744,7 +747,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   onScroll={barHide.onScroll}
                 />
               ) : (
-                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} onScopes={(next) => setScopes({ path: current.path, scopes: next })} />
+                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} onScopes={(next, onward) => {
+                    crumbRoll.value = onward ? 1 : -1;
+                    setScopes({ path: current.path, scopes: next });
+                  }} />
               )}
               {cover === undefined ? null : (
                 <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">
@@ -769,7 +775,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
             <BackButton onPress={() => navigation.goBack()} label={backLabel} maxWidth={topBackMax} />
             {current.kind === "file" ? (
               <View style={styles.crumbs}>
-                <BreadcrumbPill path={crumbPath} symbols={crumbSymbols} />
+                <BreadcrumbPill path={crumbPath} symbols={crumbSymbols} roll={crumbRoll} />
               </View>
             ) : (
               <View style={styles.topSpacer} pointerEvents="none" />

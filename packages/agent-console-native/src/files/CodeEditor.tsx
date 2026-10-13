@@ -122,8 +122,9 @@ export const CodeEditor = (props: {
   /** Open the session that made a change (from its popover in the gutter). */
   readonly onOpenSession?: (sessionID: string) => void;
   /** The named scopes the line you are at is in, outermost first, when they
-   * change (breadcrumbs.ts). */
-  readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>) => void;
+   * change (breadcrumbs.ts), and whether the line moved on down the file
+   * (else back up). */
+  readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>, onward: boolean) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -147,13 +148,16 @@ export const CodeEditor = (props: {
   const ranges = React.useRef<ReadonlyArray<StickyRange>>([]);
   const atLine = React.useRef(0);
   const reportedScopes = React.useRef<string | undefined>(undefined);
+  const reportedLine = React.useRef(0);
   const { onScopes } = props;
   const reportScopes = React.useCallback(() => {
     const scopes = scopesAt(ranges.current, atLine.current);
     const key = scopes.map((scope) => `${scope.kind} ${scope.name}`).join("\n");
     if (key === reportedScopes.current) return;
     reportedScopes.current = key;
-    onScopes?.(scopes);
+    const onward = atLine.current >= reportedLine.current;
+    reportedLine.current = atLine.current;
+    onScopes?.(scopes, onward);
   }, [onScopes]);
   // As of the latest render, for the parse below (which runs on the text).
   const reportScopesLatest = React.useRef(reportScopes);
