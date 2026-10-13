@@ -13,10 +13,12 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
-import { canApplyChanges, canShowConflicts, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
-import type { Rebase } from "file-sync";
+import { canApplyChanges, canMarkChanges, canShowConflicts, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
+import { FileSync, type Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
 import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
+import { cachedSessionTitle } from "../sessionCache";
+import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
 import { stickyRanges } from "./stickyRanges";
 import { textFor } from "../theme";
@@ -63,13 +65,26 @@ const buttonLabel = (merge: MergeColors, background: string): string => {
   return labels[0] === labels[1] && typeof labels[0] === "string" ? labels[0] : "#FFFFFF";
 };
 
+/** The label on an agent change's popover button, tinted with any of the
+ * mark colours: one colour for all, white when they would differ. */
+const changeLabel = (change: ChangeColors, background: string): string => {
+  const labels = [change.added, change.modified, change.deleted].map((tint) => textFor(seenOver(tint, background) ?? tint).label);
+  return labels.every((label) => label === labels[0]) && typeof labels[0] === "string" ? labels[0] : "#FFFFFF";
+};
+
 const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: HighlightResult | undefined): EditorTheme => {
   const colors = typeof theme === "string" ? undefined : theme.colors;
   const background = highlight?.background ?? colors?.["editor.background"];
   const foreground = highlight?.foreground ?? colors?.["editor.foreground"];
   const light = isLightTheme(typeof theme === "string" ? undefined : theme.type, background);
   const merge = mergeColorsOf(colors);
+  const change = changeColorsOf(colors, light);
   return {
+    changeAdded: change.added,
+    changeModified: change.modified,
+    changeDeleted: change.deleted,
+    changeFlash: change.flash,
+    changeLabel: changeLabel(change, background ?? (light ? "#FFFFFF" : "#000000")),
     mergeCurrentHeader: merge.currentHeader,
     mergeIncomingHeader: merge.incomingHeader,
     mergeCurrentContent: merge.currentContent,
@@ -103,6 +118,8 @@ export const CodeEditor = (props: {
    * buttons to settle them. */
   readonly conflicts?: ReadonlyArray<Rebase.Conflict>;
   readonly onConflictChoice?: (index: number, keep: ConflictChoice) => void;
+  /** Open the session that made a change (from its popover in the gutter). */
+  readonly onOpenSession?: (sessionID: string) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -147,6 +164,21 @@ export const CodeEditor = (props: {
         setText(update.text);
         if (canApplyChanges && native.current !== null) {
           void native.current.applyChanges(JSON.stringify(update.changes), update.text.length, JSON.stringify(update.highlights));
+          if (canMarkChanges && update.marks.length > 0) {
+            const sessionID = update.author instanceof FileSync.Agent ? update.author.sessionID : undefined;
+            const title = sessionID === undefined ? undefined : cachedSessionTitle(sessionID);
+            const at = Date.now();
+            void native.current.markChanges(
+              JSON.stringify(
+                update.marks.map((mark) => ({
+                  ...mark,
+                  sessionID,
+                  title,
+                  at,
+                })),
+              ),
+            );
+          }
           return;
         }
         setNativeText(update.text);
@@ -245,6 +277,7 @@ export const CodeEditor = (props: {
           setText(event.nativeEvent.text);
           props.onChangeText?.(event.nativeEvent.text);
         }}
+        {...(props.onOpenSession === undefined ? {} : { onOpenSession: (event) => props.onOpenSession?.(event.nativeEvent.sessionID) })}
         {...(props.onConflictChoice === undefined ? {} : { onConflictAction: (event) => props.onConflictChoice?.(event.nativeEvent.index, event.nativeEvent.keep) })}
       />
     </View>

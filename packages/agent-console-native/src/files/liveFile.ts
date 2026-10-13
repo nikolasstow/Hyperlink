@@ -14,6 +14,7 @@
  * @internal
  */
 import { FileSync, Rebase, TextChange } from "file-sync";
+import { type ChangeMark, changeMarks } from "./changeMarks";
 
 export interface LiveFile {
   /** The hub run `version` counts in. */
@@ -42,6 +43,9 @@ export interface EditorUpdate {
   readonly text: string;
   /** Whole lines the outside change touched, in the new text, to light. */
   readonly highlights: ReadonlyArray<TextRange>;
+  /** The lines an agent added, changed or deleted, in the new text, to mark
+   * in the gutter; none for anyone else's change. */
+  readonly marks: ReadonlyArray<ChangeMark>;
   readonly author: FileSync.Author | undefined;
 }
 
@@ -107,6 +111,7 @@ const editorUpdate = (before: string, after: string, author: FileSync.Author | u
     changes,
     text: after,
     highlights: light ? changedLines(after, changes) : [],
+    marks: author instanceof FileSync.Agent ? changeMarks(before, after) : [],
     author,
   };
 };

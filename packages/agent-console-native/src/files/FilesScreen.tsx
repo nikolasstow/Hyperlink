@@ -710,7 +710,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   onScroll={barHide.onScroll}
                 />
               ) : (
-                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={insets.bottom + BAR_ROOM + 20} />
+                <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={insets.bottom + BAR_ROOM + 20} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} />
               )}
               {cover === undefined ? null : (
                 <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">

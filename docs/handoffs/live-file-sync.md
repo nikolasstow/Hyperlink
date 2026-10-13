@@ -157,6 +157,30 @@ plugin.
   (tmux `eta-metro`). In the eta app's setup, enter `100.67.32.32:5299`. The
   shared :5199/:5195/:8081 (epsilon) are untouched.
 
+## Built: agent change marks (native apiVersion 8)
+
+- An agent's edit marks its lines in the gutter, the way VS Code marks
+  source-control changes: a stripe beside added and changed lines, a wedge
+  where lines were deleted. Only agent edits are marked (`FileSync.Agent`
+  author), not your own or another device's. Marks move with the text and stay
+  until the file is closed; a whole-text replace clears them.
+- Tapping the gutter beside a mark (line numbers included) opens a glass
+  popover: "Edited by <session title>", how long ago, and a glass Open session
+  button tinted with the mark's colour. Taps on the code still place the
+  cursor. A tap anywhere else closes it.
+- The lines flash across the full width as the change lands, then fade (owner:
+  "not sure we need it, but try it").
+- Colours come from the theme's VS Code keys (`changeColors.ts`):
+  `editorGutter.addedBackground`, `editorGutter.modifiedBackground`,
+  `editorGutter.deletedBackground` (else `editorError.foreground`), and
+  `diffEditor.insertedLineBackground` (else `insertedTextBackground`) for the
+  flash. VS Code's defaults apply where a theme sets none.
+- Code: `src/files/changeMarks.ts` (which lines; tested), `changeColors.ts`,
+  `liveFile.ts` (`EditorUpdate.marks`), `CodeEditor.tsx` (`markChanges` with
+  the cached session title), native `ChangeMarks.swift`.
+- The editor starts with a clear background, not a dark default, so a light
+  theme no longer flashes dark as a file opens.
+
 ## Open
 
 - Large files: the hub keeps the text in memory for followed files only. Reads

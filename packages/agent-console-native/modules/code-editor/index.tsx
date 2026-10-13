@@ -41,6 +41,14 @@ export interface EditorTheme {
   readonly mergeCurrentHeader?: string;
   readonly mergeIncomingHeader?: string;
   readonly mergeLabel?: string;
+  /** An agent's change (changeColors.ts): the gutter stripes for added and
+   * changed lines, the wedge where lines were deleted, the flash as it
+   * lands, and the label on the popover's button. */
+  readonly changeAdded?: string;
+  readonly changeModified?: string;
+  readonly changeDeleted?: string;
+  readonly changeFlash?: string;
+  readonly changeLabel?: string;
   /** Whether the theme is light: glass drawn in the editor takes this
    * appearance, not the phone's. */
   readonly light?: boolean;
@@ -82,6 +90,8 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly onTextChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
   /** A conflict's button: keep yours or theirs. */
   readonly onConflictAction?: (event: NativeSyntheticEvent<{ readonly index: number; readonly keep: ConflictChoice }>) => void;
+  /** Open session on an agent change's popover (`apiVersion` 8). */
+  readonly onOpenSession?: (event: NativeSyntheticEvent<{ readonly sessionID: string }>) => void;
   /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
   readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
 }
@@ -98,6 +108,13 @@ export interface CodeEditorHandle {
    * if it differs), `highlightJson` `[{from,to}]` lit for a moment.
    */
   readonly applyChanges: (changesJson: string, expectedLength: number, highlightJson: string) => Promise<void>;
+  /**
+   * Mark lines an agent changed, in the gutter, until the file is closed
+   * (`apiVersion` 8): `marksJson` is `[{kind,from,to,sessionID?,title?,at}]`
+   * against the current text — `kind` "added", "modified" or "deleted" (a
+   * point between lines), `at` when it landed (ms since 1970).
+   */
+  readonly markChanges: (marksJson: string) => Promise<void>;
 }
 
 // Gate on the native API version, not mere presence: the first build shipped an
@@ -128,3 +145,6 @@ export const canShowConflicts = apiVersion >= 6;
 /** Whether the editor takes `tokensJson` as `{length, lines}` and keeps its
  * colours in step while typing. */
 export const canVersionTokens = apiVersion >= 7;
+
+/** Whether the editor marks an agent's changes in the gutter (`markChanges`). */
+export const canMarkChanges = apiVersion >= 8;

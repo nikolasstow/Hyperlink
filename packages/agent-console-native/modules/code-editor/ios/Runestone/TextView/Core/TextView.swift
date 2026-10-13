@@ -788,6 +788,12 @@ open class TextView: UIScrollView {
     /// Subviews kept above the gutter as it is brought forward on layout.
     var viewsAboveGutter: [UIView] = []
 
+    /// Add a view behind the text but over the editor's background, in
+    /// content coordinates (lines lit as an outside change lands).
+    func insertBehindText(_ view: UIView) {
+        textInputView.insertSubview(view, at: 0)
+    }
+
     /// Space kept above and below lines' text, by row (see `TextInputView.lineInsets`).
     var lineInsets: [Int: LineInsets] {
         get {
