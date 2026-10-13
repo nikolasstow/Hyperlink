@@ -47,9 +47,19 @@ public final class CodeEditorModule: Module {
         //    `onOpenSession`).
         // 9: editing with the keyboard down (`hideKeyboard`, `showKeyboard`).
         // 10: the line you are at (`onLineChange`), for breadcrumbs.
+        // 11: the code font (`fontFamily`), and custom fonts installed from
+        //     files (`registerFont`, `unregisterFont`).
         Constants([
-            "apiVersion": 10,
+            "apiVersion": 11,
         ])
+
+        AsyncFunction("registerFont") { (uri: String) -> [String] in
+            try CodeFonts.register(uri)
+        }
+
+        AsyncFunction("unregisterFont") { (uri: String) in
+            CodeFonts.unregister(uri)
+        }
 
         AsyncFunction("hideKeyboard") { () -> Bool in
             CodeEditorView.hideKeyboard()
@@ -88,6 +98,9 @@ public final class CodeEditorModule: Module {
             }
             Prop("fontSize") { (view: CodeEditorView, value: Double) in
                 view.setFontSize(value)
+            }
+            Prop("fontFamily") { (view: CodeEditorView, value: String) in
+                view.setFontFamily(value)
             }
             Prop("showLineNumbers") { (view: CodeEditorView, value: Bool) in
                 view.setShowLineNumbers(value)

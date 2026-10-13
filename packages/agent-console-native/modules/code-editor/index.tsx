@@ -94,6 +94,9 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly onOpenSession?: (event: NativeSyntheticEvent<{ readonly sessionID: string }>) => void;
   /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
   readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
+  /** The code's font family; the system's monospace while it is not
+   * installed (`apiVersion` 11). */
+  readonly fontFamily?: string;
   /** The line you are at (0-based), when it changes: the caret's while
    * editing, else the top of the visible code (`apiVersion` 10). */
   readonly onLineChange?: (event: NativeSyntheticEvent<{ readonly line: number }>) => void;
@@ -132,6 +135,8 @@ const nativeModule =
         readonly apiVersion?: number;
         readonly hideKeyboard?: () => Promise<boolean>;
         readonly showKeyboard?: () => Promise<boolean>;
+        readonly registerFont?: (uri: string) => Promise<ReadonlyArray<string>>;
+        readonly unregisterFont?: (uri: string) => Promise<void>;
       }>("CodeEditor")
     : null;
 const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.apiVersion : 0;
@@ -164,6 +169,18 @@ export const canMarkChanges = apiVersion >= 8;
  * can't. */
 export const hideEditorKeyboard = (): Promise<boolean> =>
   apiVersion >= 9 && nativeModule?.hideKeyboard !== undefined ? nativeModule.hideKeyboard() : Promise.resolve(false);
+
+/** Whether the editor draws in a chosen family (`fontFamily`) and custom
+ * fonts can be installed from files (`apiVersion` 11). */
+export const canInstallFonts = apiVersion >= 11;
+
+/** Register the font file at `uri` for the app; its families. */
+export const registerFont = (uri: string): Promise<ReadonlyArray<string>> =>
+  canInstallFonts && nativeModule?.registerFont !== undefined ? nativeModule.registerFont(uri) : Promise.reject(new Error("This build cannot install fonts"));
+
+/** Unregister the font file at `uri` (a font being removed). */
+export const unregisterFont = (uri: string): Promise<void> =>
+  canInstallFonts && nativeModule?.unregisterFont !== undefined ? nativeModule.unregisterFont(uri) : Promise.resolve();
 
 /** Bring the keyboard back to a file kept editing without it. False when
  * there is none. */

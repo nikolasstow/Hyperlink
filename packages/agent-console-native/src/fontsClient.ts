@@ -2,11 +2,8 @@
  * Custom code fonts. Fonts aren't extensions — just a family name and a source
  * (a URL to a .ttf/.otf/.woff2, or later an uploaded file). They live in the
  * synced app config (`config.fonts`), so they travel across devices like the
- * theme, without the extension store.
- *
- * Rendering a custom font on device needs `expo-font` (a native module → a
- * build); until that ships, a custom font can be added/selected here and will
- * apply once the build lands. Managing the list needs no build.
+ * theme, without the extension store. Each device installs the listed fonts
+ * for itself (fonts/CodeFonts.ts).
  *
  * @internal
  */

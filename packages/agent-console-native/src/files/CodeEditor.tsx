@@ -301,6 +301,7 @@ export const CodeEditor = (props: {
         bottomInset={props.bottomInset}
         stickyFill={props.stickyFill}
         fontSize={codeFontSizeOf(appTheme)}
+        fontFamily={appTheme.codeFont}
         showLineNumbers
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}
