@@ -4,15 +4,15 @@
  * defaults (the same in light and dark), and the crumbs' text from
  * `breadcrumb.foreground`.
  *
- * The icons are SF Symbols standing in for VS Code's codicons.
+ * The icons are VS Code's own codicons (codiconGlyphs.ts), as it maps the kinds.
  *
  * @internal
  */
-import type { SFSymbol } from "sf-symbols-typescript";
+import type { CodiconName } from "../codiconGlyphs";
 import type { SymbolKind } from "./stickyRanges";
 
 interface Look {
-  readonly icon: SFSymbol;
+  readonly icon: CodiconName;
   /** The theme key for its colour. */
   readonly key: string;
   /** VS Code's default; undefined = the theme's foreground. */
@@ -24,22 +24,22 @@ const ORANGE = "#EE9D28";
 const BLUE = "#75BEFF";
 
 const looks: Record<SymbolKind, Look> = {
-  function: { icon: "cube", key: "symbolIcon.functionForeground", fallback: PURPLE },
-  method: { icon: "cube", key: "symbolIcon.methodForeground", fallback: PURPLE },
-  constructor: { icon: "cube", key: "symbolIcon.constructorForeground", fallback: PURPLE },
-  property: { icon: "wrench", key: "symbolIcon.propertyForeground", fallback: undefined },
-  class: { icon: "square.stack.3d.up", key: "symbolIcon.classForeground", fallback: ORANGE },
-  interface: { icon: "link", key: "symbolIcon.interfaceForeground", fallback: BLUE },
-  enum: { icon: "list.number", key: "symbolIcon.enumeratorForeground", fallback: ORANGE },
-  namespace: { icon: "curlybraces", key: "symbolIcon.namespaceForeground", fallback: undefined },
-  type: { icon: "t.square", key: "symbolIcon.typeParameterForeground", fallback: undefined },
-  variable: { icon: "x.square", key: "symbolIcon.variableForeground", fallback: BLUE },
-  constant: { icon: "equal.square", key: "symbolIcon.constantForeground", fallback: undefined },
-  heading: { icon: "number", key: "symbolIcon.stringForeground", fallback: undefined },
+  function: { icon: "symbol-method", key: "symbolIcon.functionForeground", fallback: PURPLE },
+  method: { icon: "symbol-method", key: "symbolIcon.methodForeground", fallback: PURPLE },
+  constructor: { icon: "symbol-method", key: "symbolIcon.constructorForeground", fallback: PURPLE },
+  property: { icon: "symbol-property", key: "symbolIcon.propertyForeground", fallback: undefined },
+  class: { icon: "symbol-class", key: "symbolIcon.classForeground", fallback: ORANGE },
+  interface: { icon: "symbol-interface", key: "symbolIcon.interfaceForeground", fallback: BLUE },
+  enum: { icon: "symbol-enum", key: "symbolIcon.enumeratorForeground", fallback: ORANGE },
+  namespace: { icon: "symbol-namespace", key: "symbolIcon.namespaceForeground", fallback: undefined },
+  type: { icon: "symbol-parameter", key: "symbolIcon.typeParameterForeground", fallback: undefined },
+  variable: { icon: "symbol-variable", key: "symbolIcon.variableForeground", fallback: BLUE },
+  constant: { icon: "symbol-constant", key: "symbolIcon.constantForeground", fallback: undefined },
+  heading: { icon: "symbol-string", key: "symbolIcon.stringForeground", fallback: undefined },
 };
 
 export interface SymbolLook<Color> {
-  readonly icon: SFSymbol;
+  readonly icon: CodiconName;
   readonly color: string | Color;
 }
 
