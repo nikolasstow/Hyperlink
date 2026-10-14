@@ -15,10 +15,16 @@
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "RNS_GAMMA_ENABLED": "1"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "RNS_GAMMA_ENABLED": "1"
+      }
     }
   },
   "submit": {
