@@ -187,3 +187,21 @@ plugin.
   are capped at `MAX_READ_BYTES` today. Keep the same cap.
 - Files that are deleted or renamed while open: show it and keep the user's
   text. Decide the UI when phase 1 lands.
+
+## PERF — follow scope storm (flagged for eta, 2026-10-13)
+
+Device `[perf]` logs on epsilon show routine JS stalls of 0.9–2.7 s (one 5.7 s)
+and an app-wide lag, correlated with a live-sync **retry storm**: the app is
+following `…/worktrees/epsilon/repos/effect/packages/effect/src` — the whole
+Effect library source tree (a directory path, plus thousands of files) — and
+each follow fails `FileSyncError`, then `REFOLLOW` (2 s) retries forever. Every
+cycle logged ~5 `[live]` lines per file over the RN bridge.
+
+- Done (Dubz side, merge-safe): gated the chatty `[live]` `console.log`s behind
+  `LIVE_LOG` in `LiveFiles.ts` (the `DIAG(live-files): temporary` lines). Cuts
+  the bridge churn; does NOT change sync behaviour.
+- **Still needed (eta owns):** fix the FOLLOW SCOPE. The app should not follow
+  giant / unopened trees — only files actually open in a tab or on screen. Why
+  is `repos/effect/.../src` (and a directory path, not a file) being followed at
+  all? A directory follow that errors should not re-follow on a 2 s loop
+  forever; cap/stop re-follow after N failures, and never follow a non-file.
