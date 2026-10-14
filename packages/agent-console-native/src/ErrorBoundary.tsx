@@ -9,28 +9,43 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors } from "./colors";
 
 type Props = { readonly children: React.ReactNode };
-type State = { readonly error: Error | undefined };
+type State = { readonly error: Error | undefined; readonly componentStack: string | undefined };
 
 export class ErrorBoundary extends React.Component<Props, State> {
-  override state: State = { error: undefined };
+  override state: State = { error: undefined, componentStack: undefined };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
   }
 
-  override componentDidCatch(error: Error): void {
-    console.error("[ErrorBoundary]", error);
+  override componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    // The component stack NAMES the component that threw — the one detail the
+    // bare message/stack misses (and it survives here: EAS bundles unminified
+    // for Hermes). Shown below so a release crash is self-diagnosing.
+    console.error("[ErrorBoundary]", error, info.componentStack);
+    this.setState({ componentStack: info.componentStack ?? undefined });
   }
 
   override render(): React.ReactNode {
-    const { error } = this.state;
+    const { error, componentStack } = this.state;
     if (error === undefined) return this.props.children;
     return (
       <View style={styles.root}>
         <Text style={styles.title}>Something crashed</Text>
         <ScrollView style={styles.scroll}>
           <Text style={styles.message}>{error.message}</Text>
-          {error.stack !== undefined ? <Text style={styles.stack}>{error.stack}</Text> : null}
+          {componentStack !== undefined ? (
+            <>
+              <Text style={styles.heading}>Component stack</Text>
+              <Text style={styles.stack}>{componentStack}</Text>
+            </>
+          ) : null}
+          {error.stack !== undefined ? (
+            <>
+              <Text style={styles.heading}>JS stack</Text>
+              <Text style={styles.stack}>{error.stack}</Text>
+            </>
+          ) : null}
         </ScrollView>
       </View>
     );
@@ -57,6 +72,13 @@ const styles = StyleSheet.create({
     color: colors.label,
     fontSize: 15,
     marginBottom: 12,
+  },
+  heading: {
+    color: colors.label,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 8,
+    marginBottom: 4,
   },
   stack: {
     color: colors.secondaryLabel,

@@ -68,8 +68,11 @@ const keepViews = (): void => {
 };
 
 // Read back once, at launch: a workspace not loaded yet starts from its kept
-// list (revalidated on its next ensure or prefetch).
-AsyncStorage.getItem(STORAGE_KEY).then(
+// list (revalidated on its next ensure or prefetch). Exposed as a promise so the
+// launch can wait for it (App.tsx), like the other stores — otherwise a screen
+// sized from these views (RepoScreen's collapsing header) renders before they
+// land and resizes when they arrive.
+export const extensionViewsReadBack: Promise<void> = AsyncStorage.getItem(STORAGE_KEY).then(
   (raw) => {
     if (raw === null) return;
     const decoded = Schema.decodeUnknownOption(Schema.fromJsonString(StoredViews))(raw);

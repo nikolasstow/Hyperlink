@@ -51,6 +51,7 @@
     "@shikijs/monaco": "4.4.2",
     "@types/node": "^20.19.40",
     "@types/react": "~19.2.2",
+    "babel-preset-expo": "~57.0.8",
     "esbuild": "^0.28.1",
     "monaco-editor": "0.56.0",
     "sharp": "^0.34.5",
