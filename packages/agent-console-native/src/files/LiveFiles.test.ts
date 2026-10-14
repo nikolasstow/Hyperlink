@@ -6,7 +6,7 @@
  */
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeServices } from "@effect/platform-node";
-import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
+import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Logger, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
 import { HttpRouter } from "effect/unstable/http";
 import { describe, expect, it, vi } from "vitest";
 import { fileSyncLayer } from "../../../agent-console/src/server/files/rpc";
@@ -177,4 +177,24 @@ describe("LiveFiles against the file hub", () => {
         }),
       ),
     ), 20_000);
+
+  it("asks for a folder once, not every 2 s, and shows why", () => {
+    const warnings: Array<string> = [];
+    const logger = Logger.make(({ message }) => {
+      warnings.push(JSON.stringify(message));
+    });
+    return run(
+      withHub(({ live, file }) =>
+        Effect.gen(function* () {
+          const folder = file.slice(0, file.lastIndexOf("/"));
+          yield* live.follow(api, new Set([file, folder]));
+          // Two refollow spaces: a retry would have asked twice more.
+          yield* Effect.sleep(Duration.millis(4500));
+          const problems = yield* live.problems.pipe(Stream.take(1), Stream.runCollect);
+          expect(Option.flatMap(Option.fromNullishOr(problems[0]), HashMap.get(folder))).toEqual(Option.some("NotAFile"));
+          expect(warnings.filter((warning) => warning.includes(folder))).toHaveLength(1);
+        }),
+      ).pipe(Effect.provide(Logger.layer([logger]))),
+    );
+  }, 20_000);
 });

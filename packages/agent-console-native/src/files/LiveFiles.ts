@@ -54,6 +54,14 @@ const liveLog = (...args: ReadonlyArray<unknown>): void => {
   if (LIVE_LOG) console.log(...args);
 };
 
+/** Whether following failed for a reason trying again in a moment will not
+ * change: the path is a folder, too large, or not there. Such a path is left
+ * (its problem shown) until the list of followed files changes or the app
+ * comes back to the foreground; else a folder in a tab was asked for every
+ * 2 s, for ever. */
+const settled = (error: { readonly _tag: string }): boolean =>
+  error instanceof FileSync.FileSyncError && (error.reason === "NotAFile" || error.reason === "TooLarge" || error.reason === "NotFound");
+
 /** Raised to follow a file again: the hub's changes skipped a version. */
 class OutOfStep extends Data.TaggedError("OutOfStep")<{
   readonly path: string;
@@ -240,12 +248,18 @@ const make = Effect.gen(function* () {
       Effect.tapError((error) => Effect.sync(() => liveLog("[live] follow failed", path, String(error)))),
       Effect.tapError((error) =>
         SubscriptionRef.update(problems, HashMap.set(path, error._tag === "FileSyncError" ? error.reason : error._tag === "OutOfStep" ? "Io" : "Unreachable")).pipe(
-          Effect.andThen(Effect.logWarning(`live files: following ${path} stopped; following again`, error)),
+          Effect.andThen(
+            settled(error)
+              ? Effect.logWarning(`live files: ${path} cannot be followed; left until it is listed again or the app returns`, error)
+              : Effect.logWarning(`live files: following ${path} stopped; following again`, error),
+          ),
         ),
       ),
-      Effect.retry(REFOLLOW),
+      Effect.retry({ schedule: REFOLLOW, while: (error) => !settled(error) }),
       // The hub ended the stream (it should not): follow again.
       Effect.repeat(REFOLLOW),
+      // Its problem is shown; the error is kept there, not here.
+      Effect.ignore,
     );
 
   // Back in the foreground (or online), follow every file afresh: iOS pauses a
