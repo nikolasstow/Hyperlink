@@ -7,7 +7,7 @@
 
 import * as React from "react";
 import "../styles/widgets.css";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { RegistryProvider, useAtomValue, useAtomSet } from "hyperlink-ts/ui/atom-react";
 import { countAtom, increment, reset } from "./counter-hyperlink.js";
 

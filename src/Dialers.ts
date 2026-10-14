@@ -16,7 +16,8 @@
  *
  * @module Dialers
  */
-import { Effect, Encoding, Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
+import { Hex } from "effect/encoding";
 import * as Hyperlink from "./Hyperlink";
 
 /** Kind stamped on Lookup-family HyperServices. @public */
@@ -122,7 +123,7 @@ export class Service extends Hyperlink.Service<Service>()(
 export const mintId: Effect.Effect<string> = Effect.sync(() => {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
-  return Encoding.encodeHex(bytes);
+  return Hex.encode(bytes);
 });
 
 /**

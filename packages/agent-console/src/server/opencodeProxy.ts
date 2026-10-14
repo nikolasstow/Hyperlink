@@ -9,7 +9,7 @@
  * @internal
  */
 import { Config, Effect, Option } from "effect";
-import { Headers, HttpClient, HttpClientRequest, HttpRouter, HttpServerResponse } from "effect/unstable/http";
+import { Headers, HttpClient, HttpClientRequest, HttpRouter, HttpServerResponse } from "effect/http";
 
 /** Where the app's opencode client points, under this server. */
 export const OPENCODE_PREFIX = "/opencode";
@@ -20,7 +20,7 @@ const HOP_HEADERS = new Set(["connection", "keep-alive", "transfer-encoding", "u
 
 const forwardable = (headers: Headers.Headers): Headers.Headers => Headers.removeMany(headers, [...HOP_HEADERS]);
 
-const opencodeUrl = Config.string("AGENT_CONSOLE_OPENCODE_URL").pipe(Config.withDefault("http://127.0.0.1:4096"));
+const opencodeUrl = Config.String("AGENT_CONSOLE_OPENCODE_URL").pipe(Config.withDefault("http://127.0.0.1:4096"));
 
 export const opencodeProxyRoute = HttpRouter.add("*", `${OPENCODE_PREFIX}/*`, (request) =>
   Effect.gen(function* () {

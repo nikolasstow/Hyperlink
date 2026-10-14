@@ -9,7 +9,7 @@
 import { Box, Text } from "ink";
 import * as React from "react";
 import { Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import * as Group from "../Group";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import * as PriorityView from "../ui/PriorityView";

@@ -21,9 +21,9 @@ import {
 import {
   RateLimiterError,
   RateLimiterStore,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import type { PlatformError } from "effect/PlatformError";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import * as WorkPool from "../src/WorkPool";

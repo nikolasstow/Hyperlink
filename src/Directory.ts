@@ -148,7 +148,7 @@ export class NodesServingRequest extends Schema.Class<NodesServingRequest>(
  * @category errors
  * @public
  */
-export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
+export class IncumbentAlive extends Schema.TaggedError<IncumbentAlive>()(
   "IncumbentAlive",
   {
     nodeKey: Schema.String,

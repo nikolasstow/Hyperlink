@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import { Duration, Effect, FileSystem, Layer, Option, Path, Queue, Scope, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { FileSync, TextChange } from "file-sync";
 import { describe, expect, it } from "vitest";
 import { FileHub } from "./hub";

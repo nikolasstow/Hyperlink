@@ -2,7 +2,7 @@
  * Hyperlink.atom / query / fn — Effect-reactive adapters over a Tag.
  */
 import { Effect, Layer, Schema, Stream, SubscriptionRef } from "effect";
-import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { describe, expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { channelKeyOf } from "../src/internal/atomHandle";

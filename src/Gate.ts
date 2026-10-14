@@ -107,7 +107,7 @@ import {
   type WithGateRunErrors,
   GateStopped as GateStoppedSchema,
 } from "./internal/gateSchema";
-import { RateLimiterError } from "effect/unstable/persistence/RateLimiter";
+import { RateLimiterError } from "effect/persistence/RateLimiter";
 
 // ============================================================================
 // Public wire schemas + spec
@@ -168,7 +168,7 @@ export type Status = internal.GateStatus;
  * finish.
  *
  * @remarks
- * Wire-encodable (`Schema.TaggedErrorClass`) and always present on Tag / Service `run`
+ * Wire-encodable (`Schema.TaggedError`) and always present on Tag / Service `run`
  * alongside Effect's {@link RateLimiterError} (`Effect.catchTag("GateStopped", …)`).
  * Also on local {@link make} handles.
  *

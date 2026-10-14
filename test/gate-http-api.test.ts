@@ -1,8 +1,8 @@
 import { it, describe, expect } from "@effect/vitest"
 import { Context, Effect, Layer, Ref, Schema } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
-import type { HttpClientError } from "effect/unstable/http"
-import { HttpApi, HttpApiClient, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import type { HttpClientError } from "effect/http"
+import { HttpApi, HttpApiClient, HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { acceptJson, Gate } from "../src"
 
 const json200 = JSON.stringify({ pong: true })

@@ -9,7 +9,7 @@
  * @internal
  */
 import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
 import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";

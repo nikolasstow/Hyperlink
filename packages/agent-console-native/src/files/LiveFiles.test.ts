@@ -7,7 +7,7 @@
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeServices } from "@effect/platform-node";
 import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Logger, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 import { describe, expect, it, vi } from "vitest";
 import { fileSyncLayer } from "../../../agent-console/src/server/files/rpc";
 import { type DeviceSignal, DeviceSignals } from "../effect/DeviceSignals";

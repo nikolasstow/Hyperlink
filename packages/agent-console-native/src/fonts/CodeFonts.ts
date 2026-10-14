@@ -9,7 +9,7 @@
  * @internal
  */
 import { Context, Data, Effect, Layer, Option, Schema, SubscriptionRef } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { KeyValueStore } from "effect/persistence";
 import { Directory, File, Paths } from "expo-file-system";
 import { canInstallFonts, registerFont, unregisterFont } from "../../modules/code-editor";
 import type { CustomFont } from "../fontsClient";

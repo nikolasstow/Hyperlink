@@ -8,10 +8,11 @@
  * @module storage/sqlite/historyStore
  */
 import { Clock, Context, DateTime, Effect, Layer, Schema, Scope } from "effect";
+import { unknownJsonString } from "../../internal/json";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import type { SqliteClientConfig } from "@effect/sql-sqlite-node/SqliteClient";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
-import type { SqlError } from "effect/unstable/sql/SqlError";
+import { SqlClient } from "effect/sql/SqlClient";
+import type { SqlError } from "effect/sql/SqlError";
 import { HistoryStoreTag } from "../../HistoryStore";
 import type { HistoryStoreShape } from "../../HistoryStore";
 
@@ -28,8 +29,8 @@ const ddl: ReadonlyArray<string> = [
 
 // Opaque entry ⇄ JSON column (Schema, not raw JSON.parse/stringify). Entries are already-encoded
 // JSON owned by the caller, so the sync round-trip can't fail on our own data.
-const encodeEntry = Schema.encodeSync(Schema.UnknownFromJsonString);
-const decodeEntry = Schema.decodeUnknownSync(Schema.UnknownFromJsonString);
+const encodeEntry = Schema.encodeSync(unknownJsonString);
+const decodeEntry = Schema.decodeUnknownSync(unknownJsonString);
 
 const asRecord = (row: unknown): Record<string, unknown> => {
   const out: Record<string, unknown> = {};

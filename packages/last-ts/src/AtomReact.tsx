@@ -1,7 +1,7 @@
 /**
  * @module AtomReact
  *
- * React binding over Effect's native reactive layer (`effect/unstable/reactivity`) —
+ * React binding over Effect's native reactive layer (`effect/reactivity`) —
  * `AtomRegistry` provider + hooks, plus `Atom.AtomRuntime` context for app layers.
  *
  * Prefer {@link ../Last.provider} so call sites take children only:
@@ -27,7 +27,7 @@
  */
 import * as errors from "./internal/errors";
 import * as React from "react";
-import { Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry } from "effect/reactivity";
 
 // =============================================================================
 // Atom registry (subscribe / mount)

@@ -19,5 +19,5 @@ export const runServer = <A, E>(
 
 // Future SSR/RSC hydration seam (no implementation now): the client island runtime
 // would be `Atom.runtime(layer)` (see examples/apps/queue-widget), and server->client
-// handoff would use `effect/unstable/reactivity/Hydration` (`dehydrate`/`hydrate`)
+// handoff would use `effect/reactivity/Hydration` (`dehydrate`/`hydrate`)
 // with atom-react's `HydrationBoundary`. Wired only when a doc page needs a live island.

@@ -7,7 +7,7 @@
  * @internal
  */
 import { Duration, Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { PluginError } from "../../plugin/api";
 
 const registry = "https://registry.npmjs.org";

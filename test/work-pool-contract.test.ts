@@ -12,7 +12,7 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect";
-import { RpcClient, RpcTest } from "effect/unstable/rpc";
+import { RpcClient, RpcTest } from "effect/rpc";
 import { expect, it } from "vitest";
 import { WorkPool } from "../src";
 import { queueControlSpec } from "../src/WorkPool";
@@ -306,7 +306,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
           timestamps: { enqueuedAt: DateTime.makeUnsafe(0) },
         },
       ]),
-    // the engine error is Schema.TaggedErrorClass now → it crosses RPC and catchTag works
+    // the engine error is Schema.TaggedError now → it crosses RPC and catchTag works
     releaseEncoded: () =>
       Effect.fail(new QueueMissingItemSchemaError({ queue: "test/Numbers" })),
     deadLetter: () => Effect.succeed([]),

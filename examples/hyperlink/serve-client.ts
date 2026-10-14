@@ -12,8 +12,8 @@
 // ---cut---
 import { NodeHttpServer } from "@effect/platform-node";
 import { Effect, Layer, Schema, SubscriptionRef } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization, RpcServer } from "effect/rpc";
 import * as Hyperlink from "../../src/Hyperlink";
 
 class Counter extends Hyperlink.Service<Counter>()("examples/CounterRpc/Counter", {
@@ -51,7 +51,7 @@ const program = Effect.gen(function* () {
   const address = yield* HttpServer.HttpServer.pipe(
     Effect.map((server) => server.address),
   );
-  const port = address._tag === "TcpAddress" ? address.port : 0;
+  const port = address._tag === "UnixPathAddress" ? 0 : address.port;
   const transport = RpcClient.layerProtocolHttp({
     url: `http://127.0.0.1:${String(port)}/rpc`,
   }).pipe(

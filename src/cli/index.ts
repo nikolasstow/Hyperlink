@@ -27,7 +27,7 @@
  *
  */
 import { Console, Effect, Predicate, type Schema } from "effect";
-import { Command, Flag } from "effect/unstable/cli";
+import { Command, Flag } from "effect/cli";
 import * as Group from "../Group";
 import { methodMeta, specOf } from "../Hyperlink";
 import type {
@@ -68,11 +68,11 @@ const flagFor = (name: string, schema: unknown): Flag.Flag<unknown> | undefined 
   }
   switch (schema.ast._tag) {
     case "String":
-      return Flag.string(name);
+      return Flag.String(name);
     case "Number":
-      return Flag.float(name);
+      return Flag.Finite(name);
     case "Boolean":
-      return Flag.boolean(name);
+      return Flag.Boolean(name);
     default:
       return undefined;
   }

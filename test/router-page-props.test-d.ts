@@ -3,7 +3,7 @@
  */
 import { describe, expectTypeOf, it } from "@effect/vitest";
 import { Effect, Layer, Schema, pipe } from "effect";
-import { HttpApiEndpoint } from "effect/unstable/httpapi";
+import { HttpApiEndpoint } from "effect/http-api";
 import * as Layout from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";

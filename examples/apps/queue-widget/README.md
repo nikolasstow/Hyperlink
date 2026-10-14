@@ -2,7 +2,7 @@
 
 A dashboard is **widgets**. A queue widget renders a queue's live stats +
 controls; you build its atoms from the queue tag and **provide the right layer**.
-Built entirely on **Effect 4's native reactive layer** (`effect/unstable/reactivity`)
+Built entirely on **Effect 4's native reactive layer** (`effect/reactivity`)
 — no external `@effect-atom`, no duplicate `effect`.
 
 ```sh
@@ -69,12 +69,12 @@ fully live (incl. background worker progress) with **zero** refresh wiring. One 
 
 The only seam is the layer in `Atom.runtime(layer)`. Today `DemoQueue.layer` (a real
 local queue). For a server-backed queue: an **RPC-backed client layer** for the same
-tag — built from `Hyperlink.Service`'s contract via `effect/unstable/reactivity/AtomRpc`.
+tag — built from `Hyperlink.Service`'s contract via `effect/reactivity/AtomRpc`.
 The widget and atoms don't change.
 
 ## Next slices
 
 - `handle.changes` snapshot stream → swap `stats` to a stream atom (true live).
-- Server components (RSC) via `effect/unstable/reactivity/Hydration` — render the
+- Server components (RSC) via `effect/reactivity/Hydration` — render the
   shell, hydrate to live atoms on the client.
 - More widget types (daemon, gate) — same shape: build atoms from a tag.

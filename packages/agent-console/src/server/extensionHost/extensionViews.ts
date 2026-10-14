@@ -17,8 +17,8 @@
 import { NodeServices, NodeWorker } from "@effect/platform-node";
 import { Worker } from "node:worker_threads";
 import { Context, Duration, Effect, FileSystem, Layer, Option, Path } from "effect";
-import { RpcClient } from "effect/unstable/rpc";
-import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import { RpcClient } from "effect/rpc";
+import { RpcClientError } from "effect/rpc/RpcClientError";
 import { resolveWithin } from "../fs";
 import { PluginRegistry } from "../plugin/registry";
 import { Workspaces } from "../workspaces";

@@ -4,7 +4,7 @@
 import * as React from "react";
 import { describe, expect, it } from "@effect/vitest";
 import { Layer, Schema } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { renderToString } from "react-dom/server";
 import * as Group from "../src/Group";
 import * as Node from "../src/Node";

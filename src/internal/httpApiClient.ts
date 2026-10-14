@@ -26,12 +26,12 @@
  * @module HttpApiClient
  */
 
-import { Headers, HttpClient, HttpClientRequest } from "effect/unstable/http";
+import { Headers, HttpClient, HttpClientRequest } from "effect/http";
 import {
   HttpApi,
   HttpApiClient as EffectHttpApiClient,
-} from "effect/unstable/httpapi";
-import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
+} from "effect/http-api";
+import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/http-api";
 import {
   Cause,
   Clock,
@@ -54,11 +54,11 @@ import {
   RateLimiterError,
   RateLimiterStore,
   make as makeRateLimiter,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import type {
   ConsumeResult,
   RateLimiter as EffectRateLimiter,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import * as Hyperlink from "../Hyperlink";
 import * as HttpClientGate from "../HttpClientGate";

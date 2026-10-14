@@ -17,8 +17,8 @@ import { Config, Effect } from "effect"
 import * as DynamicConfig from "hyperlink-ts/DynamicConfig"
 
 const cfg = DynamicConfig.make({
-  baseUrl: Config.string("BASE_URL").pipe(Config.withDefault("https://api.example.com")),
-  apiKey: DynamicConfig.swappable(Config.redacted("API_KEY")),
+  baseUrl: Config.String("BASE_URL").pipe(Config.withDefault("https://api.example.com")),
+  apiKey: DynamicConfig.swappable(Config.Redacted("API_KEY")),
 })
 
 const program = Effect.gen(function* () {
@@ -43,10 +43,10 @@ A field is made swappable one of two ways, and the choice is about **who may swa
 
 ``` ts
 // scoped — reachable by setByKey only where layer(cfg) is provided
-const cfg = DynamicConfig.make({ token: DynamicConfig.swappable(Config.string("TOKEN")) })
+const cfg = DynamicConfig.make({ token: DynamicConfig.swappable(Config.String("TOKEN")) })
 
 // process-wide — setByKey works on any runtime, no wiring
-const apiKey = DynamicConfig.globalSwappable(Config.redacted("API_KEY"))
+const apiKey = DynamicConfig.globalSwappable(Config.Redacted("API_KEY"))
 ```
 
 ### Swapping by key
@@ -64,7 +64,7 @@ yield* DynamicConfig.setByKey("API_KEY", "rotated")
 ``` ts
 const whole = yield* DynamicConfig.all(cfg)  // read the whole bag at once, like Config.all
 const child = DynamicConfig.extend(cfg, {    // clone a bag and add fields
-  retries: Config.int("RETRIES").pipe(Config.withDefault(3)),
+  retries: Config.Int("RETRIES").pipe(Config.withDefault(3)),
 })
 const readonly = DynamicConfig.freeze(cfg)   // .set won't compile against a frozen view
 ```

@@ -1,5 +1,5 @@
 import { Duration, Effect, Layer, Schema, Stream } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
@@ -73,7 +73,7 @@ const assertStreams = Effect.gen(function* () {
 const withPortClient = (connectAt: (port: number) => Layer.Layer<HubNode>) =>
   Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     return yield* assertStreams.pipe(
       Effect.provide(Hyperlink.client(HubQueue).pipe(Layer.provide(connectAt(port)))),
       Effect.scoped,

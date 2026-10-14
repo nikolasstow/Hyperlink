@@ -10,7 +10,7 @@
  * These are the `GET` routes observed on `api-sdp.nwslsoccer.com` for `/v1/nwsl/football` (locale `en-US`).
  * Other nodes (vocabulary, widgets, ecal) are out of scope for this client.
  */
-import { HttpApi } from "effect/unstable/httpapi";
+import { HttpApi } from "effect/http-api";
 import { NwslSdpPlayerGroup } from "./player-group";
 import { NwslSdpSeasonGroup } from "./season-group";
 import { NwslSdpTeamGroup } from "./team-group";

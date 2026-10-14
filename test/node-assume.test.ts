@@ -3,7 +3,7 @@
  */
 import { Effect, Layer, Redacted, Schema } from "effect";
 import { NodeHttpServer } from "@effect/platform-node";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
@@ -25,7 +25,7 @@ const withPort = <A, E, R>(
 ): Effect.Effect<A, E, R | HttpServer.HttpServer> =>
   Effect.gen(function* () {
     const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-    return yield* use(addr._tag === "TcpAddress" ? addr.port : 0);
+    return yield* use(addr._tag === "UnixPathAddress" ? 0 : addr.port);
   });
 
 describe("Node.assume", () => {

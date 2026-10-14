@@ -153,5 +153,5 @@ yield* sql.withTransaction(
 ```
 
 {.note}
-Errors that cross the wire are `Schema.TaggedErrorClass`, so they encode as well as throw — see
+Errors that cross the wire are `Schema.TaggedError`, so they encode as well as throw — see
 *Effect idioms → Errors that cross the wire*.

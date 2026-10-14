@@ -64,7 +64,7 @@ export class ResolveRequest extends Schema.Class<ResolveRequest>("LookupResolveR
  * @category errors
  * @public
  */
-export class DuplicateIdentity extends Schema.TaggedErrorClass<DuplicateIdentity>()(
+export class DuplicateIdentity extends Schema.TaggedError<DuplicateIdentity>()(
   "DuplicateIdentity",
   {
     key: Schema.String,

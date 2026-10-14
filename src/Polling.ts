@@ -523,7 +523,7 @@ export const acceleratingWithRefs = (options: {
  *
  * @example
  * ```ts
- * const pollInterval = DynamicConfig.swappable(Config.duration("POLL_INTERVAL"))
+ * const pollInterval = DynamicConfig.swappable(Config.Duration("POLL_INTERVAL"))
  * Daemon.make("sync", { polling: Polling.dynamic(pollInterval), effect })
  * ```
  * @category presets

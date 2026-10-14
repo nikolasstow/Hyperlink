@@ -16,8 +16,8 @@
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
 import { api } from "./api";
 import { CollectionStates } from "./collections/state";
 import { ExtensionViews } from "./extensionHost/extensionViews";

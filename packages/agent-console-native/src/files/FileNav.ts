@@ -14,7 +14,7 @@
  */
 import { fromHome, under } from "./pathForms";
 import { Context, Effect, HashMap, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { KeyValueStore } from "effect/persistence";
 
 export const FileNavEntry = Schema.Struct({
   path: Schema.String,

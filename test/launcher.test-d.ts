@@ -3,7 +3,7 @@
  */
 import type { Config, Duration, Effect, Layer, Redacted, Scope } from "effect";
 import type { ConfigError } from "effect/Config";
-import type { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import type { ChildProcess, ChildProcessSpawner } from "effect/process";
 import type * as Launcher from "../src/Launcher";
 import type {
   AssumeNotReady,

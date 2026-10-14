@@ -11,7 +11,7 @@
  * @internal
  */
 import { Schema } from "effect";
-import { Rpc, RpcGroup } from "effect/unstable/rpc";
+import { Rpc, RpcGroup } from "effect/rpc";
 
 /** How the app draws a page: a tree of rows (every VS Code view), sections
  * of facts with links to the plugin's other pages, or a collection (items in
@@ -96,7 +96,7 @@ export type InvokeResult = typeof InvokeResult.Type;
 /** The host could not answer: an extension failed to activate or threw, a
  * task needs something the runner does not do, or the host itself is down or
  * late. Crosses the worker boundary and the HTTP API, so it is a schema error. */
-export class ExtensionHostError extends Schema.TaggedErrorClass<ExtensionHostError>()("ExtensionHostError", {
+export class ExtensionHostError extends Schema.TaggedError<ExtensionHostError>()("ExtensionHostError", {
   reason: Schema.Literals(["ActivationFailed", "ProviderFailed", "Unsupported", "HostUnavailable", "Timeout"]),
   message: Schema.String,
 }) {}
@@ -104,7 +104,7 @@ export class ExtensionHostError extends Schema.TaggedErrorClass<ExtensionHostErr
 /** The request named something that is not there or not allowed: a view or
  * row the host does not know (a row id goes stale when its view refreshes), a
  * command that row does not offer, or a workspace outside the files root. */
-export class ViewRequestError extends Schema.TaggedErrorClass<ViewRequestError>()("ViewRequestError", {
+export class ViewRequestError extends Schema.TaggedError<ViewRequestError>()("ViewRequestError", {
   reason: Schema.Literals(["UnknownView", "UnknownNode", "UnknownCommand", "BadWorkspace"]),
   message: Schema.String,
 }) {}

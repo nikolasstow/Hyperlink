@@ -8,7 +8,7 @@ import * as NodeRedis from "@effect/platform-node/NodeRedis";
 import { Clock, Config, Effect, Layer, Random } from "effect";
 import {
   layerStoreRedis as rateLimiterStoreRedis,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 
 export type RedisEndpoint = {
   readonly host: string;
@@ -34,16 +34,15 @@ const parseRedisUrl = (raw: string): RedisEndpoint => {
 /** Parse `REDIS_URL` (`redis://[:password@]host:port[/db]`) or fall back to localhost. */
 export const redisEndpoint: RedisEndpoint = parseRedisUrl(
   Effect.runSync(
-    Config.string("REDIS_URL").pipe(Config.withDefault(DEFAULT_URL)),
+    Config.String("REDIS_URL").pipe(Config.withDefault(DEFAULT_URL)),
   ),
 );
 
 /** Node `Redis` + `NodeRedis` services for the probed endpoint. */
 export const nodeRedisLayer = NodeRedis.layer({
-  host: redisEndpoint.host,
-  port: redisEndpoint.port,
-  db: redisEndpoint.db,
-  password: redisEndpoint.password,
+  socket: { host: redisEndpoint.host, port: redisEndpoint.port },
+  ...(redisEndpoint.db === undefined ? {} : { database: redisEndpoint.db }),
+  ...(redisEndpoint.password === undefined ? {} : { password: redisEndpoint.password }),
 });
 
 const probeRedis = Effect.gen(function* () {

@@ -21,7 +21,7 @@
  * @internal
  */
 import { Data, type Effect, type FileSystem, type Path } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 import type { InvokeResult } from "../extensionHost/protocol";
 
 export { Completed, OpenFile, OpenUrl, RunTask } from "../extensionHost/protocol";

@@ -5,7 +5,7 @@
  * @internal
  */
 import { Context, Effect, Layer, Option, Stream, SubscriptionRef } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { KeyValueStore } from "effect/persistence";
 import { KeptPages } from "./keptPages";
 
 const STORE_KEY = "pages";

@@ -3,7 +3,7 @@
  * @internal
  */
 import { Effect, Stream } from "effect";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 import { connectForRef } from "../internal/nodeConnect";
 import type { NodeKey } from "../Node";
 import * as LogEntry from "../LogEntry";

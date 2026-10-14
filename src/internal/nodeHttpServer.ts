@@ -16,11 +16,11 @@ import {
   HttpRouter,
   HttpServer,
   HttpServerResponse,
-} from "effect/unstable/http"
+} from "effect/http"
 import {
   RpcSerialization,
   RpcServer,
-} from "effect/unstable/rpc"
+} from "effect/rpc"
 import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,
@@ -161,7 +161,9 @@ const httpServerBase = (
       const { nodeStatusServeEntry } = yield* Effect.promise(
         () => import("./nodeStatus"),
       );
-      const listenScope = yield* Scope.Scope;
+      // A scope this layer owns (Effect 4.0 closes only owned scopes): the server is built into it
+      // below, so `closeListen` tears the server down; it closes with the layer's own scope too.
+      const listenScope = yield* Scope.fork(yield* Scope.Scope);
       const membership = membershipFromAdvertise(
         options?.advertiseNode,
         entries,
@@ -267,9 +269,12 @@ const httpServerBase = (
           ? { onConflict: options.onConflict }
           : undefined,
       );
-      return retype<HttpServed>(
-        served.pipe(Layer.provideMerge(closedLayer(advertise))) as never,
+      const listening = yield* Layer.buildWithMemoMap(
+        served.pipe(Layer.provideMerge(closedLayer(advertise))),
+        yield* Layer.CurrentMemoMap,
+        listenScope,
       );
+      return retype<HttpServed>(Layer.succeedContext(listening) as never);
     }) as never,
   );
 };

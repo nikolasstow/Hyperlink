@@ -16,8 +16,8 @@
 import { NodeRuntime, NodeServices, NodeWorkerRunner } from "@effect/platform-node";
 import { workerData } from "node:worker_threads";
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-import { RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient } from "effect/http";
+import { RpcServer } from "effect/rpc";
 import { makeHost } from "./host";
 import { ExtensionHostRpcs } from "./protocol";
 

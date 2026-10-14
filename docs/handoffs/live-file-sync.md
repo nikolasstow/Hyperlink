@@ -72,8 +72,8 @@ plugin.
   follow stream), rebases on it, and writes again. So the hub keeps no history.
   Its own disk write coming back through the watcher is no change (the text
   matches).
-- **Transport.** Effect RPC over a WebSocket (`effect/unstable/rpc` +
-  `effect/unstable/socket`). The browser dashboard already requires WebSocket,
+- **Transport.** Effect RPC over a WebSocket (`effect/rpc` +
+  `effect/socket`). The browser dashboard already requires WebSocket,
   and RN has a native one. Group `FileSync`: `follow(paths) → Stream<FileEvent>`
   and `write(...)`. Schemas are `_tag` unions, one Struct per payload.
 - **Diffing.** A small dependency (`fast-diff`, also used by Quill, pure JS)

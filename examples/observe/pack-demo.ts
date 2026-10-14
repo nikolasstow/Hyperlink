@@ -18,7 +18,7 @@
 
 // ---cut---
 import { Effect, Schema, SubscriptionRef, pipe } from "effect";
-import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Observe from "../../src/Observe";
 import * as WorkPoolView from "../../src/ui/WorkPoolView";

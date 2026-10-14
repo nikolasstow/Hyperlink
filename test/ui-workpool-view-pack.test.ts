@@ -2,7 +2,7 @@
  * WorkPoolView observe pack exports + queueControls bind.
  */
 import { Effect, Schema, SubscriptionRef } from "effect";
-import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import { describe, expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Observe from "../src/Observe";

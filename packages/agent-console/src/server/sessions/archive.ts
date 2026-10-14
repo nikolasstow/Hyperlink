@@ -29,7 +29,7 @@ export const sessionIdPayload = Schema.Struct({
 });
 
 /** A marked set (the archive, the muted) could not be read or written. */
-export class SessionArchiveError extends Schema.TaggedErrorClass<SessionArchiveError>()("SessionArchiveError", {
+export class SessionArchiveError extends Schema.TaggedError<SessionArchiveError>()("SessionArchiveError", {
   message: Schema.String,
 }) {}
 

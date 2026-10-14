@@ -14,7 +14,7 @@ import {
 import {
   RpcSerialization,
   RpcServer,
-} from "effect/unstable/rpc"
+} from "effect/rpc"
 import { unlinkBestEffort } from "./ipcPath"
 import * as Hyperlink from "../Hyperlink"
 import {
@@ -177,7 +177,9 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
       const { nodeStatusServeEntry } = yield* Effect.promise(
         () => import("./nodeStatus"),
       );
-      const listenScope = yield* Scope.Scope;
+      // A scope this layer owns (Effect 4.0 closes only owned scopes): the server is built into it
+      // below, so `closeListen` tears the server down; it closes with the layer's own scope too.
+      const listenScope = yield* Scope.fork(yield* Scope.Scope);
       const membership = membershipFromAdvertise(
         options.advertiseNode,
         entries,
@@ -292,9 +294,12 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
           ? { onConflict: options.onConflict }
           : undefined,
       );
-      return retype<IpcServed>(
-        withUnlink.pipe(Layer.provideMerge(closedLayer(advertise))) as never,
+      const listening = yield* Layer.buildWithMemoMap(
+        withUnlink.pipe(Layer.provideMerge(closedLayer(advertise))),
+        yield* Layer.CurrentMemoMap,
+        listenScope,
       );
+      return retype<IpcServed>(Layer.succeedContext(listening) as never);
     }) as never,
   );
 };

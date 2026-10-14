@@ -3,7 +3,7 @@
 // rejects a duplicate group id). Declared once; the island imports these prebuilt atoms.
 
 import { Effect, Stream } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import * as WorkPool from "hyperlink-ts/WorkPool";
 
 class DemoQueue extends WorkPool.define<DemoQueue, string, never>()("docs/DemoQueue", {

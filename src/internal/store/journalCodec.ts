@@ -1,30 +1,32 @@
 /**
- * MessagePack encode/decode for {@link EventJournal} store row payloads.
- *
- * Uses {@link Msgpack.schema} from `effect/unstable/encoding/Msgpack` — no direct
- * `msgpackr` dependency in this package.
+ * Binary encode/decode for {@link EventJournal} store row payloads, with
+ * Effect's {@link SchemaBinary} codec over JSON values (Effect 4.0 removed its
+ * MessagePack codec). The journal is in memory, so no stored bytes depend on
+ * the format.
  *
  * @module internal/store/journalCodec
  * @internal
  */
 
 import { Effect, Schema } from "effect";
-import * as Msgpack from "effect/unstable/encoding/Msgpack";
+import { SchemaBinary } from "effect/encoding";
 import { toJsonValue } from "./helpers";
 import { StoreJournalDecodeError, StoreJournalEncodeError } from "./errors";
 
-const journalPayloadBytes = Msgpack.schema(Schema.Json);
+const journalPayloadBytes = SchemaBinary.toCodec(Schema.Json);
 
 /** @internal */
 export const encodeJournalPayload = (
   payload: unknown,
 ): Effect.Effect<Uint8Array<ArrayBuffer>, StoreJournalEncodeError> =>
   Schema.encodeUnknownEffect(journalPayloadBytes)(toJsonValue(payload)).pipe(
+    // Encoded bytes may share a larger buffer; the journal keeps each payload.
+    Effect.map((bytes) => bytes.slice()),
     Effect.mapError(
       (cause) =>
         new StoreJournalEncodeError({
           cause,
-          detail: "Failed to MessagePack-encode store row payload",
+          detail: "Failed to encode store row payload",
         }),
     ),
   );
@@ -38,7 +40,7 @@ export const decodeJournalPayload = (
       (cause) =>
         new StoreJournalDecodeError({
           cause,
-          detail: "Failed to MessagePack-decode store row payload",
+          detail: "Failed to decode store row payload",
         }),
     ),
   );

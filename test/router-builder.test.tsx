@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer, ManagedRuntime, Schema, pipe } from "effect";
-import { HttpApiEndpoint } from "effect/unstable/httpapi";
+import { HttpApiEndpoint } from "effect/http-api";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import * as Last from "last-ts/Last";

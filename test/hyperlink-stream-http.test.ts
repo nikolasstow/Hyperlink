@@ -7,8 +7,8 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization, RpcServer } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -56,7 +56,7 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((server) => server.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
 
     yield* Effect.gen(function* () {
       const ticker = yield* Ticker;
@@ -114,7 +114,7 @@ it("streams the queue status snapshot over real http", () => {
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((server) => server.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     yield* Effect.gen(function* () {
       const queue = yield* QueueWatch;
       const seen = yield* Stream.runCollect(queue.status);

@@ -1,6 +1,6 @@
 import { DateTime, Effect, Layer, Schema, Stream, SubscriptionRef } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization, RpcServer } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { WorkPool } from "../src";
@@ -94,7 +94,7 @@ it("enqueue round-trips a full entry (item + metadata) over real http", () => {
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((server) => server.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
 
     yield* Effect.gen(function* () {
       const queue = yield* HttpQueue;

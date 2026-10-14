@@ -1,7 +1,7 @@
 /**
  * Player-scoped SDP routes.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { NWSL_SDP_FOOTBALL_PATH_PREFIX } from "./constants";
 import { NwslPlayerProfileResponse, PlayerIdPath, SeasonAndLocaleQuery } from "./schemas";
 

@@ -4,7 +4,7 @@
  * failure naming the command.
  */
 import { Data, Effect, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 export class CommandFailedError extends Data.TaggedError("CommandFailedError")<{
   readonly command: string;

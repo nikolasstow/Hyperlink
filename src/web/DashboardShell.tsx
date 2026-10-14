@@ -6,7 +6,7 @@
  * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */
 import * as React from "react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import {
   type ApiTag,
   type GroupNode,

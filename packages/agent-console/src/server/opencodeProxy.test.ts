@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { Duration, Effect, Fiber, Layer } from "effect";
-import { FetchHttpClient, HttpRouter } from "effect/unstable/http";
+import { FetchHttpClient, HttpRouter } from "effect/http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { opencodeProxyRoute } from "./opencodeProxy";
 

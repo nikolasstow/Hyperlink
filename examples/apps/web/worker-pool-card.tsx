@@ -9,7 +9,7 @@
  */
 import * as React from "react";
 import { Duration, Effect, Layer, Stream } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { displayName, useAtomValue, useRuntime } from "../../../src/web";
 import { WorkerPool } from "./hub";
 import * as Views from "../../../src/ui/Views";

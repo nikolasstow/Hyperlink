@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { KeyValueStore } from "effect/persistence";
 import { describe, expect, it } from "vitest";
 import { KeptThemes } from "./KeptThemes";
 

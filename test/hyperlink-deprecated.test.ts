@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { RpcTest } from "effect/unstable/rpc";
+import { RpcTest } from "effect/rpc";
 import { describe, expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { hashContract } from "../src/internal/contractHash";

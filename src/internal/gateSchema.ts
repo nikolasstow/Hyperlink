@@ -6,7 +6,7 @@
  */
 
 import { Schema } from "effect";
-import { RateLimiterError } from "effect/unstable/persistence/RateLimiter";
+import { RateLimiterError } from "effect/persistence/RateLimiter";
 import * as Hyperlink from "../Hyperlink";
 import type { Method, RefField } from "../Hyperlink";
 import * as Lifecycle from "../Lifecycle";
@@ -16,13 +16,13 @@ import * as Lifecycle from "../Lifecycle";
  * `Off`), or a waiting call is failed by a `stopMode: "failWaiting"` stop.
  * In-flight bodies always finish.
  *
- * `Schema.TaggedErrorClass` so it is both yieldable **and** wire-encodable — part of
+ * `Schema.TaggedError` so it is both yieldable **and** wire-encodable — part of
  * every Gate's `run` RPC error channel (see {@link withGateRunErrors}).
  *
  * @category errors
  * @public
  */
-export class GateStopped extends Schema.TaggedErrorClass<GateStopped>()(
+export class GateStopped extends Schema.TaggedError<GateStopped>()(
   "GateStopped",
   {
     resourceId: Schema.String,

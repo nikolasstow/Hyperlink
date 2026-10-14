@@ -14,7 +14,7 @@
  */
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Path } from "effect";
-import { Command, Flag } from "effect/unstable/cli";
+import { Command, Flag } from "effect/cli";
 import packageJson from "../package.json" with { type: "json" };
 import { runString } from "./command";
 
@@ -59,8 +59,8 @@ const rewriteSchemaImports = (source: string, depth: number): string =>
   source.replaceAll("from \"@opencode-ai/schema/", `from "${"../".repeat(depth + 1)}schema/`);
 
 const vendor = Command.make("vendor-opencode", {
-  repo: Flag.string("repo").pipe(Flag.withDefault(`${process.env.HOME}/Coding/opencode`), Flag.withDescription("An opencode checkout.")),
-  ref: Flag.string("ref").pipe(Flag.withDefault("v1.18.33"), Flag.withDescription("The server's version (a git ref).")),
+  repo: Flag.String("repo").pipe(Flag.withDefault(`${process.env.HOME}/Coding/opencode`), Flag.withDescription("An opencode checkout.")),
+  ref: Flag.String("ref").pipe(Flag.withDefault("v1.18.33"), Flag.withDescription("The server's version (a git ref).")),
 }).pipe(
   Command.withDescription("Vendor the opencode v2 API the app uses (protocol groups and their schema) into src/opencode."),
   Command.withHandler(({ repo, ref }) =>

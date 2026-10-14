@@ -36,7 +36,7 @@ Contract (Hyperlink Spec / handle)
         │         (optional: also export queryOptions for people who wire TanStack themselves — keep on table)
         │         └─► tRPC-shaped facade       (looks like tRPC; no tRPC dep; can sit on TanStack-backed hooks)
         │
-        └─► Effect-reactive-native helpers     ← separate family; feels like effect/unstable/reactivity
+        └─► Effect-reactive-native helpers     ← separate family; feels like effect/reactivity
                   (atoms / AsyncResult / subscribe / fn — NOT a TanStack clone)
                   └─► dashboard bundles / cards (main path for our dashboard)
 ```
@@ -45,7 +45,7 @@ Contract (Hyperlink Spec / handle)
 
 - **`Hyperlink.useQuery(WorkerPool, (p) => p.active)`** is a **Hyperlink** hook. Callers don’t assemble TanStack. **Under the hood** it is built with `@tanstack/react-query` (real TanStack — cache, invalidate, etc.).
 - **Keep on the table:** also expose `queryOptions` / raw TanStack wiring for apps that already own a QueryClient and want to pass Hyperlink into TanStack themselves.
-- **Alternative helper family:** built on **Effect reactive** (`effect/unstable/reactivity`), designed to **feel native to Effect reactive** (Atom, `AsyncResult`, subscribe, `fn`, `Reactivity` keys) — not “TanStack names on atoms.”
+- **Alternative helper family:** built on **Effect reactive** (`effect/reactivity`), designed to **feel native to Effect reactive** (Atom, `AsyncResult`, subscribe, `fn`, `Reactivity` keys) — not “TanStack names on atoms.”
 - Dashboard default = Effect-reactive family. TanStack-backed `Hyperlink.useQuery` = for TanStack/React ecosystems.
 
 ### 1. Promise / async handle adapter — “game changer”
@@ -72,7 +72,7 @@ Contract (Hyperlink Spec / handle)
 
 ### 4. Effect-reactive-native helpers — public family (not dashboard-only)
 
-Uses official **`effect/unstable/reactivity`** (not standalone `@effect-atom`). API should feel like Effect reactivity.
+Uses official **`effect/reactivity`** (not standalone `@effect-atom`). API should feel like Effect reactivity.
 
 `Atom.runtime(layer)` builds an `AtomRuntime`: an atom of `AsyncResult<Context<R>>` plus `.atom` / `.fn` / `.pull` / `.subscriptionRef` that run only once that context is `Success`. Not a Node runtime; not a dashboard type. (`DashboardRuntime` in `ui/data.ts` is just an alias for `Atom.AtomRuntime` — avoid that name on the public helper surface.)
 

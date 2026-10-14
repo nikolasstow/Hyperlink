@@ -17,7 +17,7 @@
  * @internal
  */
 import { Data, Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 
 export const FsEntry = Schema.Struct({
   name: Schema.String,

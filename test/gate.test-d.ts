@@ -1,5 +1,5 @@
 import { Duration, Effect, Schema } from "effect";
-import type { RateLimiter } from "effect/unstable/persistence/RateLimiter";
+import type { RateLimiter } from "effect/persistence/RateLimiter";
 import * as Gate from "../src/Gate";
 
 class UnitGate extends Gate.define<UnitGate>()("@app/UnitGate", {

@@ -7,7 +7,7 @@
 import * as errors from "./errors";
 import * as React from "react";
 import { Context, Layer, Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import * as AtomReact from "../AtomReact";
 import { getProp, hasBrand } from "./predicates";
 import {

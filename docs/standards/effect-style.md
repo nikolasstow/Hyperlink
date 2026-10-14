@@ -13,14 +13,14 @@ hygiene (entry points, nesting, lifetimes), plus formatting and comments.
 ## Reach for native Effect subpaths, not external packages
 
 Reactivity, RPC, SQL, HTTP, event logs, persistence — all ship inside Effect under
-`effect/unstable/*`. Import them from there; never pull an external package that duplicates them (no
-`@effect-atom` — reactivity is `effect/unstable/reactivity`).
+`effect/*`. Import them from there; never pull an external package that duplicates them (no
+`@effect-atom` — reactivity is `effect/reactivity`).
 
 ``` ts
 // ✅ good — native
-import * as Reactivity from "effect/unstable/reactivity"
-import { RpcServer } from "effect/unstable/rpc"
-import { SqlClient } from "effect/unstable/sql/SqlClient"
+import * as Reactivity from "effect/reactivity"
+import { RpcServer } from "effect/rpc"
+import { SqlClient } from "effect/sql/SqlClient"
 
 // ❌ bad — an external package that Effect already provides
 import { Atom } from "@effect-atom/atom"
@@ -45,7 +45,7 @@ Core (`effect`):
 - **Config & observability** — `Config`, `ConfigProvider`, `Metric`, `Logger`, `Tracer`
 - **Platform** — `FileSystem`, `Path`, `PlatformError`, `Crypto`
 
-Families (`effect/unstable/*`), each a self-contained subpath (see *Public vs internal → domain
+Families (`effect/*`), each a self-contained subpath (see *Public vs internal → domain
 family*): `rpc`, `sql`, `http`, `httpapi`, `cli`, `reactivity`, `persistence`, `eventlog`,
 `encoding`, `socket`, `workers`, `workflow`, `cluster`, `observability`, `ai`.
 
@@ -82,12 +82,12 @@ declareQueue(fields: Record<string, Schema.Top>)
 
 An in-process failure is a `Data.TaggedError` (see *Principles → Errors are values*). An error that
 travels over RPC must also **encode**, so it extends the schema error class
-(`Schema.TaggedErrorClass`) — that makes it both a yieldable error and wire-serializable in one
+(`Schema.TaggedError`) — that makes it both a yieldable error and wire-serializable in one
 declaration.
 
 ``` ts
 // ✅ good — wire-encodable: yieldable AND serializable
-class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingItemSchemaError>()(
+class QueueMissingItemSchemaError extends Schema.TaggedError<QueueMissingItemSchemaError>()(
   "QueueMissingItemSchemaError",
   { id: Schema.String },
 ) {}

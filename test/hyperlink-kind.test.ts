@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as WorkPool from "../src/WorkPool";

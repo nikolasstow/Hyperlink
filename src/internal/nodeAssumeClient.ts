@@ -29,7 +29,7 @@ export const ASSUME_TOKEN_ENV = "HYPERLINK_ASSUME_TOKEN";
  * @category config
  * @public
  */
-export const assumeTokenConfig = Config.redacted(ASSUME_TOKEN_ENV);
+export const assumeTokenConfig = Config.Redacted(ASSUME_TOKEN_ENV);
 
 /**
  * Call {@link NodeStatusTag}.`assume` on `node` with `{ token }` — Track A ownership ack.

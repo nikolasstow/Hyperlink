@@ -14,9 +14,7 @@ export type JsonValue =
   | ReadonlyArray<JsonValue>;
 
 /** Codec: JSON string ↔ unknown value. @internal */
-export const responseBodyJson = Schema.fromJsonString(Schema.Unknown);
-/** Codec: JSON string ↔ unknown (alias of the Schema primitive). @internal */
-export const unknownJsonString = Schema.UnknownFromJsonString;
+export const unknownJsonString = Schema.fromJsonString(Schema.Unknown);
 
 /** Narrow to a non-array JSON object. @internal */
 export const isRecord = (

@@ -15,7 +15,7 @@ import { runNodeProgramOrExit } from "../shared/demo-harness";
 // ---cut---
 import { NodeHttpServer } from "@effect/platform-node";
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/http";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
 
@@ -43,7 +43,7 @@ const program = Effect.gen(function* () {
   const address = yield* HttpServer.HttpServer.pipe(
     Effect.map((server) => server.address),
   );
-  const port = address._tag === "TcpAddress" ? address.port : 0;
+  const port = address._tag === "UnixPathAddress" ? 0 : address.port;
   const response = yield* Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
     return yield* client.get(`http://127.0.0.1:${String(port)}/health`);

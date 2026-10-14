@@ -12,7 +12,7 @@ reactive runtime and a root `Group`:
 
 ``` tsx
 import { Dashboard } from "hyperlink-ts/web"
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 
 const runtime = Atom.runtime(appLayer) // appLayer: your service clients over a transport
 <Dashboard runtime={runtime} group={ServicesHub} />

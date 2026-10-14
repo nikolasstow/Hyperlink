@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
@@ -28,7 +28,7 @@ describe("hostless client(tag, node)", () => {
   it.effect("a nodeless distributed tag is client-readable by naming the node: client(tag, node)", () =>
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((server) => server.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       const transport = Hyperlink.http(DbNode, {
         url: `http://127.0.0.1:${port}/rpc`,
       });

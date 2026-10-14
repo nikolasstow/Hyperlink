@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization, RpcServer } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -38,7 +38,7 @@ it("drives a resource over real http (server + client through the toolkit)", () 
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((server) => server.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     const httpProtocol = RpcClient.layerProtocolHttp({
       url: `http://127.0.0.1:${port}/rpc`,
     }).pipe(

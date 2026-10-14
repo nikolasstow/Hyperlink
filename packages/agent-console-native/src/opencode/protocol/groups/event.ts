@@ -3,7 +3,7 @@ import { EventManifest } from "../../schema/event-manifest"
 import { Location } from "../../schema/location"
 import type { Definition } from "../../schema/event"
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/http-api"
 
 const fields = {
   id: Event.ID,

@@ -13,7 +13,7 @@
  * @internal
  */
 import { Context, Effect, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { KeyValueStore } from "effect/persistence";
 import type { BarWindowState } from "./barWindowGeometry";
 
 const PREFS_KEY = "dubzWindow";

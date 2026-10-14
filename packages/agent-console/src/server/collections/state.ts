@@ -119,12 +119,12 @@ export const collectionChangePayload = Schema.Struct({
 
 /** A request the state cannot take: a page that is no collection, a
  * workspace outside the files root, an empty name, an unknown category. */
-export class CollectionStateRequestError extends Schema.TaggedErrorClass<CollectionStateRequestError>()("CollectionStateRequestError", {
+export class CollectionStateRequestError extends Schema.TaggedError<CollectionStateRequestError>()("CollectionStateRequestError", {
   message: Schema.String,
 }) {}
 
 /** The state could not be read or written. */
-export class CollectionStateIoError extends Schema.TaggedErrorClass<CollectionStateIoError>()("CollectionStateIoError", {
+export class CollectionStateIoError extends Schema.TaggedError<CollectionStateIoError>()("CollectionStateIoError", {
   message: Schema.String,
 }) {}
 

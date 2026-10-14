@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -45,7 +45,7 @@ const RosterLocal = Hyperlink.layer(RosterQueue, { count: Effect.succeed(42) });
 
 const portOf = (ctx: Context.Context<HttpServer.HttpServer>): number => {
   const address = Context.get(ctx, HttpServer.HttpServer).address;
-  return address._tag === "TcpAddress" ? address.port : 0;
+  return address._tag === "UnixPathAddress" ? 0 : address.port;
 };
 
 it("nested hub group: local members + one remote (mini) member, one runtime", () =>

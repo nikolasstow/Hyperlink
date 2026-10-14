@@ -1,5 +1,5 @@
 import { Effect, Layer, Option, Schema, Stream } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -22,7 +22,7 @@ it("every served node auto-serves its node status over http", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       yield* Effect.gen(function* () {
         const node = yield* NodeStatusTag;
 

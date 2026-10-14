@@ -11,9 +11,9 @@
 import { runNodeProgramOrExit } from "../shared/demo-harness";
 
 // ---cut---
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { Effect, Layer, Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import * as Gate from "../../src/Gate";
 
 const DemoClientId = "examples/jsonplaceholder/DemoApiClient" as const;

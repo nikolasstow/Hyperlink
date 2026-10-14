@@ -8,7 +8,7 @@
 import { Box, Text } from "ink";
 import * as React from "react";
 import { Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import {
   type ApiTag,
   type FleetHealthTag,

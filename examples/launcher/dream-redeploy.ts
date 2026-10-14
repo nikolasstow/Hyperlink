@@ -33,7 +33,7 @@ import {
   Layer,
   Schedule,
 } from "effect";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 import * as Directory from "../../src/Directory";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Launcher from "../../src/Launcher";

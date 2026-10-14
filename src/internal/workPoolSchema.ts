@@ -24,13 +24,13 @@ export const QueueItemCodecDescriptorSchema = Schema.Struct({
 /**
  * Encoded release was requested for a queue without `itemSchema`.
  *
- * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
+ * `Schema.TaggedError` so it is both a yieldable/throwable error **and** wire-encodable —
  * part of the `releaseEncoded` RPC error channel.
  *
  * @category errors
  * @public
  */
-export class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMissingItemSchemaError>()(
+export class QueueMissingItemSchemaError extends Schema.TaggedError<QueueMissingItemSchemaError>()(
   "QueueMissingItemSchemaError",
   {
     queue: Schema.String,
@@ -40,13 +40,13 @@ export class QueueMissingItemSchemaError extends Schema.TaggedErrorClass<QueueMi
 /**
  * A queue item failed schema encoding while preparing a wire handoff release.
  *
- * `Schema.TaggedErrorClass` so it is both a yieldable/throwable error **and** wire-encodable —
+ * `Schema.TaggedError` so it is both a yieldable/throwable error **and** wire-encodable —
  * part of the `releaseEncoded` RPC error channel.
  *
  * @category errors
  * @public
  */
-export class QueueItemEncodingError extends Schema.TaggedErrorClass<QueueItemEncodingError>()(
+export class QueueItemEncodingError extends Schema.TaggedError<QueueItemEncodingError>()(
   "QueueItemEncodingError",
   {
     queue: Schema.String,

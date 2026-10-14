@@ -1,7 +1,7 @@
 import { Duration, Effect, Exit, Layer, Schema, Scope, Stream } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
-import { RpcClient } from "effect/unstable/rpc";
+import { RpcClient } from "effect/rpc";
 import { describe, expect, it } from "vitest";
 import { Daemon, WorkPool, Gate } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
@@ -33,7 +33,7 @@ const remote = <A, E, R>(
   return Effect.runPromise(
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = address._tag === "TcpAddress" ? address.port : 0;
+      const port = address._tag === "UnixPathAddress" ? 0 : address.port;
       return yield* op.pipe(
         Effect.provide(clientTag.pipe(Layer.provide(proto(clientKind, port)))),
         Effect.scoped,
@@ -131,7 +131,7 @@ describe("transport conformance: an http client against a ws server FAILS as Pro
     return Effect.runPromise(
       Effect.gen(function* () {
         const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-        const port = address._tag === "TcpAddress" ? address.port : 0;
+        const port = address._tag === "UnixPathAddress" ? 0 : address.port;
         return yield* Effect.exit(
           op.pipe(
             Effect.provide(clientTag.pipe(Layer.provide(proto("http", port)))),

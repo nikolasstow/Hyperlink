@@ -4,7 +4,7 @@
  * @internal
  */
 import { Cause, Effect, Predicate, Stream } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 /** Narrow a type-erased value at the adapter edge without surfacing `unknown` channels. */
 const edge = <T>(value: never): T => value;

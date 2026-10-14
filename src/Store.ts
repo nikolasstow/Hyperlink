@@ -14,7 +14,7 @@
  *
  * - {@link Service.layerMemory} / {@link store.layerMemory} — `EventJournal.layerMemory` (process-local) + Logs.
  * - {@link Service.layer} / {@link store.layer} with **required** `{ filename }` — SQLite via `SqlEventJournal`
- *   (`effect/unstable/eventlog`) on `@effect/sql-sqlite-node`.
+ *   (`effect/eventlog`) on `@effect/sql-sqlite-node`.
  *
  * Toolkit engines (`Daemon.layer`, …) soft-default {@link layerDefaultMemory} via
  * {@link withDefaultStorage} (**R fulfilled**). Override by providing your {@link Service} into
@@ -74,8 +74,8 @@
  */
 
 import { Context, Effect, Layer, Option, Predicate, Schema, Scope, Stream } from "effect";
-import * as EventJournal from "effect/unstable/eventlog/EventJournal";
-import * as SqlEventJournal from "effect/unstable/eventlog/SqlEventJournal";
+import * as EventJournal from "effect/eventlog/EventJournal";
+import * as SqlEventJournal from "effect/eventlog/SqlEventJournal";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { LogRelay, layer as logsLayer } from "./internal/logs/relay";
 import type { LogRelayService } from "./internal/logs/relay";

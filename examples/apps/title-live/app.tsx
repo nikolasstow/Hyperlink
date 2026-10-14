@@ -5,7 +5,7 @@
  */
 import * as React from "react";
 import { Context, Effect, Layer, SubscriptionRef } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import * as AtomReact from "last-ts/AtomReact";
 import * as Last from "last-ts/Last";
 

@@ -1,6 +1,6 @@
 import { render } from "ink-testing-library";
 import { Effect, Schema } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../../../src/Hyperlink";
 import { make } from "../../../src/tui";

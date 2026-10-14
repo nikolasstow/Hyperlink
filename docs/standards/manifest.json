@@ -15,6 +15,16 @@
           "title": "A doc comment has a fixed shape"
         },
         {
+          "id": "documentation.break-up-every-call",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples",
+            "docs"
+          ],
+          "title": "Break every call onto its own line"
+        },
+        {
           "id": "documentation.example-must-be-real",
           "severity": "must",
           "appliesTo": [
@@ -1008,6 +1018,14 @@
           "title": "Namespaced types are short; internal types use the full module prefix"
         },
         {
+          "id": "types-and-naming.phantom-members-mirror-what-they-carry",
+          "severity": "must",
+          "appliesTo": [
+            "src"
+          ],
+          "title": "A phantom member is named after what it mirrors"
+        },
+        {
           "id": "types-and-naming.values-are-camelcase",
           "severity": "must",
           "appliesTo": [
@@ -1270,5 +1288,5 @@
       ]
     }
   ],
-  "ruleCount": 140
+  "ruleCount": 142
 }

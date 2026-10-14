@@ -153,7 +153,7 @@ failure mode we design against.
 const url = process.env.SERVICE_URL ?? "http://localhost"
 
 // ✅ good — required config fails loudly at load
-const url = yield* Config.string("SERVICE_URL")
+const url = yield* Config.String("SERVICE_URL")
 ```
 
 {#illegal-states-unrepresentable .must appliesTo="src examples"}

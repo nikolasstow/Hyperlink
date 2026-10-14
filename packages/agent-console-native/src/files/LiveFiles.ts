@@ -20,8 +20,8 @@
  * @internal
  */
 import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, PubSub, Random, RcMap, Ref, Schedule, Semaphore, Stream, SubscriptionRef } from "effect";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import { Socket } from "effect/unstable/socket";
+import { RpcClient, RpcSerialization } from "effect/rpc";
+import { Socket } from "effect/socket";
 import { FileSync } from "file-sync";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";

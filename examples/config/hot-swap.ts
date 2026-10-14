@@ -17,11 +17,11 @@ import * as DynamicConfig from "../../src/DynamicConfig";
 // Define config the normal way; wrap the one field that may rotate at runtime.
 // Defaults let the demo run with no env vars set.
 const cfg = DynamicConfig.make({
-  baseUrl: Config.string("API_BASE_URL").pipe(
+  baseUrl: Config.String("API_BASE_URL").pipe(
     Config.withDefault("https://api.example.com"),
   ),
   apiKey: DynamicConfig.swappable(
-    Config.redacted("API_KEY").pipe(
+    Config.Redacted("API_KEY").pipe(
       Config.withDefault(Redacted.make("k-initial")),
     ),
   ),
@@ -41,7 +41,7 @@ const program = Effect.gen(function* () {
   );
 
   // Even a raw `Config` reader of the same key sees it — they share the provider.
-  const rawKey = yield* Config.redacted("API_KEY");
+  const rawKey = yield* Config.Redacted("API_KEY");
   yield* Effect.logInfo(`raw reader sees  : ${Redacted.value(rawKey)}`);
 
   // Read the whole config as one object, like `Config.all`.

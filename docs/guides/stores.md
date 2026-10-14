@@ -174,7 +174,7 @@ fleet limit provide Effect Redis:
 ```ts
 import {
   layerStoreRedis as rateLimiterStoreRedis,
-} from "effect/unstable/persistence/RateLimiter"
+} from "effect/persistence/RateLimiter"
 import { NodeRedis } from "@effect/platform-node"
 
 const FleetLive = Layer.mergeAll(EastGate.layer, WestGate.layer).pipe(

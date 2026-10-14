@@ -1,6 +1,6 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { KeyValueStore } from "effect/persistence";
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "../chat/model";
 import { DeviceSignals } from "../effect/DeviceSignals";

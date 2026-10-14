@@ -15,8 +15,8 @@ import { runNodeProgramOrExit } from "../shared/demo-harness";
 // ---cut---
 import { NodeHttpServer } from "@effect/platform-node";
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import * as Daemon from "../../src/Daemon";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
@@ -46,7 +46,7 @@ const program = Effect.gen(function* () {
   const address = yield* HttpServer.HttpServer.pipe(
     Effect.map((server) => server.address),
   );
-  const port = address._tag === "TcpAddress" ? address.port : 0;
+  const port = address._tag === "UnixPathAddress" ? 0 : address.port;
 
   yield* Effect.gen(function* () {
     const daemon = yield* RemoteReport;

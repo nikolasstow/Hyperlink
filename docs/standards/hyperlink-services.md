@@ -277,7 +277,7 @@ const depthByNode = { ...(yield* Hyperlink.peers(Prices)), [self.key]: local }
 ``` ts
 Hyperlink.peersLayer(Prices, self, {
   nodes,
-  url: (node) => Config.option(Config.string(`${node.key}_URL`)),
+  url: (node) => Config.option(Config.String(`${node.key}_URL`)),
   //   Config.option → undefined skips a peer (partial mesh)
   //   a raw ConfigError fails the build loudly (misconfiguration)
 })

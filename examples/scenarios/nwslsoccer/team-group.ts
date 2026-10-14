@@ -1,7 +1,7 @@
 /**
  * Team-scoped SDP routes: season stats and roster for a club.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { NWSL_SDP_FOOTBALL_PATH_PREFIX } from "./constants";
 import {
   LocaleQuery,

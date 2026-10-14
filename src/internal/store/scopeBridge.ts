@@ -5,7 +5,7 @@
  * @internal
  */
 
-import * as EventJournal from "effect/unstable/eventlog/EventJournal";
+import * as EventJournal from "effect/eventlog/EventJournal";
 import { Effect, Function, Stream } from "effect";
 import {
   changesFromScopes,
@@ -25,9 +25,9 @@ import { StoreChangeEvent, StoreScopeNotRegistered } from "./errors";
  * invalidation; a racy double-build is harmless because materialization is pure/idempotent. @internal
  */
 const memoizedAt = (
-  materialize: (scopeKey: string, input: StoreSpec | StoreContractValue) => unknown,
+  materialize: (scopeKey: string, input: StoreSpec | StoreContractValue) => object,
 ) => {
-  const perScope = new Map<string, (input: StoreSpec | StoreContractValue) => unknown>();
+  const perScope = new Map<string, (input: StoreSpec | StoreContractValue) => object>();
   return <Input extends StoreSpec | StoreContractValue>(
     scopeKey: string,
     input: Input,

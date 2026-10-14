@@ -5,8 +5,8 @@
  * `ChildProcess` / `ChildProcessSpawner` instead of raw `node:child_process`.
  */
 import { Data, Effect } from "effect";
-import { ChildProcess } from "effect/unstable/process";
-import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
+import { ChildProcess } from "effect/process";
+import { ChildProcessSpawner } from "effect/process/ChildProcessSpawner";
 
 /**
  * A child tool exited non-zero.

@@ -26,8 +26,8 @@ import {
   Stream,
 } from "effect";
 import type { ProtocolKind } from "./nodeCore";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import { FetchHttpClient } from "effect/unstable/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
+import { FetchHttpClient } from "effect/http";
 import type { AddressedNode } from "./nodeCore";
 import * as Hyperlink from "../Hyperlink";
 import * as LookupPolicy from "../LookupPolicy";

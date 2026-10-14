@@ -1,5 +1,5 @@
 import { Context, Duration, Effect, Layer, Ref, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
@@ -29,7 +29,7 @@ class Wire extends Hyperlink.Service<Wire>()("mps/wire", { ping: Hyperlink.effec
 const noop = { ping: Effect.succeed(0) };
 const portOf = (ctx: Context.Context<HttpServer.HttpServer>): number => {
   const address = Context.get(ctx, HttpServer.HttpServer).address;
-  return address._tag === "TcpAddress" ? address.port : 0;
+  return address._tag === "UnixPathAddress" ? 0 : address.port;
 };
 
 describe("multi-protocol node served over http + ws", () => {
@@ -54,7 +54,7 @@ describe("multi-protocol node served over http + ws", () => {
         ),
       );
 
-      const call = (transport: Layer.Layer<import("effect/unstable/rpc").RpcClient.Protocol>) =>
+      const call = (transport: Layer.Layer<import("effect/rpc").RpcClient.Protocol>) =>
         Effect.gen(function* () {
           const wire = yield* Wire;
           return yield* wire.ping;

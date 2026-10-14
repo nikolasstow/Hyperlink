@@ -11,7 +11,7 @@ import {
   Option,
   type Layer,
 } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import * as AtomReact from "../AtomReact";
 import * as Document from "../Document";
 import * as Router from "../Router";

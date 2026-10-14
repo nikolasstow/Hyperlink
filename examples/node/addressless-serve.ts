@@ -31,7 +31,7 @@ class Jobs extends Hyperlink.Service<Jobs>()("Jobs", {
 /** Address-less — `Node.unix` mints path + claims this key. */
 class Worker extends Node.Service<Worker, Jobs>()("AddresslessWorker") {}
 
-const lookupSock = Config.string("LOOKUP_SOCK").pipe(
+const lookupSock = Config.String("LOOKUP_SOCK").pipe(
   Config.withDefault("/tmp/hyperlink-ts-forms-addressless.sock"),
 )
 

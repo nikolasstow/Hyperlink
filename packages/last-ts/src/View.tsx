@@ -23,7 +23,7 @@
  */
 import * as React from "react";
 import { Cause, Context, Effect } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import * as AtomReact from "./AtomReact";
 import { kindSym } from "./internal/kindSym";
 import * as pageContext from "./internal/pageContext";

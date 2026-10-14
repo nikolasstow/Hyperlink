@@ -12,7 +12,7 @@
  *
  * @internal
  */
-import { HttpApi, HttpApiMiddleware } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiMiddleware } from "effect/http-api";
 import { EventGroup } from "./protocol/groups/event";
 import { HealthGroup } from "./protocol/groups/health";
 import { MessageGroup } from "./protocol/groups/message";

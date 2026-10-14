@@ -25,7 +25,7 @@ class Jobs extends Hyperlink.Service<Jobs>()("Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-const lookupSock = Config.string("LOOKUP_SOCK").pipe(
+const lookupSock = Config.String("LOOKUP_SOCK").pipe(
   Config.withDefault("/tmp/hyperlink-ts-forms-addressless.sock"),
 )
 

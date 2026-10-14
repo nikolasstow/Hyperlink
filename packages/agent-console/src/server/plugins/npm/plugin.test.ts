@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, Path, type Scope } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { describe, expect, it } from "vitest";
 import type { PluginBlock, PluginCollectionContent, PluginItem } from "../../plugin/api";
 import plugin from "./plugin";

@@ -3,7 +3,7 @@ import { Duration, Schema } from "effect";
 import {
   RateLimitExceeded,
   RateLimiterError,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import {
   completeRun,
   enterWaiting,

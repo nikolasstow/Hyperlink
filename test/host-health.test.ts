@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { WorkPool } from "../src";
@@ -19,7 +19,7 @@ it("httpServer mounts a /health readiness route (200 + service roster)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       yield* Effect.gen(function* () {
         const client = yield* HttpClient.HttpClient;
         const res = yield* client.get(`http://127.0.0.1:${port}/health`);

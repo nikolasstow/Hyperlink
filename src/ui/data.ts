@@ -12,7 +12,7 @@
  *
  */
 import { Effect, Option, Predicate, Stream, type Schema } from "effect";
-import { Atom, type AsyncResult } from "effect/unstable/reactivity";
+import { Atom, type AsyncResult } from "effect/reactivity";
 import * as Group from "../Group";
 import {
   nodeOf,

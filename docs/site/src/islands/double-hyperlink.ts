@@ -3,7 +3,7 @@
 // registry rejects a duplicate group id). Declared once; the island imports these atoms.
 
 import { Effect, Schema, Stream } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import * as Gate from "hyperlink-ts/Gate";
 
 class Double extends Gate.define<Double>()("docs/Double", {

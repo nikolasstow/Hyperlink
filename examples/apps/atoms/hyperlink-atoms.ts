@@ -13,7 +13,7 @@
  */
 
 import { Effect, Schema } from "effect";
-import { Atom, type AsyncResult } from "effect/unstable/reactivity";
+import { Atom, type AsyncResult } from "effect/reactivity";
 import { methodMeta, specOf, isVoidCommand } from "../../../src/Hyperlink";
 import type { AnyMethod, FlatSpec, HyperlinkTag, Spec } from "../../../src/Hyperlink";
 

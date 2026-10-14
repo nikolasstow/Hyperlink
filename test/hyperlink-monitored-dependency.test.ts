@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Schema, Stream } from "effect";
-import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
@@ -34,7 +34,7 @@ const withPort = <A, E, R>(
 ): Effect.Effect<A, E, R | HttpServer.HttpServer> =>
   Effect.gen(function* () {
     const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-    return yield* use(addr._tag === "TcpAddress" ? addr.port : 0);
+    return yield* use(addr._tag === "UnixPathAddress" ? 0 : addr.port);
   });
 
 describe("Hyperlink.monitoredDependency", () => {

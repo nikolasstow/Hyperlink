@@ -29,7 +29,7 @@
  * @internal
  */
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient } from "effect/http";
 import { Conversations } from "../conversations/Conversations";
 import { BarWindowStore } from "../dubz/BarWindowStore";
 import { Favorites } from "../favorites/Favorites";

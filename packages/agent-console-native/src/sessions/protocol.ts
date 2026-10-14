@@ -8,7 +8,7 @@
  * @internal
  */
 import { Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { Opencode } from "../opencode/Opencode";
 import type { ServerAddress } from "../opencode/serverAddress";
 import type { SessionID } from "../opencode/schema/session-id";

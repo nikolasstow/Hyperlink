@@ -1,5 +1,5 @@
 import { Duration, Effect, Layer, Option, Schema, Stream } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { WorkPool } from "../src";
@@ -33,7 +33,7 @@ it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports r
   Effect.runPromise(
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = address._tag === "TcpAddress" ? address.port : 0;
+      const port = address._tag === "UnixPathAddress" ? 0 : address.port;
       const wire = Hyperlink.protocolWebsocket(`ws://127.0.0.1:${port}/rpc`);
 
       yield* Effect.gen(function* () {

@@ -8,12 +8,13 @@
  * @internal
  */
 import { Data, Effect, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+import { unknownJsonString } from "./json";
+import { SqlClient } from "effect/sql/SqlClient";
 
 const TABLE = "hyperlink_ts_shard_map";
 
-const encodeValue = Schema.encodeSync(Schema.UnknownFromJsonString);
-const decodeValue = Schema.decodeUnknownSync(Schema.UnknownFromJsonString);
+const encodeValue = Schema.encodeSync(unknownJsonString);
+const decodeValue = Schema.decodeUnknownSync(unknownJsonString);
 
 const ddl = `CREATE TABLE IF NOT EXISTS ${TABLE} (
   scope_key TEXT NOT NULL,

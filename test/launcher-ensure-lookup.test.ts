@@ -10,7 +10,7 @@ import {
   Layer,
   Option,
 } from "effect";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 import * as Launcher from "../src/Launcher";
 import * as Lookup from "../src/Lookup";
 import * as Identity from "../src/Identity";

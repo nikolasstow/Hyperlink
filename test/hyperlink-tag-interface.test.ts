@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -70,7 +70,7 @@ it("Tag<Self, I> serves over RPC — the wired member crosses http; locals stay 
 
       yield* Effect.gen(function* () {
         const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-        const port = addr._tag === "TcpAddress" ? addr.port : 0;
+        const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
         yield* Effect.gen(function* () {
           const c = yield* Counter; // the client handle
           // the wired member round-trips over real http:

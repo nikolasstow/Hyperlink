@@ -12,7 +12,7 @@
  * The **data-plane** verbs involve the per-queue item type `T` and its `itemSchema`: the
  * enqueue verbs (`add` / `prioritize` / `defer` / `enqueue`) and the entry-returning verbs
  * (`release` / `releaseEncoded` / `deadLetter` / `drop`) are all wired. `releaseEncoded`'s
- * failure channel is the engine's encode errors, which are `Schema.TaggedErrorClass` (both
+ * failure channel is the engine's encode errors, which are `Schema.TaggedError` (both
  * yieldable and wire-encodable), so they cross RPC and `catchTag` works on the client. Each
  * queue instance is its **own** resource (its own RPC group, prefixed by its id) — built by
  * {@link defineQueueTag} from the shared control spec plus per-instance data procedures
@@ -544,7 +544,7 @@ export const queueEncodedEntry = Schema.Struct({
 
 /**
  * The `releaseEncoded` failure channel — the wire-encodable union of the engine's encode
- * errors (now `Schema.TaggedErrorClass`, so they are both yieldable and RPC-encodable).
+ * errors (now `Schema.TaggedError`, so they are both yieldable and RPC-encodable).
  *
  * @category wire schemas
  * @public

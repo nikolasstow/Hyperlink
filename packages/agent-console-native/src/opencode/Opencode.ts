@@ -9,8 +9,8 @@
  * @internal
  */
 import { Context, Effect, HashMap, Layer, Option, SynchronizedRef } from "effect";
-import { HttpClient } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { HttpClient } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { OpencodeApi } from "./api";
 import type { ServerAddress } from "./serverAddress";
 

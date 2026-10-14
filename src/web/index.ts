@@ -10,7 +10,7 @@
  *
  * ```tsx
  * import { Dashboard } from "hyperlink-ts/web";
- * import { Atom } from "effect/unstable/reactivity";
+ * import { Atom } from "effect/reactivity";
  * const runtime = Atom.runtime(appLayer); // appLayer: Hyperlink.client(...) over http
  * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```

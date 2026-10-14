@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpServer, HttpRouter } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpServer, HttpRouter } from "effect/http";
+import { RpcClient, RpcSerialization, RpcServer } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -44,7 +44,7 @@ it("serve preserves R so per-resource deps are isolated on one shared RpcServer"
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((server) => server.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       const clientTransport = protocol(`http://127.0.0.1:${port}/rpc`);
       yield* Effect.gen(function* () {
         const a = yield* A;

@@ -6,7 +6,7 @@
 import { Box, Text } from "ink";
 import * as React from "react";
 import { Option, Layer } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "../ui/atom-react";
 import { isQueueTag, type QueueTag } from "../ui/data";
 import * as Route from "../ui/Route";

@@ -12,7 +12,7 @@ import {
 } from "effect"
 import {
   RpcClient,
-} from "effect/unstable/rpc"
+} from "effect/rpc"
 import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,

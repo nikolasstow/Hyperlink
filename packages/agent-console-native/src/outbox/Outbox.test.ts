@@ -1,6 +1,6 @@
 import { Effect, Layer, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { KeyValueStore } from "effect/persistence";
 import { describe, expect, it } from "vitest";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { Opencode } from "../opencode/Opencode";

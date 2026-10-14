@@ -1,5 +1,5 @@
 import { Duration, Effect, Exit, Layer, Option, Schema, Stream } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -39,7 +39,7 @@ describe("F5 split-dial: runtime transport override", () => {
   it.live("node status.changes over Node.connectSocket override (tag url stays dead)", () =>
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = address._tag === "TcpAddress" ? address.port : 0;
+      const port = address._tag === "UnixPathAddress" ? 0 : address.port;
       const transport = OverrideNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`));
       const head = yield* Stream.unwrap(Effect.map(OverrideNode, (h) => h.status.changes)).pipe(
         Stream.take(1),
@@ -60,7 +60,7 @@ describe("F5 split-dial: runtime transport override", () => {
     () =>
       Effect.gen(function* () {
         const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-        const port = address._tag === "TcpAddress" ? address.port : 0;
+        const port = address._tag === "UnixPathAddress" ? 0 : address.port;
         // Construct override *before* Hyperlink.client so connectAddressed reuses it (F5 memo).
         const transport = OverrideNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`));
         // Verify still probes the tag's stamped url (:1) — opt out; this test is the dial target.

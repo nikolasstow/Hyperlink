@@ -11,7 +11,7 @@
 
 // ---cut---
 import { Effect, Schema, SubscriptionRef } from "effect";
-import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
 
 class Counter extends Hyperlink.Service<Counter>()("examples/ObserveHyperlinkAtom/Counter", {

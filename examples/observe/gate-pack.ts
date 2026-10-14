@@ -11,7 +11,7 @@
 
 // ---cut---
 import { Effect, Schema } from "effect";
-import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import * as Gate from "../../src/Gate";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Observe from "../../src/Observe";

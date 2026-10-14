@@ -12,7 +12,7 @@
 
 import * as React from "react";
 import { Effect, Schema } from "effect";
-import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 // Import the module directly (not the package barrel) so the browser bundle
 // doesn't drag in Node-only manager code.
 import * as WorkPool from "../../../src/WorkPool";

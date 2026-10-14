@@ -20,7 +20,7 @@
 import { Box, render, Text, useInput, useStdout } from "ink";
 import * as React from "react";
 import { Data, Duration, Effect, Layer, Schema, Stream } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import { WorkPool } from "../../../src";
 import * as LogEntry from "../../../src/LogEntry";
 import * as Hyperlink from "../../../src/Hyperlink";

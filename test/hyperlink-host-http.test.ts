@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -33,7 +33,7 @@ it("drives a node-bearing resource over real http (ship only the tag)", () => {
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((server) => server.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     const EdgeLive = Hyperlink.http(EdgeNode, {
       url: `http://127.0.0.1:${port}/rpc`,
     });

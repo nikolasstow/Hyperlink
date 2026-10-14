@@ -14,7 +14,7 @@ import {
   FetchHttpClient,
   HttpClient,
   HttpClientRequest,
-} from "effect/unstable/http";
+} from "effect/http";
 import { Clock, Effect, Layer } from "effect";
 import { HttpClientGate, Gate } from "../../src";
 

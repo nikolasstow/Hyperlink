@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -37,7 +37,7 @@ it("httpServer serves serve layers on one /rpc, isolated, with /health listing b
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((server) => server.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       const base = `http://127.0.0.1:${port}`;
 
       // isolation over RPC

@@ -6,7 +6,7 @@ import {
   RateLimiterError,
   RateLimiterStore,
   layerStoreMemory as rateLimiterStoreMemory,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import { Storage, type StorageApi } from "../src/Store";

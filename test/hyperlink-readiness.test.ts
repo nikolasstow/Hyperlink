@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -24,7 +24,7 @@ const withPort = <A, E, R>(
 ): Effect.Effect<A, E, R | HttpServer.HttpServer> =>
   Effect.gen(function* () {
     const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-    return yield* use(addr._tag === "TcpAddress" ? addr.port : 0);
+    return yield* use(addr._tag === "UnixPathAddress" ? 0 : addr.port);
   });
 
 it("a not-ready resource flips /health to 503 (degraded) with its detail", () =>

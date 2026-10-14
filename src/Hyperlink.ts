@@ -2,7 +2,7 @@
  * **Hyperlink toolkit** — schema-defined service tags with local + remote (RPC) layers.
  *
  * @remarks
- * Lightweight by construction: imports only `Schema` and `effect/unstable/rpc`, never a
+ * Lightweight by construction: imports only `Schema` and `effect/rpc`, never a
  * heavy implementation. A {@link Spec} is the single source for a HyperService's wire
  * contract — the inferred service interface, the client forwarder, and the server
  * handlers all derive from it.
@@ -89,9 +89,9 @@ import {
   Headers,
   HttpClient,
   HttpRouter,
-} from "effect/unstable/http";
+} from "effect/http";
 import * as SchemaAST from "effect/SchemaAST";
-import * as Socket from "effect/unstable/socket/Socket";
+import * as Socket from "effect/socket/Socket";
 import type { Simplify } from "effect/Types";
 import {
   Rpc,
@@ -100,7 +100,7 @@ import {
   RpcSchema,
   RpcSerialization,
   RpcServer,
-} from "effect/unstable/rpc";
+} from "effect/rpc";
 import { combineByNode, combineQuery } from "./MultiNode";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import { builtInNodeStoreContract } from "./internal/store/nodeStoreSpec";
@@ -400,7 +400,7 @@ export type ClientVerifyError =
 
 /**
  * Effect's http RPC client surfaces a wrong-protocol peer as `RpcClientDefect` with these
- * fixed messages (see `effect/unstable/rpc/RpcClient`). Match the defect `_tag` + those
+ * fixed messages (see `effect/rpc/RpcClient`). Match the defect `_tag` + those
  * strings — the only discriminant the wire gives us.
  *
  * @internal
@@ -5310,7 +5310,7 @@ export const layerProtocol = (
  * `protocolWebsocket(3009)` / `connect(tag, …(port))` becomes `…://api.myapp.com:3009/rpc` — no
  * `NODE_ENV` branching, just "did they configure a host". @category transports @public
  */
-export const clientHost: Config.Config<string> = Config.string(
+export const clientHost: Config.Config<string> = Config.String(
   "HYPERLINK_CLIENT_HOST",
 ).pipe(Config.withDefault("localhost"));
 
@@ -5539,17 +5539,25 @@ const nPipe = unixNodeDial;
 // [extracted to Node module — was Hyperlink.ts:4669-4685]
 
 // Reachability probes (transport-native, one bounded connection). Socket: reachable if the ws stays
-// open past a short window (`run` errors fast if it can't connect). Http: reachable if the url answers
+// open past a short window (dialing fails fast if it can't connect). Http: reachable if the url answers
 // at all (any response — an RPC server may 4xx a bare GET, which still proves it's up).
 // Build each transport layer as a Context in a local scope and provide *that* (not the Layer) — the
 // `strictEffectProvide`-clean form for a library helper that isn't an app entry point.
+/** Dials `socket` and reads until it closes or `window` passes: fails fast when it cannot connect, or
+ * when it closes inside the window. */
+const stayOpen = (socket: Socket.Socket, window: Duration.Duration) =>
+  Effect.raceFirst(
+    socket.reader.pipe(Effect.flatMap((reader) => Effect.forever(reader.pull))),
+    Effect.sleep(window),
+  );
+
 const probeSocketReachable = (url: string, window: Duration.Duration) =>
   Effect.gen(function* () {
     const ctx = yield* Layer.build(Socket.layerWebSocketConstructorGlobal);
     const socket = yield* Socket.makeWebSocket(Effect.sync(() => toWebSocketUrl(url))).pipe(
       Effect.provide(ctx),
     );
-    yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
+    yield* stayOpen(socket, window);
   }).pipe(Effect.scoped);
 
 const probeHttpReachable = (url: string, timeout: Duration.Input) =>
@@ -5641,7 +5649,7 @@ const probeEndpointReachable = (
     return Effect.gen(function* () {
       const { NodeSocket } = yield* Effect.promise(() => import("@effect/platform-node"));
       const socket = yield* NodeSocket.makeNet({ path: address });
-      yield* Effect.raceFirst(socket.run(() => Effect.void), Effect.sleep(window));
+      yield* stayOpen(socket, window);
     }).pipe(
       Effect.scoped,
       Effect.mapError(

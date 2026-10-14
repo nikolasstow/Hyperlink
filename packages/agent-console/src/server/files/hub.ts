@@ -19,7 +19,7 @@
  * @internal
  */
 import { Clock, Config, Context, Duration, Effect, FileSystem, Layer, Option, Path, PubSub, Random, RcMap, Ref, Schedule, Schema, Semaphore, Stream } from "effect";
-import { HttpClient } from "effect/unstable/http";
+import { HttpClient } from "effect/http";
 import { FileSync, TextChange } from "file-sync";
 import { FsError, MAX_READ_BYTES, resolveWithin } from "../fs";
 
@@ -111,7 +111,7 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const http = yield* HttpClient.HttpClient;
-  const opencodeUrl = yield* Config.string("AGENT_CONSOLE_OPENCODE_URL").pipe(Config.withDefault("http://127.0.0.1:4096"));
+  const opencodeUrl = yield* Config.String("AGENT_CONSOLE_OPENCODE_URL").pipe(Config.withDefault("http://127.0.0.1:4096"));
   // Tells this run of the hub from the last, whose versions mean nothing now.
   const startedAt = yield* Clock.currentTimeMillis;
   const salt = yield* Random.nextInt;

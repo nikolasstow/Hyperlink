@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
-import { FetchHttpClient, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as WorkPool from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
@@ -76,7 +76,7 @@ describe("queueSpec wire — RPC round-trip", () => {
   it.live("Completed.success is a number over http RPC when tag stamps success", () =>
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = address._tag === "TcpAddress" ? address.port : 0;
+      const port = address._tag === "UnixPathAddress" ? 0 : address.port;
 
       yield* Effect.gen(function* () {
         const q = yield* NumberQueue;

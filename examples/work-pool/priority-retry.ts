@@ -25,10 +25,10 @@ const EmailJob = Schema.Struct({
 
 /**
  * Wire-ready failure for the tag's `error` slot.
- * Prefer `Schema.TaggedErrorClass` (yieldable + encodable) over `Data.TaggedError` when the
+ * Prefer `Schema.TaggedError` (yieldable + encodable) over `Data.TaggedError` when the
  * failure is part of the public queue contract.
  */
-class SendError extends Schema.TaggedErrorClass<SendError>()("SendError", {
+class SendError extends Schema.TaggedError<SendError>()("SendError", {
   id: Schema.String,
   reason: Schema.String,
 }) {}
