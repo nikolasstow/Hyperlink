@@ -125,21 +125,27 @@ export const Composer = (props: {
       cancelled = true;
     };
   }, []);
+  // Only a model the server offers is ever chosen (one it does not have fails
+  // the turn): the choice is checked against the list whenever the list
+  // changes, falling back to the conversation's model, the last one used,
+  // the server's default, then the first.
+  const seedProviderID = props.seedModel?.providerID;
+  const seedModelID = props.seedModel?.modelID;
+  const directory = props.directory;
   React.useEffect(() => {
-    if (selectedModel !== undefined || models.length === 0 || lastModel === null) return;
-    const fromSeed =
-      props.seedModel !== undefined
-        ? findModel(models, props.seedModel.providerID, props.seedModel.modelID) ?? props.seedModel
-        : undefined;
-    const fromLast = lastModel !== undefined ? findModel(models, lastModel.providerID, lastModel.modelID) : undefined;
-    setSelectedModel(fromSeed ?? fromLast ?? getDefaultModel(props.directory) ?? models[0]);
-  }, [models, lastModel]); // eslint-disable-line react-hooks/exhaustive-deps -- seed applied in the effect below
+    if (models.length === 0 || lastModel === null) return;
+    const offered = (pick: { readonly providerID: string; readonly modelID: string } | undefined): ModelOption | undefined =>
+      pick === undefined ? undefined : findModel(models, pick.providerID, pick.modelID);
+    const seed = seedProviderID === undefined || seedModelID === undefined ? undefined : { providerID: seedProviderID, modelID: seedModelID };
+    setSelectedModel((current) => offered(current) ?? offered(seed) ?? offered(lastModel) ?? getDefaultModel(directory) ?? models[0]);
+  }, [models, lastModel, seedProviderID, seedModelID, directory]);
 
+  // The conversation's model, when it changes and the server offers it.
   React.useEffect(() => {
-    if (props.seedModel === undefined || models.length === 0) return;
-    const match = findModel(models, props.seedModel.providerID, props.seedModel.modelID);
-    setSelectedModel(match ?? props.seedModel);
-  }, [props.seedModel?.providerID, props.seedModel?.modelID, models]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (seedProviderID === undefined || seedModelID === undefined) return;
+    const match = findModel(models, seedProviderID, seedModelID);
+    if (match !== undefined) setSelectedModel(match);
+  }, [seedProviderID, seedModelID, models]);
 
   // Whether the message had the keyboard when the model window opened: leaving
   // the window puts it back as it was.
@@ -173,7 +179,6 @@ export const Composer = (props: {
     },
     [pickModel, closeModels],
   );
-  const directory = props.directory;
   const refreshCatalog = React.useCallback(() => reloadModels(directory), [directory]);
 
   // The input sizes itself to its text (one line to MAX_INPUT_HEIGHT, then it
