@@ -22,28 +22,17 @@
  */
 const fs = require("fs");
 const path = require("path");
-const { slugify, variantIconFile, variantMarkerFile } = require("./variant");
+const { appScheme, resolveVariant, slugify, variantIconFile } = require("./variant");
 
 /** The variant from the environment, or from an uncommitted app-variant.json. A
  * MISSING file means "base build" (expected); a MALFORMED file throws loudly. */
-const resolveVariant = () => {
-  const fromEnv = process.env.APP_VARIANT;
-  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) return fromEnv.trim();
-  const file = path.join(__dirname, variantMarkerFile);
-  if (!fs.existsSync(file)) return undefined;
-  const value = JSON.parse(fs.readFileSync(file, "utf8")).variant;
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`${variantMarkerFile} must contain a non-empty "variant" string, got: ${JSON.stringify(value)}`);
-  }
-  return value.trim();
-};
 
 /** Plugin entries to strip from a variant (their native extensions can't coexist
  * across installs without their own bundle IDs + App Group, which they hardcode). */
 const EXTENSION_PLUGINS = new Set(["@bacons/apple-targets", "./plugins/withAppIntents.js"]);
 
 module.exports = ({ config }) => {
-  const variant = resolveVariant();
+  const variant = resolveVariant(__dirname);
   if (variant === undefined) return config;
 
   const slug = slugify(variant);
@@ -78,7 +67,7 @@ module.exports = ({ config }) => {
   return {
     ...config,
     name: `${config.name} · ${variant}`,
-    scheme: `${config.scheme}${slug.replace(/-/g, "")}`,
+    scheme: appScheme(config.scheme, variant),
     icon: variantIcon,
     ios,
     plugins,

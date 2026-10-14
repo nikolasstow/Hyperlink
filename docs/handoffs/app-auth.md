@@ -11,9 +11,10 @@ opencode v2 also requires a password now (see `slash-commands.md`).
    server adds it when it forwards `/opencode/*`, and drops the app's own `Authorization`. The
    phone never sees opencode's password.
 2. **Pairing, like opencode's.** `pnpm pair` on the Mac makes a single-use code that expires in a
-   few minutes and shows a QR code with the code and the server's addresses (Tailscale included).
-   In the app: Add Server → scan → the app redeems the code for its own device token. Typing the
-   address and code works too.
+   few minutes and shows a QR code of a pairing link. Scanned with the iPhone's own camera, it
+   opens the app (no scanner in the app; owner, 10-14), which shows the server and asks before it
+   redeems the code for its own device token. Typing the address and code in Add Server works
+   too.
 3. **Tokens per device, both ends.**
    - Phone: the token in the iOS Keychain, readable after first unlock (the background drain and
      Live Activities still work).
@@ -39,14 +40,18 @@ opencode v2 also requires a password now (see `slash-commands.md`).
 - `server/opencodeServer.ts`: opencode's address and password
   (`AGENT_CONSOLE_OPENCODE_PASSWORD`); the proxy and the file hub send it, and the proxy drops
   the app's `authorization` and `ticket`.
-- `pnpm pair` (`server/pair.ts`): a code, the addresses (Tailscale first) and a QR code of
-  `{ "code", "urls" }`.
+- `pnpm pair` (`server/pair.ts`): a QR code of `<scheme>://pair?code=…&url=…&url=…` (addresses
+  Tailscale first), for the app built from the same worktree (`appScheme` in the native
+  package's `variant.js`, shared with `app.config.js`; `APP_VARIANT=<name>` for another
+  variant), plus the code and addresses to type.
 
 Checked end to end on `:5298` against opencode v2 on `:4097`.
 
 ## Next: the app
 
-Keychain (`expo-secure-store`) and the scanner (`expo-camera`) are new native modules, so a
-build. Add Server: scan or type, redeem, keep the token per server. Every request: the token
+The pairing link needs no native code (the scheme is already registered; React Native's
+`Linking` reads it). The Keychain (`expo-secure-store`) is a new native module, so a build. The
+link opens a confirm screen (which server, its addresses) before redeeming; Add Server also takes
+an address and a code. Keep the token per server. Every request: the token
 on HTTP (the Effect clients, `fetch`, the event streams), a ticket for each WebSocket. A
 devices list in settings with remove.

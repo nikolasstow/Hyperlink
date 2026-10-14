@@ -1,9 +1,12 @@
 /**
  * `pnpm pair`: pairs a phone with this machine's API server
  * (docs/handoffs/app-auth.md). Asks the running server for a single-use code
- * (with the admin token from its state folder) and prints it with the
- * server's addresses, and a QR code of both for the app to scan:
- * `{ "code": "…", "urls": ["http://100.x.y.z:5199", …] }`.
+ * (with the admin token from its state folder) and prints a pairing link, and
+ * a QR code of it: scanned with the iPhone's camera, it opens the app, which
+ * asks before it pairs. The link is
+ * `<scheme>://pair?code=…&url=http://100.x.y.z:5199&url=…` (addresses
+ * Tailscale first), for the app built from this worktree (its variant's
+ * scheme; `APP_VARIANT=<name>` for another variant's).
  *
  * Port: `AGENT_CONSOLE_API_PORT` (default 5199), as the server. Run it from
  * the folder the server runs in (or set `AGENT_CONSOLE_STATE_DIR` the same).
@@ -16,7 +19,11 @@ import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { renderUnicodeCompact } from "uqr";
 import { PairingCode } from "./auth/DeviceAuth";
+import { appScheme, resolveVariant } from "../../../agent-console-native/variant";
 import { adminTokenFile, stateDirectory } from "./sessions/files";
+
+/** The app's base scheme, from its app.json. */
+const AppJson = Schema.fromJsonString(Schema.Struct({ expo: Schema.Struct({ scheme: Schema.String }) }));
 
 /** Tailscale's address range (100.64.0.0/10): reachable from the phone anywhere. */
 const isTailscale = (address: string): boolean => {
@@ -45,19 +52,22 @@ const program = Effect.gen(function* () {
     Effect.flatMap(HttpClientResponse.schemaBodyJson(PairingCode)),
   );
   const urls = reachableAddresses().map((address) => `http://${address}:${port}`);
+  const appDir = path.join(path.dirname(path.dirname(process.cwd())), "packages", "agent-console-native");
+  const { expo } = yield* Schema.decodeUnknownEffect(AppJson)(yield* fs.readFileString(path.join(appDir, "app.json")));
+  const scheme = appScheme(expo.scheme, resolveVariant(appDir));
+  const link = `${scheme}://pair?${new URLSearchParams([["code", pairing.code], ...urls.map((url) => ["url", url])]).toString()}`;
   const minutes = Math.round((pairing.expiresAt - Date.now()) / 60_000);
   yield* Console.log(
     [
       "",
-      `  Pairing code: ${pairing.code}  (works once, for ${minutes} minutes)`,
+      `  Scan with the iPhone's camera to pair (${scheme}); works once, for ${minutes} minutes.`,
       "",
-      ...urls.map((url) => `  ${url}`),
-      "",
-      ...renderUnicodeCompact(yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Struct({ code: Schema.String, urls: Schema.Array(Schema.String) })))({ code: pairing.code, urls }), { border: 2 })
+      ...renderUnicodeCompact(link, { border: 2 })
         .split("\n")
         .map((line) => `  ${line}`),
       "",
-      "  In the app: Add Server, then scan this, or type an address and the code.",
+      `  Or in the app, Add Server: code ${pairing.code} at`,
+      ...urls.map((url) => `    ${url}`),
       "",
     ].join("\n"),
   );
