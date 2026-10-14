@@ -83,7 +83,7 @@ public final class CodeEditorModule: Module {
         }.runOnQueue(.main)
 
         View(CodeEditorView.self) {
-            Events("onTextChange", "onStickyDebug", "onConflictAction", "onOpenSession", "onLineChange", "onScrollRest")
+            Events("onTextChange", "onConflictAction", "onOpenSession", "onLineChange", "onScrollRest")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)

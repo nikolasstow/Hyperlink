@@ -92,8 +92,6 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly onConflictAction?: (event: NativeSyntheticEvent<{ readonly index: number; readonly keep: ConflictChoice }>) => void;
   /** Open session on an agent change's popover (`apiVersion` 8). */
   readonly onOpenSession?: (event: NativeSyntheticEvent<{ readonly sessionID: string }>) => void;
-  /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
-  readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
   /** The code's font family; the system's monospace while it is not
    * installed (`apiVersion` 11). */
   readonly fontFamily?: string;

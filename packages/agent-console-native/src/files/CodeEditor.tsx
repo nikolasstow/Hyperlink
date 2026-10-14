@@ -184,10 +184,6 @@ export const CodeEditor = (props: {
     setText(props.text);
   }, [props.text]);
   const native = React.useRef<CodeEditorHandle>(null);
-  // DIAG(live-files): temporary — which native editor this build carries.
-  React.useEffect(() => {
-    console.log("[live] editor", props.name, "applyChanges", canApplyChanges, "conflict zones", canShowConflicts);
-  }, [props.name]);
   React.useImperativeHandle(
     props.ref,
     () => ({
@@ -257,10 +253,12 @@ export const CodeEditor = (props: {
 
   React.useEffect(() => {
     let alive = true;
-    const delay = firstRun.current ? 0 : RETOKENIZE_MS;
+    const first = firstRun.current;
+    const delay = first ? 0 : RETOKENIZE_MS;
     firstRun.current = false;
     const handle = setTimeout(() => {
-      void tokenizeCode({ code: text, lang, theme })
+      // Kept on the device as opened; each version after is memory only.
+      void tokenizeCode({ code: text, lang, theme, keep: first })
         .then((highlight) => {
           if (!alive) return;
           setTokensJson(tokensJsonOf(text, highlight));
@@ -270,7 +268,6 @@ export const CodeEditor = (props: {
       void stickyRanges(text, lang)
         .then((parsed) => {
           if (!alive) return;
-          console.log(`[sticky] ${lang}: ${parsed.length} ranges`);
           setStickyJson(JSON.stringify(pinnable(parsed)));
           ranges.current = parsed;
           reportScopesLatest.current();
@@ -308,7 +305,6 @@ export const CodeEditor = (props: {
           : { onScrollRest: (event) => props.onScrollRest?.({ x: event.nativeEvent.offsetX ?? 0, y: event.nativeEvent.offset }) })}
         showLineNumbers
         wrapLines={false}
-        onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}
         onLineChange={(event) => {
           atLine.current = event.nativeEvent.line;
           reportScopes();

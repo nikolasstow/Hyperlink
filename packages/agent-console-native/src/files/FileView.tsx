@@ -148,8 +148,6 @@ export const FileView = (props: {
       // typist still saves every few seconds — but only when autosave is on for
       // this file's scope (manual Save still writes regardless).
       const autosave = resolveAutosave(autosaveSettingsNow(), { path, repo });
-      // DIAG(live-files): temporary — whether this keystroke schedules a save.
-      console.log("[live] typed", path.split("/").pop(), "autosave", autosave);
       if (!autosave) return;
       if (cloudTimer.current !== undefined) clearTimeout(cloudTimer.current);
       cloudTimer.current = setTimeout(saveCloud, CLOUD_DELAY_MS);

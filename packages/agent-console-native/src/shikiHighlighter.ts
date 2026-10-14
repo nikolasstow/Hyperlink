@@ -194,6 +194,9 @@ export const tokenizeCode = async (params: {
   readonly code: string;
   readonly lang: string;
   readonly theme: string | ThemeRegistrationRaw;
+  /** Keep the result on the device too (default): false for versions that
+   * will not be asked for again, such as each pause while typing. */
+  readonly keep?: boolean;
 }): Promise<HighlightResult> => {
   const themeName = typeof params.theme === "string" ? params.theme : (params.theme.name ?? "custom");
   const langId = LANG_ALIASES[params.lang.toLowerCase()] ?? params.lang.toLowerCase();
@@ -219,7 +222,7 @@ export const tokenizeCode = async (params: {
     })),
   );
   const output: HighlightResult = { lines, background: result.bg, foreground: result.fg };
-  setCachedTokens(key, output);
+  setCachedTokens(key, output, params.keep ?? true);
   return output;
 };
 

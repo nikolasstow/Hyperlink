@@ -18,6 +18,7 @@ import { useBarCover } from "../dubz/useBarWindow";
 import { useInstalledCodeFonts } from "../fonts/useCodeFonts";
 import { codeFontSizeOf } from "../settings";
 import { langFromFilename, tokenizeCode } from "../shikiHighlighter";
+import { textHash } from "../textHash";
 import { useTheme } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
 import { editorThemeOf, tokensJsonOf } from "./CodeEditor";
@@ -30,15 +31,6 @@ import { useScrollOffset } from "./useFileScrolls";
 const drawn = new Map<string, string>();
 const lastOf = new Map<string, string>();
 
-/** FNV-1a, for a short name from long inputs. */
-const hashOf = (input: string): string => {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < input.length; index++) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(16).padStart(8, "0");
-};
 
 /**
  * The image of `path` as its editor shows it under a header `topInset` tall;
@@ -61,8 +53,8 @@ export const useFilePreview = (path: string, name: string, topInset: number, fet
   const key =
     text === undefined
       ? undefined
-      : `preview-${hashOf(
-          [path, text.length, hashOf(text), themeName, fontFamily, installed.has(fontFamily), fontSize, width, height, top, bottom, Math.round(offset.x), Math.round(offset.y), scale].join("\u0000"),
+      : `preview-${textHash(
+          [path, text.length, textHash(text), themeName, fontFamily, installed.has(fontFamily), fontSize, width, height, top, bottom, Math.round(offset.x), Math.round(offset.y), scale].join("\u0000"),
         )}`;
   const [uri, setUri] = React.useState<string | undefined>(() => (key === undefined ? undefined : drawn.get(key)) ?? lastOf.get(path));
 
@@ -75,7 +67,7 @@ export const useFilePreview = (path: string, name: string, topInset: number, fet
     }
     let alive = true;
     const lang = langFromFilename(name);
-    Promise.all([tokenizeCode({ code: text, lang, theme }), stickyRanges(text, lang)])
+    Promise.all([tokenizeCode({ code: text, lang, theme, keep: false }), stickyRanges(text, lang)])
       .then(([highlight, ranges]) =>
         renderPreview({
           key,

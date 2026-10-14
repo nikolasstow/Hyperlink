@@ -156,8 +156,6 @@ export const LiveFilesFollower = (): null => {
     return all;
   }, [places, kept, shown]);
   React.useEffect(() => {
-    // DIAG(live-files): temporary, remove once the device path is confirmed.
-    console.log("[live] follow", server, [...paths]);
     run("following", (live) => live.follow(server, paths));
   }, [server, paths]);
   return null;
