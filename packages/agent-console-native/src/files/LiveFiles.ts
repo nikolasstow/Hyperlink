@@ -243,7 +243,12 @@ const make = Effect.gen(function* () {
           Effect.andThen(Effect.logWarning(`live files: following ${path} stopped; following again`, error)),
         ),
       ),
-      Effect.retry(REFOLLOW),
+      // Retry only TRANSIENT failures (a dropped connection, an OutOfStep that
+      // resyncs). A FileSyncError is the hub permanently rejecting the path
+      // (e.g. following a directory or a too-large/absent file); retrying it
+      // every 2s forever is a storm that stalls JS app-wide. Stop on it — the
+      // path is re-followed on the next foreground/online or access instead.
+      Effect.retry({ schedule: REFOLLOW, while: (error) => error._tag !== "FileSyncError" }),
       // The hub ended the stream (it should not): follow again.
       Effect.repeat(REFOLLOW),
     );
