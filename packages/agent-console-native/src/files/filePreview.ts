@@ -5,12 +5,15 @@
  * where the file was left. Being the editor's own drawing, a tab's preview
  * matches the open file to the pixel, and zooms into it without a seam.
  *
- * Drawn when a preview is first shown and again whenever anything it shows
- * changes; each drawing is kept (by everything that went into it), and a file
- * shows its last one meanwhile.
+ * Drawn when a preview is first shown, and again once anything it shows has
+ * changed and then stayed still for a moment (a drawing holds the main thread
+ * for a tenth of a second or so: not while you scroll or type). Drawings are
+ * made one at a time; a file shows its last one meanwhile, and that one is
+ * let go once the next is drawn.
  *
  * @internal
  */
+import { File } from "expo-file-system";
 import * as React from "react";
 import { useWindowDimensions } from "react-native";
 import { canRenderPreviews, renderPreview } from "../../modules/code-editor";
@@ -27,9 +30,39 @@ import { pinnable, stickyRanges } from "./stickyRanges";
 import { useLiveFile } from "./useLiveFiles";
 import { useScrollOffset } from "./useFileScrolls";
 
-/** Drawings by key (everything that went into one), and each file's last. */
+/** Drawings by key (everything that went into one), and the last of each
+ * file in each layout (`slotOf`). */
 const drawn = new Map<string, string>();
-const lastOf = new Map<string, string>();
+const lastOf = new Map<string, { readonly key: string; readonly uri: string }>();
+
+/** How long what a preview shows stays the same before it is drawn again. */
+const SETTLE_MS = 1000;
+
+/** The drawing being made: the next waits for it. */
+let drawing: Promise<unknown> = Promise.resolve();
+const oneAtATime = <A>(draw: () => Promise<A>): Promise<A> => {
+  const next = drawing.then(draw, draw);
+  drawing = next.catch(() => undefined);
+  return next;
+};
+
+/** A file in one layout: previews of it laid out otherwise keep their own. */
+const slotOf = (path: string, width: number, height: number, top: number): string => [path, width, height, top].join("\u0000");
+
+/** Keeps a file's new drawing and lets its last in the same layout go. */
+const keepDrawing = (path: string, slot: string, key: string, uri: string): void => {
+  const last = lastOf.get(slot);
+  drawn.set(key, uri);
+  lastOf.set(slot, { key, uri });
+  if (last === undefined || last.uri === uri) return;
+  drawn.delete(last.key);
+  try {
+    const file = new File(last.uri);
+    if (file.exists) file.delete();
+  } catch (error) {
+    console.error(`[files] letting go of an old preview of ${path} failed`, error);
+  }
+};
 
 
 /**
@@ -56,7 +89,8 @@ export const useFilePreview = (path: string, name: string, topInset: number, fet
       : `preview-${textHash(
           [path, text.length, textHash(text), themeName, fontFamily, installed.has(fontFamily), fontSize, width, height, top, bottom, Math.round(offset.x), Math.round(offset.y), scale].join("\u0000"),
         )}`;
-  const [uri, setUri] = React.useState<string | undefined>(() => (key === undefined ? undefined : drawn.get(key)) ?? lastOf.get(path));
+  const slot = slotOf(path, width, height, top);
+  const [uri, setUri] = React.useState<string | undefined>(() => (key === undefined ? undefined : drawn.get(key)) ?? lastOf.get(slot)?.uri);
 
   React.useEffect(() => {
     if (key === undefined || text === undefined || !canRenderPreviews) return undefined;
@@ -67,8 +101,8 @@ export const useFilePreview = (path: string, name: string, topInset: number, fet
     }
     let alive = true;
     const lang = langFromFilename(name);
-    Promise.all([tokenizeCode({ code: text, lang, theme, keep: false }), stickyRanges(text, lang)])
-      .then(([highlight, ranges]) =>
+    const draw = () =>
+      Promise.all([tokenizeCode({ code: text, lang, theme, keep: false }), stickyRanges(text, lang)]).then(([highlight, ranges]) =>
         renderPreview({
           key,
           text,
@@ -86,17 +120,26 @@ export const useFilePreview = (path: string, name: string, topInset: number, fet
           offsetX: offset.x,
           scale,
         }),
-      )
-      .then((image) => {
-        if (image === undefined) return;
-        drawn.set(key, image);
-        lastOf.set(path, image);
-        if (alive) setUri(image);
-      })
-      .catch((error: unknown) => console.error(`[files] drawing the preview of ${path} failed`, error));
+      );
+    // The first drawing at once (a preview is wanted before it is shown);
+    // later ones once it has stayed the same a moment.
+    const timer = setTimeout(
+      () => {
+        if (!alive) return;
+        oneAtATime(() => (alive ? draw() : Promise.resolve(undefined)))
+          .then((image) => {
+            if (image === undefined) return;
+            keepDrawing(path, slot, key, image);
+            if (alive) setUri(image);
+          })
+          .catch((error: unknown) => console.error(`[files] drawing the preview of ${path} failed`, error));
+      },
+      lastOf.has(slot) ? SETTLE_MS : 0,
+    );
     return () => {
       alive = false;
+      clearTimeout(timer);
     };
-  }, [key, path, name, text, theme, fontFamily, fontSize, width, height, top, bottom, offset, scale]);
+  }, [key, slot, path, name, text, theme, fontFamily, fontSize, width, height, top, bottom, offset, scale]);
   return uri;
 };
