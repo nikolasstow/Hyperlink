@@ -423,7 +423,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
             </View>
           ) : sub?.kind === "list" ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-              <DubzSessionListPage file={sub.file} onOpen={openSession} shifted={shifted} />
+              <DubzSessionListPage file={sub.file} onOpen={openSession} shifted={shifted} compact={compact} />
             </View>
           ) : null}
           {/* Feathered blur at the window's bottom — content scrolls behind the

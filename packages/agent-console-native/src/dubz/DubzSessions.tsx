@@ -410,9 +410,13 @@ const DubzScrollPage = (props: {
   readonly trailing?: React.ReactNode;
   /** Chat pages anchor to the bottom (newest in view); lists stay at the top. */
   readonly bottomAnchored?: boolean;
+  /** Compact mode's left gap (pt): the content and header shift right by it, so
+   * the top-left button has room. `pageWidth` is already shrunk by it. */
+  readonly leftInset?: number;
   readonly children: React.ReactNode;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
+  const gap = props.leftInset ?? 0;
   // The window's resize gesture, so the title pill is the grab area (the top
   // grabber is hidden on sub-pages — see BarWindow grabberHidden).
   const resize = React.useContext(BarWindowResizeContext);
@@ -421,7 +425,7 @@ const DubzScrollPage = (props: {
       {/* Scroll content — its own Host, slides. Fills the body so content passes
        * behind the top feather + header pill and the bottom composer pill. */}
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
-        <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), ...(props.bottomAnchored === true ? [defaultScrollAnchor("bottom")] : []), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted)]}>
+        <ScrollView showsIndicators={false} modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "topLeading" }), ...(props.bottomAnchored === true ? [defaultScrollAnchor("bottom")] : []), offset({ x: (props.shifted ? 0 : width) + gap }), animation(SLIDE, props.shifted)]}>
           <VStack alignment="leading" spacing={props.spacing} modifiers={[frame({ width: props.pageWidth, alignment: "leading" }), padding({ top: HEADER_CLEARANCE, bottom: BOTTOM_CLEARANCE })]}>
             {props.children}
           </VStack>
@@ -435,7 +439,7 @@ const DubzScrollPage = (props: {
        * (sized to the header area so it never covers the scroll below). */}
       <View style={styles.headerSlot} pointerEvents="box-none">
         <Host style={{ flex: 1 }} ignoreSafeArea="all">
-          <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), offset({ x: props.shifted ? 0 : width }), animation(SLIDE, props.shifted), padding({ top: TOP_INSET })]}>
+          <VStack modifiers={[frame({ maxWidth: FILL, maxHeight: FILL, alignment: "top" }), offset({ x: (props.shifted ? 0 : width) + gap }), animation(SLIDE, props.shifted), padding({ top: TOP_INSET })]}>
             <PageHeader title={props.title} width={props.pageWidth} trailing={props.trailing} />
           </VStack>
         </Host>
@@ -465,7 +469,10 @@ export const DubzSessionPage = (props: {
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
   const { client, address } = useAppContext();
-  const pageWidth = width - WINDOW_SIDE * 2;
+  // Compact: shift the chat right for the top-left button (a chat is always
+  // taller than the viewport, so the gap keys on `compact`, not compactContent).
+  const leftInset = props.compact === true ? DUBZ_COMPACT_LEFT_GAP : 0;
+  const pageWidth = width - WINDOW_SIDE * 2 - leftInset;
   const shifted = props.shifted === true;
   // Stream only while the page is shown (it's kept mounted through the slide).
   const enabled = shifted;
@@ -515,7 +522,7 @@ export const DubzSessionPage = (props: {
   const messages = nextPending.length === 0 ? delivered : [...delivered, ...nextPending];
 
   return (
-    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={props.compact === true ? undefined : <GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
+    <DubzScrollPage pageWidth={pageWidth} leftInset={leftInset} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={props.compact === true ? undefined : <GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
       {messages.map((message) => (
         <ChatBubble key={message.id} message={message} width={pageWidth} />
       ))}
@@ -644,9 +651,12 @@ export const DubzSessionListPage = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
   readonly shifted?: boolean;
+  /** Compact: shift the list right for the top-left button, hide the right one. */
+  readonly compact?: boolean;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
-  const pageWidth = width - WINDOW_SIDE * 2;
+  const leftInset = props.compact === true ? DUBZ_COMPACT_LEFT_GAP : 0;
+  const pageWidth = width - WINDOW_SIDE * 2 - leftInset;
   const shifted = props.shifted === true;
   const { client, server } = useAppContext();
   // Favoriting from this list pins to the file's repo scope (as the repo's own
@@ -706,7 +716,7 @@ export const DubzSessionListPage = (props: {
 
   return (
     <FavoriteScopeProvider value={favScope}>
-      <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title="Sessions" spacing={GAP} trailing={<SortMenu sort={sort} onSort={setSort} unreadOnly={unreadOnly} onUnreadOnly={setUnreadOnly} />}>
+      <DubzScrollPage pageWidth={pageWidth} leftInset={leftInset} shifted={shifted} title="Sessions" spacing={GAP} trailing={props.compact === true ? undefined : <SortMenu sort={sort} onSort={setSort} unreadOnly={unreadOnly} onUnreadOnly={setUnreadOnly} />}>
         {rows}
       </DubzScrollPage>
     </FavoriteScopeProvider>
