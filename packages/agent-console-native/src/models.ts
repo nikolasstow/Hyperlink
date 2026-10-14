@@ -1,5 +1,5 @@
 /**
- * Connected models from `client.provider.list()`. Never log or touch the
+ * Connected models from `client.config.providers()` (the configured providers). Never log or touch the
  * raw provider `.key` field — the response includes API keys inline (not
  * in the SDK’s declared type); only `.id` / `.name` / `.models` are read.
  *
@@ -55,28 +55,29 @@ const inFlightFor = (client: OpencodeClient): Map<string | undefined, Promise<Ca
 };
 
 const load = async (client: OpencodeClient, directory: string | undefined): Promise<Cache> => {
-  const { data, error } = await client.provider.list(directory !== undefined ? { query: { directory } } : undefined);
+  // The configured providers only (a few hundred KB), not `provider.list()`:
+  // that is the whole models.dev catalog (about 7 MB), and on the phone it
+  // came back cut short ("JSON Parse error") and cost a long parse.
+  const { data, error } = await client.config.providers(directory !== undefined ? { query: { directory } } : undefined);
   if (data === undefined) throw new Error(`Couldn't load the models: ${JSON.stringify(error)}`);
 
-  const connected = new Set(data.connected);
-  const options: Array<ModelOption> = [];
-  for (const provider of data.all) {
-    if (!connected.has(provider.id)) continue;
-    for (const model of Object.values(provider.models)) {
-      options.push({
-        providerID: provider.id,
-        providerName: provider.name,
-        modelID: model.id,
-        name: model.name,
-      });
-    }
-  }
+  const options: Array<ModelOption> = data.providers.flatMap((provider) =>
+    Object.values(provider.models).map((model) => ({
+      providerID: provider.id,
+      providerName: provider.name,
+      modelID: model.id,
+      name: model.name,
+    })),
+  );
 
-  const defaultProviderID = data.connected.find((id) => data.default[id] !== undefined);
-  const defaultModelID = defaultProviderID !== undefined ? data.default[defaultProviderID] : undefined;
+  // opencode's own last resort: the first configured provider's default
+  // model (its config's `model` and the models used last come first, but are
+  // not served; the composer prefers the user's last model anyway).
+  const defaultProvider = data.providers.find((provider) => data.default[provider.id] !== undefined);
+  const defaultModelID = defaultProvider === undefined ? undefined : data.default[defaultProvider.id];
   const defaultModel =
-    defaultProviderID !== undefined && defaultModelID !== undefined
-      ? options.find((o) => o.providerID === defaultProviderID && o.modelID === defaultModelID)
+    defaultProvider !== undefined && defaultModelID !== undefined
+      ? options.find((o) => o.providerID === defaultProvider.id && o.modelID === defaultModelID)
       : undefined;
 
   return { options, defaultModel };
