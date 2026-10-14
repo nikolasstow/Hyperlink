@@ -159,12 +159,12 @@ const loadWorkspace = (apiBase: string, workspace: string): Promise<void> =>
 export const prefetchWorkspaces = (apiBase: string, workspaces: ReadonlyArray<string>): void => {
   const missing = workspaces.filter(needsLoad);
   if (missing.length === 0) return;
-  // The warm-up only speeds things up; any workspace it cannot take fails its
-  // own load below, which is where that shows.
-  void warmViews(apiBase, missing).then(
-    () => undefined,
-    (error: unknown) => console.error("[extension views] warming the host failed", error),
-  );
+  // Warm each workspace on its own (not one batch call): a stale or removed
+  // worktree answers BadWorkspace, and a single batch would 400 as a whole —
+  // stopping EVERY repo from pre-warming (and so slowing every open). The warm
+  // only speeds things up; a workspace it cannot take fails its own load below,
+  // which is where that shows — so a failed warm is swallowed here.
+  void Promise.allSettled(missing.map((workspace) => warmViews(apiBase, [workspace])));
   missing.forEach((workspace) => void loadWorkspace(apiBase, workspace));
 };
 
