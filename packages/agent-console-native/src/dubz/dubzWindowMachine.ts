@@ -40,12 +40,11 @@ export interface DubzWindowState {
    * Without this, an active, taller component snaps the window back up after a
    * drag and compact can never be reached. */
   readonly pinned: boolean;
-  /** The display mode, from the live visible height (dubzLayout): whether Dubz
-   * is compact, and whether the content must shift aside for the top-left
-   * buttons. A height reaction keeps these up to date; they are not per-frame
-   * state (they flip only on a threshold crossing). */
+  /** Whether Dubz is compact — the live visible height is in the compact zone
+   * (dubzLayout.isCompact). In the zone the top controls are a side bar, so the
+   * content shifts right. A height reaction keeps it up to date; it flips only on
+   * crossing the zone edge, not per frame. */
   readonly compact: boolean;
-  readonly compactContent: boolean;
 }
 
 /** What happens to the window. */
@@ -59,7 +58,7 @@ export type DubzWindowEvent =
   | { readonly _tag: "componentActivated"; readonly height: number }
   | { readonly _tag: "componentHeightChanged"; readonly height: number }
   | { readonly _tag: "componentDeactivated" }
-  | { readonly _tag: "layoutChanged"; readonly compact: boolean; readonly compactContent: boolean };
+  | { readonly _tag: "layoutChanged"; readonly compact: boolean };
 
 /** The initial state: closed, keyboard down, at a remembered default. */
 export const initialDubzWindowState = (defaultHeight: number): DubzWindowState => ({
@@ -69,7 +68,6 @@ export const initialDubzWindowState = (defaultHeight: number): DubzWindowState =
   activeHeight: undefined,
   pinned: false,
   compact: false,
-  compactContent: false,
 });
 
 /** The requested height: the user's pinned height when they have dragged one,
@@ -94,7 +92,7 @@ export const reduceDubzWindow = (state: DubzWindowState, event: DubzWindowEvent)
       // Terminal: closed stays closed until an explicit open. The keyboard is
       // left as tracked; it animates down on its own. The display mode resets —
       // the height reaction sets it again on the next open.
-      return state.phase === "closed" ? state : { ...state, phase: "closed", compact: false, compactContent: false };
+      return state.phase === "closed" ? state : { ...state, phase: "closed", compact: false };
     case "keyboardShown":
       // Tracked whether open or closed; it never opens the window and never
       // changes the requested height.
@@ -120,10 +118,8 @@ export const reduceDubzWindow = (state: DubzWindowState, event: DubzWindowEvent)
       // Back to the default (unpinned) on the next calculation.
       return state.activeHeight === undefined ? state : { ...state, activeHeight: undefined, pinned: false };
     case "layoutChanged":
-      // The display mode, from the height reaction (dubzLayout). A discrete flip
-      // on a threshold crossing, not per-frame.
-      return state.compact === event.compact && state.compactContent === event.compactContent
-        ? state
-        : { ...state, compact: event.compact, compactContent: event.compactContent };
+      // Compact, from the height reaction (dubzLayout). A discrete flip on
+      // crossing the zone edge, not per-frame.
+      return state.compact === event.compact ? state : { ...state, compact: event.compact };
   }
 };

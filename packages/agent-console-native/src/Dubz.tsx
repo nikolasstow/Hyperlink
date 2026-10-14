@@ -33,7 +33,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzCompactSync } from "./dubz/DubzCompactSync";
-import { DUBZ_BOTTOM_BAR, DUBZ_COMPACT_LEFT_GAP, DUBZ_TOP_BAR, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -212,22 +212,19 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     else if (!open && winState.phase === "open") dispatch({ _tag: "closeRequested", reason: "dismiss" });
   }, [open, winState.phase, dispatch]);
   const requestedHeight = requestedHeightOf(winState);
-  // What the CONTENT naturally wants (an active component's height, else the
-  // default) — NOT the requested window height, which can be pinned smaller by a
-  // drag. compactContent compares THIS against the viewport, so a pinned-small
-  // window still knows its content is taller and keeps the left gap.
-  const contentHeight = winState.activeHeight ?? winState.defaultHeight;
   // A suggestion claims a height (the session area, expanded): the window grows
   // to it if it needs to, and falls back to the default when it claims none.
   const onSuggestionActiveHeight = React.useCallback(
     (height: number | undefined) => dispatch(height === undefined ? { _tag: "componentDeactivated" } : { _tag: "componentActivated", height }),
     [dispatch],
   );
-  // The compact display mode, from the live height (DubzCompactSync reports it).
-  const onLayoutChanged = React.useCallback(
-    (compact: boolean, compactContent: boolean) => dispatch({ _tag: "layoutChanged", compact, compactContent }),
-    [dispatch],
-  );
+  // Compact, from the live height (DubzCompactSync reports it).
+  const onLayoutChanged = React.useCallback((compact: boolean) => dispatch({ _tag: "layoutChanged", compact }), [dispatch]);
+  // Stable callbacks for BarWindow — an inline arrow here rebuilds the resize
+  // gesture every render, which (under the compact re-renders) churned and fired
+  // phantom resizes.
+  const onResize = React.useCallback((height: number) => dispatch({ _tag: "heightSettled", height }), [dispatch]);
+  const onKeyboardSettle = React.useCallback((up: boolean) => dispatch(up ? { _tag: "keyboardShown" } : { _tag: "keyboardHidden" }), [dispatch]);
   // In the compact zone the top controls are a side bar, so the content always
   // shifts right for it — the gap (and the sub-page's hidden right button) key on
   // `compact`, not on whether the content overflows.
@@ -387,8 +384,8 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       requestedHeight={requestedHeight}
       minOpenHeight={SINGLE_SUGGESTION_HEIGHT}
       freeAbove
-      onResize={(height) => dispatch({ _tag: "heightSettled", height })}
-      onKeyboardSettle={(up) => dispatch(up ? { _tag: "keyboardShown" } : { _tag: "keyboardHidden" })}
+      onResize={onResize}
+      onKeyboardSettle={onKeyboardSettle}
       // Dubz opens to its suggestions without deploying the keyboard; a tap on
       // the field raises it (only auto-focuses if the keyboard is already up).
       raiseKeyboardOnOpen={false}
@@ -408,7 +405,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           {/* Watches the live height and reports the compact display mode to the
            * coordinator (renders nothing). The claim it compares against is the
            * requested height. */}
-          <DubzCompactSync claim={contentHeight} topBar={DUBZ_TOP_BAR} bottomBar={DUBZ_BOTTOM_BAR} onChange={onLayoutChanged} />
+          <DubzCompactSync onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
           <View style={[styles.mainArea, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>

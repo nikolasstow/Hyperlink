@@ -1,8 +1,8 @@
 /**
- * Watches the Dubz window's live visible height and reports the compact display
- * mode (dubzLayout) to the coordinator when it crosses a threshold. Renders
- * nothing; it is a child of the window body, so it reads the height through
- * BarWindowHeightContext.
+ * Watches the Dubz window's live visible height and reports whether it is
+ * compact (dubzLayout.isCompact) to the coordinator when it crosses the zone
+ * edge. Renders nothing; a child of the window body, so it reads the height
+ * through BarWindowHeightContext.
  *
  * The reaction returns a packed number (no per-frame allocation) and reports
  * only on a change, so the coordinator (and its log) sees a discrete flip, never
@@ -13,30 +13,17 @@
 import * as React from "react";
 import { runOnJS, useAnimatedReaction } from "react-native-reanimated";
 import { BarWindowHeightContext } from "../BarWindow";
-import { isCompact, needsCompactContent } from "./dubzLayout";
+import { isCompact } from "./dubzLayout";
 
-export const DubzCompactSync = (props: {
-  /** The window height the content wants (requested), including both bars. */
-  readonly claim: number;
-  readonly topBar: number;
-  readonly bottomBar: number;
-  readonly onChange: (compact: boolean, compactContent: boolean) => void;
-}): null => {
+export const DubzCompactSync = (props: { readonly onChange: (compact: boolean) => void }): null => {
   const height = React.useContext(BarWindowHeightContext);
-  const { claim, topBar, bottomBar, onChange } = props;
+  const { onChange } = props;
   useAnimatedReaction(
-    () => {
-      const h = height === undefined ? 0 : height.value;
-      // The content's own height is the claim without its two bars; it needs to
-      // compact when that is taller than the live viewport (height − bars).
-      const compact = isCompact(h);
-      const compactContent = needsCompactContent(h, claim - topBar - bottomBar, topBar, bottomBar);
-      return (compact ? 1 : 0) | (compactContent ? 2 : 0);
-    },
+    () => (height !== undefined && isCompact(height.value) ? 1 : 0),
     (next, prev) => {
-      if (next !== prev) runOnJS(onChange)((next & 1) !== 0, (next & 2) !== 0);
+      if (next !== prev) runOnJS(onChange)(next === 1);
     },
-    [height, claim, topBar, bottomBar],
+    [height],
   );
   return null;
 };

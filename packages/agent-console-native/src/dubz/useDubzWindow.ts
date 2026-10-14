@@ -19,7 +19,7 @@ import { saveDubzDefaultHeight } from "./useBarWindow";
  * so it is actually visible in Metro while we debug the window behaviour. */
 const h = (n: number | undefined): string => (n === undefined ? "-" : String(Math.round(n)));
 const logTransition = (routeKey: string, event: DubzWindowEvent, prev: DubzWindowState, next: DubzWindowState): void => {
-  const show = (s: DubzWindowState): string => `${s.phase}/${s.keyboard} def=${h(s.defaultHeight)} act=${h(s.activeHeight)}${s.pinned ? " PIN" : ""} c=${s.compact ? 1 : 0}${s.compactContent ? "/cc" : ""}`;
+  const show = (s: DubzWindowState): string => `${s.phase}/${s.keyboard} def=${h(s.defaultHeight)} act=${h(s.activeHeight)}${s.pinned ? " PIN" : ""} c=${s.compact ? 1 : 0}`;
   console.log(`[dubz] ${routeKey} ${event._tag}: ${show(prev)} → ${show(next)} req=${h(requestedHeightOf(next))}`);
 };
 
