@@ -9,6 +9,8 @@
  * @internal
  */
 import * as React from "react";
+import { StyleSheet, Text } from "react-native";
+import { colors } from "../colors";
 import { Markdown } from "../Markdown";
 import { ReasoningBlock } from "../ReasoningBlock";
 import { ToolCallBubble } from "../ToolCallBubble";
@@ -24,7 +26,20 @@ export const MessageParts = (props: { readonly parts: ReadonlyArray<ChatPart>; r
           return <ReasoningBlock key={part.id} part={part} />;
         case "tool":
           return <ToolCallBubble key={part.id} part={part} />;
+        case "error":
+          return (
+            <Text key={part.id} style={styles.error}>
+              {part.text}
+            </Text>
+          );
       }
     })}
   </>
 );
+
+const styles = StyleSheet.create({
+  error: {
+    color: colors.destructive,
+    fontSize: 15,
+  },
+});

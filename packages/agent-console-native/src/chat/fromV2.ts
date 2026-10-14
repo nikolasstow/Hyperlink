@@ -93,8 +93,18 @@ const viewOf = (message: SessionMessage.Info): ChatMessage | undefined => {
     case "system":
     case "skill":
     case "compaction":
-    case "idle":
       return undefined;
+    case "idle":
+      // A turn that failed says why; one that ended well or was stopped
+      // shows nothing of its own.
+      return message.outcome !== "failed"
+        ? undefined
+        : {
+            id: message.id,
+            role: "assistant",
+            parts: [{ kind: "error", id: `${message.id}:error`, text: message.error?.message ?? "The agent could not answer." }],
+            time: { created: ms(message.time.created), completed: ms(message.time.created) },
+          };
   }
 };
 

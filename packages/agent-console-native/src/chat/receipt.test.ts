@@ -25,6 +25,11 @@ describe("latestReceipt", () => {
     expect(latestReceipt(messages, undefined)).toEqual({ messageID: "new", receipt: { kind: "delivered", at: 1_000_000_000_000 } });
   });
 
+  it("is Failed when the agent could not answer it", () => {
+    const failed: ChatMessage = { id: "e", role: "assistant", parts: [{ kind: "error", id: "e:error", text: "Model unavailable" }], time: { created: 1_700_000_000_000 } };
+    expect(latestReceipt([user("m"), failed], undefined)?.receipt).toEqual({ kind: "failed" });
+  });
+
   it("takes seconds as seconds", () => {
     expect(latestReceipt([user("m"), assistant("a", 1_700_000_000)], undefined)?.receipt).toEqual({ kind: "read", at: 1_700_000_000_000 });
   });

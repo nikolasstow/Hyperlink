@@ -3,7 +3,7 @@
  * message saying how far it got. Sending… while it waits in the outbox, Not
  * Delivered when the server refused it (the lane is held on it), Delivered
  * with the time once the server has it, Read with the time once the agent answered it (its
- * first answer after it began).
+ * first answer after it began), Failed when the agent could not answer it.
  *
  * @internal
  */
@@ -14,7 +14,8 @@ export type Receipt =
   | { readonly kind: "sending" }
   | { readonly kind: "notDelivered" }
   | { readonly kind: "delivered"; readonly at: number | undefined }
-  | { readonly kind: "read"; readonly at: number };
+  | { readonly kind: "read"; readonly at: number }
+  | { readonly kind: "failed" };
 
 /** The receipt for your latest message, and which message that is. */
 export interface LatestReceipt {
@@ -28,6 +29,7 @@ export const latestReceipt = (messages: ReadonlyArray<ChatMessage>, heldID: stri
   if (mine === undefined) return undefined;
   if (mine.queued === true) return { messageID: mine.id, receipt: mine.id === heldID ? { kind: "notDelivered" } : { kind: "sending" } };
   const answer = messages.slice(index + 1).find((message) => message.role === "assistant" && message.time !== undefined);
+  if (answer !== undefined && answer.parts.length > 0 && answer.parts.every((part) => part.kind === "error")) return { messageID: mine.id, receipt: { kind: "failed" } };
   return {
     messageID: mine.id,
     receipt:

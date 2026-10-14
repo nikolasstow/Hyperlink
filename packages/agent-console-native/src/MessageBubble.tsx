@@ -138,12 +138,14 @@ const DateHeader = (props: { readonly at: number }): React.ReactElement => {
 
 const ReceiptLine = (props: { readonly receipt: Receipt }): React.ReactElement => {
   const textColors = useTextColors();
-  const color = { color: props.receipt.kind === "notDelivered" ? colors.destructive : textColors.secondaryLabel };
+  const color = { color: props.receipt.kind === "notDelivered" || props.receipt.kind === "failed" ? colors.destructive : textColors.secondaryLabel };
   switch (props.receipt.kind) {
     case "sending":
       return <Text style={[styles.receipt, color]}>Sending…</Text>;
     case "notDelivered":
       return <Text style={[styles.receipt, styles.receiptState, color]}>Not Delivered</Text>;
+    case "failed":
+      return <Text style={[styles.receipt, styles.receiptState, color]}>Failed</Text>;
     case "delivered":
       return (
         <Text style={[styles.receipt, color]} numberOfLines={1}>
