@@ -8,7 +8,6 @@
  * @internal
  */
 import * as React from "react";
-import { authedFetch } from "./auth/serverTokens";
 import type { Catalog } from "./models/ModelCatalog";
 import { catalogNow, hasOwnCatalog, refreshCatalog, useCatalog } from "./models/useModelCatalog";
 
@@ -72,17 +71,9 @@ export const getDefaultModel = (directory: string | undefined): ModelOption | un
   return provider === undefined || modelID === undefined ? undefined : findModel(optionsOf(catalog), provider.id, modelID);
 };
 
-/**
- * Has the server fetch the models.dev catalog now and rebuild its model lists
- * from it (`POST /provider/refresh`, from our opencode patch), then loads the
- * folder's list afresh. Throws when the server can't refresh, so the caller
- * can say so.
- */
-export const reloadModels = async (address: string, directory: string | undefined): Promise<void> => {
-  const response = await authedFetch(`${address}/provider/refresh`, { method: "POST" });
-  if (!response.ok) throw new Error(`Model refresh failed: HTTP ${response.status} ${await response.text()}`);
-  await refreshCatalog(directory);
-};
+/** Loads the folder's model list afresh (opencode v2 keeps its own catalog
+ * current; it has no refresh to ask for). A failure is logged (ModelCatalog). */
+export const reloadModels = (directory: string | undefined): Promise<void> => refreshCatalog(directory);
 
 export const findModel = (
   options: ReadonlyArray<ModelOption>,

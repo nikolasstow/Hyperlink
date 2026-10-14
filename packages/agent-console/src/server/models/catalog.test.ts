@@ -8,19 +8,27 @@ import { modelsRoute } from "./catalog";
 const UPSTREAM_PORT = 6100 + Math.floor(Math.random() * 100);
 const asked: Array<string> = [];
 
-/** A stand-in for opencode's /config/providers: with keys, as the real one. */
+const model = (providerID: string, id: string, name: string, enabled = true) => ({ id, modelID: id, providerID, name, enabled, settings: { apiKey: "sk-secret" } });
+
+/** A stand-in for opencode v2's provider and model routes: with keys, as the real one. */
 const upstream = createServer((request: IncomingMessage, response: ServerResponse) => {
   asked.push(request.url ?? "");
+  const path = new URL(request.url ?? "/", "http://localhost").pathname;
+  const body =
+    path === "/api/provider"
+      ? { data: [{ id: "deepseek", name: "DeepSeek", settings: { apiKey: "sk-secret" } }, { id: "opencode", name: "OpenCode" }, { id: "idle", name: "No models" }] }
+      : path === "/api/model"
+        ? {
+            data: [
+              model("deepseek", "deepseek-v4-pro", "DeepSeek V4 Pro"),
+              model("opencode", "big-pickle", "Big Pickle"),
+              model("opencode", "old", "Old", false),
+              model("opencode", "fable", "Fable"),
+            ],
+          }
+        : { data: model("opencode", "big-pickle", "Big Pickle") };
   response.writeHead(200, { "content-type": "application/json" });
-  response.end(
-    JSON.stringify({
-      providers: [
-        { id: "deepseek", name: "DeepSeek", key: "sk-secret", options: { apiKey: "sk-secret" }, models: { "deepseek-v4-pro": { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro", cost: {} } } },
-        { id: "opencode", name: "OpenCode", key: "sk-other", models: { "big-pickle": { id: "big-pickle", name: "Big Pickle" }, fable: { id: "fable", name: "Fable" } } },
-      ],
-      default: { deepseek: "deepseek-v4-pro", opencode: "big-pickle" },
-    }),
-  );
+  response.end(JSON.stringify({ location: { directory: "/repo a" }, ...body }));
 });
 
 beforeAll(async () => {
@@ -34,7 +42,7 @@ afterAll(() => {
 });
 
 describe("GET /models", () => {
-  it("streams each configured provider a line, the defaults last, and no keys", async () => {
+  it("streams each provider with enabled models a line, the default last, and no keys", async () => {
     const { handler, dispose } = HttpRouter.toWebHandler(modelsRoute, { disableLogger: true });
     // The route takes its HTTP client per request, as the server provides it.
     const context = await Effect.runPromise(Layer.build(FetchHttpClient.layer).pipe(Effect.scoped));
@@ -49,7 +57,8 @@ describe("GET /models", () => {
         .map((line) => Schema.decodeUnknownSync(Schema.fromJsonString(Models.Line))(line));
       expect(lines.map((line) => (line._tag === "Provider" ? line.provider.id : "defaults"))).toEqual(["deepseek", "opencode", "defaults"]);
       expect(lines[1]).toEqual({ _tag: "Provider", provider: { id: "opencode", name: "OpenCode", models: [{ id: "big-pickle", name: "Big Pickle" }, { id: "fable", name: "Fable" }] } });
-      expect(asked.at(-1)).toBe("/config/providers?directory=%2Frepo%20a");
+      expect(lines.at(-1)).toEqual({ _tag: "Defaults", defaults: { opencode: "big-pickle" } });
+      expect([...asked].sort()).toEqual(["/api/model", "/api/model/default", "/api/provider"].map((path) => `${path}?location%5Bdirectory%5D=%2Frepo+a`).sort());
     } finally {
       await dispose();
     }

@@ -36,7 +36,6 @@ import * as React from "react";
 import { Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { useAppContext } from "./AppContext";
 import { useAgentButtonVisible } from "./agentButtonSettings";
 import { type BarGeometry, INPUT_LINE_HEIGHT, INPUT_PADDING_VERTICAL, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT, setBarOpen, setInputHeight, useBarGeometry } from "./barGeometry";
 import { type BarTopSection, BottomBar } from "./BottomBar";
@@ -81,7 +80,6 @@ export const Composer = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { address } = useAppContext();
   const routeKey = useRoute().key;
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
@@ -176,7 +174,7 @@ export const Composer = (props: {
     [pickModel, closeModels],
   );
   const directory = props.directory;
-  const refreshCatalog = React.useCallback(() => reloadModels(address, directory), [address, directory]);
+  const refreshCatalog = React.useCallback(() => reloadModels(directory), [directory]);
 
   // The input sizes itself to its text (one line to MAX_INPUT_HEIGHT, then it
   // scrolls); its section follows, animated, by the height Yoga gave it. Not
