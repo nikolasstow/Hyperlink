@@ -55,6 +55,18 @@ describe("dubzWindowMachine", () => {
     expect(requestedHeightOf(shorter)).toBe(DEFAULT);
   });
 
+  it("layoutChanged sets the compact flags, dedups, and resets on close", () => {
+    const open = run(start, { _tag: "openRequested" }, { _tag: "layoutChanged", compact: true, compactContent: true });
+    expect(open.compact).toBe(true);
+    expect(open.compactContent).toBe(true);
+    // Dedup: the same flags return the same state object.
+    expect(run(open, { _tag: "layoutChanged", compact: true, compactContent: true })).toBe(open);
+    // Close resets the display mode.
+    const closed = run(open, { _tag: "closeRequested", reason: "dismiss" });
+    expect(closed.compact).toBe(false);
+    expect(closed.compactContent).toBe(false);
+  });
+
   it("a component height change reruns the calculation, and deactivation returns to the default", () => {
     const active = run(start, { _tag: "openRequested" }, { _tag: "componentActivated", height: 500 });
     const grown = run(active, { _tag: "componentHeightChanged", height: 650 });

@@ -44,6 +44,16 @@ const KEEP_CONNECTION = Duration.seconds(30);
 /** Between attempts to follow a file again after its stream failed. */
 const REFOLLOW = Schedule.spaced(Duration.seconds(2));
 
+/** `[live]` debug logging is very chatty — several lines per file event — and
+ * each console.log crosses the RN bridge, which stalls JS under load (a retry
+ * storm over a large follow scope logs thousands of lines). Off by default;
+ * flip to trace a sync issue. The real fix for the storm (not following huge /
+ * unopened trees) is in the follow scope — see docs/handoffs/live-file-sync.md. */
+const LIVE_LOG = false;
+const liveLog = (...args: ReadonlyArray<unknown>): void => {
+  if (LIVE_LOG) console.log(...args);
+};
+
 /** Raised to follow a file again: the hub's changes skipped a version. */
 class OutOfStep extends Data.TaggedError("OutOfStep")<{
   readonly path: string;
@@ -58,7 +68,7 @@ const socketUrl = (api: string): string => `${api.replace(/^http/, "ws")}${FileS
 const connect = (api: string) =>
   Effect.gen(function* () {
     // DIAG(live-files): temporary.
-    yield* Effect.sync(() => console.log("[live] connect", socketUrl(api)));
+    yield* Effect.sync(() => liveLog("[live] connect", socketUrl(api)));
     const protocol = yield* Layer.build(
       RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
         Layer.provide(Socket.layerWebSocket(socketUrl(api))),
@@ -140,7 +150,7 @@ const make = Effect.gen(function* () {
       if (Option.isNone(start)) return;
       const { file, changes } = start.value;
       // DIAG(live-files): temporary — every write, and what it sends.
-      yield* Effect.sync(() => console.log("[live] writing", path.split("/").pop(), "base v", file.version, JSON.stringify(changes)));
+      yield* Effect.sync(() => liveLog("[live] writing", path.split("/").pop(), "base v", file.version, JSON.stringify(changes)));
       const result = yield* connection(api).pipe(
         Effect.flatMap((client) =>
           client.Write(
@@ -181,13 +191,13 @@ const make = Effect.gen(function* () {
   const receive = (path: string, event: FileSync.FileEvent) =>
     Effect.gen(function* () {
       // DIAG(live-files): temporary.
-      yield* Effect.sync(() => console.log("[live] event", path, event._tag));
+      yield* Effect.sync(() => liveLog("[live] event", path, event._tag));
       const current = yield* fileOf(path);
       if (event instanceof FileSync.Synced) {
         // DIAG(live-files): temporary.
-        yield* Effect.sync(() => console.log("[live] reading kept copy", path.split("/").pop()));
+        yield* Effect.sync(() => liveLog("[live] reading kept copy", path.split("/").pop()));
         const kept = Option.isSome(current) ? nothingKept : yield* keptOnDevice(path);
-        yield* Effect.sync(() => console.log("[live] kept copy read", path.split("/").pop(), kept.base?.length, kept.edit?.length));
+        yield* Effect.sync(() => liveLog("[live] kept copy read", path.split("/").pop(), kept.base?.length, kept.edit?.length));
         const received = LiveFile.synced(Option.getOrUndefined(current), kept, event);
         yield* put(path, received.file, received.editor);
         yield* SubscriptionRef.update(problems, HashMap.remove(path));
@@ -206,28 +216,28 @@ const make = Effect.gen(function* () {
       if (received === undefined) return yield* new OutOfStep({ path });
       // DIAG(live-files): temporary — did our edits clash with it?
       yield* Effect.sync(() =>
-        console.log("[live] change folded", path.split("/").pop(), "had edits", current.value.text !== current.value.base, "conflicts", received.file.conflicts.length),
+        liveLog("[live] change folded", path.split("/").pop(), "had edits", current.value.text !== current.value.base, "conflicts", received.file.conflicts.length),
       );
       yield* put(path, received.file, received.editor);
     }).pipe(
       Semaphore.withPermits(lock, 1),
       // DIAG(live-files): temporary.
-      Effect.tap(() => Effect.sync(() => console.log("[live] handled", path.split("/").pop(), event._tag))),
+      Effect.tap(() => Effect.sync(() => liveLog("[live] handled", path.split("/").pop(), event._tag))),
       Effect.andThen(writeIfWanted(path)),
     );
 
   const followOn = (api: string, path: string) =>
-    Effect.sync(() => console.log("[live] following", api, path)).pipe(
+    Effect.sync(() => liveLog("[live] following", api, path)).pipe(
       Effect.andThen(connection(api)),
       Effect.flatMap((client) =>
         client.Follow({ path }).pipe(
           // DIAG(live-files): temporary — arrival, before waiting for the lock.
-          Stream.tap((event) => Effect.sync(() => console.log("[live] arrived", path.split("/").pop(), event._tag))),
+          Stream.tap((event) => Effect.sync(() => liveLog("[live] arrived", path.split("/").pop(), event._tag))),
           Stream.runForEach((event) => receive(path, event)),
         ),
       ),
       Effect.scoped,
-      Effect.tapError((error) => Effect.sync(() => console.log("[live] follow failed", path, String(error)))),
+      Effect.tapError((error) => Effect.sync(() => liveLog("[live] follow failed", path, String(error)))),
       Effect.tapError((error) =>
         SubscriptionRef.update(problems, HashMap.set(path, error._tag === "FileSyncError" ? error.reason : error._tag === "OutOfStep" ? "Io" : "Unreachable")).pipe(
           Effect.andThen(Effect.logWarning(`live files: following ${path} stopped; following again`, error)),

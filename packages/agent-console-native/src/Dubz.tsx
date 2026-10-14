@@ -32,7 +32,8 @@ import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
-import { DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DubzCompactSync } from "./dubz/DubzCompactSync";
+import { DUBZ_BOTTOM_BAR, DUBZ_TOP_BAR, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -217,6 +218,14 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     (height: number | undefined) => dispatch(height === undefined ? { _tag: "componentDeactivated" } : { _tag: "componentActivated", height }),
     [dispatch],
   );
+  // The compact display mode, from the live height (DubzCompactSync reports it).
+  const onLayoutChanged = React.useCallback(
+    (compact: boolean, compactContent: boolean) => dispatch({ _tag: "layoutChanged", compact, compactContent }),
+    [dispatch],
+  );
+  // compactContent (the left-gap trigger) is stored in the coordinator; the
+  // gap layout consumes it in the next slice. Only `compact` is read here.
+  const compact = winState.compact;
 
   // Tapping the session row pushes a placeholder page in over the window (main
   // row slides left, page slides in from the right — SwiftUI's own animation,
@@ -389,6 +398,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         // What Dubz suggests: its contents sit at the bottom, on the pill's
         // top, and never move; the window's top only reveals or hides them.
         <>
+          {/* Watches the live height and reports the compact display mode to the
+           * coordinator (renders nothing). The claim it compares against is the
+           * requested height. */}
+          <DubzCompactSync claim={requestedHeight} topBar={DUBZ_TOP_BAR} bottomBar={DUBZ_BOTTOM_BAR} onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
           <View style={styles.mainArea} pointerEvents={sub === undefined ? "box-none" : "none"}>
@@ -404,7 +417,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
            * slide-out, then unmounted. */}
           {sub?.kind === "session" ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-              <DubzSessionPage session={sub.session} onFullScreen={fullScreen} shifted={shifted} />
+              <DubzSessionPage session={sub.session} onFullScreen={fullScreen} shifted={shifted} compact={compact} />
             </View>
           ) : sub?.kind === "list" ? (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">

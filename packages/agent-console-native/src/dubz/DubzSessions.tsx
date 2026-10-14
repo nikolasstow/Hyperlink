@@ -88,18 +88,22 @@ const TITLE_PILL_MIN = 56;
 /** The floating composer pill's space at the window's bottom: the pill, its
  * inset (BarWindow COMPOSER_INSET), and a gap. */
 export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
-/** The window height that shows `rows` suggestion rows above the floating pill:
- * the pill area, a gap, the rows (each PILL tall, GAP between them), and the
- * grab handle's clearance at the top (so the grabber has room). */
+/** Dubz's own top controls (back / title / trailing) and bottom composer pill —
+ * what the compact math removes from the content viewport, and what the active
+ * claim reserves so the buttons sit above the content when not compact. */
+export const DUBZ_TOP_BAR = TOP_INSET + PILL + GAP;
+export const DUBZ_BOTTOM_BAR = PILL_AREA;
+/** The active claim: a window tall enough to show `rows` rows with the top
+ * controls on their own row above and the composer pill below. */
 export const suggestionAreaHeight = (rows: number): number =>
-  PILL_AREA + GAP + (rows * PILL + Math.max(rows - 1, 0) * GAP) + HANDLE_CLEARANCE;
-/** One suggestion row: the Dubz "drag-anywhere" low anchor, and the window's
- * default before the user has ever dragged it. */
-export const SINGLE_SUGGESTION_HEIGHT = suggestionAreaHeight(1);
+  DUBZ_BOTTOM_BAR + GAP + (rows * PILL + Math.max(rows - 1, 0) * GAP) + DUBZ_TOP_BAR;
+/** The free-drag min / default: one row with only the grab handle's clearance at
+ * the top (compact sizing — the top controls overlay, they do not get a row). */
+export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL + HANDLE_CLEARANCE;
 /** Scroll content clears the overlaid header at the top, and the floating
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
-const HEADER_CLEARANCE = TOP_INSET + PILL + GAP;
-const BOTTOM_CLEARANCE = PILL_AREA;
+const HEADER_CLEARANCE = DUBZ_TOP_BAR;
+const BOTTOM_CLEARANCE = DUBZ_BOTTOM_BAR;
 /** Stable empty transcript, so the live chat's memo keeps its reference. */
 const NO_MESSAGES: ReadonlyArray<ChatMessage> = [];
 
@@ -448,6 +452,9 @@ export const DubzSessionPage = (props: {
   readonly session: DubzOpenSession;
   readonly onFullScreen: () => void;
   readonly shifted?: boolean;
+  /** Compact: no room for the full top row, so the right (full-screen) button
+   * is hidden. */
+  readonly compact?: boolean;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
   const { client, address } = useAppContext();
@@ -501,7 +508,7 @@ export const DubzSessionPage = (props: {
   const messages = nextPending.length === 0 ? delivered : [...delivered, ...nextPending];
 
   return (
-    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={<GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
+    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={props.compact === true ? undefined : <GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
       {messages.map((message) => (
         <ChatBubble key={message.id} message={message} width={pageWidth} />
       ))}
