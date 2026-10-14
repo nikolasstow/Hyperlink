@@ -46,6 +46,9 @@ import { Outbox } from "../outbox/Outbox";
 import { Reachability } from "../outbox/Reachability";
 import { KeptNav } from "../navigation/KeptNav";
 import { layer as asyncStorageLayer } from "./asyncStorage";
+import { authedFetch } from "../auth/serverTokens";
+import { ServerAuth } from "../auth/ServerAuth";
+import { layer as secretStoreLayer } from "../auth/secretStoreNative";
 import { layer as deviceSignalsLayer } from "./deviceSignalsNative";
 
 const OUTBOX_STORAGE_PREFIX = "agent-console-native:outbox:";
@@ -60,7 +63,12 @@ const NAV_STORAGE_PREFIX = "agent-console-native:nav:";
 const FAVORITES_STORAGE_PREFIX = "agent-console-native:favorites:";
 const BAR_WINDOW_STORAGE_PREFIX = "agent-console-native:barWindow:";
 
-const platform = Layer.mergeAll(FetchHttpClient.layer, deviceSignalsLayer, foldersLayer);
+const AUTH_STORAGE_PREFIX = "agent-console-native:auth:";
+
+// Every Effect HTTP request goes through `authedFetch`: a paired server's
+// requests carry its token (auth/serverTokens.ts).
+const httpClient = FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch)(authedFetch)));
+const platform = Layer.mergeAll(httpClient, deviceSignalsLayer, foldersLayer);
 
 const AppLayer = Layer.mergeAll(
   Outbox.layer,
@@ -75,6 +83,7 @@ const AppLayer = Layer.mergeAll(
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
   BarWindowStore.layer.pipe(Layer.provide(asyncStorageLayer(BAR_WINDOW_STORAGE_PREFIX))),
   LiveFiles.layer,
+  ServerAuth.layer.pipe(Layer.provide([asyncStorageLayer(AUTH_STORAGE_PREFIX), secretStoreLayer])),
 ).pipe(
   Layer.provideMerge(Reachability.layer),
   Layer.provideMerge(Opencode.layer),

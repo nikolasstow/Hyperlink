@@ -1,10 +1,13 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
-import { AppState, Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, Button, Linking, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider, useAppContext } from "./src/AppContext";
 import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
+import { type PairingLink, parsePairingLink } from "./src/auth/pairingLink";
+import { pairWithServer, serverAuthReadBack } from "./src/auth/useServerAuth";
+import { deviceInfo } from "./src/deviceName";
 import { conversationsReadBack } from "./src/conversations/useConversations";
 import { homeLayoutReadBack } from "./src/home/useHomeLayout";
 import { keptThemesReadBack } from "./src/useCodeTheme";
@@ -53,7 +56,10 @@ type Screen =
   | { readonly step: "server-setup"; readonly error?: string }
   | { readonly step: "connecting"; readonly server: string }
   | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly server: string; readonly error?: string }
-  | { readonly step: "ready"; readonly client: OpencodeClient; readonly server: string; readonly rootDir: string };
+  | { readonly step: "ready"; readonly client: OpencodeClient; readonly server: string; readonly rootDir: string }
+  // A pairing link opened the app (auth/pairingLink.ts): asks before it
+  // pairs, and goes back to where it was on Cancel.
+  | { readonly step: "pair"; readonly link: PairingLink; readonly previous: Screen; readonly busy: boolean; readonly error?: string };
 
 /** The longest the launch waits for the device's stores to be read back. */
 const READ_BACK_WAIT_MS = 1000;
@@ -69,7 +75,10 @@ const connectToServer = async (server: string): Promise<OpencodeClient> => {
   const timedOut = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(`No answer from "${server}". Is the agent-console server running there?`)), CONNECT_TIMEOUT_MS),
   );
-  const { data, error } = await Promise.race([client.session.list(), timedOut]);
+  const { data, error, response } = await Promise.race([client.session.list(), timedOut]);
+  if (response.status === 401) {
+    throw new Error(`The server at "${server}" asks for this phone to be paired. Run pnpm pair on the Mac, then open its link, or type its code below.`);
+  }
   if (error !== undefined || data === undefined) {
     const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : undefined;
     throw new Error(message ?? `Couldn't reach opencode through the server at "${server}".`);
@@ -84,6 +93,7 @@ const AppInner = (): React.ReactElement => {
   const [screen, setScreen] = React.useState<Screen>({ step: "loading" });
   const [addressInput, setAddressInput] = React.useState("");
   const [rootDirInput, setRootDirInput] = React.useState("");
+  const [pairingCodeInput, setPairingCodeInput] = React.useState("");
   const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
@@ -101,6 +111,8 @@ const AppInner = (): React.ReactElement => {
         Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack, fileScrollsReadBack, extensionViewsReadBack]),
         new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS)),
       ]);
+      // The paired servers' tokens, before the first request to one.
+      await Promise.race([serverAuthReadBack, new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS))]);
       primeDefaultPermissionMode(await getDefaultPermissionMode());
       primeSessionPermissionModes(await getSessionPermissionModes());
       const savedAddress = await getServerAddress();
@@ -129,9 +141,8 @@ const AppInner = (): React.ReactElement => {
     })();
   }, []);
 
-  const onSubmitServer = (): void => {
-    const address = addressInput.trim();
-    if (address.length === 0) return;
+  /** Connects to `address` and goes on to the app (or to choosing a root). */
+  const connectTo = (address: string): void => {
     setScreen({ step: "connecting", server: address });
     connectToServer(address)
       .then(async (client) => {
@@ -146,6 +157,47 @@ const AppInner = (): React.ReactElement => {
       })
       .catch((err: unknown) => setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) }));
   };
+
+  const onSubmitServer = (): void => {
+    const address = addressInput.trim();
+    if (address.length === 0) return;
+    const code = pairingCodeInput.trim();
+    if (code.length === 0) {
+      connectTo(address);
+      return;
+    }
+    // A code typed with the address: pair first, then connect.
+    setScreen({ step: "connecting", server: address });
+    pairWithServer([normalizeServerAddress(address)], code, deviceInfo().name)
+      .then((origin) => {
+        setPairingCodeInput("");
+        connectTo(origin);
+      })
+      .catch((err: unknown) => setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) }));
+  };
+
+  /** Pairs as the open pairing link says, then connects to that server. */
+  const onPair = (pairing: Extract<Screen, { readonly step: "pair" }>): void => {
+    setScreen({ ...pairing, busy: true, error: undefined });
+    pairWithServer(pairing.link.urls, pairing.link.code, deviceInfo().name)
+      .then((origin) => {
+        setAddressInput(origin);
+        connectTo(origin);
+      })
+      .catch((err: unknown) => setScreen({ ...pairing, busy: false, error: err instanceof Error ? err.message : String(err) }));
+  };
+
+  // A pairing link, whether it launched the app or arrived while it runs.
+  React.useEffect(() => {
+    const open = (url: string | null): void => {
+      const link = url === null ? undefined : parsePairingLink(url);
+      if (link === undefined) return;
+      setScreen((current) => ({ step: "pair", link, previous: current.step === "pair" ? current.previous : current, busy: false }));
+    };
+    void Linking.getInitialURL().then(open);
+    const subscription = Linking.addEventListener("url", ({ url }) => open(url));
+    return () => subscription.remove();
+  }, []);
 
   const onSubmitRootDir = (client: OpencodeClient, server: string): void => {
     const rootDir = rootDirInput.trim();
@@ -173,7 +225,16 @@ const AppInner = (): React.ReactElement => {
   return (
     <View style={styles.root}>
       <StatusBar style="auto" />
-      {screen.step === "loading" || screen.step === "connecting" ? (
+      {screen.step === "pair" ? (
+        <View style={[styles.center, { paddingTop: insets.top }]}>
+          <Text style={styles.title}>Pair this phone?</Text>
+          <Text style={styles.dimText}>With the server at {screen.link.urls[0]}. It gets its own token, kept in this phone’s Keychain.</Text>
+          {screen.link.urls.length > 1 ? <Text style={styles.dimText}>Also tried, in order: {screen.link.urls.slice(1).join(", ")}</Text> : null}
+          {screen.error !== undefined ? <Text style={styles.errorText}>{screen.error}</Text> : null}
+          <Button title={screen.busy ? "Pairing…" : "Pair"} disabled={screen.busy} onPress={() => onPair(screen)} />
+          <Button title="Cancel" disabled={screen.busy} onPress={() => setScreen(screen.previous)} />
+        </View>
+      ) : screen.step === "loading" || screen.step === "connecting" ? (
         // The launch loading view: a minimal navigator whose screen uses Home's
         // SAME shared native header (homeHeader.ts) over the skeleton body, so
         // the header buttons and cards line up exactly with Home. No client, no
@@ -193,6 +254,17 @@ const AppInner = (): React.ReactElement => {
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
+            onSubmitEditing={onSubmitServer}
+          />
+          <Text style={styles.dimText}>Pairing code, if the server asks for one (from pnpm pair on the Mac)</Text>
+          <TextInput
+            style={styles.input}
+            value={pairingCodeInput}
+            onChangeText={setPairingCodeInput}
+            placeholder="ABCD2345"
+            placeholderTextColor={colors.placeholderText}
+            autoCapitalize="characters"
+            autoCorrect={false}
             onSubmitEditing={onSubmitServer}
           />
           <Button title="Connect" onPress={onSubmitServer} />

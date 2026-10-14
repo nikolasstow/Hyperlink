@@ -7,7 +7,7 @@
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeServices } from "@effect/platform-node";
 import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Logger, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
-import { HttpRouter } from "effect/http";
+import { FetchHttpClient, HttpRouter } from "effect/http";
 import { describe, expect, it, vi } from "vitest";
 import { fileSyncLayer } from "../../../agent-console/src/server/files/rpc";
 import { type DeviceSignal, DeviceSignals } from "../effect/DeviceSignals";
@@ -72,7 +72,7 @@ const withHub = <A, E>(
     yield* Layer.launch(HttpRouter.serve(fileSyncLayer).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port: PORT })))).pipe(Effect.forkScoped);
     // Built in this test's scope, so the service lives as long as the test.
     const signals = yield* Queue.unbounded<DeviceSignal>();
-    const services = yield* Layer.build(LiveFiles.layer.pipe(Layer.provide(Layer.succeed(DeviceSignals)({ signals: Stream.fromQueue(signals) }))));
+    const services = yield* Layer.build(LiveFiles.layer.pipe(Layer.provide(Layer.succeed(DeviceSignals)({ signals: Stream.fromQueue(signals) })), Layer.provide(FetchHttpClient.layer)));
     const live = Context.get(services, LiveFiles);
     yield* live.follow(api, new Set([file]));
     yield* until(live, file, (text) => (text === "one\ntwo\nthree\n" ? true : undefined));

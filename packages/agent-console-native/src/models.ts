@@ -8,6 +8,7 @@
 import * as React from "react";
 import { AppState } from "react-native";
 import type { OpencodeClient } from "./client";
+import { authedFetch } from "./auth/serverTokens";
 
 export type ModelOption = {
   readonly providerID: string;
@@ -127,7 +128,7 @@ export const refreshModels = (client: OpencodeClient, directory: string | undefi
  * Throws when the server can't refresh, so the caller can say so.
  */
 export const reloadModels = async (client: OpencodeClient, address: string, directory: string | undefined): Promise<void> => {
-  const response = await fetch(`${address}/provider/refresh`, { method: "POST" });
+  const response = await authedFetch(`${address}/provider/refresh`, { method: "POST" });
   if (!response.ok) throw new Error(`Model refresh failed: HTTP ${response.status} ${await response.text()}`);
   await refreshModels(client, directory);
 };

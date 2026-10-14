@@ -22,6 +22,7 @@ import type { RootStackParamList } from "./RootNavigator";
 import { type Server, serverById } from "./servers";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useScreenBackground, useTextColors, useThemedStyles } from "./theme";
+import { authedFetch } from "./auth/serverTokens";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Server">;
 
@@ -66,7 +67,7 @@ const useHost = (address: string): { readonly host: HostInfo | undefined; readon
   const [offline, setOffline] = React.useState(false);
   React.useEffect(() => {
     let alive = true;
-    void fetch(`http://${address}:${HOST_PORT}/api/host`, { cache: "no-store" })
+    void authedFetch(`http://${address}:${HOST_PORT}/api/host`, { cache: "no-store" })
       .then((response) => response.json())
       .then((data: HostInfo) => {
         if (!alive) return;

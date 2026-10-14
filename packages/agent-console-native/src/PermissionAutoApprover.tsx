@@ -19,6 +19,7 @@ import { AppState } from "react-native";
 import { useAppContext } from "./AppContext";
 import { fetchSessions } from "./sessions/fetchSessions";
 import { asPendingPermission, getPermissionMode, replyToPermission, type PendingPermission } from "./sessionPermissions";
+import { authedFetch } from "./auth/serverTokens";
 
 /** Wait before reconnecting after the stream drops, growing to this cap. */
 const RETRY_MS = 1000;
@@ -37,7 +38,7 @@ const approve = (address: string, pending: PendingPermission): void => {
 /** The asks already pending in a directory (v1: opencode keeps them per
  * directory). */
 const pendingIn = async (address: string, directory: string): Promise<ReadonlyArray<PendingPermission>> => {
-  const response = await fetch(`${address}/permission?directory=${encodeURIComponent(directory)}`);
+  const response = await authedFetch(`${address}/permission?directory=${encodeURIComponent(directory)}`);
   if (!response.ok) throw new Error(`listing permissions in ${directory}: HTTP ${response.status} ${await response.text()}`);
   const body: unknown = await response.json();
   if (!Array.isArray(body)) throw new Error(`listing permissions in ${directory}: not a list`);

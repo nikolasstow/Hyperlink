@@ -8,6 +8,7 @@ import type { OpencodeClient } from "./client";
 import { expandHome } from "./homeDir";
 import { RepoAdminError, runRepoAdmin } from "./repoAdmin";
 import { getRepoTemplate, resolveRepoPath } from "./settings";
+import { authedFetch } from "./auth/serverTokens";
 
 export type ParsedRemote = {
   readonly input: string;
@@ -208,7 +209,7 @@ export const searchGitHubRepos = async (
     `${backendAddress.replace(/\/$/, "")}/github/search/repositories` +
     `?q=${encodeURIComponent(q)}&per_page=8`;
   try {
-    const response = await fetch(url, {
+    const response = await authedFetch(url, {
       headers: { Accept: "application/vnd.github+json" },
     });
     if (!response.ok) return [];
@@ -294,7 +295,7 @@ export const fetchRepoMeta = async (
   if (owner === undefined || owner.length === 0 || name.length === 0) return undefined;
   const base = `${backendAddress.replace(/\/$/, "")}/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
   try {
-    const infoResponse = await fetch(base, {
+    const infoResponse = await authedFetch(base, {
       headers: { Accept: "application/vnd.github+json" },
     });
     if (!infoResponse.ok) return undefined;
@@ -318,7 +319,7 @@ export const fetchRepoMeta = async (
         : [];
     }
 
-    const contentsResponse = await fetch(`${base}/contents`, {
+    const contentsResponse = await authedFetch(`${base}/contents`, {
       headers: { Accept: "application/vnd.github+json" },
     });
     let ruleFiles: ReadonlyArray<string> = [];

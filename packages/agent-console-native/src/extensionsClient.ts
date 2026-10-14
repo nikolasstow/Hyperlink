@@ -13,6 +13,7 @@
  */
 import type { ThemeRegistrationRaw } from "shiki/core";
 import { Schema } from "effect";
+import { authedFetch } from "./auth/serverTokens";
 
 /** A contribution an installed extension provides. */
 export interface ThemeContribution {
@@ -84,7 +85,7 @@ const decodeConfig = Schema.decodeUnknownSync(ConfigSchema);
 export const base = (apiBase: string): string => apiBase.replace(/\/+$/, "");
 
 export const request = async (url: string, init?: RequestInit): Promise<unknown> => {
-  const res = await fetch(url, init);
+  const res = await authedFetch(url, init);
   const text = await res.text();
   if (!res.ok) {
     // The server sends a JSON error ({ reason, detail } or { reason, message });

@@ -22,6 +22,7 @@
  * @internal
  */
 import { setSessionPermissionModes } from "./settings";
+import { authedFetch } from "./auth/serverTokens";
 
 export type PermissionMode = "full" | "ask";
 export type PermissionReply = "once" | "always" | "reject";
@@ -131,7 +132,7 @@ export const replyToPermission = async (
       ? `/permission/${encodeURIComponent(pending.requestID)}/reply?directory=${encodeURIComponent(pending.directory)}`
       : `/api/session/${pending.sessionID}/permission/${pending.requestID}/reply`;
 
-  const response = await fetch(`${address}${path}`, {
+  const response = await authedFetch(`${address}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ reply }),

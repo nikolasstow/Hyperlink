@@ -47,11 +47,27 @@ opencode v2 also requires a password now (see `slash-commands.md`).
 
 Checked end to end on `:5298` against opencode v2 on `:4097`.
 
-## Next: the app
+## Built: app (2026-10-14, eta)
 
-The pairing link needs no native code (the scheme is already registered; React Native's
-`Linking` reads it). The Keychain (`expo-secure-store`) is a new native module, so a build. The
-link opens a confirm screen (which server, its addresses) before redeeming; Add Server also takes
-an address and a code. Keep the token per server. Every request: the token
-on HTTP (the Effect clients, `fetch`, the event streams), a ticket for each WebSocket. A
-devices list in settings with remove.
+- `src/auth/SecretStore.ts` + `secretStoreNative.ts`: the Keychain (`expo-secure-store`,
+  `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`), loaded only when its native module is in the build;
+  an older build reports it unavailable and pairing asks for a new build.
+- `src/auth/ServerAuth.ts`: pairs at the first address that answers `/health`, redeems the code
+  as this phone (`deviceInfo().name`), keeps the token in the Keychain and the paired servers in
+  `KeyValueStore`, reads them back at launch (before the first connection), lists each server's
+  devices (at launch and on return to the foreground) and revokes them.
+- `src/auth/serverTokens.ts`: the tokens by origin, and the only way a request gets one:
+  the Effect clients (`FetchHttpClient.Fetch`), the opencode SDK, `authedFetch` for every plain
+  `fetch`, `authHeaders` for downloads. Unpaired servers get no token and work as before.
+- The file-sync WebSocket asks for a ticket for each connection.
+- `App.tsx`: a pairing link (`<scheme>://pair?code=…&url=…`, `auth/pairingLink.ts`) shows
+  "Pair this phone?" with the server, then pairs and connects; the server setup screen takes a
+  pairing code; a server that answers 401 says to pair.
+- Settings → Paired devices: each device, "This phone", Remove (asks first; removing this phone
+  goes back to choosing a server).
+
+## Rolling out
+
+1. Install the build with the Keychain module.
+2. Restart eta's API server (`:5299`) on this code: it then asks every app for a token.
+3. Claude runs `pnpm pair` there and sends the link in the chat; tap it, then Pair.

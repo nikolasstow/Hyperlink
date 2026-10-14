@@ -10,6 +10,7 @@ import * as React from "react";
 import { Host, Slider } from "@expo/ui/swift-ui";
 import {
   ActivityIndicator,
+  Alert,
   LayoutAnimation,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
+import type { PairedDevice } from "./auth/ServerAuth";
+import { originOf } from "./auth/serverTokens";
+import { revokeDevice, useServerDevices } from "./auth/useServerAuth";
 import { CARD_RADIUS, CardGlass } from "./CardGlass";
 import { DetentSlider } from "../modules/detent-slider";
 import { colors } from "./colors";
@@ -87,6 +91,26 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { server, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
+  const serverOrigin = originOf(server) ?? server;
+  const serverDevices = useServerDevices(serverOrigin);
+  /** Asks, then removes a paired device; removing this phone goes back to choosing a server. */
+  const confirmRemoveDevice = (device: PairedDevice): void => {
+    const isThisPhone = device.id === serverDevices?.thisDevice;
+    Alert.alert(isThisPhone ? "Remove this phone?" : `Remove ${device.name}?`, isThisPhone ? "It stops reaching this server until it is paired again." : "Its token stops working at once.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          revokeDevice(serverOrigin, device.id)
+            .then(() => {
+              if (isThisPhone) onChangeServer();
+            })
+            .catch((error: unknown) => Alert.alert("Could not remove it", error instanceof Error ? error.message : String(error)));
+        },
+      },
+    ]);
+  };
 
   const [rootDirDraft, setRootDirDraft] = React.useState(rootDir);
   const [repoTemplateDraft, setRepoTemplateDraft] = React.useState(DEFAULT_REPO_TEMPLATE);
@@ -441,6 +465,25 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             <Text style={styles.destructiveText}>Change server…</Text>
           </TouchableOpacity>
         </View>
+        {serverDevices === undefined ? null : (
+          <>
+            <Text style={styles.sectionLabel}>Paired devices</Text>
+            <View style={[styles.card, styles.listCard]}>
+              <CardGlass />
+              {serverDevices.devices.map((device, index) => (
+                <View key={device.id} style={[styles.optionRow, index > 0 && styles.optionRowBorder]}>
+                  <Text style={styles.fieldLabel} numberOfLines={1}>
+                    {device.name}
+                    {device.id === serverDevices.thisDevice ? <Text style={styles.hint}>  This phone</Text> : null}
+                  </Text>
+                  <TouchableOpacity activeOpacity={0.6} onPress={() => confirmRemoveDevice(device)}>
+                    <Text style={styles.destructiveText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
         <Text style={styles.sectionLabel}>Notifications</Text>
         <View style={styles.card}>
           <CardGlass />

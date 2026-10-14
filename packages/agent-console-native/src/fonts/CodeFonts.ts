@@ -12,6 +12,7 @@ import { Context, Data, Effect, Layer, Option, Schema, SubscriptionRef } from "e
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { Directory, File, Paths } from "expo-file-system";
 import { canInstallFonts, registerFont, unregisterFont } from "../../modules/code-editor";
+import { authHeaders } from "../auth/serverTokens";
 import type { CustomFont } from "../fontsClient";
 
 const STORE_KEY = "fonts";
@@ -49,7 +50,7 @@ const download = (family: string, address: string) =>
     try: async () => {
       const folder = fontsFolder();
       if (!folder.exists) folder.create({ intermediates: true, idempotent: true });
-      const file = await File.downloadFileAsync(address, new File(folder, fileNameOf(family)), { idempotent: true });
+      const file = await File.downloadFileAsync(address, new File(folder, fileNameOf(family)), { idempotent: true, headers: authHeaders(address) });
       return file.uri;
     },
     catch: (error) => new FontInstallError({ family, reason: `downloading ${address}: ${String(error)}` }),

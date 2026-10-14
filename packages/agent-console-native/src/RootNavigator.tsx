@@ -50,6 +50,7 @@ import { serverById } from "./servers";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
 import { RepoScreen } from "./RepoScreen";
 import { SessionListScreen } from "./SessionListScreen";
+import { authedFetch } from "./auth/serverTokens";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -195,7 +196,7 @@ export const RootNavigator = (): React.ReactElement => {
     let unsubscribe = (): void => {};
     void getBackendAddress(server).then((backend) => {
       unsubscribe = subscribeActivityPushTokens((sessionID, token) => {
-        void fetch(`${backend}/push/activity`, {
+        void authedFetch(`${backend}/push/activity`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ sessionID, token }),

@@ -15,13 +15,14 @@
  */
 import { createOpencodeClient } from "@opencode-ai/sdk/client";
 import { fetch as expoFetch } from "expo/fetch";
+import { authorizeRequest } from "./auth/serverTokens";
 
 import { normalizeServerAddress } from "./opencode/serverAddress";
 
 export { normalizeServerAddress };
 
 export const makeClient = (serverAddress: string) =>
-  createOpencodeClient({ baseUrl: normalizeServerAddress(serverAddress), fetch: (request) => expoFetch(request) });
+  createOpencodeClient({ baseUrl: normalizeServerAddress(serverAddress), fetch: (request) => expoFetch(authorizeRequest(request)) });
 
 export type OpencodeClient = ReturnType<typeof makeClient>;
 
