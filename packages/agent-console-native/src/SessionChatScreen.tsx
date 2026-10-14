@@ -37,7 +37,8 @@ import { removeQueued, retryLane, sendMessage, useLane } from "./outbox/useOutbo
 import { rememberConversation, retitleConversation, useKeptConversation } from "./conversations/useConversations";
 import { cachedSessionTitle } from "./sessionCache";
 import { getSession, interruptSession } from "./sessions/sessionCommands";
-import { replyToAsk, useSessionWatch } from "./sessions/useSessionWatch";
+import { replyToAsk, useSessionTitle, useSessionWatch } from "./sessions/useSessionWatch";
+import { NEW_SESSION_TITLE } from "./sessions/sessionTitle";
 import type { Permission } from "./opencode/schema/permission";
 import { getPermissionMode } from "./sessionPermissions";
 import { AGENT } from "./agentConstants";
@@ -273,10 +274,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     setSelected((current) => (current.includes(file.path) ? current.filter((path) => path !== file.path) : [file.path, ...current]));
     setOrderVersion((version) => version + 1);
   };
-  // Its title from the first frame: kept with the conversation, or from the
-  // session list read this launch; renamed here, the new one.
+  // Its title from the first frame: renamed here, else as named live (v2
+  // names it a moment after the first message), else kept with the
+  // conversation or from the session list; never blank (the placeholder).
   const [renamed, setRenamed] = React.useState<string | undefined>(undefined);
-  const title = renamed ?? kept?.title ?? cachedSessionTitle(sessionID);
+  const title = useSessionTitle(server, sessionID, renamed ?? kept?.title ?? cachedSessionTitle(sessionID));
   // Newest-first — paired with `inverted` below, which should anchor the
   // list to the newest message on its own. In practice it wasn't sticking
   // reliably, so this still explicitly re-pins to `offset: 0` (an
@@ -336,7 +338,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         sessionID,
         repo: "",
         worktree: "",
-        title: title ?? "Session",
+        title,
         action: "Working…",
       });
     }
@@ -354,7 +356,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
 
   // Rename via the shared action; apply the new title locally on success.
   const renameSession = React.useCallback(() => {
-    promptRenameSession(server, sessionID, title ?? "", (next) => {
+    // The placeholder is not a name to edit.
+    promptRenameSession(server, sessionID, title === NEW_SESSION_TITLE ? "" : title, (next) => {
       setRenamed(next);
       retitleConversation(server, sessionID, next).catch((error: unknown) => console.error("[conversations] keeping the new title failed", error));
     });
@@ -367,7 +370,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     props.navigation.setOptions({
       // The id while its name is not on the device (opened from a notification
       // before the session list is read, a subagent's session).
-      headerTitle: () => <SessionHeaderTitle title={title ?? sessionID} connected={connected} />,
+      headerTitle: () => <SessionHeaderTitle title={title} connected={connected} />,
       unstable_headerRightItems: () => [
         {
           type: "menu",
@@ -445,7 +448,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       sessionID,
       repo: "",
       worktree: "",
-      title: title ?? "Session",
+      title,
       action: "Working…",
     });
     const id = SessionMessage.ID.create();

@@ -5,21 +5,29 @@
  * (text and reasoning as they are written, a tool's input as it streams, a
  * tool's progress) applied as opencode's own client applies them.
  *
+ * Your messages are not the updater's: the server writes them when their
+ * inbox item is delivered (core/session/projector.ts). The projection does
+ * the same: it keeps what was enqueued (with its text) and adds the message
+ * on `session.inbox.delivered`.
+ *
  * A message an event changes is replaced (the updater works on an immer
  * draft); every other keeps its object, so a view cached per message
  * (fromV2.ts) is reused.
  *
  * @internal
  */
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 import { produce } from "immer";
 import { type Adapter, update } from "../opencode/core/message-updater";
 import type { SessionEvent } from "../opencode/schema/session-event";
+import type { SessionInbox } from "../opencode/schema/session-inbox";
 import type { SessionMessage } from "../opencode/schema/session-message";
 
 /** The list the projection keeps (replaced, never changed in place). */
 export interface Projection {
   messages: ReadonlyArray<SessionMessage.Info>;
+  /** Enqueued and not yet delivered, by inbox id (the message's id). */
+  inbox: Map<string, SessionInbox.Item>;
 }
 
 const replace = (projection: Projection, next: SessionMessage.Info): void => {
@@ -59,8 +67,50 @@ const adapterOf = (projection: Projection): Adapter => ({
     }),
 });
 
+/** The message a delivered inbox item becomes, as the server writes it. */
+const deliveredMessage = (id: SessionMessage.ID, item: SessionInbox.Item, created: number): SessionMessage.Info | undefined => {
+  const time = { created: DateTime.makeUnsafe(created) };
+  switch (item.type) {
+    case "user":
+      return {
+        id,
+        type: "user",
+        metadata: item.payload.metadata,
+        text: item.payload.text,
+        files: item.payload.files,
+        agents: item.payload.agents,
+        skills: item.payload.skills,
+        time,
+      };
+    case "synthetic":
+      return { id, type: "synthetic", metadata: item.payload.metadata, text: item.payload.text, description: item.payload.description, time };
+    case "compaction":
+    case "move":
+      return undefined;
+  }
+};
+
 /** Applies a durable event: what the server does with it. */
-export const applyDurable = (projection: Projection, event: SessionEvent.DurableEvent): Effect.Effect<void> => update(adapterOf(projection), event);
+export const applyDurable = (projection: Projection, event: SessionEvent.DurableEvent): Effect.Effect<void> =>
+  Effect.suspend(() => {
+    switch (event.type) {
+      case "session.inbox.enqueued":
+        projection.inbox.set(event.data.inboxID, event.data.item);
+        return Effect.void;
+      case "session.inbox.cancelled":
+        projection.inbox.delete(event.data.inboxID);
+        return Effect.void;
+      case "session.inbox.delivered": {
+        const item = projection.inbox.get(event.data.inboxID);
+        projection.inbox.delete(event.data.inboxID);
+        const message = item === undefined ? undefined : deliveredMessage(event.data.inboxID, item, event.created);
+        if (message !== undefined && !projection.messages.some((known) => known.id === message.id)) projection.messages = [...projection.messages, message];
+        return Effect.void;
+      }
+      default:
+        return update(adapterOf(projection), event);
+    }
+  });
 
 /** The ephemeral events the chat shows as they come. */
 export type Streaming = Extract<

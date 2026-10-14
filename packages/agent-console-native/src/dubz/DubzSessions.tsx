@@ -50,7 +50,7 @@ import type { SessionSummary } from "../sessions/sessionList";
 import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
 import { PILL_FONT_SIZE, PILL_PAD_H, titlePillWidth } from "../titlePillStyle";
-import { useSessionWatch } from "../sessions/useSessionWatch";
+import { useSessionTitle, useSessionWatch } from "../sessions/useSessionWatch";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { groupSessions } from "./groupSessions";
 import { sessionsForFile } from "./sessionsForFile";
@@ -188,7 +188,7 @@ export const DubzSessionArea = (props: {
         onTapGesture(() => props.onOpen(toOpen(session))),
       ]}
     >
-      <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{session.title}</UIText>
+      <PillTitle sessionID={session.id} known={session.title} />
     </HStack>
   );
 
@@ -308,6 +308,15 @@ const GlassIconButton = (props: { readonly systemName: React.ComponentProps<type
 };
 
 /** A section header in the grouped list (Unread / Today / N days ago …). */
+/** A session pill's title, as it is now (named a moment after the first
+ * message). */
+const PillTitle = (props: { readonly sessionID: string; readonly known: string }): React.ReactElement => {
+  const textColors = useTextColors();
+  const { address } = useAppContext();
+  const title = useSessionTitle(serverAddressOf(address), props.sessionID, props.known);
+  return <UIText modifiers={[font({ size: 16, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>{title}</UIText>;
+};
+
 const SectionHeader = (props: { readonly title: string }): React.ReactElement => {
   const textColors = useTextColors();
   return (
@@ -465,6 +474,7 @@ export const DubzSessionPage = (props: {
   const server = React.useMemo(() => serverAddressOf(address), [address]);
   const session = React.useMemo(() => SessionID.make(props.session.id), [props.session.id]);
   const kept = useKeptConversation(server, props.session.id);
+  const title = useSessionTitle(server, props.session.id, props.session.title);
   const live = useV2Transcript(server, session, enabled);
   const delivered = live ?? kept?.messages ?? NO_MESSAGES;
   const lane = useLane(server, session);
@@ -477,7 +487,7 @@ export const DubzSessionPage = (props: {
   const messages = nextPending.length === 0 ? delivered : [...delivered, ...nextPending];
 
   return (
-    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={props.session.title} spacing={10} bottomAnchored trailing={props.compact === true ? undefined : <GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
+    <DubzScrollPage pageWidth={pageWidth} shifted={shifted} title={title} spacing={10} bottomAnchored trailing={props.compact === true ? undefined : <GlassIconButton systemName="arrow.up.left.and.arrow.down.right" onPress={props.onFullScreen} />}>
       {messages.map((message) => (
         <ChatBubble key={message.id} message={message} width={pageWidth} />
       ))}
@@ -549,13 +559,14 @@ const DubzSessionCard = (props: {
   // Open a chat: its newest messages are kept before the tap (preload).
   usePreloadConversation(session.id, session.time.updated, session.title);
   const kept = useKeptConversation(serverAddressOf(address), session.id);
+  const title = useSessionTitle(serverAddressOf(address), session.id, session.title);
   const summary = kept === undefined ? undefined : lastSummary(kept.messages);
   const summaryText = summary === undefined ? undefined : summaryLabel(summary.role, summary.text);
   const scope = useFavoriteScope();
   const favorite = useIsFavorited(scope, sessionTarget(session.id));
   // No worktree pill here (the Dubz list doesn't need it); the height fits the
   // title and the summary exactly, from cached text, so it's right on load.
-  const height = sessionCardHeight({ titleLines: titleLines(session.title), pills: false, summaryLines: summaryLines(summaryText) });
+  const height = sessionCardHeight({ titleLines: titleLines(title), pills: false, summaryLines: summaryLines(summaryText) });
   const actions = sessionCardActions({
     muted: props.muted,
     archived: false,
@@ -586,8 +597,8 @@ const DubzSessionCard = (props: {
           <CardBody
             width={props.width}
             height={height}
-            titleLines={titleLines(session.title)}
-            title={session.title}
+            titleLines={titleLines(title)}
+            title={title}
             meta={relativeTime(session.time.updated)}
             unread={props.unread}
             unreadColor={themeColors.secondary}

@@ -27,6 +27,7 @@ import { SESSION_CARD_HEIGHT, sessionCardSize, titleLines } from "./home/homeLay
 import { useKeptConversation } from "./conversations/useConversations";
 import { useAppContext } from "./AppContext";
 import { serverAddressOf } from "./opencode/serverAddress";
+import { useSessionTitle } from "./sessions/useSessionWatch";
 import { takeReturning } from "./sessionArchive";
 import { SystemIcon } from "./SystemIcon";
 import { useCardTint, useTextColors, useTheme } from "./theme";
@@ -247,11 +248,14 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   // Its last message from the conversation kept on the device, so it is
   // there from the first frame and its size (worked out from the same) holds.
   const { address } = useAppContext();
-  const kept = useKeptConversation(serverAddressOf(address), props.sessionId);
+  const server = serverAddressOf(address);
+  const kept = useKeptConversation(server, props.sessionId);
+  // Named a moment after its first message: the name shows when given.
+  const title = useSessionTitle(server, props.sessionId, props.title);
   const summary = kept === undefined ? undefined : lastSummary(kept.messages);
   const scope = useFavoriteScope();
   const favorite = useIsFavorited(scope, sessionTarget(props.sessionId));
-  const size = sessionCardSize({ title: props.title, pills: props.repo !== undefined || props.worktree !== undefined, summary: summary !== undefined });
+  const size = sessionCardSize({ title, pills: props.repo !== undefined || props.worktree !== undefined, summary: summary !== undefined });
 
   // Archiving: the row slides off to the left, then the session leaves the
   // list, and the rows below glide up into its place (the lists' layout
@@ -350,8 +354,8 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
             <CardBody
               width={cardWidth}
               height={SESSION_CARD_HEIGHT[size]}
-              titleLines={titleLines(props.title)}
-              title={props.title}
+              titleLines={titleLines(title)}
+              title={title}
               repo={props.repo}
               worktree={props.worktree}
               meta={props.meta}

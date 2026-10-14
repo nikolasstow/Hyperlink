@@ -1,7 +1,7 @@
 /**
  * What a server's sessions are doing, live (opencode v2's event stream): which
- * are running, when each last did anything, and the permission asks waiting
- * on an answer. Sessions on allow all (sessionPermissions.ts) have their asks
+ * are running, when each last did anything, their titles as they are named or
+ * renamed, and the permission asks waiting on an answer. Sessions on allow all (sessionPermissions.ts) have their asks
  * answered here, `once`, as they come.
  *
  * Each connection: subscribe first (events wait in a queue), then load what
@@ -42,9 +42,12 @@ export interface Watched {
   readonly activityAt: ReadonlyMap<string, number>;
   /** Permission asks waiting on an answer, oldest first. */
   readonly asks: ReadonlyArray<Permission.Request>;
+  /** Titles given since the stream connected (v2 names a session a moment
+   * after its first message), by session. */
+  readonly titles: ReadonlyMap<string, string>;
 }
 
-export const NOTHING_WATCHED: Watched = { connected: false, busy: new Set(), activityAt: new Map(), asks: [] };
+export const NOTHING_WATCHED: Watched = { connected: false, busy: new Set(), activityAt: new Map(), asks: [], titles: new Map() };
 
 /** The event stream ended or failed: the connection starts again. */
 class EventsDropped extends Data.TaggedError("EventsDropped")<{
@@ -84,6 +87,7 @@ const applied = (watched: Watched, event: OpenCodeEvent): Watched => {
   const sessionID = sessionOf(event);
   if (sessionID === undefined) return watched;
   const touched = withActivity(watched, sessionID, "created" in event ? event.created : Date.now());
+  if (event.type === "session.renamed") return { ...touched, titles: new Map(touched.titles).set(sessionID, event.data.title) };
   if (event.type === "session.status") return withBusy(touched, sessionID, event.data.status.type !== "idle");
   if (RUNNING.has(event.type)) return withBusy(touched, sessionID, true);
   if (STOPPED.has(event.type)) return withBusy(touched, sessionID, false);
@@ -131,7 +135,7 @@ const make = Effect.gen(function* () {
         (sessionID) => client["server.permission"]["session.permission.list"]({ params: { sessionID } }).pipe(Effect.map((response) => response.data)),
         { concurrency: 4 },
       );
-      yield* update(server, (current) => ({ connected: true, busy: new Set(running), activityAt: current.activityAt, asks: asks.flat() }));
+      yield* update(server, (current) => ({ ...current, connected: true, busy: new Set(running), asks: asks.flat() }));
       yield* Effect.forEach(asks.flat(), (ask) => approve(server, ask), { discard: true });
       yield* Stream.fromQueue(waiting).pipe(
         Stream.runForEach((event) =>

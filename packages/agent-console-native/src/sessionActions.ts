@@ -10,6 +10,7 @@ import { runApp } from "./effect/runtime";
 import { SessionID } from "./opencode/schema/session-id";
 import type { ServerAddress } from "./opencode/serverAddress";
 import { interruptSession, removeSession, renameSession } from "./sessions/sessionCommands";
+import { shownTitle } from "./sessions/sessionTitle";
 
 /** Says a failed action, and logs why. */
 const failed = (title: string) => (error: unknown) => {
@@ -69,7 +70,7 @@ export const confirmDeleteSession = (
   title: string,
   onDeleted?: () => void,
 ): void => {
-  Alert.alert(`Delete “${title}”?`, "The session and its messages are deleted. This can’t be undone.", [
+  Alert.alert(`Delete “${shownTitle(title)}”?`, "The session and its messages are deleted. This can’t be undone.", [
     { text: "Cancel", style: "cancel" },
     {
       text: "Delete",

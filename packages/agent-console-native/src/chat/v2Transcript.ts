@@ -51,7 +51,7 @@ export const v2Transcript = (server: ServerAddress, sessionID: SessionID): Strea
       const opencode = yield* Opencode;
       const client = yield* opencode.client(server);
       const messages = yield* SubscriptionRef.make<ReadonlyArray<SessionMessage.Info>>([]);
-      const projection: Projection = { messages: [] };
+      const projection: Projection = { messages: [], inbox: new Map() };
       const publish = Effect.suspend(() => SubscriptionRef.set(messages, projection.messages));
 
       /** Every message, oldest first, page by page. */
@@ -79,6 +79,11 @@ export const v2Transcript = (server: ServerAddress, sessionID: SessionID): Strea
           Stream.runIntoQueue(waiting),
           Effect.forkScoped,
         );
+        // What was enqueued and not yet delivered (delivered later, it becomes
+        // a message), read before the messages: one delivered in between is
+        // then in the messages, and its delivery a repeat.
+        const inbox = yield* client["server.session"]["session.inbox.list"]({ params: { sessionID } });
+        projection.inbox = new Map(inbox.data.map((item) => [item.id, item]));
         projection.messages = yield* loadAll;
         yield* publish;
         yield* Stream.fromQueue(waiting).pipe(

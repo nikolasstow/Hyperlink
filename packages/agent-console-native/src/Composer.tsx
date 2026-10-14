@@ -31,7 +31,7 @@
  *
  * @internal
  */
-import { useRoute } from "@react-navigation/native";
+import { useIsFocused, useRoute } from "@react-navigation/native";
 import * as React from "react";
 import { Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -308,6 +308,16 @@ export const Composer = (props: {
   const onBlur = (): void => {
     setFocused(false);
   };
+
+  // Its page left (a send opened the chat, a tap opened another page): the
+  // input lets go and the bar collapses, so coming back finds it closed
+  // unless it holds unsent text.
+  const pageFocused = useIsFocused();
+  React.useEffect(() => {
+    if (pageFocused) return;
+    inputRef.current?.blur();
+    setFocused(false);
+  }, [pageFocused]);
 
   // One send at a time: the text stays until it is on its way.
   const sending = React.useRef(false);

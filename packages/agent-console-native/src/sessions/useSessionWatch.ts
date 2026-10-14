@@ -2,7 +2,8 @@
  * A server's live sessions for React (SessionWatch.ts through the app
  * runtime): `useSessionWatch` watches the server while `enabled` and gives
  * what is known (running sessions, last activity, permission asks);
- * `replyToAsk` answers an ask.
+ * `useSessionTitle` gives a session's title as it is now; `replyToAsk`
+ * answers an ask.
  *
  * @internal
  */
@@ -12,6 +13,7 @@ import { forkApp, runApp } from "../effect/runtime";
 import type { Permission } from "../opencode/schema/permission";
 import type { ServerAddress } from "../opencode/serverAddress";
 import { NOTHING_WATCHED, SessionWatch, type Watched } from "./SessionWatch";
+import { shownTitle } from "./sessionTitle";
 
 let watched: ReadonlyMap<ServerAddress, Watched> = new Map();
 const listeners = new Set<() => void>();
@@ -59,6 +61,15 @@ export const useSessionWatch = (server: ServerAddress, enabled: boolean = true):
     };
   }, [server, enabled]);
   return React.useSyncExternalStore(subscribe, () => watched.get(server) ?? NOTHING_WATCHED);
+};
+
+/** A session's title as it is now: named or renamed since the list was read
+ * (the watch, while something watches the server), else `known` (the list,
+ * the device's copy), else the placeholder. Never blank. */
+export const useSessionTitle = (server: ServerAddress, sessionID: string, known: string | undefined): string => {
+  mirror();
+  const live = React.useSyncExternalStore(subscribe, () => watched.get(server)?.titles.get(sessionID));
+  return shownTitle(live ?? known);
 };
 
 /** Answers a permission ask; rejects when the server does not take it. */
