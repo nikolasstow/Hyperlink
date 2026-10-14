@@ -13,6 +13,7 @@ import { keptNavReadBack } from "./src/navigation/useKeptNav";
 import { favoritesReadBack } from "./src/favorites/useFavorites";
 import { reposReadBack } from "./src/repoScanCache";
 import { sessionsReadBack } from "./src/sessionCache";
+import { extensionViewsReadBack } from "./src/extensionViewsStore";
 import { ConversationPreloader } from "./src/conversations/ConversationPreloader";
 import { LiveFilesFollower } from "./src/files/useLiveFiles";
 import { AppToastHost } from "./src/AppToast";
@@ -96,7 +97,7 @@ const AppInner = (): React.ReactElement => {
       // Never longer than READ_BACK_WAIT_MS: a store that cannot be read must
       // not hold the app on the launch screen.
       const readBack = Promise.race([
-        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack]),
+        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack, extensionViewsReadBack]),
         new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS)),
       ]);
       primeDefaultPermissionMode(await getDefaultPermissionMode());
