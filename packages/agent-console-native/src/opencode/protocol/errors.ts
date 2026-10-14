@@ -1,4 +1,12 @@
 import { Schema } from "effect"
+import { Skill } from "../schema/skill"
+import { Location } from "../schema/location"
+
+export class LocationNotFoundError extends Schema.TaggedError<LocationNotFoundError>()(
+  "LocationNotFoundError",
+  { location: Location.PublicRef, message: Schema.String },
+  { httpApiStatus: 404 },
+) {}
 
 export class InvalidRequestError extends Schema.TaggedError<InvalidRequestError>()(
   "InvalidRequestError",
@@ -8,6 +16,26 @@ export class InvalidRequestError extends Schema.TaggedError<InvalidRequestError>
     field: Schema.optional(Schema.String),
   },
   { httpApiStatus: 400 },
+) {}
+
+export class RpcError extends Schema.TaggedError<RpcError>()(
+  "RpcError",
+  {
+    type: Schema.String,
+    message: Schema.String,
+    data: Schema.optional(Schema.Unknown),
+  },
+  { httpApiStatus: 400 },
+) {}
+
+export class RpcInternalError extends Schema.TaggedError<RpcInternalError>()(
+  "RpcInternalError",
+  {
+    type: Schema.Literals(["rpc.internal", "rpc.invalid_output"]),
+    message: Schema.String,
+    data: Schema.optional(Schema.Unknown),
+  },
+  { httpApiStatus: 500 },
 ) {}
 
 export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
@@ -21,6 +49,15 @@ export class ConflictError extends Schema.TaggedError<ConflictError>()(
   {
     message: Schema.String,
     resource: Schema.optional(Schema.String),
+  },
+  { httpApiStatus: 409 },
+) {}
+
+export class SessionBusyError extends Schema.TaggedError<SessionBusyError>()(
+  "SessionBusyError",
+  {
+    sessionID: Schema.String,
+    message: Schema.String,
   },
   { httpApiStatus: 409 },
 ) {}
@@ -52,6 +89,62 @@ export class ProviderNotFoundError extends Schema.TaggedError<ProviderNotFoundEr
   { httpApiStatus: 404 },
 ) {}
 
+export class IntegrationNotFoundError extends Schema.TaggedError<IntegrationNotFoundError>()(
+  "IntegrationNotFoundError",
+  {
+    integrationID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class IntegrationAttemptNotFoundError extends Schema.TaggedError<IntegrationAttemptNotFoundError>()(
+  "IntegrationAttemptNotFoundError",
+  {
+    integrationID: Schema.String,
+    attemptID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class IntegrationMethodNotFoundError extends Schema.TaggedError<IntegrationMethodNotFoundError>()(
+  "IntegrationMethodNotFoundError",
+  {
+    integrationID: Schema.String,
+    methodID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class ProjectNotFoundError extends Schema.TaggedError<ProjectNotFoundError>()(
+  "ProjectNotFoundError",
+  {
+    projectID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class FileNotFoundError extends Schema.TaggedError<FileNotFoundError>()(
+  "FileNotFoundError",
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class AgentNotFoundError extends Schema.TaggedError<AgentNotFoundError>()(
+  "AgentNotFoundError",
+  {
+    agentID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
 export class SessionNotFoundError extends Schema.TaggedError<SessionNotFoundError>()(
   "SessionNotFoundError",
   {
@@ -71,6 +164,42 @@ export class MessageNotFoundError extends Schema.TaggedError<MessageNotFoundErro
   { httpApiStatus: 404 },
 ) {}
 
+export class SkillNotFoundError extends Schema.TaggedError<SkillNotFoundError>()(
+  "SkillNotFoundError",
+  {
+    skill: Skill.ID,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class McpServerNotFoundError extends Schema.TaggedError<McpServerNotFoundError>()(
+  "McpServerNotFoundError",
+  {
+    server: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class CommandNotFoundError extends Schema.TaggedError<CommandNotFoundError>()(
+  "CommandNotFoundError",
+  {
+    command: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class CommandExecutionError extends Schema.TaggedError<CommandExecutionError>()(
+  "CommandExecutionError",
+  {
+    command: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 500 },
+) {}
+
 export class InvalidCursorError extends Schema.TaggedError<InvalidCursorError>()(
   "InvalidCursorError",
   { message: Schema.String },
@@ -86,13 +215,31 @@ export class PermissionNotFoundError extends Schema.TaggedError<PermissionNotFou
   { httpApiStatus: 404 },
 ) {}
 
-export class QuestionNotFoundError extends Schema.TaggedError<QuestionNotFoundError>()(
-  "QuestionNotFoundError",
+export class FormNotFoundError extends Schema.TaggedError<FormNotFoundError>()(
+  "FormNotFoundError",
   {
-    requestID: Schema.String,
+    id: Schema.String,
     message: Schema.String,
   },
   { httpApiStatus: 404 },
+) {}
+
+export class FormAlreadySettledError extends Schema.TaggedError<FormAlreadySettledError>()(
+  "FormAlreadySettledError",
+  {
+    id: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+export class FormInvalidAnswerError extends Schema.TaggedError<FormInvalidAnswerError>()(
+  "FormInvalidAnswerError",
+  {
+    id: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 400 },
 ) {}
 
 export class ForbiddenError extends Schema.TaggedError<ForbiddenError>()(
@@ -105,6 +252,15 @@ export class PtyNotFoundError extends Schema.TaggedError<PtyNotFoundError>()(
   "PtyNotFoundError",
   {
     ptyID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+export class ShellNotFoundError extends Schema.TaggedError<ShellNotFoundError>()(
+  "ShellNotFoundError",
+  {
+    id: Schema.String,
     message: Schema.String,
   },
   { httpApiStatus: 404 },

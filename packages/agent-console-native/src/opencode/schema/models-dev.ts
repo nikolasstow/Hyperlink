@@ -1,8 +1,8 @@
 export * as ModelsDev from "./models-dev"
 
-import { define, inventory } from "./event"
+import { ephemeral, inventory } from "./event"
 
-const Refreshed = define({
+const Refreshed = ephemeral({
   type: "models-dev.refreshed",
   schema: {},
 })

@@ -52,7 +52,7 @@ const make = Effect.gen(function* () {
 
   const healthy = (server: ServerAddress) =>
     opencode.client(server).pipe(
-      Effect.flatMap((client) => client["server.health"]["health.get"]()),
+      Effect.flatMap((client) => client["server.server"]["server.info"]()),
       Effect.timeout(PROBE_TIMEOUT),
     );
 

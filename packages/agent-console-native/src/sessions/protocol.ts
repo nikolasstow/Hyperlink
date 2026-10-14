@@ -45,5 +45,5 @@ export const interruptSession = (server: ServerAddress, sessionID: SessionID) =>
   Effect.gen(function* () {
     const opencode = yield* Opencode;
     const client = yield* opencode.client(server);
-    yield* client["server.session"]["session.interrupt"]({ params: { sessionID } });
+    yield* client["server.session"]["session.interrupt"]({ params: { sessionID }, query: {} });
   });

@@ -28,7 +28,7 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
     Effect.gen(function* () {
       const path = url.pathname;
       const body: unknown = request.body._tag === "Uint8Array" ? JSON.parse(new TextDecoder().decode(request.body.body)) : undefined;
-      if (path === "/api/health") return json(request, 200, { healthy: true });
+      if (path === "/api/info") return json(request, 200, { version: "test", pid: 1, urls: [], paths: { tmp: "/tmp" } });
       if (path === "/session/status") {
         status.checks += 1;
         return json(request, 200, status.checks <= busyChecks ? Object.fromEntries([...sessions].map((id) => [id, { type: "busy" }])) : {});
@@ -52,7 +52,7 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
         const sessionID = prompt[1] ?? "";
         if (!sessions.has(sessionID)) return json(request, 404, { _tag: "SessionNotFoundError", sessionID, message: "not found" });
         const payload = typeof body === "object" && body !== null ? body : {};
-        const text = "prompt" in payload && typeof payload.prompt === "object" && payload.prompt !== null && "text" in payload.prompt && typeof payload.prompt.text === "string" ? payload.prompt.text : "";
+        const text = "text" in payload && typeof payload.text === "string" ? payload.text : "";
         const attempt = (attempts.get(text) ?? 0) + 1;
         attempts.set(text, attempt);
         const outcome = answer(text, attempt);
@@ -60,7 +60,7 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
         if (outcome === "fail") return json(request, 500, { error: "boom" });
         admitted.push(text);
         const id = "id" in payload && typeof payload.id === "string" ? payload.id : "msg_unknown";
-        return json(request, 200, { data: { admittedSeq: admitted.length, id, sessionID, prompt: { text }, delivery: "queue", timeCreated: 1 } });
+        return json(request, 200, { data: { id, sessionID, time: { created: 1 }, type: "user", payload: { text }, delivery: "queue" } });
       }
       return json(request, 404, { error: `no route ${request.method} ${path}` });
     }),

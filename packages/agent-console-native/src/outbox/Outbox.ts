@@ -227,10 +227,8 @@ const make = Effect.gen(function* () {
           params: { sessionID: lane.sessionID },
           payload: {
             id: message.id,
-            prompt: {
-              text: message.text,
-              files: message.files.map((file) => ({ uri: `file://${file.path}`, mime: "text/plain", name: file.name })),
-            },
+            text: message.text,
+            files: message.files.map((file) => ({ uri: `file://${file.path}`, mime: "text/plain", name: file.name })),
             delivery: "queue",
           },
         }),

@@ -32,7 +32,8 @@ const PAGE = 100;
 
 const summaryOf = (info: Session.Info): SessionSummary => ({
   id: info.id,
-  title: info.title,
+  // v2 names a session after its first message; until then it has none.
+  title: info.title ?? "",
   directory: info.location.directory,
   parentID: info.parentID,
   time: { created: DateTime.toEpochMillis(info.time.created), updated: DateTime.toEpochMillis(info.time.updated) },

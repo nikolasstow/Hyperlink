@@ -24,7 +24,7 @@ export const useV2Transcript = (server: ServerAddress, sessionID: SessionID, ena
   const [messages, setMessages] = React.useState<ReadonlyArray<ChatMessage> | undefined>(undefined);
   React.useEffect(() => {
     if (!enabled) return undefined;
-    let latest: ReadonlyArray<SessionMessage.Message> | undefined;
+    let latest: ReadonlyArray<SessionMessage.Info> | undefined;
     let frame: number | undefined;
     const flush = (): void => {
       frame = undefined;

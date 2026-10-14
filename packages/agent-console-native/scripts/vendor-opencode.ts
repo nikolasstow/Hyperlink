@@ -9,8 +9,12 @@
  * published, so this is how the app gets the server's exact API (an
  * `HttpApiClient` is derived from it), wire shapes and projection.
  *
- *   pnpm vendor:opencode                       # ~/Coding/opencode at v1.18.33
- *   pnpm vendor:opencode --repo <dir> --ref <tag>
+ *   pnpm vendor:opencode                       # ~/Coding/opencode-v2 at its HEAD
+ *   pnpm vendor:opencode --repo <dir> --ref <ref>
+ *
+ * Upstream writes `@opencode/schema/x` and relative imports ending in `.js`;
+ * both are rewritten (to the vendored copy, and without `.js`, which Metro
+ * does not map to `.ts`).
  */
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Path } from "effect";
@@ -18,34 +22,49 @@ import { Command, Flag } from "effect/cli";
 import packageJson from "../package.json" with { type: "json" };
 import { runString } from "./command";
 
-/** The protocol modules the app uses (paths under protocol's `src`). */
+/** The protocol modules the app uses (paths under protocol's `src`); the
+ * protocol modules they import come along. */
 const PROTOCOL = [
   "errors.ts",
   "middleware/authorization.ts",
   "middleware/schema-error.ts",
-  "groups/health.ts",
+  "groups/server.ts",
   "groups/session.ts",
   "groups/message.ts",
   "groups/event.ts",
+  "groups/permission.ts",
+  "groups/command.ts",
+  "groups/skill.ts",
+  "groups/model.ts",
 ];
 
 /** The core modules the app uses (paths under core's `src`), with how their
  * imports of core's re-exports of schema are pointed at the vendored schema. */
 const CORE = ["session/message-updater.ts"];
 const CORE_IMPORTS: ReadonlyArray<readonly [string, string]> = [
-  ['from "./event"', 'from "../schema/session-event"'],
-  ['from "./message"', 'from "../schema/session-message"'],
+  ['from "./event.js"', 'from "../schema/session-event"'],
+  ['from "./message.js"', 'from "../schema/session-message"'],
 ];
+
+/** A relative import's specifier without upstream's `.js` ending. */
+const withoutJs = (specifier: string): string => specifier.replace(/\.js$/, "");
+
+/** Every relative `from "./x.js"` without its `.js` (Metro resolves `.ts` only by name). */
+const stripJsImports = (source: string): string => source.replace(/from "(\.{1,2}\/[^"]+)\.js"/g, 'from "$1"');
 
 /** The schema modules a module imports, as paths under schema's `src`:
  * relative imports resolved against the module's own folder (within schema),
  * and `@opencode-ai/schema/x` (from protocol). */
 const schemaImportsOf = (path: Path.Path, file: string, source: string, fromProtocol: boolean): ReadonlyArray<string> =>
   Array.from(source.matchAll(/from "([^"]+)"/g), (match) => match[1] ?? "").flatMap((specifier) => {
-    if (specifier.startsWith("@opencode-ai/schema/")) return [`${specifier.slice("@opencode-ai/schema/".length)}.ts`];
+    if (specifier.startsWith("@opencode/schema/")) return [`${withoutJs(specifier.slice("@opencode/schema/".length))}.ts`];
     if (fromProtocol || !specifier.startsWith(".")) return [];
-    return [`${path.normalize(path.join(path.dirname(file), specifier))}.ts`];
+    return [`${path.normalize(path.join(path.dirname(file), withoutJs(specifier)))}.ts`];
   });
+
+/** The protocol modules a protocol module imports (relative), as paths under protocol's `src`. */
+const protocolImportsOf = (path: Path.Path, file: string, source: string): ReadonlyArray<string> =>
+  Array.from(source.matchAll(/from "(\.{1,2}\/[^"]+)"/g), (match) => `${path.normalize(path.join(path.dirname(file), withoutJs(match[1] ?? "")))}.ts`);
 
 /** React Native's Babel codegen plugin runs on every file and rejects any
  * export named `Commands` (reserved for native component commands); the one
@@ -56,11 +75,11 @@ const reactNativeSafe = (source: string): string => source.replace(/(?<![.\w"])C
 /** Protocol's `@opencode-ai/schema/x` imports, pointed at the vendored copy
  * (`depth` = how far the module sits below `src/opencode/protocol`). */
 const rewriteSchemaImports = (source: string, depth: number): string =>
-  source.replaceAll("from \"@opencode-ai/schema/", `from "${"../".repeat(depth + 1)}schema/`);
+  source.replace(/from "@opencode\/schema\/([^"]+?)(?:\.js)?"/g, (_, module: string) => `from "${"../".repeat(depth + 1)}schema/${module}"`);
 
 const vendor = Command.make("vendor-opencode", {
-  repo: Flag.String("repo").pipe(Flag.withDefault(`${process.env.HOME}/Coding/opencode`), Flag.withDescription("An opencode checkout.")),
-  ref: Flag.String("ref").pipe(Flag.withDefault("v1.18.33"), Flag.withDescription("The server's version (a git ref).")),
+  repo: Flag.String("repo").pipe(Flag.withDefault(`${process.env.HOME}/Coding/opencode-v2`), Flag.withDescription("An opencode checkout.")),
+  ref: Flag.String("ref").pipe(Flag.withDefault("HEAD"), Flag.withDescription("The server's version (a git ref).")),
 }).pipe(
   Command.withDescription("Vendor the opencode v2 API the app uses (protocol groups and their schema) into src/opencode."),
   Command.withHandler(({ repo, ref }) =>
@@ -76,7 +95,13 @@ const vendor = Command.make("vendor-opencode", {
         });
 
       const protocol = new Map<string, string>();
-      for (const file of PROTOCOL) protocol.set(file, yield* show(`protocol/src/${file}`));
+      const protocolPending = [...PROTOCOL];
+      for (let file = protocolPending.pop(); file !== undefined; file = protocolPending.pop()) {
+        if (protocol.has(file)) continue;
+        const source = yield* show(`protocol/src/${file}`);
+        protocol.set(file, source);
+        protocolPending.push(...protocolImportsOf(path, file, source));
+      }
       const core = new Map<string, string>();
       for (const file of CORE) {
         const source = yield* show(`core/src/${file}`);
@@ -117,9 +142,9 @@ const vendor = Command.make("vendor-opencode", {
           );
           yield* fs.writeFileString(path.join(dir, "VERSION"), `opencode ${ref} (${commit})\n`);
         });
-      yield* write(path.join(root, "schema"), schema, (_, source) => reactNativeSafe(source));
-      yield* write(path.join(root, "protocol"), protocol, (file, source) => rewriteSchemaImports(source, file.split("/").length - 1));
-      yield* write(path.join(root, "core"), core, (_, source) => source);
+      yield* write(path.join(root, "schema"), schema, (_, source) => stripJsImports(reactNativeSafe(source)));
+      yield* write(path.join(root, "protocol"), protocol, (file, source) => stripJsImports(rewriteSchemaImports(source, file.split("/").length - 1)));
+      yield* write(path.join(root, "core"), core, (_, source) => stripJsImports(source));
       yield* Effect.log(`Vendored ${protocol.size} protocol, ${core.size} core and ${schema.size} schema modules from opencode ${ref} into src/opencode.`);
     }),
   ),

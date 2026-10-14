@@ -3,10 +3,16 @@ import { DateTime, Option, Schema, SchemaGetter } from "effect"
 export const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0))
 export const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
-export const RelativePath = Schema.String.pipe(Schema.brand("RelativePath"))
+export const RelativePath = Schema.String.pipe(
+  Schema.brand("RelativePath"),
+  Schema.annotate({ identifier: "RelativePath" }),
+)
 export type RelativePath = typeof RelativePath.Type
 
-export const AbsolutePath = Schema.String.pipe(Schema.brand("AbsolutePath"))
+export const AbsolutePath = Schema.String.pipe(
+  Schema.brand("AbsolutePath"),
+  Schema.annotate({ identifier: "AbsolutePath" }),
+)
 export type AbsolutePath = typeof AbsolutePath.Type
 
 export const optional = <S extends Schema.Top>(schema: S) =>
@@ -17,6 +23,8 @@ export const optional = <S extends Schema.Top>(schema: S) =>
     }),
   )
 
+// Effect schemas expose `make` through prototype getters, so `Object.assign` cannot override it.
+// Defining the properties replaces a constructor as long as the schema's own `make` has not been read.
 export const withStatics = <S extends object, M extends Record<string, unknown>>(schema: S, methods: M): S & M =>
   Object.defineProperties(schema, Object.getOwnPropertyDescriptors(methods)) as S & M
 

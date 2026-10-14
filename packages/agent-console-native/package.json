@@ -12,6 +12,7 @@
     "@react-navigation/elements": "^2.9.40",
     "@react-navigation/native": "^7.3.18",
     "@react-navigation/native-stack": "^7.18.10",
+    "agent-console-protocol": "workspace:*",
     "effect": "4.0.4",
     "expo": "~57.0.16",
     "expo-asset": "^57.0.18",
@@ -31,7 +32,6 @@
     "expo-status-bar": "~57.0.1",
     "expo-task-manager": "~57.0.21",
     "expo-web-browser": "~57.0.2",
-    "agent-console-protocol": "workspace:*",
     "file-sync": "workspace:*",
     "immer": "11.1.4",
     "react": "19.2.3",
@@ -51,6 +51,7 @@
   "devDependencies": {
     "@effect/platform-node": "4.0.4",
     "@shikijs/monaco": "4.4.2",
+    "@standard-schema/spec": "^1.1.0",
     "@types/node": "^20.19.40",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "~57.0.8",

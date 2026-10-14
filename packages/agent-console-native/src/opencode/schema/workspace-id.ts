@@ -3,7 +3,8 @@ import { ascending } from "./identifier"
 import { statics } from "./schema"
 
 export const WorkspaceID = Schema.String.check(Schema.isStartingWith("wrk")).pipe(
-  Schema.brand("WorkspaceV2.ID"),
+  Schema.brand("Workspace.ID"),
+  Schema.annotate({ identifier: "Workspace.ID" }),
   statics((schema) => {
     const create = () => schema.make("wrk_" + ascending())
     return {
