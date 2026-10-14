@@ -534,7 +534,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       return;
     }
     let cancelled = false;
-    void listModels(client, directory).then((options) => {
+    void listModels(directory).then((options) => {
       if (cancelled) return;
       setResolvedSeed(findModel(options, seedModel.providerID, seedModel.modelID) ?? seedModel);
     });

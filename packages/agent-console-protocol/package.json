@@ -1,0 +1,30 @@
+{
+  "name": "agent-console-protocol",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The wire formats between the agent-console API server and its apps (besides file sync): what each endpoint sends, as Effect schemas both sides decode.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nikolas Stow",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./Models": {
+      "types": "./src/Models.ts",
+      "default": "./src/Models.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "effect": "4.0.4"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
+}

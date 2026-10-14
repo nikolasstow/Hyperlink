@@ -20,6 +20,7 @@
     "@opencode-ai/sdk": "^1.18.23",
     "effect": "4.0.4",
     "fflate": "^0.8.3",
+    "agent-console-protocol": "workspace:*",
     "file-sync": "workspace:*",
     "fontkit": "^2.0.4",
     "last-ts": "workspace:*",

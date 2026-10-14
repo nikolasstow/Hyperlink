@@ -31,6 +31,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-task-manager": "~57.0.21",
     "expo-web-browser": "~57.0.2",
+    "agent-console-protocol": "workspace:*",
     "file-sync": "workspace:*",
     "immer": "11.1.4",
     "react": "19.2.3",

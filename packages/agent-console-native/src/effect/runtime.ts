@@ -47,6 +47,8 @@ import { Reachability } from "../outbox/Reachability";
 import { KeptNav } from "../navigation/KeptNav";
 import { layer as asyncStorageLayer } from "./asyncStorage";
 import { authedFetch } from "../auth/serverTokens";
+import { authedStreamingFetch } from "../auth/streamingFetch";
+import { ModelCatalog } from "../models/ModelCatalog";
 import { ServerAuth } from "../auth/ServerAuth";
 import { layer as secretStoreLayer } from "../auth/secretStoreNative";
 import { layer as deviceSignalsLayer } from "./deviceSignalsNative";
@@ -64,6 +66,11 @@ const FAVORITES_STORAGE_PREFIX = "agent-console-native:favorites:";
 const BAR_WINDOW_STORAGE_PREFIX = "agent-console-native:barWindow:";
 
 const AUTH_STORAGE_PREFIX = "agent-console-native:auth:";
+const MODELS_STORAGE_PREFIX = "agent-console-native:models:";
+
+// The model catalog reads its response as it comes, so its client streams
+// (expo/fetch; React Native's own fetch reads a body whole).
+const streamingHttpClient = FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch)(authedStreamingFetch)));
 
 // Every Effect HTTP request goes through `authedFetch`: a paired server's
 // requests carry its token (auth/serverTokens.ts).
@@ -84,6 +91,7 @@ const AppLayer = Layer.mergeAll(
   BarWindowStore.layer.pipe(Layer.provide(asyncStorageLayer(BAR_WINDOW_STORAGE_PREFIX))),
   LiveFiles.layer,
   ServerAuth.layer.pipe(Layer.provide([asyncStorageLayer(AUTH_STORAGE_PREFIX), secretStoreLayer])),
+  ModelCatalog.layer.pipe(Layer.provide([asyncStorageLayer(MODELS_STORAGE_PREFIX), streamingHttpClient])),
 ).pipe(
   Layer.provideMerge(Reachability.layer),
   Layer.provideMerge(Opencode.layer),
