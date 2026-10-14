@@ -33,7 +33,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzCompactSync } from "./dubz/DubzCompactSync";
-import { DUBZ_BOTTOM_BAR, DUBZ_TOP_BAR, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
+import { DUBZ_BOTTOM_BAR, DUBZ_COMPACT_LEFT_GAP, DUBZ_TOP_BAR, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -223,9 +223,11 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     (compact: boolean, compactContent: boolean) => dispatch({ _tag: "layoutChanged", compact, compactContent }),
     [dispatch],
   );
-  // compactContent (the left-gap trigger) is stored in the coordinator; the
-  // gap layout consumes it in the next slice. Only `compact` is read here.
-  const compact = winState.compact;
+  // `compact` hides the sub-page's right button; `compactContent` (compact AND
+  // content taller than the viewport) shifts the content right for the top-left
+  // button — the left gap.
+  const { compact, compactContent } = winState;
+  const leftInset = compactContent ? DUBZ_COMPACT_LEFT_GAP : 0;
 
   // Tapping the session row pushes a placeholder page in over the window (main
   // row slides left, page slides in from the right — SwiftUI's own animation,
@@ -404,10 +406,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <DubzCompactSync claim={requestedHeight} topBar={DUBZ_TOP_BAR} bottomBar={DUBZ_BOTTOM_BAR} onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
-          <View style={styles.mainArea} pointerEvents={sub === undefined ? "box-none" : "none"}>
+          <View style={[styles.mainArea, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
             {suggestions.map((suggestion) =>
               suggestion._tag === "Sessions" ? (
-                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} />
+                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
               ) : (
                 <Suggestion key={suggestion._tag} suggestion={suggestion} />
               ),

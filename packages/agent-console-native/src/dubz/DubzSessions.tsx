@@ -74,6 +74,10 @@ const GAP = 8;
 const NUMBER_WIDTH = 60;
 /** The window's side margin (BarWindow) + the suggestions' padding, per side. */
 const WINDOW_SIDE = 12 + 16;
+/** Compact mode's left gap: the top-left button (a PILL-wide back button) and a
+ * gap. The content shifts right by this and its rows shrink by it, so the button
+ * has room and nothing is covered. */
+export const DUBZ_COMPACT_LEFT_GAP = PILL + GAP;
 /** How many extra sessions the expand reveals. */
 const EXTRA = 4;
 /** SwiftUI's own animation (UI thread), no Reanimated. */
@@ -154,6 +158,9 @@ export const DubzSessionArea = (props: {
   /** Report the height Dubz should grow to while expanded (undefined when it
    * claims none — collapsed or empty), so the window grows if it needs to. */
   readonly onActiveHeight?: (height: number | undefined) => void;
+  /** Compact mode's left gap (pt): the rows shrink by it so they fit the
+   * right-shifted content area (which leaves room for the top-left button). */
+  readonly leftInset?: number;
 }): React.ReactElement | null => {
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
@@ -177,7 +184,7 @@ export const DubzSessionArea = (props: {
   React.useEffect(() => () => onActiveHeightRef.current?.(undefined), []);
   const top = sessions[0];
   if (top === undefined) return null;
-  const rowWidth = width - WINDOW_SIDE * 2;
+  const rowWidth = width - WINDOW_SIDE * 2 - (props.leftInset ?? 0);
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - GAP);
   const extras = sessions.slice(1, 1 + EXTRA);
 
