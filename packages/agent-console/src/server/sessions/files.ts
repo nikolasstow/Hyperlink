@@ -11,5 +11,13 @@
  * `.agent-console` under the working folder). */
 export const stateFolderName = ".agent-console";
 
+/** The state folder itself: `AGENT_CONSOLE_STATE_DIR`, else `.agent-console`
+ * under the working folder (`join` is the platform's path join). */
+export const stateDirectory = (join: (...parts: ReadonlyArray<string>) => string): string =>
+  process.env.AGENT_CONSOLE_STATE_DIR ?? join(process.cwd(), stateFolderName);
+
+export const devicesFile = "devices.json";
+export const adminTokenFile = "admin-token";
+
 export const archivedSessionsFile = "archived-sessions.json";
 export const mutedSessionsFile = "muted-sessions.json";

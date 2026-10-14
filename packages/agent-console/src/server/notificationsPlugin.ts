@@ -28,7 +28,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Connect, Plugin } from "vite";
 import { type ActivityState, registerActivityToken, sendActivityEnd, sendActivityUpdate } from "./activityPush";
-import { mutedSessionsFile, stateFolderName } from "./sessions/files";
+import { mutedSessionsFile, stateDirectory } from "./sessions/files";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
@@ -376,7 +376,7 @@ export const notificationsPlugin = (): Plugin => {
    * applies to the very next notification. An unreadable list mutes nothing
    * and says why. */
   const isMuted = async (sessionID: string): Promise<boolean> => {
-    const file = resolve(process.env.AGENT_CONSOLE_STATE_DIR ?? resolve(process.cwd(), stateFolderName), mutedSessionsFile);
+    const file = resolve(stateDirectory((...parts) => resolve(...parts)), mutedSessionsFile);
     const text = await readFile(file, "utf8").catch((error: unknown) => {
       if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
       console.error(`[notifications] reading ${file} failed; nothing is muted`, error);

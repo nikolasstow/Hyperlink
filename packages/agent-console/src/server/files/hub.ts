@@ -18,10 +18,11 @@
  *
  * @internal
  */
-import { Clock, Config, Context, Duration, Effect, FileSystem, Layer, Option, Path, PubSub, Random, RcMap, Ref, Schedule, Schema, Semaphore, Stream } from "effect";
-import { HttpClient } from "effect/http";
+import { Clock, Context, Duration, Effect, FileSystem, Layer, Option, Path, PubSub, Random, RcMap, Ref, Schedule, Schema, Semaphore, Stream } from "effect";
+import { Headers, HttpClient } from "effect/http";
 import { FileSync, TextChange } from "file-sync";
 import { FsError, MAX_READ_BYTES, resolveWithin } from "../fs";
+import { opencodePassword, opencodeUrl, withOpencodeAuth } from "../opencodeServer";
 
 /** Quiet time after a disk event before reading the file: one read for a burst
  * of writes (an agent's write, then its formatter's). */
@@ -111,7 +112,8 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const http = yield* HttpClient.HttpClient;
-  const opencodeUrl = yield* Config.String("AGENT_CONSOLE_OPENCODE_URL").pipe(Config.withDefault("http://127.0.0.1:4096"));
+  const opencode = yield* opencodeUrl;
+  const password = yield* opencodePassword;
   // Tells this run of the hub from the last, whose versions mean nothing now.
   const startedAt = yield* Clock.currentTimeMillis;
   const salt = yield* Random.nextInt;
@@ -240,7 +242,7 @@ const make = Effect.gen(function* () {
     );
 
   /** opencode's events, for who wrote a file. Reconnects; never ends. */
-  const listen = http.get(`${opencodeUrl}/global/event`).pipe(
+  const listen = http.get(`${opencode}/global/event`, { headers: withOpencodeAuth(Headers.empty, password) }).pipe(
     Effect.map((response) => response.stream),
     Stream.unwrap,
     Stream.decodeText,

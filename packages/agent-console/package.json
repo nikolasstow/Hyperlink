@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "serve": "tsx src/server/serve.ts",
+    "pair": "tsx src/server/pair.ts",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -27,6 +28,7 @@
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "shiki": "^4.3.1",
+    "uqr": "0.1.3",
     "wawoff2": "^2.0.1"
   },
   "devDependencies": {

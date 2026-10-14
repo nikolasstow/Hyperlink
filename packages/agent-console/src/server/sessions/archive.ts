@@ -15,7 +15,7 @@
  */
 import { NodeServices } from "@effect/platform-node";
 import { Clock, Context, Effect, FileSystem, Layer, Path, Schema, SynchronizedRef } from "effect";
-import { archivedSessionsFile, mutedSessionsFile, stateFolderName } from "./files";
+import { archivedSessionsFile, mutedSessionsFile, stateDirectory } from "./files";
 
 /** When each marked session was marked, by session id. */
 export const ArchivedSessions = Schema.Record(Schema.String, Schema.Number);
@@ -43,7 +43,7 @@ const markedSet = (fileName: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const dir = process.env.AGENT_CONSOLE_STATE_DIR ?? path.join(process.cwd(), stateFolderName);
+    const dir = stateDirectory((...parts) => path.join(...parts));
     const file = path.join(dir, fileName);
 
     const read = fs.exists(file).pipe(

@@ -1,9 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { NodeHttpServer } from "@effect/platform-node";
-import { Duration, Effect, Fiber, Layer } from "effect";
-import { FetchHttpClient, HttpRouter } from "effect/http";
+import { Duration, Effect, Fiber, Layer, Option } from "effect";
+import { FetchHttpClient, Headers, HttpRouter } from "effect/http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { opencodeProxyRoute } from "./opencodeProxy";
+import { withOpencodeAuth } from "./opencodeServer";
 
 const UPSTREAM_PORT = 5800 + Math.floor(Math.random() * 100);
 const PROXY_PORT = 5900 + Math.floor(Math.random() * 100);
@@ -40,6 +41,7 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
         method: request.method,
         url: request.url,
         directory: request.headers["x-opencode-directory"] ?? null,
+        authorization: request.headers.authorization ?? null,
         body,
       }),
     );
@@ -51,6 +53,8 @@ let stop: (() => void) | undefined;
 beforeAll(async () => {
   await new Promise<void>((resolve) => upstream.listen(UPSTREAM_PORT, "127.0.0.1", resolve));
   process.env.AGENT_CONSOLE_OPENCODE_URL = `http://127.0.0.1:${UPSTREAM_PORT}`;
+  // Read once at start, as in production.
+  process.env.AGENT_CONSOLE_OPENCODE_PASSWORD = "secret";
   const fiber = Effect.runFork(
     Layer.launch(
       HttpRouter.serve(opencodeProxyRoute).pipe(
@@ -69,7 +73,10 @@ afterAll(() => {
   stop?.();
   if (upstream.listening) upstream.close();
   delete process.env.AGENT_CONSOLE_OPENCODE_URL;
+  delete process.env.AGENT_CONSOLE_OPENCODE_PASSWORD;
 });
+
+const opencodeBasic = `Basic ${Buffer.from("opencode:secret").toString("base64")}`;
 
 describe("opencode forward", () => {
   it("forwards the method, path, query, headers and body, and the response's status and headers", async () => {
@@ -87,8 +94,25 @@ describe("opencode forward", () => {
       method: "POST",
       url: "/session/abc/message?limit=2",
       directory: "/repo",
+      authorization: opencodeBasic,
       body: '{"text":"hi"}',
     });
+  });
+
+  it("sends opencode its own password, never the app's token or ticket", async () => {
+    const response = await fetch(`${proxy}/opencode/session?ticket=abc&limit=1`, {
+      headers: { authorization: "Bearer the-apps-token" },
+    });
+    expect(await response.json()).toMatchObject({
+      url: "/session?limit=1",
+      authorization: opencodeBasic,
+    });
+  });
+
+  it("with no opencode password, passes no authorization on", () => {
+    const headers = withOpencodeAuth(Headers.fromInput({ authorization: "Bearer the-apps-token", accept: "*/*" }), Option.none());
+    expect(Headers.get(headers, "authorization")).toEqual(Option.none());
+    expect(Headers.get(headers, "accept")).toEqual(Option.some("*/*"));
   });
 
   it("forwards a GET with no body", async () => {
