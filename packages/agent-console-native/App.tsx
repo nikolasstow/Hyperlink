@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import * as React from "react";
-import { AppState, Button, Linking, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, Button, Linking, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppContextProvider, useAppContext } from "./src/AppContext";
@@ -226,14 +226,14 @@ const AppInner = (): React.ReactElement => {
     <View style={styles.root}>
       <StatusBar style="auto" />
       {screen.step === "pair" ? (
-        <View style={[styles.center, { paddingTop: insets.top }]}>
+        <ScrollView style={styles.root} contentContainerStyle={[styles.center, { paddingTop: insets.top }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.title}>Pair this phone?</Text>
           <Text style={styles.dimText}>With the server at {screen.link.urls[0]}. It gets its own token, kept in this phone’s Keychain.</Text>
           {screen.link.urls.length > 1 ? <Text style={styles.dimText}>Also tried, in order: {screen.link.urls.slice(1).join(", ")}</Text> : null}
           {screen.error !== undefined ? <Text style={styles.errorText}>{screen.error}</Text> : null}
           <Button title={screen.busy ? "Pairing…" : "Pair"} disabled={screen.busy} onPress={() => onPair(screen)} />
           <Button title="Cancel" disabled={screen.busy} onPress={() => setScreen(screen.previous)} />
-        </View>
+        </ScrollView>
       ) : screen.step === "loading" || screen.step === "connecting" ? (
         // The launch loading view: a minimal navigator whose screen uses Home's
         // SAME shared native header (homeHeader.ts) over the skeleton body, so
@@ -241,7 +241,7 @@ const AppInner = (): React.ReactElement => {
         // Home data — so it can't hit the blank the early Home-mount caused.
         <LaunchNavigator />
       ) : screen.step === "server-setup" ? (
-        <View style={[styles.center, { paddingTop: insets.top }]}>
+        <ScrollView style={styles.root} contentContainerStyle={[styles.center, { paddingTop: insets.top }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.title}>Where’s your server?</Text>
           <Text style={styles.dimText}>The agent-console server’s host and port, e.g. 100.67.32.32:5199</Text>
           {screen.error !== undefined ? <Text style={styles.errorText}>{screen.error}</Text> : null}
@@ -268,9 +268,9 @@ const AppInner = (): React.ReactElement => {
             onSubmitEditing={onSubmitServer}
           />
           <Button title="Connect" onPress={onSubmitServer} />
-        </View>
+        </ScrollView>
       ) : screen.step === "root-setup" ? (
-        <View style={[styles.center, { paddingTop: insets.top }]}>
+        <ScrollView style={styles.root} contentContainerStyle={[styles.center, { paddingTop: insets.top }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <Text style={styles.title}>Where do your repos live?</Text>
           <Text style={styles.dimText}>The folder repos are checked out under, e.g. /Users/you/Coding</Text>
           {screen.error !== undefined ? <Text style={styles.errorText}>{screen.error}</Text> : null}
@@ -285,7 +285,7 @@ const AppInner = (): React.ReactElement => {
             onSubmitEditing={() => onSubmitRootDir(screen.client, screen.server)}
           />
           <Button title="Continue" onPress={() => onSubmitRootDir(screen.client, screen.server)} />
-        </View>
+        </ScrollView>
       ) : (
         <AppContextProvider
           value={{
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   center: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 12,

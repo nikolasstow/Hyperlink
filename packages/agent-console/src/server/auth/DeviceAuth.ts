@@ -21,7 +21,8 @@ import { Base64Url, Hex } from "effect/encoding";
 import { adminTokenFile, devicesFile, stateDirectory } from "../sessions/files";
 
 /** How long a pairing code can be redeemed. */
-export const PAIRING_TTL_MS = 5 * 60 * 1000;
+/** For now 20 minutes (owner, 2026-10-14): long enough to get from the Mac to the phone. */
+export const PAIRING_TTL_MS = 20 * 60 * 1000;
 /** How long a WebSocket ticket can be used. */
 export const TICKET_TTL_MS = 30 * 1000;
 /** How often a device's last-seen time is written, at most. */

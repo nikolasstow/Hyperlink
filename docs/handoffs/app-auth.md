@@ -29,7 +29,7 @@ opencode v2 also requires a password now (see `slash-commands.md`).
 
 ## Built: server (2026-10-14, branch `feat/app-auth` on `chore/effect-4`)
 
-- `server/auth/DeviceAuth.ts`: pairing codes (8 letters without look-alikes, 5 minutes, one
+- `server/auth/DeviceAuth.ts`: pairing codes (8 letters without look-alikes, 20 minutes, one
   use), device tokens (32 random bytes, kept as SHA-256 in `devices.json`, `0600`), WebSocket
   tickets (30 seconds, one use), the admin token (`admin-token`, `0600`, made at first start).
   Every token is compared by hash.
