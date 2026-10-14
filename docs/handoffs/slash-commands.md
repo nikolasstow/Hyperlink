@@ -43,6 +43,22 @@ Related: `dubz-suggestions-decisions.md` (suggestions without `/`, through Laya)
   ids, exactly once, through the outbox). v2 has no way to run a command, and v1 does not see v2
   sessions. This is the open question below.
 
+## Upstream opencode (checked 2026-10-14)
+
+Our server runs `v1.18.33` plus two patches (2026-09-30). Upstream `dev` is 647 commits on and
+releases as `v2.0.29`:
+
+- **v2 runs commands now.** `POST /api/session/:id/command` takes `{ name, …prompt, delivery? }`
+  (no message id); skills are their own list (`GET /api/skill`) and are turned on per session with
+  `POST /api/experimental/session/:id/skill`. `Command.Info` is only `{ name, description }`.
+- **v1 is gone.** No v1 routes remain; `packages/opencode` is split into `server`, `core`, `cli`
+  and others, with a v1-to-v2 database migration (`core/database/v1-migration`).
+- **Our first patch is upstream** (providers reload when the models catalog refreshes). The
+  `POST /provider/refresh` endpoint is not.
+- **Our app still uses v1** in many places: the `@opencode-ai/sdk` v1 client (17 files across the
+  native app and agent-console: session lists, the chat stream, worktrees, previews), v1 lanes in
+  the outbox, and its vendored v2 API is the v1.18.33 one.
+
 ## Open
 
 1. **How a command runs on a v2 session.** Options:
