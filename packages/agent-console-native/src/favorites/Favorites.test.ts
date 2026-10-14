@@ -1,5 +1,5 @@
 import { Effect, Option } from "effect";
-import { KeyValueStore } from "effect/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
 import { Favorites } from "./Favorites";
 import { homeScope, LegacyFavorites, repoTarget, ScopedFavorites, sessionTarget } from "./model";

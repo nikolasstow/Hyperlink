@@ -7,7 +7,7 @@
  * @internal
  */
 import { Context, Effect, Layer, Option, Schema } from "effect";
-import { KeyValueStore } from "effect/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { themeJson } from "./extensionsClient";
 
 const STORE_KEY = "themes";

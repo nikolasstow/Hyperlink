@@ -6,7 +6,7 @@
  * @internal
  */
 import { Context, Effect, Layer, Option, Schema, SubscriptionRef } from "effect";
-import { KeyValueStore } from "effect/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 
 const STORE_KEY = "scroll-offsets";
 

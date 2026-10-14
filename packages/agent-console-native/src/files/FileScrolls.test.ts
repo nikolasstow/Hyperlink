@@ -1,5 +1,5 @@
 import { Effect, Stream } from "effect";
-import { KeyValueStore } from "effect/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
 import { FileScrolls } from "./FileScrolls";
 

@@ -21,7 +21,7 @@
  */
 import { Context, Duration, Effect, FiberMap, HashMap, Layer, Option, Schema, Semaphore, Stream, SubscriptionRef } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
-import { KeyValueStore } from "effect/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { chatMessagesOfV1History } from "../chat/fromV1";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { chatMessagesOfV2 } from "../chat/fromV2";

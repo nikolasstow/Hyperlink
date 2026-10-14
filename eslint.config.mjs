@@ -195,4 +195,23 @@ export default [
       ],
     },
   },
+  // The native app is bundled by Metro, which keeps every module a barrel re-exports. The
+  // `effect/persistence` barrel reaches the SQL migrator, whose dynamic import() Metro refuses,
+  // so the app cannot load. Import the module itself.
+  {
+    files: ["packages/agent-console-native/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "effect/persistence",
+              message: "Metro cannot bundle the effect/persistence barrel (it reaches effect/sql/Migrator). Import the module: `import * as KeyValueStore from \"effect/persistence/KeyValueStore\"`.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

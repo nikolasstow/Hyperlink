@@ -29,7 +29,7 @@
  */
 import { Cause, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, Schedule, Schema, Stream, SubscriptionRef } from "effect";
 import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { KeyValueStore } from "effect/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { Opencode, type OpencodeClient } from "../opencode/Opencode";
 import type { ServerAddress } from "../opencode/serverAddress";
 import { ServiceUnavailableError, UnknownError } from "../opencode/protocol/errors";
