@@ -35,7 +35,7 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
-import { AGENT } from "./client";
+import { AGENT } from "./agentConstants";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { HomeTargetPickers, sessionDirectory, type SessionTarget, TARGET_PICKERS_HEIGHT } from "./HomeTargetPickers";
@@ -55,7 +55,7 @@ import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessi
 import { SessionCard } from "./SessionCard";
 import { type FavoriteTarget, repoScope } from "./favorites/model";
 import { FavoriteScopeProvider, useBoard } from "./favorites/useFavorites";
-import { useSessionActivity } from "./useSessionActivity";
+import { useSessionWatch } from "./sessions/useSessionWatch";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
@@ -152,13 +152,13 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { name, dir, isRepo } = props.route.params;
-  const { client, backend, rootDir, address, server: apiBase } = useAppContext();
+  const { backend, rootDir, address, server: apiBase } = useAppContext();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const { colors: themeColors } = useTheme();
   const perGroup = useGroupSize();
   const isFocused = useIsFocused();
-  const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
+  const { busy: busySessions, activityAt } = useSessionWatch(serverAddressOf(address), isFocused);
 
   // The kept list (read back at launch), so it draws from its first frame.
   const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>(cachedSessionsNow);
@@ -238,7 +238,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         await sendMessage({
           server: serverAddressOf(address),
           sessionID,
-          protocol: "v2",
           directory: directory === undefined ? undefined : AbsolutePath.make(directory),
           create: target.kind === "newFolder" ? { folder: { root: rootDir, name: target.name } } : {},
           text,
@@ -246,7 +245,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
           agent: Agent.ID.make(AGENT),
         });
-        props.navigation.navigate("Chat", { sessionID, protocol: "v2" });
+        props.navigation.navigate("Chat", { sessionID });
         void load();
       } finally {
         setSending(false);
@@ -338,7 +337,6 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     return (
       <SessionCard
         key={`${keyPrefix}-${session.id}`}
-        client={client}
         sessionId={session.id}
         updatedAt={session.time.updated}
         title={session.title}
@@ -346,11 +344,10 @@ export const RepoScreen = (props: Props): React.ReactElement => {
         meta={relativeTime(session.time.updated)}
         running={busySessions.has(session.id)}
         unread={isUnread(session)}
-        previewEnabled={isFocused}
         onOpen={() => props.navigation.navigate("Chat", { sessionID: session.id })}
-        onRename={() => promptRenameSession(client, session.id, session.title, () => void load())}
-        onStop={() => abortSession(client, session.id, () => void load())}
-        onDelete={() => confirmDeleteSession(client, session.id, session.title, () => void load())}
+        onRename={() => promptRenameSession(serverAddressOf(address), session.id, session.title, () => void load())}
+        onStop={() => abortSession(serverAddressOf(address), session.id, () => void load())}
+        onDelete={() => confirmDeleteSession(serverAddressOf(address), session.id, session.title, () => void load())}
         onArchive={() => archiveWithUndo(apiBase, session.id)}
         muted={mutedSet.has(session.id)}
         onMute={() => toggleMute(apiBase, session.id)}

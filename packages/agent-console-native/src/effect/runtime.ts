@@ -40,6 +40,7 @@ import { HomeLayoutStore } from "../home/HomeLayoutStore";
 import { CodeFonts } from "../fonts/CodeFonts";
 import { KeptThemes } from "../KeptThemes";
 import { SessionBackgrounds } from "../sessions/SessionBackgrounds";
+import { SessionWatch } from "../sessions/SessionWatch";
 import { Opencode } from "../opencode/Opencode";
 import { layer as foldersLayer } from "../outbox/foldersNative";
 import { Outbox } from "../outbox/Outbox";
@@ -68,8 +69,9 @@ const BAR_WINDOW_STORAGE_PREFIX = "agent-console-native:barWindow:";
 const AUTH_STORAGE_PREFIX = "agent-console-native:auth:";
 const MODELS_STORAGE_PREFIX = "agent-console-native:models:";
 
-// The model catalog reads its response as it comes, so its client streams
-// (expo/fetch; React Native's own fetch reads a body whole).
+// The model catalog and opencode's event stream read their responses as they
+// come, so their client streams (expo/fetch; React Native's own fetch reads a
+// body whole).
 const streamingHttpClient = FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch)(authedStreamingFetch)));
 
 // Every Effect HTTP request goes through `authedFetch`: a paired server's
@@ -90,11 +92,12 @@ const AppLayer = Layer.mergeAll(
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
   BarWindowStore.layer.pipe(Layer.provide(asyncStorageLayer(BAR_WINDOW_STORAGE_PREFIX))),
   LiveFiles.layer,
+  SessionWatch.layer,
   ServerAuth.layer.pipe(Layer.provide([asyncStorageLayer(AUTH_STORAGE_PREFIX), secretStoreLayer])),
   ModelCatalog.layer.pipe(Layer.provide([asyncStorageLayer(MODELS_STORAGE_PREFIX), streamingHttpClient])),
 ).pipe(
   Layer.provideMerge(Reachability.layer),
-  Layer.provideMerge(Opencode.layer),
+  Layer.provideMerge(Opencode.layer.pipe(Layer.provide(streamingHttpClient))),
   Layer.provide(asyncStorageLayer(OUTBOX_STORAGE_PREFIX)),
   Layer.provideMerge(platform),
 );

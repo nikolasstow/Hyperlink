@@ -27,6 +27,7 @@ import {
 import * as React from "react";
 import { Alert, DynamicColorIOS, StyleSheet, Text, useColorScheme, View } from "react-native";
 import { useAppContext } from "./AppContext";
+import { serverAddressOf } from "./opencode/serverAddress";
 import { listLocalBranches, readCurrentBranch } from "./branchScan";
 import { runFs } from "./effect/runtime";
 import type { ScannedRepo, ScannedWorktree } from "./repoScan";
@@ -147,7 +148,7 @@ const PillLabel = (props: {
 };
 
 export const HomeTargetPickers = (props: Props): React.ReactElement => {
-  const { client, backend, rootDir } = useAppContext();
+  const { address, backend, rootDir } = useAppContext();
   const [branches, setBranches] = React.useState<ReadonlyArray<string>>([]);
   const [newRepoOpen, setNewRepoOpen] = React.useState(false);
   const [sort, setSort] = React.useState<RepoMenuSort>("recent");
@@ -380,7 +381,7 @@ export const HomeTargetPickers = (props: Props): React.ReactElement => {
             createThenChoose(
               name,
               async () => {
-                const path = await createWorktree(client, rootDir, target.repo, main.path, name);
+                const path = await createWorktree(serverAddressOf(address), rootDir, target.repo, main.path, name);
                 await props.onWorkspaceChanged();
                 void setLastWorktreeForRepo(target.repo, name);
                 return {

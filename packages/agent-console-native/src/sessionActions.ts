@@ -6,15 +6,24 @@
  * @internal
  */
 import { Alert } from "react-native";
-import type { OpencodeClient } from "./client";
+import { runApp } from "./effect/runtime";
+import { SessionID } from "./opencode/schema/session-id";
+import type { ServerAddress } from "./opencode/serverAddress";
+import { interruptSession, removeSession, renameSession } from "./sessions/sessionCommands";
+
+/** Says a failed action, and logs why. */
+const failed = (title: string) => (error: unknown) => {
+  console.error(`[sessions] ${title}`, error);
+  Alert.alert(title, error instanceof Error ? error.message : "The server could not do it.");
+};
 
 /**
- * Prompt for a new session name and apply it via `session.update`. `onRenamed`
+ * Prompt for a new session name and apply it (`session.update`). `onRenamed`
  * runs on success with the new title (update a local title, refresh a list, …);
  * failures are surfaced rather than swallowed.
  */
 export const promptRenameSession = (
-  client: OpencodeClient,
+  server: ServerAddress,
   sessionID: string,
   currentTitle: string,
   onRenamed: (title: string) => void,
@@ -29,16 +38,7 @@ export const promptRenameSession = (
         onPress: (text?: string) => {
           const next = (text ?? "").trim();
           if (next === "") return;
-          void client.session
-            .update({ path: { id: sessionID }, body: { title: next } })
-            .then(({ error }) => {
-              if (error !== undefined) {
-                Alert.alert("Couldn't rename", "The server rejected the new name.");
-                return;
-              }
-              onRenamed(next);
-            })
-            .catch(() => Alert.alert("Couldn't rename", "Couldn't reach the server."));
+          runApp(renameSession(server, SessionID.make(sessionID), next)).then(() => onRenamed(next), failed("Couldn't rename"));
         },
       },
     ],
@@ -49,34 +49,22 @@ export const promptRenameSession = (
 
 /**
  * Abort the running agent for a session. `onAborted` runs on success (refresh a
- * list, …); failures are surfaced rather than swallowed — the SDK reports HTTP
- * errors on `.error`, so a resolved-but-failed response is checked explicitly.
+ * list, …); failures are surfaced rather than swallowed.
  */
 export const abortSession = (
-  client: OpencodeClient,
+  server: ServerAddress,
   sessionID: string,
   onAborted?: () => void,
 ): void => {
-  void client.session
-    .abort({ path: { id: sessionID } })
-    .then(({ error }) => {
-      if (error !== undefined) {
-        Alert.alert("Couldn't stop", "The server rejected the stop request.");
-        return;
-      }
-      onAborted?.();
-    })
-    .catch(() => Alert.alert("Couldn't stop", "Couldn't reach the server."));
+  runApp(interruptSession(server, SessionID.make(sessionID))).then(() => onAborted?.(), failed("Couldn't stop"));
 };
 
 /**
  * Delete a session, after asking: it cannot be undone. `onDeleted` runs on
- * success (refresh a list, …); failures are surfaced rather than swallowed —
- * the SDK reports HTTP errors on `.error`, so a resolved-but-failed response is
- * checked explicitly.
+ * success (refresh a list, …); failures are surfaced rather than swallowed.
  */
 export const confirmDeleteSession = (
-  client: OpencodeClient,
+  server: ServerAddress,
   sessionID: string,
   title: string,
   onDeleted?: () => void,
@@ -87,16 +75,7 @@ export const confirmDeleteSession = (
       text: "Delete",
       style: "destructive",
       onPress: () => {
-        void client.session
-          .delete({ path: { id: sessionID } })
-          .then(({ error }) => {
-            if (error !== undefined) {
-              Alert.alert("Couldn't delete", "The server rejected the delete.");
-              return;
-            }
-            onDeleted?.();
-          })
-          .catch(() => Alert.alert("Couldn't delete", "Couldn't reach the server."));
+        runApp(removeSession(server, SessionID.make(sessionID))).then(() => onDeleted?.(), failed("Couldn't delete"));
       },
     },
   ]);

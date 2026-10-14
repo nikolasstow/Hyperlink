@@ -36,6 +36,7 @@ const PROTOCOL = [
   "groups/command.ts",
   "groups/skill.ts",
   "groups/model.ts",
+  "groups/shell.ts",
 ];
 
 /** The core modules the app uses (paths under core's `src`), with how their

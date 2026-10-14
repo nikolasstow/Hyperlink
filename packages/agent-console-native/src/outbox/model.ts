@@ -17,12 +17,6 @@ import { AbsolutePath } from "../opencode/schema/schema";
 import { SessionID } from "../opencode/schema/session-id";
 import { SessionMessage } from "../opencode/schema/session-message";
 
-/** How a lane's messages reach the server: opencode's v2 session API, or v1
- * for a session made before the app moved to v2 (v2 cannot see its history,
- * so it is never prompted through v2). */
-export const Protocol = Schema.Literals(["v2", "v1"]);
-export type Protocol = typeof Protocol.Type;
-
 /** A folder to make before the session, when the session is for a new one. */
 export class NewFolder extends Schema.Class<NewFolder>("Outbox.NewFolder")({
   /** The folder it goes in (the workspace root, as typed: may start with `~`). */
@@ -68,7 +62,6 @@ export class Held extends Schema.Class<Held>("Outbox.Held")({
 export class Lane extends Schema.Class<Lane>("Outbox.Lane")({
   server: ServerAddress,
   sessionID: SessionID,
-  protocol: Protocol,
   /** Where the session runs (absolute). Unknown only until a new folder is
    * made (the server resolves its root), then filled in. */
   directory: Schema.optional(AbsolutePath),

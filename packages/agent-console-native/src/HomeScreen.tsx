@@ -32,9 +32,9 @@ import { RepoCard } from "./RepoCard";
 import { ServerCard } from "./ServerCard";
 import { type Server, serverById, useServers } from "./servers";
 import { LAYOUT_MS, SessionCard } from "./SessionCard";
-import { useSessionActivity } from "./useSessionActivity";
+import { useSessionWatch } from "./sessions/useSessionWatch";
 import { HomeSkeleton } from "./HomeSkeleton";
-import { AGENT } from "./client";
+import { AGENT } from "./agentConstants";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -107,12 +107,12 @@ const heading = (title: string): Row => ({ kind: "heading", title });
 export const HomeScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { client, backend, rootDir, address, server } = useAppContext();
+  const { backend, rootDir, address, server } = useAppContext();
   const groupSize = useGroupSize();
   // Only stream / lazily load previews while Home is on screen — the chat holds
   // its own stream when open.
   const isFocused = useIsFocused();
-  const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
+  const { busy: busySessions, activityAt } = useSessionWatch(serverAddressOf(address), isFocused);
   // Read state for the unread dots. Reloaded on focus (e.g. back from a chat
   // that just marked itself read); live activity from `activityAt` above then
   // flips a session unread the instant a message lands, without a refresh.
@@ -181,7 +181,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       setLoading(false);
       await Promise.all([loadSessions(), loadScan(cachedScan === undefined)]);
     })();
-  }, [loadSessions, loadScan, client, rootDir]);
+  }, [loadSessions, loadScan, address, rootDir]);
 
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
     if (target === undefined || sending) return;
@@ -194,7 +194,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       await sendMessage({
         server: serverAddressOf(address),
         sessionID,
-        protocol: "v2",
         directory: directory === undefined ? undefined : AbsolutePath.make(directory),
         create: target.kind === "newFolder" ? { folder: { root: rootDir, name: target.name } } : {},
         text,
@@ -202,7 +201,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
         agent: Agent.ID.make(AGENT),
       });
-      props.navigation.navigate("Chat", { sessionID, protocol: "v2" });
+      props.navigation.navigate("Chat", { sessionID });
       void loadSessions();
     } finally {
       setSending(false);
@@ -491,7 +490,6 @@ export const HomeScreen = (props: Props): React.ReactElement => {
           if (item.kind === "session") {
             return (
               <SessionCard
-                client={client}
                 sessionId={item.session.id}
                 updatedAt={item.session.time.updated}
                 title={item.session.title}
@@ -500,11 +498,10 @@ export const HomeScreen = (props: Props): React.ReactElement => {
                 meta={relativeTime(item.session.time.updated)}
                 running={busySessions.has(item.session.id)}
                 unread={isUnread(item.session)}
-                previewEnabled={isFocused}
                 onOpen={() => props.navigation.navigate("Chat", { sessionID: item.session.id })}
-                onRename={() => promptRenameSession(client, item.session.id, item.session.title, () => void loadSessions())}
-                onStop={() => abortSession(client, item.session.id, () => void loadSessions())}
-                onDelete={() => confirmDeleteSession(client, item.session.id, item.session.title, () => void loadSessions())}
+                onRename={() => promptRenameSession(serverAddressOf(address), item.session.id, item.session.title, () => void loadSessions())}
+                onStop={() => abortSession(serverAddressOf(address), item.session.id, () => void loadSessions())}
+                onDelete={() => confirmDeleteSession(serverAddressOf(address), item.session.id, item.session.title, () => void loadSessions())}
                 onArchive={() => archiveWithUndo(server, item.session.id)}
                 muted={mutedSet.has(item.session.id)}
                 onMute={() => toggleMute(server, item.session.id)}

@@ -1,5 +1,5 @@
 /**
- * App-wide dependencies (the connected client, the server address, the
+ * App-wide dependencies (the server address, the
  * configured repo root) — provided once at the navigator's root, read by
  * any screen via `useAppContext()`. These aren't navigation params: they're
  * singletons for this run of the app, not per-route data, so threading
@@ -9,10 +9,8 @@
  * @internal
  */
 import * as React from "react";
-import type { OpencodeClient } from "./client";
 
 type AppContextValue = {
-  readonly client: OpencodeClient;
   /** The server the app connects to (the agent-console API server): plugins,
    * themes, sessions' marks, live files. */
   readonly server: string;

@@ -19,6 +19,7 @@ import { MessageGroup } from "./protocol/groups/message";
 import { ModelGroup } from "./protocol/groups/model";
 import { makePermissionGroup } from "./protocol/groups/permission";
 import { ServerGroup } from "./protocol/groups/server";
+import { ShellGroup } from "./protocol/groups/shell";
 import { makeSessionGroup } from "./protocol/groups/session";
 import { SkillGroup } from "./protocol/groups/skill";
 import { Authorization } from "./protocol/middleware/authorization";
@@ -40,5 +41,6 @@ export const OpencodeApi = HttpApi.make("opencode")
   .add(CommandGroup.middleware(Location))
   .add(SkillGroup.middleware(Location))
   .add(ModelGroup.middleware(Location))
+  .add(ShellGroup.middleware(Location))
   .middleware(Authorization)
   .middleware(SchemaErrorMiddleware);

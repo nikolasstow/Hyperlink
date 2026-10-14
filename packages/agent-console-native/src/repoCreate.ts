@@ -4,9 +4,9 @@
  *
  * @internal
  */
-import type { OpencodeClient } from "./client";
 import { expandHome } from "./homeDir";
-import { RepoAdminError, runRepoAdmin } from "./repoAdmin";
+import type { ServerAddress } from "./opencode/serverAddress";
+import { runRepoAdmin } from "./repoAdmin";
 import { getRepoTemplate, resolveRepoPath } from "./settings";
 import { authedFetch } from "./auth/serverTokens";
 
@@ -113,88 +113,81 @@ const parseLsRemote = (output: string): { defaultBranch: string | undefined; bra
 };
 
 export const previewRemote = async (
-  client: OpencodeClient,
+  server: ServerAddress,
   rootDir: string,
   rawUrl: string,
   repoNameOverride?: string,
 ): Promise<RemotePreview> => {
   const remote = parseRemoteInput(rawUrl);
-  if (remote === undefined) throw new RepoAdminError("That doesn't look like a git URL or owner/repo.");
+  if (remote === undefined) throw new Error("That doesn't look like a git URL or owner/repo.");
 
-  const expanded = await expandHome(client, rootDir);
+  const expanded = await expandHome(server, rootDir);
   const template = await getRepoTemplate();
   const repoName = (repoNameOverride?.trim() || remote.name).trim();
   const destination = resolveRepoPath(expanded, repoName, template);
 
-  const output = await runRepoAdmin(
-    client,
-    expanded,
-    `git ls-remote --heads --symref ${JSON.stringify(remote.url)}`,
-    "ls-remote",
-  );
+  const output = await runRepoAdmin(server, expanded, `git ls-remote --heads --symref ${JSON.stringify(remote.url)}`);
   const { defaultBranch, branches } = parseLsRemote(output);
   return { remote: { ...remote, name: repoName }, defaultBranch, branches, destination };
 };
 
 export const cloneRepo = async (
-  client: OpencodeClient,
+  server: ServerAddress,
   rootDir: string,
   remoteUrl: string,
   repoName: string,
   branch: string | undefined,
 ): Promise<string> => {
-  const expanded = await expandHome(client, rootDir);
+  const expanded = await expandHome(server, rootDir);
   const template = await getRepoTemplate();
   const destination = resolveRepoPath(expanded, repoName, template);
   const parent = destination.replace(/\/[^/]+$/, "");
   const branchFlag = branch !== undefined && branch.length > 0 ? `-b ${JSON.stringify(branch)} ` : "";
   await runRepoAdmin(
-    client,
+    server,
     expanded,
     `mkdir -p ${JSON.stringify(parent)} && git clone ${branchFlag}${JSON.stringify(remoteUrl)} ${JSON.stringify(destination)}`,
-    `clone ${repoName}`,
   );
   return destination;
 };
 
 export const initRepo = async (
-  client: OpencodeClient,
+  server: ServerAddress,
   rootDir: string,
   repoName: string,
 ): Promise<string> => {
-  const expanded = await expandHome(client, rootDir);
+  const expanded = await expandHome(server, rootDir);
   const template = await getRepoTemplate();
   const destination = resolveRepoPath(expanded, repoName, template);
   const parent = destination.replace(/\/[^/]+$/, "");
   await runRepoAdmin(
-    client,
+    server,
     expanded,
     `mkdir -p ${JSON.stringify(parent)} && mkdir -p ${JSON.stringify(destination)} && git -C ${JSON.stringify(destination)} init -b main`,
-    `init ${repoName}`,
   );
   return destination;
 };
 
 /** Resolve where an empty init would land (create-flow folder prefs). */
 export const previewInitDestination = async (
-  client: OpencodeClient,
+  server: ServerAddress,
   rootDir: string,
   repoName: string,
 ): Promise<string> => {
-  const expanded = await expandHome(client, rootDir);
+  const expanded = await expandHome(server, rootDir);
   const template = await getRepoTemplate();
   return resolveRepoPath(expanded, repoName.trim(), template);
 };
 
 
 export const createWorkspaceFolder = async (
-  client: OpencodeClient,
+  server: ServerAddress,
   rootDir: string,
   name: string,
 ): Promise<string> => {
-  const expanded = await expandHome(client, rootDir);
+  const expanded = await expandHome(server, rootDir);
   const path = `${expanded}/${name}`;
-  await runRepoAdmin(client, expanded, `mkdir -p ${JSON.stringify(path)}`, `mkdir ${name}`);
+  await runRepoAdmin(server, expanded, `mkdir -p ${JSON.stringify(path)}`);
   return path;
 };
 

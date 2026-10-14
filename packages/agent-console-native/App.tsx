@@ -24,7 +24,12 @@ import { LiveFilesFollower } from "./src/files/useLiveFiles";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
-import { type OpencodeClient, makeClient, normalizeServerAddress } from "./src/client";
+import { Effect } from "effect";
+import { HttpClientError } from "effect/http";
+import { runApp } from "./src/effect/runtime";
+import { Opencode } from "./src/opencode/Opencode";
+import { UnauthorizedError } from "./src/opencode/protocol/errors";
+import { normalizeServerAddress, serverAddressOf } from "./src/opencode/serverAddress";
 import { colors } from "./src/colors";
 import { RootNavigator } from "./src/RootNavigator";
 import { ThemeProvider } from "./src/theme";
@@ -47,7 +52,7 @@ import { KeyboardHeightProvider } from "./src/keyboardHeight";
 
 /** Only the one-time async bootstrap (resolve a server address, connect,
  * resolve a root folder) lives in this hand-rolled state machine — once
- * `client`/`rootDir` are known, RootNavigator (a real
+ * the server and `rootDir` are known, RootNavigator (a real
  * @react-navigation/native-stack) takes over for Home/Chat/Settings. This
  * flow has no "back" between its own steps (each one is just "waiting on
  * the previous async step to resolve"), so it doesn't need real navigation
@@ -56,8 +61,8 @@ type Screen =
   | { readonly step: "loading" }
   | { readonly step: "server-setup"; readonly error?: string }
   | { readonly step: "connecting"; readonly server: string }
-  | { readonly step: "root-setup"; readonly client: OpencodeClient; readonly server: string; readonly error?: string }
-  | { readonly step: "ready"; readonly client: OpencodeClient; readonly server: string; readonly rootDir: string }
+  | { readonly step: "root-setup"; readonly server: string; readonly error?: string }
+  | { readonly step: "ready"; readonly server: string; readonly rootDir: string }
   // A pairing link opened the app (auth/pairingLink.ts): asks before it
   // pairs, and goes back to where it was on Cancel.
   | { readonly step: "pair"; readonly link: PairingLink; readonly previous: Screen; readonly busy: boolean; readonly error?: string };
@@ -69,23 +74,28 @@ const READ_BACK_WAIT_MS = 1000;
  * an address that answers nothing must not hold the app on the launch screen. */
 const CONNECT_TIMEOUT_MS = 10_000;
 
-/** Connect through the server: listing opencode's sessions there proves both
- * are up. */
-const connectToServer = async (server: string): Promise<OpencodeClient> => {
-  const client = makeClient(opencodeAddressOf(server));
-  const timedOut = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`No answer from "${server}". Is the agent-console server running there?`)), CONNECT_TIMEOUT_MS),
+/** Whether a failure is the server asking for this phone to be paired. */
+const isUnpaired = (error: unknown): boolean =>
+  error instanceof UnauthorizedError ||
+  (HttpClientError.isHttpClientError(error) && "response" in error.reason && error.reason.response?.status === 401);
+
+/** Connect through the server: opencode's info there proves both are up. */
+const connectToServer = (server: string): Promise<void> =>
+  runApp(
+    Opencode.pipe(
+      Effect.flatMap((opencode) => opencode.client(serverAddressOf(opencodeAddressOf(server)))),
+      Effect.flatMap((client) => client["server.server"]["server.info"]()),
+      Effect.timeout(CONNECT_TIMEOUT_MS),
+      Effect.mapError((error) =>
+        isUnpaired(error)
+          ? new Error(`The server at "${server}" asks for this phone to be paired. Run pnpm pair on the Mac, then open its link, or type its code below.`)
+          : error._tag === "TimeoutError"
+            ? new Error(`No answer from "${server}". Is the agent-console server running there?`)
+            : new Error(`Couldn't reach opencode through the server at "${server}": ${error.message}`),
+      ),
+      Effect.asVoid,
+    ),
   );
-  const { data, error, response } = await Promise.race([client.session.list(), timedOut]);
-  if (response.status === 401) {
-    throw new Error(`The server at "${server}" asks for this phone to be paired. Run pnpm pair on the Mac, then open its link, or type its code below.`);
-  }
-  if (error !== undefined || data === undefined) {
-    const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : undefined;
-    throw new Error(message ?? `Couldn't reach opencode through the server at "${server}".`);
-  }
-  return client;
-};
 
 const AppInner = (): React.ReactElement => {
   // No LayoutAnimation on bootstrap transitions: the launch→ready swap changes
@@ -127,14 +137,14 @@ const AppInner = (): React.ReactElement => {
       void getBackendAddress(savedAddress).then((backend) => registerForPush(backend));
       setScreen({ step: "connecting", server: savedAddress });
       try {
-        const client = await connectToServer(savedAddress);
+        await connectToServer(savedAddress);
         const savedRootDir = await getRootDir();
         if (savedRootDir === undefined) {
-          setScreen({ step: "root-setup", client, server: savedAddress });
+          setScreen({ step: "root-setup", server: savedAddress });
         } else {
           setRootDirInput(savedRootDir);
           await readBack;
-          setScreen({ step: "ready", client, server: savedAddress, rootDir: savedRootDir });
+          setScreen({ step: "ready", server: savedAddress, rootDir: savedRootDir });
         }
       } catch (err) {
         setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) });
@@ -146,14 +156,14 @@ const AppInner = (): React.ReactElement => {
   const connectTo = (address: string): void => {
     setScreen({ step: "connecting", server: address });
     connectToServer(address)
-      .then(async (client) => {
+      .then(async () => {
         void setServerAddress(address);
         const savedRootDir = await getRootDir();
         if (savedRootDir === undefined) {
-          setScreen({ step: "root-setup", client, server: address });
+          setScreen({ step: "root-setup", server: address });
         } else {
           setRootDirInput(savedRootDir);
-          setScreen({ step: "ready", client, server: address, rootDir: savedRootDir });
+          setScreen({ step: "ready", server: address, rootDir: savedRootDir });
         }
       })
       .catch((err: unknown) => setScreen({ step: "server-setup", error: err instanceof Error ? err.message : String(err) }));
@@ -200,11 +210,11 @@ const AppInner = (): React.ReactElement => {
     return () => subscription.remove();
   }, []);
 
-  const onSubmitRootDir = (client: OpencodeClient, server: string): void => {
+  const onSubmitRootDir = (server: string): void => {
     const rootDir = rootDirInput.trim();
     if (rootDir.length === 0) return;
     void setRootDir(rootDir);
-    setScreen({ step: "ready", client, server, rootDir });
+    setScreen({ step: "ready", server, rootDir });
   };
 
   const onChangeServer = (): void => {
@@ -283,14 +293,13 @@ const AppInner = (): React.ReactElement => {
             placeholderTextColor={colors.placeholderText}
             autoCapitalize="none"
             autoCorrect={false}
-            onSubmitEditing={() => onSubmitRootDir(screen.client, screen.server)}
+            onSubmitEditing={() => onSubmitRootDir(screen.server)}
           />
-          <Button title="Continue" onPress={() => onSubmitRootDir(screen.client, screen.server)} />
+          <Button title="Continue" onPress={() => onSubmitRootDir(screen.server)} />
         </ScrollView>
       ) : (
         <AppContextProvider
           value={{
-            client: screen.client,
             server: normalizeServerAddress(screen.server),
             address: opencodeAddressOf(screen.server),
             backend: deriveBackendAddress(screen.server),

@@ -19,18 +19,14 @@
  *
  * @internal
  */
-import { Context, Duration, Effect, FiberMap, HashMap, Layer, Option, Schema, Semaphore, Stream, SubscriptionRef } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import { Context, Duration, Effect, FiberMap, HashMap, Layer, Option, Semaphore, Stream, SubscriptionRef } from "effect";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
-import { chatMessagesOfV1History } from "../chat/fromV1";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { chatMessagesOfV2 } from "../chat/fromV2";
 import type { ChatMessage } from "../chat/model";
 import { Opencode } from "../opencode/Opencode";
 import type { ServerAddress } from "../opencode/serverAddress";
 import { SessionID } from "../opencode/schema/session-id";
-import type { Protocol } from "../outbox/model";
-import { sessionProtocol } from "../sessions/protocol";
 import { listSessions, type SessionSummary } from "../sessions/sessionList";
 import { Conversation, conversationKey, ConversationKeys } from "./model";
 
@@ -45,23 +41,6 @@ const REMEMBER_DEBOUNCE = Duration.seconds(1);
 /** The most recent sessions kept on opening: Home's lists and more. */
 const RECENT_SESSIONS = 30;
 const KEYS_KEY = "keys";
-
-/** v1's history page, as far as the chat reads it. */
-const V1History = Schema.Array(
-  Schema.Struct({
-    info: Schema.Struct({
-      id: Schema.String,
-      role: Schema.Literals(["user", "assistant"]),
-      providerID: Schema.optional(Schema.String),
-      modelID: Schema.optional(Schema.String),
-      time: Schema.Struct({
-        created: Schema.Number,
-        completed: Schema.optional(Schema.Number),
-      }),
-    }),
-    parts: Schema.Array(Schema.Unknown),
-  }),
-);
 
 type Kept = HashMap.HashMap<string, Conversation>;
 
@@ -79,7 +58,6 @@ export const newest = (messages: ReadonlyArray<ChatMessage>): ReadonlyArray<Chat
 
 const make = Effect.gen(function* () {
   const opencode = yield* Opencode;
-  const http = yield* HttpClient.HttpClient;
   const device = yield* DeviceSignals;
   const kv = yield* KeyValueStore.KeyValueStore;
   const conversations = KeyValueStore.toSchemaStore(kv, Conversation);
@@ -122,14 +100,7 @@ const make = Effect.gen(function* () {
   const keep = (key: string, conversation: Conversation) =>
     SubscriptionRef.update(state, HashMap.set(key, conversation)).pipe(Effect.andThen(persist(key)), Effect.asVoid);
 
-  const v1Newest = (server: ServerAddress, sessionID: string) =>
-    http.get(`${server}/session/${sessionID}/message`, { urlParams: { limit: String(KEPT_MESSAGES) } }).pipe(
-      Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.flatMap(HttpClientResponse.schemaBodyJson(V1History)),
-      Effect.map(chatMessagesOfV1History),
-    );
-
-  const v2Newest = (server: ServerAddress, sessionID: SessionID) =>
+  const newestOf = (server: ServerAddress, sessionID: SessionID) =>
     opencode.client(server).pipe(
       Effect.flatMap((client) => client["server.message"]["session.messages"]({ params: { sessionID }, query: { limit: KEPT_MESSAGES, order: "desc" } })),
       Effect.map((page) => chatMessagesOfV2([...page.data].reverse())),
@@ -150,12 +121,9 @@ const make = Effect.gen(function* () {
         return;
       }
       const sessionID = SessionID.make(session.id);
-      const protocol: Protocol = Option.isSome(kept)
-        ? kept.value.protocol
-        : yield* sessionProtocol(server, sessionID).pipe(Effect.provideService(HttpClient.HttpClient, http), Effect.provideService(Opencode, opencode));
-      const messages = protocol === "v1" ? yield* v1Newest(server, session.id) : yield* v2Newest(server, sessionID);
+      const messages = yield* newestOf(server, sessionID);
       const title = session.title ?? Option.getOrUndefined(Option.map(kept, (conversation) => conversation.title));
-      yield* keep(key, { protocol, updated: session.updated, title, messages });
+      yield* keep(key, { updated: session.updated, title, messages });
     }).pipe(
       fetching.withPermits(1),
       Effect.catchCause((cause) => Effect.logWarning(`[conversations] preloading ${session.id} failed`, cause)),
@@ -197,7 +165,7 @@ const make = Effect.gen(function* () {
       ),
     /** An open chat's newest messages, kept once they stop changing for a
      * moment. */
-    remember: (server: ServerAddress, sessionID: string, protocol: Protocol, messages: ReadonlyArray<ChatMessage>) => {
+    remember: (server: ServerAddress, sessionID: string, messages: ReadonlyArray<ChatMessage>) => {
       const key = conversationKey(server, sessionID);
       return FiberMap.run(
         remembering,
@@ -206,7 +174,7 @@ const make = Effect.gen(function* () {
           Effect.andThen(SubscriptionRef.get(state)),
           Effect.flatMap((kept) => {
             const title = Option.getOrUndefined(Option.map(HashMap.get(kept, key), (conversation) => conversation.title));
-            return keep(key, { protocol, updated: Date.now(), title, messages: newest(messages) });
+            return keep(key, { updated: Date.now(), title, messages: newest(messages) });
           }),
         ),
       ).pipe(Effect.asVoid);

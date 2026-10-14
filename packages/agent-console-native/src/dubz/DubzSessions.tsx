@@ -27,12 +27,10 @@ import { useAppContext } from "../AppContext";
 import { BarWindowResizeContext, HANDLE_CLEARANCE } from "../BarWindow";
 import { colors } from "../colors";
 import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
-import { chatMessageOfV1 } from "../chat/fromV1";
 import { chatMessageOfQueued, pendingMessages, sameMessages } from "../chat/fromOutbox";
 import { lastSummary, textOf, type ChatMessage } from "../chat/model";
 import { MessageParts } from "../chat/MessageParts";
 import { useV2Transcript } from "../chat/useV2Transcript";
-import { runApp } from "../effect/runtime";
 import { useKeptConversation } from "../conversations/useConversations";
 import { usePreloadConversation } from "../conversations/usePreloadConversation";
 import type { FileRef } from "../dubzSuggestions";
@@ -42,7 +40,6 @@ import { sessionCardHeight, summaryLines, titleLines } from "../home/homeLayout"
 import { Markdown } from "../Markdown";
 import { SessionID } from "../opencode/schema/session-id";
 import { serverAddressOf } from "../opencode/serverAddress";
-import type { Protocol } from "../outbox/model";
 import { useLane } from "../outbox/useOutbox";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "../sessionActions";
 import { archiveWithUndo, toggleMute, useMutedSessions } from "../sessionArchive";
@@ -53,9 +50,7 @@ import type { SessionSummary } from "../sessions/sessionList";
 import { useTextColors, useTheme } from "../theme";
 import { relativeTime } from "../time";
 import { PILL_FONT_SIZE, PILL_PAD_H, titlePillWidth } from "../titlePillStyle";
-import { sessionProtocol } from "../sessions/protocol";
-import { useSessionStream } from "../useSessionStream";
-import { useSessionActivity } from "../useSessionActivity";
+import { useSessionWatch } from "../sessions/useSessionWatch";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { groupSessions } from "./groupSessions";
 import { sessionsForFile } from "./sessionsForFile";
@@ -457,7 +452,7 @@ export const DubzSessionPage = (props: {
   readonly compact?: boolean;
 }): React.ReactElement => {
   const { width } = useWindowDimensions();
-  const { client, address } = useAppContext();
+  const { address } = useAppContext();
   const pageWidth = width - WINDOW_SIDE * 2;
   const shifted = props.shifted === true;
   // Stream only while the page is shown (it's kept mounted through the slide).
@@ -465,38 +460,12 @@ export const DubzSessionPage = (props: {
 
   // The live conversation — the same path SessionChatScreen uses, so sent
   // messages and the agent's streaming reply appear live (not a snapshot):
-  // resolve the protocol, take the live transcript (v2 or v1), fall back to the
-  // kept conversation, then merge what's still in the outbox.
+  // the live transcript, falling back to the kept conversation, then what's
+  // still in the outbox.
   const server = React.useMemo(() => serverAddressOf(address), [address]);
   const session = React.useMemo(() => SessionID.make(props.session.id), [props.session.id]);
   const kept = useKeptConversation(server, props.session.id);
-  const [foundProtocol, setProtocol] = React.useState<Protocol | undefined>(undefined);
-  const protocol = foundProtocol ?? kept?.protocol;
-  React.useEffect(() => {
-    if (protocol !== undefined) return undefined;
-    let cancelled = false;
-    void runApp(sessionProtocol(server, session)).then((answer) => {
-      if (!cancelled) setProtocol(answer);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [server, session, protocol]);
-
-  const { transcript, loaded } = useSessionStream(client, props.session.id, address, enabled);
-  const v2Messages = useV2Transcript(server, session, protocol === "v2" && enabled);
-  const live = React.useMemo(
-    (): ReadonlyArray<ChatMessage> | undefined =>
-      protocol === "v2"
-        ? v2Messages
-        : protocol === "v1" && loaded
-          ? transcript.order.flatMap((id) => {
-              const message = transcript.messages.get(id);
-              return message === undefined ? [] : [chatMessageOfV1(message)];
-            })
-          : undefined,
-    [protocol, v2Messages, loaded, transcript],
-  );
+  const live = useV2Transcript(server, session, enabled);
   const delivered = live ?? kept?.messages ?? NO_MESSAGES;
   const lane = useLane(server, session);
   const [pending, setPending] = React.useState<ReadonlyArray<ChatMessage>>([]);
@@ -641,7 +610,7 @@ export const DubzSessionListPage = (props: {
   const { width } = useWindowDimensions();
   const pageWidth = width - WINDOW_SIDE * 2;
   const shifted = props.shifted === true;
-  const { client, server } = useAppContext();
+  const { address, server } = useAppContext();
   // Favoriting from this list pins to the file's repo scope (as the repo's own
   // session list does), not Home.
   const favScope = React.useMemo(() => repoScope(props.file.repo), [props.file.repo]);
@@ -660,7 +629,7 @@ export const DubzSessionListPage = (props: {
       setSetupDate(date);
     });
   }, [refresh]);
-  const { busy, activityAt } = useSessionActivity(client, shifted);
+  const { busy, activityAt } = useSessionWatch(serverAddressOf(address), shifted);
   const mutedSet = useMutedSessions();
   const isUnread = (session: SessionSummary): boolean =>
     Math.max(session.time.updated, activityAt.get(session.id) ?? 0) > Math.max(reads.get(session.id) ?? 0, setupDate);
@@ -681,9 +650,9 @@ export const DubzSessionListPage = (props: {
       unread={isUnread(session)}
       muted={mutedSet.has(session.id)}
       onOpen={() => props.onOpen(toOpen(session))}
-      onRename={() => promptRenameSession(client, session.id, session.title, bump)}
-      onStop={() => abortSession(client, session.id, bump)}
-      onDelete={() => confirmDeleteSession(client, session.id, session.title, bump)}
+      onRename={() => promptRenameSession(serverAddressOf(address), session.id, session.title, bump)}
+      onStop={() => abortSession(serverAddressOf(address), session.id, bump)}
+      onDelete={() => confirmDeleteSession(serverAddressOf(address), session.id, session.title, bump)}
       onArchive={() => archiveWithUndo(server, session.id)}
       onMute={() => toggleMute(server, session.id)}
     />

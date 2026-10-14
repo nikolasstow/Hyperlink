@@ -22,13 +22,10 @@
  * - **Persisted** on the device (debounced): the outbox survives the app being
  *   killed, and `drain` is what the background task runs.
  *
- * Sessions made before the app moved to v2 are v1 lanes: v2 cannot see their
- * history, so their messages go through v1 (`prompt_async`, same id rules).
- *
  * @internal
  */
-import { Cause, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, Schedule, Schema, Stream, SubscriptionRef } from "effect";
-import { HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { Cause, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, Schedule, Stream, SubscriptionRef } from "effect";
+import { HttpClientError } from "effect/http";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { Opencode, type OpencodeClient } from "../opencode/Opencode";
 import type { ServerAddress } from "../opencode/serverAddress";
@@ -38,7 +35,7 @@ import type { Model } from "../opencode/schema/model";
 import { AbsolutePath } from "../opencode/schema/schema";
 import type { SessionID } from "../opencode/schema/session-id";
 import { SessionMessage } from "../opencode/schema/session-message";
-import { Attachment, Held, keyOfLane, Lane, laneKey, type LaneKey, Lanes, NewFolder, NewSession, type Protocol, QueuedMessage } from "./model";
+import { Attachment, Held, keyOfLane, Lane, laneKey, type LaneKey, Lanes, NewFolder, NewSession, QueuedMessage } from "./model";
 import { Folders } from "./Folders";
 import { Reachability } from "./Reachability";
 
@@ -64,8 +61,6 @@ class Refused extends Data.TaggedError("Outbox.Refused")<{ readonly reason: stri
  * said no to. */
 const classify = (error: unknown): Transient | Refused => {
   if (Cause.isTimeoutError(error)) return new Transient({ cause: error, unreachable: true });
-  // fetch's own failure to connect (outside HttpClient: the v1 shell calls).
-  if (error instanceof TypeError) return new Transient({ cause: error, unreachable: true });
   if (HttpClientError.isHttpClientError(error)) {
     if (error.reason._tag === "TransportError") return new Transient({ cause: error, unreachable: true });
     // A server error, by its status whatever the reason says: an undeclared
@@ -81,34 +76,12 @@ const classify = (error: unknown): Transient | Refused => {
 
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-// ── v1 (sessions made before v2) ────────────────────────────────────────────
-
-const V1Part = Schema.Union([
-  Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
-  Schema.Struct({ type: Schema.Literal("file"), mime: Schema.String, url: Schema.String, filename: Schema.String }),
-]);
-
-const V1Prompt = Schema.Struct({
-  messageID: Schema.String,
-  agent: Schema.String,
-  model: Schema.optional(Schema.Struct({ providerID: Schema.String, modelID: Schema.String })),
-  parts: Schema.Array(V1Part),
-});
-
-/** v1's run status of a folder's sessions: only those not idle are listed. */
-const V1Statuses = Schema.Record(Schema.String, Schema.Struct({ type: Schema.String }));
-
-/** How often a v1 message waiting on a busy session looks again. Only while
- * one waits; v1 has no event for it that reaches here. */
-const V1_IDLE_CHECK = Duration.seconds(2);
-
 // ── The service ─────────────────────────────────────────────────────────────
 
 /** What sending a message takes. */
 export interface Send {
   readonly server: ServerAddress;
   readonly sessionID: SessionID;
-  readonly protocol: Protocol;
   /** Where the session runs; absent only for a new folder (made first). */
   readonly directory?: AbsolutePath;
   /** When the session does not exist yet: making it (and, when `folder` is
@@ -133,7 +106,6 @@ const retrySchedule = Schedule.exponential(RETRY_FIRST).pipe(
 const make = Effect.gen(function* () {
   const opencode = yield* Opencode;
   const reachability = yield* Reachability;
-  const http = yield* HttpClient.HttpClient;
   const folders = yield* Folders;
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, Lanes);
 
@@ -216,7 +188,7 @@ const make = Effect.gen(function* () {
     return found.pipe(Effect.tap((directory) => updateLane(key, (current) => Lane.make({ ...current, directory }))));
   };
 
-  const sendV2 = (client: OpencodeClient, lane: Lane, message: QueuedMessage) =>
+  const prompt = (client: OpencodeClient, lane: Lane, message: QueuedMessage) =>
     Effect.gen(function* () {
       if (message.model !== undefined) {
         yield* step(lane.server, client["server.session"]["session.switchModel"]({ params: { sessionID: lane.sessionID }, payload: { model: message.model } }));
@@ -235,39 +207,6 @@ const make = Effect.gen(function* () {
       );
     });
 
-  const sendV1 = (lane: Lane, directory: AbsolutePath, message: QueuedMessage) =>
-    HttpClientRequest.post(`${lane.server}/session/${lane.sessionID}/prompt_async`).pipe(
-      HttpClientRequest.setUrlParam("directory", directory),
-      HttpClientRequest.schemaBodyJson(V1Prompt)({
-        messageID: message.id,
-        agent: message.agent,
-        model: message.model === undefined ? undefined : { providerID: message.model.providerID, modelID: message.model.id },
-        parts: [
-          { type: "text", text: message.text },
-          ...message.files.map((file): typeof V1Part.Type => ({ type: "file", mime: "text/plain", url: `file://${file.path}`, filename: file.name })),
-        ],
-      }),
-      Effect.flatMap((request) => HttpClient.filterStatusOk(http).execute(request)),
-      (effect) => step(lane.server, effect),
-    );
-
-  /** Whether a v1 session is running a turn now. */
-  const v1Busy = (lane: Lane, directory: AbsolutePath) =>
-    http.get(`${lane.server}/session/status`, { urlParams: { directory } }).pipe(
-      Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.flatMap(HttpClientResponse.schemaBodyJson(V1Statuses)),
-      Effect.map((statuses) => {
-        const status = statuses[lane.sessionID];
-        return status !== undefined && status.type !== "idle";
-      }),
-      (effect) => step(lane.server, effect),
-    );
-
-  /** Waits until a v1 session is idle: a message sent mid-run would go into
-   * the running turn, not after it. (v2 queues on the server.) */
-  const awaitV1Idle = (lane: Lane, directory: AbsolutePath) =>
-    v1Busy(lane, directory).pipe(Effect.repeat({ while: (busy) => busy, schedule: Schedule.spaced(V1_IDLE_CHECK) }), Effect.asVoid);
-
   /** Sends a lane's first message, waiting for the server and retrying what
    * may clear; fails only with what holds the lane. Each attempt reads the
    * lane afresh, so what an earlier attempt finished (the folder, the
@@ -284,11 +223,7 @@ const make = Effect.gen(function* () {
         yield* makeSession(client, lane, directory, message);
         yield* updateLane(key, (current) => Lane.make({ ...current, create: undefined }));
       }
-      if (lane.protocol === "v2") yield* sendV2(client, lane, message);
-      else {
-        yield* awaitV1Idle(lane, directory);
-        yield* sendV1(lane, directory, message);
-      }
+      yield* prompt(client, lane, message);
     }).pipe(
       // What may clear is retried for as long as it takes (awaiting the server
       // each time); only a refusal ends it.
@@ -352,7 +287,6 @@ const make = Effect.gen(function* () {
                 Lane.make({
                   server: input.server,
                   sessionID: input.sessionID,
-                  protocol: input.protocol,
                   directory: input.directory,
                   create:
                     input.create === undefined

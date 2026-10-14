@@ -57,7 +57,6 @@ const Message = Schema.Struct({
 });
 
 export const Conversation = Schema.Struct({
-  protocol: Schema.Literals(["v1", "v2"]),
   /** When the server last changed the session, as of these messages (ms). */
   updated: Schema.Number,
   /** Its title, for the chat's header from the first frame. */

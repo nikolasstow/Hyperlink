@@ -20,14 +20,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { useAppContext } from "./AppContext";
 import { BarWindow } from "./BarWindow";
-import { AGENT } from "./client";
-import { runApp } from "./effect/runtime";
+import { AGENT } from "./agentConstants";
 import { Agent } from "./opencode/schema/agent";
 import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { sendMessage } from "./outbox/useOutbox";
-import { sessionProtocol } from "./sessions/protocol";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
@@ -296,11 +294,9 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       try {
         const server = serverAddressOf(address);
         const sessionID = SessionID.make(session.id);
-        const protocol = await runApp(sessionProtocol(server, sessionID));
         await sendMessage({
           server,
           sessionID,
-          protocol,
           directory: session.directory === "" ? undefined : AbsolutePath.make(session.directory),
           text: body,
           files: [],

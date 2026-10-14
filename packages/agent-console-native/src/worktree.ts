@@ -1,12 +1,11 @@
 /**
- * Worktree creation — runs `git worktree add` via a short-lived session
- * under the "repo-admin" agent. Ported from packages/agent-console's
- * worktree.ts; native takes the client as an argument (no module singleton).
+ * Worktree creation: runs `git worktree add` on the server (repoAdmin.ts) at
+ * the path the owner's template gives.
  *
  * @internal
  */
-import { REPO_ADMIN_AGENT, WORKTREE_SETUP_PREFIX } from "./agentConstants";
-import type { OpencodeClient } from "./client";
+import type { ServerAddress } from "./opencode/serverAddress";
+import { runRepoAdmin } from "./repoAdmin";
 import {
   DEFAULT_WORKTREE_TEMPLATE,
   getWorktreeTemplate,
@@ -15,10 +14,8 @@ import {
 
 export { DEFAULT_WORKTREE_TEMPLATE, resolveWorktreePath };
 
-export class WorktreeCreateError extends Error {}
-
 export const createWorktree = async (
-  client: OpencodeClient,
+  server: ServerAddress,
   rootDir: string,
   repo: string,
   mainCheckoutPath: string,
@@ -26,26 +23,6 @@ export const createWorktree = async (
 ): Promise<string> => {
   const template = await getWorktreeTemplate();
   const worktreePath = resolveWorktreePath(rootDir, repo, name, template);
-
-  const { data: setupSession } = await client.session.create({
-    query: { directory: mainCheckoutPath },
-    body: { title: `${WORKTREE_SETUP_PREFIX} ${name}` },
-  });
-  if (setupSession === undefined) {
-    throw new WorktreeCreateError("Couldn't start the worktree-setup session.");
-  }
-
-  const { data: result } = await client.session.shell({
-    path: { id: setupSession.id },
-    query: { directory: mainCheckoutPath },
-    body: {
-      agent: REPO_ADMIN_AGENT,
-      command: `git worktree add ${worktreePath} -b ${name}`,
-    },
-  });
-  if (result === undefined) {
-    throw new WorktreeCreateError(`\`git worktree add\` failed for "${name}".`);
-  }
-
+  await runRepoAdmin(server, mainCheckoutPath, `git worktree add ${JSON.stringify(worktreePath)} -b ${JSON.stringify(name)}`);
   return worktreePath;
 };
