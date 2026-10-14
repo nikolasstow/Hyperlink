@@ -12,24 +12,24 @@ describe("FileScrolls", () => {
     const scrolls = await Effect.runPromise(
       Effect.gen(function* () {
         const files = yield* FileScrolls;
-        yield* files.keep("/a.ts", 120);
-        yield* files.keep("/b.ts", 40);
-        yield* files.keep("/a.ts", 300);
+        yield* files.keep("/a.ts", { x: 0, y: 120 });
+        yield* files.keep("/b.ts", { x: 16, y: 40 });
+        yield* files.keep("/a.ts", { x: 0, y: 300 });
         return yield* current;
       }).pipe(Effect.provide(FileScrolls.layer), Effect.provide(KeyValueStore.layerMemory)),
     );
-    expect(scrolls[0]).toEqual({ "/a.ts": 300, "/b.ts": 40 });
+    expect(scrolls[0]).toEqual({ "/a.ts": { x: 0, y: 300 }, "/b.ts": { x: 16, y: 40 } });
   });
 
   it("reads them back in a new run", async () => {
     const scrolls = await Effect.runPromise(
       Effect.gen(function* () {
         yield* Effect.gen(function* () {
-          yield* (yield* FileScrolls).keep("/a.ts", 120);
+          yield* (yield* FileScrolls).keep("/a.ts", { x: 0, y: 120 });
         }).pipe(Effect.provide(FileScrolls.layer));
         return yield* current.pipe(Effect.provide(FileScrolls.layer));
       }).pipe(Effect.provide(KeyValueStore.layerMemory)),
     );
-    expect(scrolls[0]).toEqual({ "/a.ts": 120 });
+    expect(scrolls[0]).toEqual({ "/a.ts": { x: 0, y: 120 } });
   });
 });

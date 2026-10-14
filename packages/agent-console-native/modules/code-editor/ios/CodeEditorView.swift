@@ -57,7 +57,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     let onScrollRest = EventDispatcher()
     /// Where to rest the code once it is laid out (a file reopening where it
     /// was left); applied once.
-    private var pendingOffset: CGFloat?
+    private var pendingOffset: CGPoint?
+    // Where the code is to rest across, while it is not yet that wide: the
+    // width is known only as lines are laid out, a moment after it rests.
+    private var acrossToGo: CGFloat?
+    private var widthObservation: NSKeyValueObservation?
     private var reportedLine = -1
 
     /// True while we set `text` programmatically, so the delegate's change
@@ -140,6 +144,24 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         // A font installed while the file is open (CodeFonts.swift) is drawn
         // in at once.
         NotificationCenter.default.addObserver(self, selector: #selector(fontsChanged), name: CodeFonts.changed, object: nil)
+        // After the change: Runestone puts the offset back as it was once it
+        // has set the size.
+        widthObservation = textView.observe(\.contentSize) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.goAcross()
+            }
+        }
+    }
+
+    /// Goes on across to where the code was left, as far as it is wide now.
+    private func goAcross() {
+        guard let acrossToGo else { return }
+        let inset = textView.adjustedContentInset
+        let maxX = max(-inset.left, textView.contentSize.width + inset.right - textView.bounds.width)
+        textView.contentOffset.x = min(acrossToGo, maxX)
+        if maxX >= acrossToGo {
+            self.acrossToGo = nil
+        }
     }
 
     @objc private func fontsChanged() {
@@ -345,19 +367,36 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     /// Rest the code `offset` points from its top, once it is laid out.
     func setInitialOffset(_ offset: Double) {
-        pendingOffset = CGFloat(offset)
+        pendingOffset = CGPoint(x: pendingOffset?.x ?? 0, y: CGFloat(offset))
         setNeedsLayout()
     }
 
-    /// The code `offset` points from its top, now (kept within the text).
-    func scrollToOffset(_ offset: CGFloat) {
-        let minY = -textView.adjustedContentInset.top
-        let maxY = max(minY, textView.contentSize.height + textView.adjustedContentInset.bottom - textView.bounds.height)
-        textView.contentOffset.y = min(max(offset - topInset, minY), maxY)
+    /// Rest the code `offset` points from its left, once it is laid out.
+    func setInitialOffsetX(_ offset: Double) {
+        pendingOffset = CGPoint(x: CGFloat(offset), y: pendingOffset?.y ?? 0)
+        setNeedsLayout()
+    }
+
+    /// The code `offset.y` points from its top and `offset.x` from its left,
+    /// now (kept within the text).
+    func scrollToOffset(_ offset: CGPoint) {
+        let inset = textView.adjustedContentInset
+        let minY = -inset.top
+        let maxY = max(minY, textView.contentSize.height + inset.bottom - textView.bounds.height)
+        textView.contentOffset.y = min(max(offset.y - topInset, minY), maxY)
+        // The width is known only for lines laid out: lay out the ones now
+        // shown before going across.
+        textView.layoutIfNeeded()
+        let minX = -inset.left
+        let maxX = max(minX, textView.contentSize.width + inset.right - textView.bounds.width)
+        textView.contentOffset.x = min(max(offset.x, minX), maxX)
     }
 
     private func reportScrollRest() {
-        onScrollRest(["offset": Double(textView.contentOffset.y + topInset)])
+        onScrollRest([
+            "offset": Double(textView.contentOffset.y + topInset),
+            "offsetX": Double(textView.contentOffset.x),
+        ])
     }
 
     func setEditable(_ editable: Bool) {
@@ -832,6 +871,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             self.pendingOffset = nil
             textView.layoutIfNeeded()
             scrollToOffset(pendingOffset)
+            acrossToGo = textView.contentOffset.x < pendingOffset.x ? pendingOffset.x : nil
         }
         conflictZones.layout()
         changeMarks.layout()
@@ -845,6 +885,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         changeMarks.followHorizontalScroll()
         updateSticky()
         reportLine()
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        acrossToGo = nil
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {

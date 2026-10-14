@@ -52,8 +52,10 @@ public final class CodeEditorModule: Module {
         //     it (`textImage`).
         // 12: previews drawn by the editor itself (`renderPreview`), and the
         //     code resting where it was left (`initialOffset`, `onScrollRest`).
+        // 13: across too (`initialOffsetX`, `onScrollRest`'s `offsetX`, a
+        //     preview's `offsetX`).
         Constants([
-            "apiVersion": 12,
+            "apiVersion": 13,
         ])
 
         AsyncFunction("registerFont") { (uri: String) -> [String] in
@@ -121,6 +123,9 @@ public final class CodeEditorModule: Module {
             }
             Prop("initialOffset") { (view: CodeEditorView, value: Double) in
                 view.setInitialOffset(value)
+            }
+            Prop("initialOffsetX") { (view: CodeEditorView, value: Double) in
+                view.setInitialOffsetX(value)
             }
             Prop("conflictsJson") { (view: CodeEditorView, value: String) in
                 view.setConflictsJson(value)

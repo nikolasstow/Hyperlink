@@ -9,9 +9,10 @@
 import { Effect, Stream } from "effect";
 import * as React from "react";
 import { forkApp, runApp } from "../effect/runtime";
-import { FileScrolls } from "./FileScrolls";
+import { FileScrolls, type ScrollOffset } from "./FileScrolls";
 
-let scrolls: Readonly<Record<string, number>> = {};
+let scrolls: Readonly<Record<string, ScrollOffset>> = {};
+const TOP: ScrollOffset = { x: 0, y: 0 };
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void): (() => void) => {
   listeners.add(listener);
@@ -47,14 +48,14 @@ export const startFileScrolls = (): void => {
   );
 };
 
-/** Where a file was left, points from its top (0 when never scrolled). */
-export const scrollOffsetOf = (path: string): number => scrolls[path] ?? 0;
+/** Where a file was left (its top left when never scrolled). */
+export const scrollOffsetOf = (path: string): ScrollOffset => scrolls[path] ?? TOP;
 
 /** Where a file was left, as it changes. */
-export const useScrollOffset = (path: string): number => React.useSyncExternalStore(subscribe, () => scrollOffsetOf(path));
+export const useScrollOffset = (path: string): ScrollOffset => React.useSyncExternalStore(subscribe, () => scrollOffsetOf(path));
 
 /** Keeps where a file came to rest. */
-export const keepScrollOffset = (path: string, offset: number): void => {
+export const keepScrollOffset = (path: string, offset: ScrollOffset): void => {
   runApp(
     Effect.gen(function* () {
       yield* (yield* FileScrolls).keep(path, offset);

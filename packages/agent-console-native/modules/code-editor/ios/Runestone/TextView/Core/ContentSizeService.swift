@@ -149,6 +149,9 @@ final class ContentSizeService {
                 }
             } else if !isLineWrappingEnabled {
                 _longestLineWidth = nil
+                // With no width known before, setting nil changed nothing, so
+                // the first lines measured never widened the content.
+                isContentSizeInvalid = true
             }
         }
         let didUpdateHeight = lineManager.setHeight(of: line, to: newSize.height)

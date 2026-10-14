@@ -100,8 +100,12 @@ export interface CodeEditorNativeProps extends ViewProps {
   /** Where the code rests once laid out, points from its top (a file
    * reopening where it was left; `apiVersion` 12). */
   readonly initialOffset?: number;
-  /** Where the code came to rest after a scroll, points from its top. */
-  readonly onScrollRest?: (event: NativeSyntheticEvent<{ readonly offset: number }>) => void;
+  /** Where the code rests across once laid out, points from its left
+   * (`apiVersion` 13). */
+  readonly initialOffsetX?: number;
+  /** Where the code came to rest after a scroll, points from its top
+   * (`offset`) and its left (`offsetX`, from `apiVersion` 13). */
+  readonly onScrollRest?: (event: NativeSyntheticEvent<{ readonly offset: number; readonly offsetX?: number }>) => void;
   /** The line you are at (0-based), when it changes: the caret's while
    * editing, else the top of the visible code (`apiVersion` 10). */
   readonly onLineChange?: (event: NativeSyntheticEvent<{ readonly line: number }>) => void;
@@ -214,6 +218,8 @@ export interface EditorPreviewOptions {
   readonly stickyFill: number;
   /** Points from the code's top it rests at. */
   readonly offset: number;
+  /** Points from the code's left it rests at (`apiVersion` 13). */
+  readonly offsetX: number;
   /** Pixels per point of the image. */
   readonly scale: number;
 }

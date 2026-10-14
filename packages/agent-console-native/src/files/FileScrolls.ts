@@ -1,6 +1,6 @@
 /**
- * Where each file was left: how far down its code rested (points from the
- * top), kept on the device, so a file reopens where it was and its tab's
+ * Where each file was left: how far down and across its code rested (points
+ * from the top and from the left), kept on the device, so a file reopens where it was and its tab's
  * preview shows the same place (filePreview.ts). Read back at launch.
  *
  * @internal
@@ -8,10 +8,20 @@
 import { Context, Effect, Layer, Option, Schema, SubscriptionRef } from "effect";
 import { KeyValueStore } from "effect/unstable/persistence";
 
-const STORE_KEY = "scrolls";
+const STORE_KEY = "scroll-offsets";
 
+/** Where a file's code rests: points from its top (`y`) and its left (`x`). */
+export interface ScrollOffset {
+  readonly x: number;
+  readonly y: number;
+}
+
+const scrollOffset = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+});
 /** Each file's resting offset, by path. */
-const fileScrolls = Schema.Record(Schema.String, Schema.Number);
+const fileScrolls = Schema.Record(Schema.String, scrollOffset);
 
 const make = Effect.gen(function* () {
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, fileScrolls);
@@ -24,7 +34,7 @@ const make = Effect.gen(function* () {
     /** Every file's resting offset as it changes (the current ones first). */
     changes: SubscriptionRef.changes(state),
     /** Keeps where a file came to rest. */
-    keep: (path: string, offset: number) =>
+    keep: (path: string, offset: ScrollOffset) =>
       SubscriptionRef.updateAndGet(state, (scrolls) => ({
         ...scrolls,
         [path]: offset,

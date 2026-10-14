@@ -19,6 +19,8 @@ struct EditorPreviewOptions: Record {
     @Field var stickyFill: Double = 0
     /// Points from the code's top it rests at.
     @Field var offset: Double = 0
+    /// Points from the code's left it rests at.
+    @Field var offsetX: Double = 0
     /// Pixels per point of the image.
     @Field var scale: Double = 1
 }
@@ -54,7 +56,7 @@ enum EditorPreview {
         editor.setStickyRangesJson(options.stickyRangesJson)
         editor.setTokensJson(options.tokensJson)
         editor.layoutIfNeeded()
-        editor.scrollToOffset(CGFloat(options.offset))
+        editor.scrollToOffset(CGPoint(x: options.offsetX, y: options.offset))
         editor.layoutIfNeeded()
 
         let format = UIGraphicsImageRendererFormat()

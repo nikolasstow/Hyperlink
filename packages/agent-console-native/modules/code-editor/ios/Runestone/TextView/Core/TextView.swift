@@ -683,8 +683,14 @@ open class TextView: UIScrollView {
     /// Lays out subviews.
     override open func layoutSubviews() {
         super.layoutSubviews()
+        // A width first known after the text was set (lines not wrapping)
+        // left the content size as it was until a line's width changed, so
+        // the code could not be put across before then.
+        if textInputView.scrollViewWidth != frame.width {
+            textInputView.scrollViewWidth = frame.width
+            hasPendingContentSizeUpdate = true
+        }
         handleContentSizeUpdateIfNeeded()
-        textInputView.scrollViewWidth = frame.width
         textInputView.frame = CGRect(x: 0, y: 0, width: max(contentSize.width, frame.width), height: max(contentSize.height, frame.height))
         textInputView.viewport = CGRect(origin: contentOffset, size: frame.size)
         bringSubviewToFront(textInputView.gutterContainerView)

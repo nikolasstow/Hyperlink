@@ -25,6 +25,7 @@ import { pinnable, type ScopeSymbol, type StickyRange, stickyRanges } from "./st
 import { codeFontSizeOf } from "../settings";
 import { textFor, useTheme } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
+import type { ScrollOffset } from "./FileScrolls";
 
 /** Re-tokenise no more than this often while typing. */
 const RETOKENIZE_MS = 150;
@@ -123,10 +124,10 @@ export const CodeEditor = (props: {
    * change (breadcrumbs.ts), and whether the line moved on down the file
    * (else back up). */
   readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>, onward: boolean) => void;
-  /** Where the code rests once laid out, points from its top. */
-  readonly initialOffset?: number;
+  /** Where the code rests once laid out. */
+  readonly initialOffset?: ScrollOffset;
   /** Where the code came to rest after a scroll. */
-  readonly onScrollRest?: (offset: number) => void;
+  readonly onScrollRest?: (offset: ScrollOffset) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -301,8 +302,10 @@ export const CodeEditor = (props: {
         stickyFill={props.stickyFill}
         fontSize={codeFontSizeOf(appTheme)}
         fontFamily={appTheme.codeFont}
-        {...(props.initialOffset === undefined ? {} : { initialOffset: props.initialOffset })}
-        {...(props.onScrollRest === undefined ? {} : { onScrollRest: (event) => props.onScrollRest?.(event.nativeEvent.offset) })}
+        {...(props.initialOffset === undefined ? {} : { initialOffset: props.initialOffset.y, initialOffsetX: props.initialOffset.x })}
+        {...(props.onScrollRest === undefined
+          ? {}
+          : { onScrollRest: (event) => props.onScrollRest?.({ x: event.nativeEvent.offsetX ?? 0, y: event.nativeEvent.offset }) })}
         showLineNumbers
         wrapLines={false}
         onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}

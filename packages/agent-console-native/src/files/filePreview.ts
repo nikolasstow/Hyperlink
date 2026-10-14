@@ -62,7 +62,7 @@ export const useFilePreview = (path: string, name: string, topInset: number, fet
     text === undefined
       ? undefined
       : `preview-${hashOf(
-          [path, text.length, hashOf(text), themeName, fontFamily, installed.has(fontFamily), fontSize, width, height, top, bottom, Math.round(offset), scale].join("\u0000"),
+          [path, text.length, hashOf(text), themeName, fontFamily, installed.has(fontFamily), fontSize, width, height, top, bottom, Math.round(offset.x), Math.round(offset.y), scale].join("\u0000"),
         )}`;
   const [uri, setUri] = React.useState<string | undefined>(() => (key === undefined ? undefined : drawn.get(key)) ?? lastOf.get(path));
 
@@ -90,7 +90,8 @@ export const useFilePreview = (path: string, name: string, topInset: number, fet
           topInset: top,
           bottomInset: bottom,
           stickyFill: top,
-          offset,
+          offset: offset.y,
+          offsetX: offset.x,
           scale,
         }),
       )
