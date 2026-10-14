@@ -228,11 +228,11 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     (compact: boolean, compactContent: boolean) => dispatch({ _tag: "layoutChanged", compact, compactContent }),
     [dispatch],
   );
-  // `compact` hides the sub-page's right button; `compactContent` (compact AND
-  // content taller than the viewport) shifts the content right for the top-left
-  // button — the left gap.
-  const { compact, compactContent } = winState;
-  const leftInset = compactContent ? DUBZ_COMPACT_LEFT_GAP : 0;
+  // In the compact zone the top controls are a side bar, so the content always
+  // shifts right for it — the gap (and the sub-page's hidden right button) key on
+  // `compact`, not on whether the content overflows.
+  const { compact } = winState;
+  const leftInset = compact ? DUBZ_COMPACT_LEFT_GAP : 0;
 
   // Tapping the session row pushes a placeholder page in over the window (main
   // row slides left, page slides in from the right — SwiftUI's own animation,

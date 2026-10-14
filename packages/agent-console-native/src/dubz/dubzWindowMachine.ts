@@ -112,9 +112,10 @@ export const reduceDubzWindow = (state: DubzWindowState, event: DubzWindowEvent)
       // expanded component grows the window to show itself.
       return state.activeHeight === event.height ? state : { ...state, activeHeight: event.height, pinned: false };
     case "componentHeightChanged":
-      // Only meaningful while a component is active; keeps any pin (a pinned
-      // compact window stays compact while the content grows under it).
-      return state.activeHeight === undefined || state.activeHeight === event.height ? state : { ...state, activeHeight: event.height };
+      // Only meaningful while a component is active. The active height changed,
+      // so the calculation reruns — which clears any user pin: a user-set height
+      // stays only UNTIL the active height changes.
+      return state.activeHeight === undefined || state.activeHeight === event.height ? state : { ...state, activeHeight: event.height, pinned: false };
     case "componentDeactivated":
       // Back to the default (unpinned) on the next calculation.
       return state.activeHeight === undefined ? state : { ...state, activeHeight: undefined, pinned: false };
