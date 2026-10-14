@@ -8,9 +8,11 @@
  * server is already awake and already connected, so it watches for the events
  * that matter and pushes.
  *
- * Two events are worth interrupting someone for:
+ * It reads opencode v2's event stream (`/api/event`). Two events are worth
+ * interrupting someone for:
  *
- * - `session.idle` — the run finished and is waiting on you.
+ * - `session.execution.succeeded` / `.failed` — the run ended and is waiting
+ *   on you.
  * - a permission ask — the run is BLOCKED and will sit there indefinitely
  *   until answered. Arguably the more urgent of the two.
  *
@@ -35,6 +37,12 @@ const EXPO_RECEIPTS_URL = "https://exp.host/--/api/v2/push/getReceipts";
 /** Expo needs a moment to hand the message to APNs before a receipt exists. */
 const RECEIPT_DELAY_MS = 6000;
 const OPENCODE_URL = process.env.AGENT_CONSOLE_OPENCODE_URL ?? "http://127.0.0.1:4096";
+/** opencode v2 asks for its server password (user `opencode`), when it has one. */
+const OPENCODE_PASSWORD = process.env.AGENT_CONSOLE_OPENCODE_PASSWORD;
+const opencodeHeaders: Record<string, string> =
+  OPENCODE_PASSWORD === undefined || OPENCODE_PASSWORD === "" ? {} : { authorization: `Basic ${Buffer.from(`opencode:${OPENCODE_PASSWORD}`).toString("base64")}` };
+const opencodeFetch = (path: string, init?: RequestInit): Promise<Response> =>
+  fetch(`${OPENCODE_URL}${path}`, { ...init, headers: { ...opencodeHeaders, ...(init?.headers ?? {}) } });
 const TOKENS_FILE = ".agent-console/push-tokens.json";
 
 /** Notification category the app registers a "Reply" text action under, so the
@@ -51,9 +59,8 @@ const ACTION_MAX = 90;
  * coalesced to at most one push per this window, always carrying the latest. */
 const ACTIVITY_UPDATE_MS = 2000;
 
-/** Sessions the app creates for its own `git worktree` plumbing. They run and
- * go idle like any other session, and notifying about them is pure noise — the
- * client already hides them from its lists. */
+/** Sessions the app made (under v1) for its own `git worktree` plumbing.
+ * Notifying about them is noise; the client hides them from its lists. */
 const HIDDEN_TITLE_PREFIX = "[worktree-setup]";
 
 /** Reconnect backoff for the event stream, capped. */
@@ -166,32 +173,9 @@ const humanDuration = (ms: number): string => {
   return `${hourLabel} ${remainder} ${remainder === 1 ? "minute" : "minutes"}`;
 };
 
-/** The one-line "what the agent is doing right now" for the Live Activity, from
- * a message part. Reasoning → its thought; text → the message so far; tool →
- * a quality label. Undefined for parts with nothing worth showing. Defensive:
- * the part shape crosses the opencode boundary. */
-const actionFromPart = (part: unknown): string | undefined => {
-  if (!isRecord(part)) return undefined;
-  if (part.type === "reasoning") {
-    const thought = clipText(part.text);
-    return thought.length === 0 ? "Thinking…" : `Thinking… ${thought}`;
-  }
-  if (part.type === "text") {
-    const message = clipText(part.text);
-    return message.length === 0 ? undefined : message;
-  }
-  if (part.type === "tool") {
-    const tool = typeof part.tool === "string" ? part.tool : "";
-    const state = isRecord(part.state) ? part.state : undefined;
-    const input = state !== undefined && isRecord(state.input) ? state.input : undefined;
-    return toolLabel(tool, input);
-  }
-  return undefined;
-};
-
 const readJson = async (req: Connect.IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
+  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
   if (chunks.length === 0) return undefined;
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -226,10 +210,11 @@ export const notificationsPlugin = (): Plugin => {
   const activityActionLast = new Map<string, string>();
   const activityActionAt = new Map<string, number>();
 
-  /** Assistant message ids per session, so a `text` part from the USER's own
-   * prompt isn't streamed into the activity as the agent's activity. Reasoning
-   * and tool parts are always the agent's; only ambiguous `text` needs this. */
-  const assistantMessages = new Map<string, Set<string>>();
+  /** The text and thoughts being written now, per session (v2 streams them as
+   * deltas), for the Live Activity's line; and each tool call's name by id
+   * (named when its input starts, run when called). */
+  const writing = new Map<string, { readonly kind: "text" | "reasoning"; readonly text: string }>();
+  const toolNames = new Map<string, string>();
 
   const load = async (): Promise<void> => {
     const raw = await readFile(tokensPath, "utf8").catch(() => undefined);
@@ -402,44 +387,55 @@ export const notificationsPlugin = (): Plugin => {
   };
 
   const titleOf = async (sessionID: string): Promise<string> => {
-    const response = await fetch(`${OPENCODE_URL}/session/${sessionID}`).catch(() => undefined);
+    const response = await opencodeFetch(`/api/session/${sessionID}`).catch(() => undefined);
     if (response === undefined || !response.ok) return "Session";
     const body: unknown = await response.json().catch(() => undefined);
-    if (isRecord(body) && typeof body.title === "string") return body.title;
-    return "Session";
+    const info = isRecord(body) && isRecord(body.data) ? body.data : undefined;
+    if (info !== undefined && typeof info.title === "string" && info.title.trim().length > 0) return info.title;
+    return "New session";
   };
 
-  /** The agent's most recent message: its id (to dedupe notifications by the
-   * message rather than by the idle event), whether the server has marked the
-   * run complete (`time.completed` — the real "done" signal, which opencode
-   * emits BEFORE an early/spurious `session.idle`), and its text, truncated for
-   * a notification body so the push (and Siri reading it) says WHAT happened
-   * rather than just "Finished.". Defensive: the shape crosses the opencode
-   * boundary. */
+  /** The agent's most recent answer: its id (to dedupe notifications by the
+   * message), whether it is complete, and its text, truncated for a
+   * notification body so the push (and Siri reading it) says WHAT happened.
+   * Defensive: the shape crosses the opencode boundary. */
   const lastAssistant = async (
     sessionID: string,
   ): Promise<{ readonly id: string | undefined; readonly completed: boolean; readonly text: string | undefined } | undefined> => {
-    const response = await fetch(`${OPENCODE_URL}/session/${sessionID}/message`).catch(() => undefined);
+    const response = await opencodeFetch(`/api/session/${sessionID}/message?limit=20&order=desc`).catch(() => undefined);
     if (response === undefined || !response.ok) return undefined;
     const body: unknown = await response.json().catch(() => undefined);
-    if (!Array.isArray(body)) return undefined;
-    for (let i = body.length - 1; i >= 0; i -= 1) {
-      const message = body[i];
-      if (!isRecord(message)) continue;
-      const info = isRecord(message.info) ? message.info : message;
-      if (info.role !== "assistant") continue;
-      const id = typeof info.id === "string" ? info.id : undefined;
-      const completed = isRecord(info.time) && typeof info.time.completed === "number";
-      const parts = Array.isArray(message.parts) ? message.parts : Array.isArray(info.parts) ? info.parts : [];
+    const messages = isRecord(body) && Array.isArray(body.data) ? body.data : [];
+    // Newest first.
+    for (const message of messages) {
+      if (!isRecord(message) || message.type !== "assistant") continue;
+      const id = typeof message.id === "string" ? message.id : undefined;
+      const completed = isRecord(message.time) && typeof message.time.completed === "number";
+      const content = Array.isArray(message.content) ? message.content : [];
       const texts: string[] = [];
-      for (const part of parts) {
-        if (isRecord(part) && part.type === "text" && typeof part.text === "string") texts.push(part.text);
+      for (const item of content) {
+        if (isRecord(item) && item.type === "text" && typeof item.text === "string") texts.push(item.text);
       }
       const joined = texts.join(" ").replace(/\s+/g, " ").trim();
       const text = joined.length === 0 ? undefined : joined.length > BODY_MAX ? `${joined.slice(0, BODY_MAX - 1)}…` : joined;
       return { id, completed, text };
     }
     return undefined;
+  };
+
+  /** Pushes the Live Activity's line for a running session (coalesced to
+   * ACTIVITY_UPDATE_MS, skipped when unchanged). */
+  const showAction = (sessionID: string, action: string | undefined): void => {
+    const now = Date.now();
+    if (action === undefined || action === activityActionLast.get(sessionID) || now - (activityActionAt.get(sessionID) ?? 0) < ACTIVITY_UPDATE_MS) return;
+    activityActionLast.set(sessionID, action);
+    activityActionAt.set(sessionID, now);
+    void sendActivityUpdate(sessionID, {
+      status: "working",
+      action,
+      messageCount: 0,
+      startedAtMs: busySessions.get(sessionID) ?? now,
+    });
   };
 
   const watch = async (): Promise<void> => {
@@ -452,7 +448,7 @@ export const notificationsPlugin = (): Plugin => {
         stall = setTimeout(() => controller.abort(), STALL_MS);
       };
       try {
-        const response = await fetch(`${OPENCODE_URL}/global/event`, { signal: controller.signal });
+        const response = await opencodeFetch("/api/event", { signal: controller.signal });
         if (response.body === null) throw new Error("no body");
         delay = 1000;
         armStall();
@@ -479,83 +475,56 @@ export const notificationsPlugin = (): Plugin => {
             } catch {
               continue;
             }
-            const event = isRecord(raw) && isRecord(raw.payload) ? raw.payload : raw;
-            if (!isRecord(event)) continue;
+            if (!isRecord(raw) || typeof raw.type !== "string") continue;
+            const type = raw.type;
+            const data = isRecord(raw.data) ? raw.data : {};
+            const sessionID = typeof data.sessionID === "string" ? data.sessionID : undefined;
+            if (sessionID === undefined) continue;
 
-            const properties = isRecord(event.properties) ? event.properties : isRecord(event.data) ? event.data : {};
-            const sessionID = typeof properties.sessionID === "string" ? properties.sessionID : undefined;
-
-            if (event.type === "message.updated" || event.type === "message.part.delta") {
-              if (sessionID !== undefined) {
-                const info = event.type === "message.updated" && isRecord(properties.info) ? properties.info : undefined;
-                if (info !== undefined && info.role === "user") {
-                  // A new user turn = a fresh run: reset the elapsed-timer start
-                  // (so the Live Activity timer counts from now, not from an
-                  // earlier run whose idle we may have missed) and clear stale
-                  // progress state.
-                  busySessions.set(sessionID, Date.now());
-                  activityActionLast.delete(sessionID);
-                  activityActionAt.delete(sessionID);
-                } else if (!busySessions.has(sessionID)) {
-                  busySessions.set(sessionID, Date.now());
-                }
-                // Record assistant message ids so `text` parts can be attributed.
-                if (info !== undefined && info.role === "assistant" && typeof info.id === "string") {
-                  const ids = assistantMessages.get(sessionID) ?? new Set<string>();
-                  ids.add(info.id);
-                  assistantMessages.set(sessionID, ids);
-                }
-              }
+            // A turn starts: your message delivered, or the run starting. The
+            // Live Activity timer counts from here; stale progress clears.
+            if (type === "session.inbox.delivered" || type === "session.execution.started") {
+              if (type === "session.inbox.delivered" || !busySessions.has(sessionID)) busySessions.set(sessionID, Date.now());
+              activityActionLast.delete(sessionID);
+              activityActionAt.delete(sessionID);
+              writing.delete(sessionID);
               continue;
             }
 
-            // Stream the agent's live activity (thoughts / message / tool) into
-            // the Live Activity's action line while the app is closed. Coalesced
-            // to ACTIVITY_UPDATE_MS and skipped when unchanged. `sendActivityUpdate`
-            // no-ops without a registered activity token, so this is free when
-            // there's no activity to drive.
-            if (event.type === "message.part.updated") {
-              if (sessionID !== undefined) {
-                if (!busySessions.has(sessionID)) busySessions.set(sessionID, Date.now());
-                const part = properties.part;
-                const partType = isRecord(part) ? part.type : undefined;
-                // Reasoning and tool parts are always the agent's; a `text` part
-                // is only the agent's if it belongs to an assistant message (not
-                // the user's own prompt echoing back).
-                const messageID = isRecord(part) && typeof part.messageID === "string" ? part.messageID : undefined;
-                const fromAssistant =
-                  partType === "reasoning" ||
-                  partType === "tool" ||
-                  (partType === "text" && messageID !== undefined && (assistantMessages.get(sessionID)?.has(messageID) ?? false));
-                const action = fromAssistant ? actionFromPart(part) : undefined;
-                const now = Date.now();
-                if (
-                  action !== undefined &&
-                  action !== activityActionLast.get(sessionID) &&
-                  now - (activityActionAt.get(sessionID) ?? 0) >= ACTIVITY_UPDATE_MS
-                ) {
-                  activityActionLast.set(sessionID, action);
-                  activityActionAt.set(sessionID, now);
-                  void sendActivityUpdate(sessionID, {
-                    status: "working",
-                    action,
-                    messageCount: 0,
-                    startedAtMs: busySessions.get(sessionID) ?? now,
-                  });
-                }
-              }
+            // The agent's live activity (thoughts / message / tool) into the
+            // Live Activity's line while the app is closed. `sendActivityUpdate`
+            // no-ops without a registered activity token.
+            if (type === "session.reasoning.started" || type === "session.text.started") {
+              if (!busySessions.has(sessionID)) busySessions.set(sessionID, Date.now());
+              writing.set(sessionID, { kind: type === "session.reasoning.started" ? "reasoning" : "text", text: "" });
+              if (type === "session.reasoning.started") showAction(sessionID, "Thinking…");
+              continue;
+            }
+            if (type === "session.reasoning.delta" || type === "session.text.delta") {
+              const current = writing.get(sessionID);
+              const delta = typeof data.delta === "string" ? data.delta : "";
+              const kind = type === "session.reasoning.delta" ? "reasoning" : "text";
+              const text = (current?.kind === kind ? current.text : "") + delta;
+              writing.set(sessionID, { kind, text });
+              const clipped = clipText(text);
+              showAction(sessionID, kind === "reasoning" ? (clipped.length === 0 ? "Thinking…" : `Thinking… ${clipped}`) : clipped.length === 0 ? undefined : clipped);
+              continue;
+            }
+            if (type === "session.tool.input.started") {
+              if (typeof data.id === "string" && typeof data.name === "string") toolNames.set(data.id, data.name);
+              continue;
+            }
+            if (type === "session.tool.called") {
+              const name = typeof data.id === "string" ? (toolNames.get(data.id) ?? "") : "";
+              if (typeof data.id === "string") toolNames.delete(data.id);
+              showAction(sessionID, toolLabel(name, isRecord(data.input) ? data.input : undefined));
               continue;
             }
 
-            if (event.type === "permission.asked" || event.type === "permission.v2.asked") {
-              if (sessionID === undefined || !shouldNotify(`ask:${sessionID}`)) continue;
+            if (type === "permission.asked") {
+              if (!shouldNotify(`ask:${sessionID}`)) continue;
               if ((await isHidden(sessionID)) || (await isMuted(sessionID))) continue;
-              const action =
-                typeof properties.permission === "string"
-                  ? properties.permission
-                  : typeof properties.action === "string"
-                    ? properties.action
-                    : "an action";
+              const action = typeof data.action === "string" ? data.action : "an action";
               await send({
                 title: await titleOf(sessionID),
                 mutableContent: true,
@@ -573,30 +542,22 @@ export const notificationsPlugin = (): Plugin => {
               continue;
             }
 
-            if (event.type === "session.idle" && sessionID !== undefined) {
-              const last = await lastAssistant(sessionID);
-              // Ignore an early/spurious idle: opencode emits one while a
-              // thinking model is still spinning up, before the run is done.
-              // The server's own `time.completed` record is the real signal (it
-              // precedes idle), so nothing ends or notifies until it's set —
-              // this is what stops a run reading as "finished" the instant it
-              // starts. Leaves busySessions intact so the real idle still fires.
-              if (last?.completed !== true) continue;
+            // The run ended (well, or failed): it waits on you. A stopped run
+            // (interrupted) was your doing, so it only ends the activity.
+            if (type === "session.execution.succeeded" || type === "session.execution.failed" || type === "session.execution.interrupted") {
+              const failure = type === "session.execution.failed" && isRecord(data.error) && typeof data.error.message === "string" ? data.error.message : undefined;
               const startedAt = busySessions.get(sessionID);
               busySessions.delete(sessionID);
               activityActionLast.delete(sessionID);
               activityActionAt.delete(sessionID);
-              assistantMessages.delete(sessionID);
+              writing.delete(sessionID);
               // Show the run as finished, THEN end it a moment later. Ending an
               // activity removes it from the Dynamic Island immediately, so a
-              // bare `sendActivityEnd` makes it vanish with no "done" frame. An
-              // update to the done state keeps it live in the island; the end
-              // 5s later clears the island (the lock screen still lingers per
-              // the end's dismissal date). Done regardless of the notification
-              // gate — the app can't do it while suspended, which is the point.
+              // bare `sendActivityEnd` makes it vanish with no "done" frame.
+              const label = type === "session.execution.failed" ? "Failed" : type === "session.execution.interrupted" ? "Stopped" : "Finished";
               const finishedState: ActivityState = {
                 status: "done",
-                action: startedAt !== undefined ? `Finished in ${humanDuration(Date.now() - startedAt)}` : "Finished",
+                action: startedAt !== undefined ? `${label} in ${humanDuration(Date.now() - startedAt)}` : label,
                 messageCount: 0,
                 startedAtMs: startedAt ?? Date.now(),
               };
@@ -604,16 +565,16 @@ export const notificationsPlugin = (): Plugin => {
               setTimeout(() => {
                 void sendActivityEnd(sessionID, finishedState);
               }, 5000);
-              if (startedAt === undefined) continue;
-              // Already notified about this exact completed message — a repeated
-              // or replayed idle, not a new response.
-              if (last.id !== undefined && idleNotifiedFor.get(sessionID) === last.id) continue;
+              if (startedAt === undefined || type === "session.execution.interrupted") continue;
+              const last = failure === undefined ? await lastAssistant(sessionID) : undefined;
+              // Already notified about this exact message: a replay, not a new answer.
+              if (last?.id !== undefined && idleNotifiedFor.get(sessionID) === last.id) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
               if ((await isHidden(sessionID)) || (await isMuted(sessionID))) continue;
-              if (last.id !== undefined) idleNotifiedFor.set(sessionID, last.id);
+              if (last?.id !== undefined) idleNotifiedFor.set(sessionID, last.id);
               await send({
                 title: await titleOf(sessionID),
-                body: last.text ?? "Finished.",
+                body: failure !== undefined ? `Failed: ${failure}` : (last?.text ?? "Finished."),
                 sound: "default",
                 categoryId: AGENT_CATEGORY,
                 mutableContent: true,
