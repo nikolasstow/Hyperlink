@@ -66,6 +66,8 @@ const program = Effect.gen(function* () {
         .split("\n")
         .map((line) => `  ${line}`),
       "",
+      `  Or open the link on the phone: ${link}`,
+      "",
       `  Or in the app, Add Server: code ${pairing.code} at`,
       ...urls.map((url) => `    ${url}`),
       "",
