@@ -34,7 +34,7 @@ const callerOf = (auth: DeviceAuth["Service"], request: HttpServerRequest.HttpSe
     onSome: auth.authorize,
   });
 
-const unauthorized = HttpServerResponse.jsonUnsafe({ _tag: "Unauthorized", message: "Pair this device first" }, { status: 401 });
+const unauthorized = HttpServerResponse.jsonUnsafe({ _tag: "UnauthorizedError", message: "Pair this device first" }, { status: 401 });
 
 /** Lets a request through only with a token or ticket (or to an open path). */
 export const authMiddleware = HttpRouter.middleware(

@@ -175,9 +175,24 @@ const make = Effect.gen(function* () {
         const device = yield* HttpClientResponse.schemaBodyJson(Paired)(response).pipe(
           Effect.mapError((error) => new PairingError({ reason: "Failed", message: error.message })),
         );
-        yield* secrets.set(tokenKey(origin), device.token).pipe(Effect.mapError((error) => new PairingError({ reason: "Failed", message: error.message })));
-        const known = yield* paired.pipe(Effect.mapError((error) => new PairingError({ reason: "Failed", message: error.message })));
-        yield* store.set(STORE_KEY, { ...known, [origin]: { deviceId: device.id } }).pipe(Effect.mapError((error) => new PairingError({ reason: "Failed", message: error.message })));
+        // The code is used now. If keeping the token fails, the device the
+        // server just made is removed (with its own token), so pairing again
+        // starts clean instead of leaving a device nobody can use.
+        yield* Effect.gen(function* () {
+          yield* secrets.set(tokenKey(origin), device.token);
+          const known = yield* paired;
+          yield* store.set(STORE_KEY, { ...known, [origin]: { deviceId: device.id } });
+        }).pipe(
+          Effect.tapError(() =>
+            HttpClientRequest.post(`${origin}/auth/revoke`).pipe(
+              HttpClientRequest.bearerToken(device.token),
+              HttpClientRequest.bodyJsonUnsafe({ id: device.id }),
+              http.execute,
+              Effect.catch((error) => Effect.logWarning(`[auth] the half-paired device on ${origin} could not be removed`, error)),
+            ),
+          ),
+          Effect.mapError((error) => new PairingError({ reason: "Failed", message: `${error.message}. Nothing was kept; run pnpm pair again.` })),
+        );
         yield* SubscriptionRef.update(tokens, (all) => new Map(all).set(origin, device.token));
         yield* Effect.forkDetach(refreshDevices(origin));
         return origin;

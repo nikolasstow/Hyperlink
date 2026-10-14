@@ -3,11 +3,11 @@ import { FetchHttpClient } from "effect/http";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
 import { DeviceSignals } from "../effect/DeviceSignals";
-import { SecretStore } from "./SecretStore";
+import { SecretStore, SecretStoreError } from "./SecretStore";
 import { ServerAuth } from "./ServerAuth";
 
 /** A stand-in server: answers /health at `up` origins, redeems `code` once. */
-const fakeServer = (options: { readonly up: ReadonlyArray<string>; readonly code: string }) => {
+const fakeServer = (options: { readonly up: ReadonlyArray<string>; readonly code: string; readonly revoked?: Array<string> }) => {
   let redeemed = false;
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   return (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -21,6 +21,10 @@ const fakeServer = (options: { readonly up: ReadonlyArray<string>; readonly code
       if (redeemed || code !== options.code) return Promise.resolve(json({ _tag: "PairingRefused" }, 403));
       redeemed = true;
       return Promise.resolve(json({ id: "device-1", token: "token-1" }));
+    }
+    if (url.pathname === "/auth/revoke") {
+      options.revoked?.push(new Headers(init?.headers).get("authorization") ?? "none");
+      return Promise.resolve(json([]));
     }
     if (url.pathname === "/auth/devices") return Promise.resolve(json([{ id: "device-1", name: "Phone", pairedAt: 1, lastSeenAt: 2 }]));
     return Promise.resolve(json({}, 404));
@@ -103,5 +107,23 @@ describe("ServerAuth", () => {
       }).pipe(Effect.provide(authOver(fetch)), Effect.provide(stores(noKeychain))),
     );
     expect(reason).toBe("NoKeychain");
+  });
+
+  it("removes the device the server made when the token cannot be kept", async () => {
+    const revoked: Array<string> = [];
+    const fetch = fakeServer({ up: ["http://h:1"], code: "C", revoked });
+    const failingKeychain = Layer.succeed(SecretStore)({
+      available: true,
+      get: () => Effect.succeed(Option.none()),
+      set: () => Effect.fail(new SecretStoreError({ message: "keychain refused" })),
+      remove: () => Effect.void,
+    });
+    const reason = await Effect.runPromise(
+      Effect.gen(function* () {
+        return (yield* Effect.flip((yield* ServerAuth).pair(["http://h:1"], "C", "Phone"))).reason;
+      }).pipe(Effect.provide(authOver(fetch)), Effect.provide(stores(failingKeychain))),
+    );
+    expect(reason).toBe("Failed");
+    expect(revoked).toEqual(["Bearer token-1"]);
   });
 });
