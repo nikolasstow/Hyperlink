@@ -6,7 +6,8 @@
  * the rest is as before (as VS Code does).
  *
  * The tokenizer itself is passed in (`line`): Shiki in the app, the same in the
- * tests.
+ * tests. Between slices, `progress` is told the lines coloured so far, so a
+ * large file can be shown coloured from the top while the rest is done.
  *
  * @internal
  */
@@ -45,6 +46,8 @@ export const tokenizeInSlices = async <Token, State>(params: {
   readonly pause: () => Promise<void>;
   /** False once the colouring is no longer wanted. */
   readonly stillWanted: () => boolean;
+  /** The lines coloured so far (from the first), between slices. */
+  readonly progress?: (lines: ReadonlyArray<ReadonlyArray<Token>>) => void;
 }): Promise<Sliced<Token, State>> => {
   const texts = linesOf(params.code);
   const previous = params.previous;
@@ -76,6 +79,7 @@ export const tokenizeInSlices = async <Token, State>(params: {
       }
     }
     if (Date.now() - sliceStart >= params.budgetMs) {
+      params.progress?.(lines);
       await params.pause();
       if (!params.stillWanted()) throw new Superseded();
       sliceStart = Date.now();

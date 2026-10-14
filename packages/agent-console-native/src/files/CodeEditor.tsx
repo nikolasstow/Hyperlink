@@ -16,7 +16,7 @@ import { StyleSheet, View } from "react-native";
 import { canApplyChanges, canMarkChanges, canShowConflicts, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
 import { FileSync, type Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
-import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
+import { cachedHighlightSync, type CodeToken, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
 import { cachedSessionTitle } from "../sessionCache";
 import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
@@ -29,6 +29,9 @@ import type { ScrollOffset } from "./FileScrolls";
 
 /** Re-tokenise no more than this often while typing. */
 const RETOKENIZE_MS = 150;
+/** Lines past the top one shown that are coloured before the first are shown:
+ * a screenful and some. */
+const FIRST_COLOURED_LINES = 100;
 
 /** Each line's coloured runs as offset ranges (what the native view wants) from
  * Shiki's per-line content tokens. UTF-16 lengths, since JS string length is UTF-16. */
@@ -259,9 +262,18 @@ export const CodeEditor = (props: {
     const delay = first ? 0 : RETOKENIZE_MS;
     firstRun.current = false;
     const handle = setTimeout(() => {
+      // A large file shows coloured from the top while the rest is done: first
+      // once the lines on screen are, then each time the coloured part has
+      // doubled (each send carries every line so far).
+      let sendAt = atLine.current + FIRST_COLOURED_LINES;
+      const progress = (lines: ReadonlyArray<ReadonlyArray<CodeToken>>) => {
+        if (!alive || lines.length < sendAt) return;
+        sendAt = lines.length * 2;
+        setTokensJson(tokensJsonOf(text, { lines }));
+      };
       // Kept on the device as opened; each version after is memory only, and
       // colours only the lines it changed.
-      void tokenizeCode({ code: text, lang, theme, keep: first, previous: lastHighlight.current, stillWanted: () => alive })
+      void tokenizeCode({ code: text, lang, theme, keep: first, previous: lastHighlight.current, stillWanted: () => alive, progress })
         .then((highlight) => {
           if (!alive) return;
           lastHighlight.current = highlight;

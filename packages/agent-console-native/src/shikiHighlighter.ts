@@ -221,6 +221,10 @@ export const tokenizeCode = async (params: {
   readonly previous?: HighlightResult;
   /** False once the result is no longer wanted (a newer text came). */
   readonly stillWanted?: () => boolean;
+  /** The lines coloured so far, from the first, while a text is coloured
+   * from the start (not an edit of `previous`, which finishes at once and
+   * whose later lines would go plain meanwhile). */
+  readonly progress?: (lines: ReadonlyArray<ReadonlyArray<CodeToken>>) => void;
 }): Promise<HighlightResult> => {
   const themeName = typeof params.theme === "string" ? params.theme : (params.theme.name ?? "custom");
   const langId = LANG_ALIASES[params.lang.toLowerCase()] ?? params.lang.toLowerCase();
@@ -237,10 +241,12 @@ export const tokenizeCode = async (params: {
 
   const lang = await ensureLang(hl, LANG_MODULES[langId] !== undefined ? langId : "text");
   const before = params.previous === undefined ? undefined : resumable.get(params.previous);
+  const previous = before !== undefined && before.lang === lang && before.themeName === themeName ? before.sliced : undefined;
   const colours = hl.getTheme(themeName);
   const sliced = await tokenizeInSlices<CodeToken, GrammarState>({
     code: params.code,
-    previous: before !== undefined && before.lang === lang && before.themeName === themeName ? before.sliced : undefined,
+    previous,
+    ...(previous === undefined && params.progress !== undefined ? { progress: params.progress } : {}),
     line: (text, state) => {
       const result = hl.codeToTokens(text, { lang, theme: themeName, ...(state === undefined ? {} : { grammarState: state }) });
       return {

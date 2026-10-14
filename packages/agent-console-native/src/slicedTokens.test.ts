@@ -23,7 +23,12 @@ const whole = (code: string): ReadonlyArray<ReadonlyArray<Token>> =>
   hl.codeToTokens(code, { lang: "typescript", theme: "github-dark" }).tokens.map((line) => line.map((token) => ({ content: token.content, color: token.color })));
 
 /** Colour in slices, counting the lines coloured. */
-const sliced = async (code: string, previous?: Sliced<Token, GrammarState>, stillWanted: () => boolean = () => true) => {
+const sliced = async (
+  code: string,
+  previous?: Sliced<Token, GrammarState>,
+  stillWanted: () => boolean = () => true,
+  progress?: (lines: ReadonlyArray<ReadonlyArray<Token>>) => void,
+) => {
   let coloured = 0;
   const result = await tokenizeInSlices<Token, GrammarState>({
     code,
@@ -42,6 +47,7 @@ const sliced = async (code: string, previous?: Sliced<Token, GrammarState>, stil
     budgetMs: 1,
     pause: () => new Promise((resolve) => setTimeout(resolve, 0)),
     stillWanted,
+    ...(progress === undefined ? {} : { progress }),
   });
   return { result, coloured };
 };
@@ -76,6 +82,16 @@ describe("tokenizeInSlices", () => {
     const { result: closed, coloured: again } = await sliced(edited(100, 0, ["/* */"]), result);
     expect(closed.lines).toEqual(whole(edited(100, 0, ["/* */"])));
     expect(again).toBeGreaterThan(lines.length - 110);
+  });
+
+  it("tells the lines coloured so far as it goes, each the start of the whole", async () => {
+    const seen: Array<ReadonlyArray<ReadonlyArray<Token>>> = [];
+    const { result } = await sliced(source, undefined, () => true, (so) => seen.push([...so]));
+    expect(seen.length).toBeGreaterThan(1);
+    for (const [index, so] of seen.entries()) {
+      expect(so.length).toBeGreaterThanOrEqual(seen[index - 1]?.length ?? 0);
+      expect(so).toEqual(result.lines.slice(0, so.length));
+    }
   });
 
   it("stops once a newer text came", async () => {
