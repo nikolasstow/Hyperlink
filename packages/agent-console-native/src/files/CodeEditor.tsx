@@ -246,6 +246,8 @@ export const CodeEditor = (props: {
   // The first tokenise is immediate (no flash); only re-tokenising while typing
   // is debounced.
   const firstRun = React.useRef(true);
+  // The last colouring, so the next colours only what an edit changed.
+  const lastHighlight = React.useRef<HighlightResult | undefined>(undefined);
 
   React.useEffect(() => {
     setEditorTheme(editorThemeOf(theme, undefined));
@@ -257,10 +259,12 @@ export const CodeEditor = (props: {
     const delay = first ? 0 : RETOKENIZE_MS;
     firstRun.current = false;
     const handle = setTimeout(() => {
-      // Kept on the device as opened; each version after is memory only.
-      void tokenizeCode({ code: text, lang, theme, keep: first })
+      // Kept on the device as opened; each version after is memory only, and
+      // colours only the lines it changed.
+      void tokenizeCode({ code: text, lang, theme, keep: first, previous: lastHighlight.current, stillWanted: () => alive })
         .then((highlight) => {
           if (!alive) return;
+          lastHighlight.current = highlight;
           setTokensJson(tokensJsonOf(text, highlight));
           setEditorTheme(editorThemeOf(theme, highlight));
         })

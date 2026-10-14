@@ -6,17 +6,19 @@
  *
  * Performance: the highlighter is created ONCE (a lazy singleton) with a curated
  * set of languages bundled; custom themes are loaded on demand and de-duped;
- * callers memoize the token output per (code, lang, theme). `tokenize` is sync
- * once the singleton has resolved.
+ * results are cached per (code, lang, theme) (codeCache.ts). Colouring runs a
+ * line at a time in short slices of the JS thread (slicedTokens.ts), and an
+ * edit of a text coloured before only colours the lines it changed.
  *
  * This is the foundation — first surfaced as a preview in Appearance, later the
  * renderer for chat code blocks and the file viewer/editor.
  *
  * @internal
  */
-import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemeRegistrationRaw } from "shiki/core";
+import { createHighlighterCore, type GrammarState, type HighlighterCore, type LanguageRegistration, type ThemeRegistrationRaw } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { cacheKey, getCachedTokens, getCachedTokensSync, setCachedTokens } from "./codeCache";
+import { type Sliced, tokenizeInSlices } from "./slicedTokens";
 import type { VsCodeTheme } from "./vscodeTheme";
 import bash from "shiki/langs/bash.mjs";
 import css from "shiki/langs/css.mjs";
@@ -185,10 +187,28 @@ export interface HighlightResult {
   readonly foreground?: string;
 }
 
+/** How long one slice of colouring may hold the JS thread, ms. */
+const SLICE_MS = 8;
+
+/** What colouring a result again after an edit needs: its lines' grammar
+ * states, and what it was coloured as. */
+interface Resumable {
+  readonly sliced: Sliced<CodeToken, GrammarState>;
+  readonly lang: string;
+  readonly themeName: string;
+}
+const resumable = new WeakMap<HighlightResult, Resumable>();
+
+const pause = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
 /**
  * Highlight `code`. `theme` is either a bundled theme name (see FALLBACK_THEME)
  * or a raw VS Code theme object (from an installed extension) — loaded and
  * cached by its `name` on first use.
+ *
+ * Coloured in slices, giving the JS thread back between them; given the
+ * `previous` result of the same document, only the lines an edit changed are
+ * coloured again. Rejects with `Superseded` once `stillWanted` says no.
  */
 export const tokenizeCode = async (params: {
   readonly code: string;
@@ -197,6 +217,10 @@ export const tokenizeCode = async (params: {
   /** Keep the result on the device too (default): false for versions that
    * will not be asked for again, such as each pause while typing. */
   readonly keep?: boolean;
+  /** This document's last result, to colour only what changed. */
+  readonly previous?: HighlightResult;
+  /** False once the result is no longer wanted (a newer text came). */
+  readonly stillWanted?: () => boolean;
 }): Promise<HighlightResult> => {
   const themeName = typeof params.theme === "string" ? params.theme : (params.theme.name ?? "custom");
   const langId = LANG_ALIASES[params.lang.toLowerCase()] ?? params.lang.toLowerCase();
@@ -212,16 +236,35 @@ export const tokenizeCode = async (params: {
   }
 
   const lang = await ensureLang(hl, LANG_MODULES[langId] !== undefined ? langId : "text");
-  const result = hl.codeToTokens(params.code, { lang, theme: themeName });
-  const lines = result.tokens.map((line) =>
-    line.map((token) => ({
-      content: token.content,
-      color: token.color,
-      italic: (token.fontStyle ?? 0) % 2 === 1,
-      bold: ((token.fontStyle ?? 0) & 2) === 2,
-    })),
-  );
-  const output: HighlightResult = { lines, background: result.bg, foreground: result.fg };
+  const before = params.previous === undefined ? undefined : resumable.get(params.previous);
+  const colours = hl.getTheme(themeName);
+  const sliced = await tokenizeInSlices<CodeToken, GrammarState>({
+    code: params.code,
+    previous: before !== undefined && before.lang === lang && before.themeName === themeName ? before.sliced : undefined,
+    line: (text, state) => {
+      const result = hl.codeToTokens(text, { lang, theme: themeName, ...(state === undefined ? {} : { grammarState: state }) });
+      return {
+        tokens: (result.tokens[0] ?? []).map((token) => ({
+          content: token.content,
+          color: token.color,
+          italic: (token.fontStyle ?? 0) % 2 === 1,
+          bold: ((token.fontStyle ?? 0) & 2) === 2,
+        })),
+        state: result.grammarState,
+      };
+    },
+    sameState: (a, b) => {
+      if (a === b) return true;
+      const stackA = a?.getInternalStack(themeName);
+      const stackB = b?.getInternalStack(themeName);
+      return stackA !== undefined && stackB !== undefined && stackA.equals(stackB);
+    },
+    budgetMs: SLICE_MS,
+    pause,
+    stillWanted: params.stillWanted ?? (() => true),
+  });
+  const output: HighlightResult = { lines: sliced.lines, background: colours.bg, foreground: colours.fg };
+  resumable.set(output, { sliced, lang, themeName });
   setCachedTokens(key, output, params.keep ?? true);
   return output;
 };
