@@ -11,15 +11,16 @@
  *
  * @internal
  */
-import { Effect } from "effect";
 import * as React from "react";
-import { runApp } from "../effect/runtime";
 import { type DubzWindowEvent, type DubzWindowState, initialDubzWindowState, reduceDubzWindow, requestedHeightOf } from "./dubzWindowMachine";
 import { saveDubzDefaultHeight } from "./useBarWindow";
 
-/** Log a transition through the Effect runtime. Discrete, never per frame. */
+/** Log a transition. Discrete, never per frame. console.log (not Effect.logDebug)
+ * so it is actually visible in Metro while we debug the window behaviour. */
+const h = (n: number | undefined): string => (n === undefined ? "-" : String(Math.round(n)));
 const logTransition = (routeKey: string, event: DubzWindowEvent, prev: DubzWindowState, next: DubzWindowState): void => {
-  void runApp(Effect.logDebug(`[dubz] ${routeKey} ${event._tag} ${prev.phase}/${prev.keyboard}→${next.phase}/${next.keyboard} req=${requestedHeightOf(next)}`));
+  const show = (s: DubzWindowState): string => `${s.phase}/${s.keyboard} def=${h(s.defaultHeight)} act=${h(s.activeHeight)}${s.pinned ? " PIN" : ""} c=${s.compact ? 1 : 0}${s.compactContent ? "/cc" : ""}`;
+  console.log(`[dubz] ${routeKey} ${event._tag}: ${show(prev)} → ${show(next)} req=${h(requestedHeightOf(next))}`);
 };
 
 export interface DubzWindow {

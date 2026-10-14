@@ -212,6 +212,11 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     else if (!open && winState.phase === "open") dispatch({ _tag: "closeRequested", reason: "dismiss" });
   }, [open, winState.phase, dispatch]);
   const requestedHeight = requestedHeightOf(winState);
+  // What the CONTENT naturally wants (an active component's height, else the
+  // default) — NOT the requested window height, which can be pinned smaller by a
+  // drag. compactContent compares THIS against the viewport, so a pinned-small
+  // window still knows its content is taller and keeps the left gap.
+  const contentHeight = winState.activeHeight ?? winState.defaultHeight;
   // A suggestion claims a height (the session area, expanded): the window grows
   // to it if it needs to, and falls back to the default when it claims none.
   const onSuggestionActiveHeight = React.useCallback(
@@ -403,7 +408,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           {/* Watches the live height and reports the compact display mode to the
            * coordinator (renders nothing). The claim it compares against is the
            * requested height. */}
-          <DubzCompactSync claim={requestedHeight} topBar={DUBZ_TOP_BAR} bottomBar={DUBZ_BOTTOM_BAR} onChange={onLayoutChanged} />
+          <DubzCompactSync claim={contentHeight} topBar={DUBZ_TOP_BAR} bottomBar={DUBZ_BOTTOM_BAR} onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
           <View style={[styles.mainArea, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
