@@ -55,6 +55,22 @@ describe("dubzWindowMachine", () => {
     expect(requestedHeightOf(shorter)).toBe(DEFAULT);
   });
 
+  it("a drag pins the height OVER an active component (compact is reachable)", () => {
+    const active = run(start, { _tag: "openRequested" }, { _tag: "componentActivated", height: 500 });
+    expect(requestedHeightOf(active)).toBe(500); // the active component grows the window
+    // Drag down into the compact zone: the pin wins over the 500 claim.
+    const compact = run(active, { _tag: "heightSettled", height: 150 });
+    expect(compact.pinned).toBe(true);
+    expect(requestedHeightOf(compact)).toBe(150);
+    // Content grows under it: still compact (the pin holds).
+    const grown = run(compact, { _tag: "componentHeightChanged", height: 600 });
+    expect(requestedHeightOf(grown)).toBe(150);
+    // A fresh (re)activation clears the pin and grows the window to show itself.
+    const reactivated = run(grown, { _tag: "componentActivated", height: 700 });
+    expect(reactivated.pinned).toBe(false);
+    expect(requestedHeightOf(reactivated)).toBe(700);
+  });
+
   it("layoutChanged sets the compact flags, dedups, and resets on close", () => {
     const open = run(start, { _tag: "openRequested" }, { _tag: "layoutChanged", compact: true, compactContent: true });
     expect(open.compact).toBe(true);

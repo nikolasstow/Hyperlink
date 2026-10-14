@@ -35,6 +35,11 @@ export interface DubzWindowState {
   readonly defaultHeight: number;
   /** An active component's height, or undefined when none is active. */
   readonly activeHeight: number | undefined;
+  /** Whether the user has dragged to a height, pinning it OVER an active
+   * component's claim. A drag pins; a (re)activation or deactivation clears it.
+   * Without this, an active, taller component snaps the window back up after a
+   * drag and compact can never be reached. */
+  readonly pinned: boolean;
   /** The display mode, from the live visible height (dubzLayout): whether Dubz
    * is compact, and whether the content must shift aside for the top-left
    * buttons. A height reaction keeps these up to date; they are not per-frame
@@ -62,15 +67,21 @@ export const initialDubzWindowState = (defaultHeight: number): DubzWindowState =
   keyboard: "down",
   defaultHeight,
   activeHeight: undefined,
+  pinned: false,
   compact: false,
   compactContent: false,
 });
 
-/** The requested height: the active component's height when it is taller than
- * the default, else the default. The keyboard is not part of this — the
- * renderer clamps it per frame. */
+/** The requested height: the user's pinned height when they have dragged one,
+ * else the active component's height when it is taller than the default, else
+ * the default. The keyboard is not part of this — the renderer clamps it per
+ * frame. */
 export const requestedHeightOf = (state: DubzWindowState): number =>
-  state.activeHeight !== undefined && state.activeHeight > state.defaultHeight ? state.activeHeight : state.defaultHeight;
+  state.pinned
+    ? state.defaultHeight
+    : state.activeHeight !== undefined && state.activeHeight > state.defaultHeight
+      ? state.activeHeight
+      : state.defaultHeight;
 
 /** The reducer: pure, total, and the only place the rules live. */
 export const reduceDubzWindow = (state: DubzWindowState, event: DubzWindowEvent): DubzWindowState => {
@@ -92,17 +103,21 @@ export const reduceDubzWindow = (state: DubzWindowState, event: DubzWindowEvent)
       // The keyboard going down does NOT close the window; closing is explicit.
       return state.keyboard === "down" ? state : { ...state, keyboard: "down" };
     case "heightSettled":
-      // A drag sets the new default — the user's drag wins and sticks. Ignored
-      // while closed (there is nothing to size).
-      return state.phase === "closed" || state.defaultHeight === event.height ? state : { ...state, defaultHeight: event.height };
+      // A drag sets the new default AND pins it — the user's drag wins and
+      // sticks, over any active component's claim (this is how compact is
+      // reached). Ignored while closed (there is nothing to size).
+      return state.phase === "closed" || (state.defaultHeight === event.height && state.pinned) ? state : { ...state, defaultHeight: event.height, pinned: true };
     case "componentActivated":
-      return state.activeHeight === event.height ? state : { ...state, activeHeight: event.height };
+      // A (re)activation takes over the sizing — it clears a pin, so a freshly
+      // expanded component grows the window to show itself.
+      return state.activeHeight === event.height ? state : { ...state, activeHeight: event.height, pinned: false };
     case "componentHeightChanged":
-      // Only meaningful while a component is active.
+      // Only meaningful while a component is active; keeps any pin (a pinned
+      // compact window stays compact while the content grows under it).
       return state.activeHeight === undefined || state.activeHeight === event.height ? state : { ...state, activeHeight: event.height };
     case "componentDeactivated":
-      // Back to the default on the next calculation.
-      return state.activeHeight === undefined ? state : { ...state, activeHeight: undefined };
+      // Back to the default (unpinned) on the next calculation.
+      return state.activeHeight === undefined ? state : { ...state, activeHeight: undefined, pinned: false };
     case "layoutChanged":
       // The display mode, from the height reaction (dubzLayout). A discrete flip
       // on a threshold crossing, not per-frame.
