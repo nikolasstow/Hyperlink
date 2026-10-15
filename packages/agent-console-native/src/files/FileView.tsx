@@ -16,13 +16,12 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
 import { isCodeEditorNative } from "../../modules/code-editor";
 import type { Rebase } from "file-sync";
 import type { ScopeSymbol } from "./stickyRanges";
 import { CodeSurface } from "../CodeSurface";
 import { langFromFilename } from "../shikiHighlighter";
-import { Markdown } from "../Markdown";
 import { type TextColors, useScreenBackground, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor, type CodeEditorApi } from "./CodeEditor";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
@@ -32,6 +31,7 @@ import { clearFileEdit, setFileEdit } from "./fileEdits";
 import { registerSave, unregisterSave } from "./fileSave";
 import { getFileTextSync } from "./fileTextCache";
 import { isMarkdown, useMarkdownMode } from "./markdownMode";
+import { MarkdownReader } from "./MarkdownReader";
 import { flashFile } from "./saveLight";
 import { editLiveFile, liveFileNow, resolveLiveConflict, saveLiveFile, useLiveFile, useLiveFileEvents, useLiveFileProblem, useOnScreen } from "./useLiveFiles";
 
@@ -182,15 +182,15 @@ export const FileView = (props: {
   // your edits; it shows the text as it is now, edits included.
   const reading = useMarkdownMode(path) === "read" && isMarkdown(name);
   const readBackground = useScreenBackground("plain");
-  const { width: screenWidth } = useWindowDimensions();
   const rendered =
     reading && state.kind === "text" ? (
-      <ScrollView
-        style={[StyleSheet.absoluteFill, { backgroundColor: readBackground }]}
-        contentContainerStyle={[styles.read, { paddingTop: topInset + EDITOR_TOP_MARGIN, paddingBottom: bottomInset }]}
-      >
-        <Markdown text={live?.text ?? state.text} width={screenWidth - READ_SIDE * 2} />
-      </ScrollView>
+      <MarkdownReader
+        text={live?.text ?? state.text}
+        topInset={topInset + EDITOR_TOP_MARGIN}
+        bottomInset={bottomInset}
+        background={readBackground}
+        {...(onScopes === undefined ? {} : { onScopes })}
+      />
     ) : null;
 
   if (state.kind === "missing" || state.kind === "error") {
@@ -260,14 +260,8 @@ export const FileView = (props: {
   );
 };
 
-/** A rendered Markdown file's side margins. */
-const READ_SIDE = 16;
-
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
-    read: {
-      paddingHorizontal: READ_SIDE,
-    },
     surface: {
       flex: 1,
     },

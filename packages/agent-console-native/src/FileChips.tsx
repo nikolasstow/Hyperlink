@@ -53,7 +53,7 @@ export const FileChips = (props: {
         ]}
       >
         <Image systemName="sparkles" size={11} color={textColors.secondaryLabel} />
-        <Text modifiers={[font({ size: 13, weight: selected ? "semibold" : "medium" }), foregroundStyle(textColors.label), lineLimit(1)]}>{id}</Text>
+        <Text modifiers={[font({ size: 13, weight: selected ? "semibold" : "medium" }), foregroundStyle(textColors.label), lineLimit(1)]}>{`/${id}`}</Text>
       </HStack>
     );
   };
