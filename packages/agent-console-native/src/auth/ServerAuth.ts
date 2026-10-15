@@ -8,6 +8,7 @@
  * @internal
  */
 import { Context, Data, Duration, Effect, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
+import { Auth } from "agent-console-protocol";
 import { Base64Url } from "effect/encoding";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
@@ -28,24 +29,9 @@ const PairedServers = Schema.Record(
 );
 type PairedServers = typeof PairedServers.Type;
 
-/** What redeeming a code gives this device. */
-const Paired = Schema.Struct({
-  id: Schema.String,
-  token: Schema.String,
-});
-
-/** A device paired with a server, as the server lists it. */
-export const PairedDevice = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  pairedAt: Schema.Number,
-  lastSeenAt: Schema.Number,
-});
-export type PairedDevice = typeof PairedDevice.Type;
-
 /** The devices paired with one server, and which of them is this phone. */
 export interface ServerDevices {
-  readonly devices: ReadonlyArray<PairedDevice>;
+  readonly devices: ReadonlyArray<Auth.Device>;
   readonly thisDevice: string;
 }
 
@@ -74,9 +60,9 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const deviceId = (yield* paired)[origin]?.deviceId;
       if (deviceId === undefined) return;
-      const listed = yield* http.get(`${origin}/auth/devices`).pipe(
+      const listed = yield* http.get(`${origin}${Auth.devicesPath}`).pipe(
         Effect.flatMap(HttpClientResponse.filterStatusOk),
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Array(PairedDevice))),
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Array(Auth.Device))),
       );
       yield* SubscriptionRef.update(devices, (all) => new Map(all).set(origin, { devices: listed, thisDevice: deviceId }));
     }).pipe(Effect.catch((error) => Effect.logWarning(`[auth] the devices of ${origin} could not be listed`, error)));
@@ -98,7 +84,7 @@ const make = Effect.gen(function* () {
   /** The first of `urls` that answers as a server. */
   const firstReachable = (urls: ReadonlyArray<string>) =>
     Effect.findFirst(urls, (url) =>
-      http.get(`${url}/health`).pipe(
+      http.get(`${url}${Auth.healthPath}`).pipe(
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.timeout(HEALTH_TIMEOUT),
         Effect.as(true),
@@ -140,7 +126,7 @@ const make = Effect.gen(function* () {
     /** Removes a device from a server; this phone's own removal forgets the server here too. */
     revoke: (origin: string, id: string) =>
       Effect.gen(function* () {
-        yield* HttpClientRequest.post(`${origin}/auth/revoke`).pipe(
+        yield* HttpClientRequest.post(`${origin}${Auth.revokePath}`).pipe(
           HttpClientRequest.bodyJsonUnsafe({ id }),
           http.execute,
           Effect.flatMap(HttpClientResponse.filterStatusOk),
@@ -166,13 +152,13 @@ const make = Effect.gen(function* () {
         const url = Option.getOrUndefined(reachable);
         const origin = url === undefined ? undefined : originOf(url);
         if (url === undefined || origin === undefined) return yield* new PairingError({ reason: "Unreachable", message: `No answer from ${urls.join(", ")}.` });
-        const response = yield* HttpClientRequest.post(`${origin}/auth/redeem`).pipe(
+        const response = yield* HttpClientRequest.post(`${origin}${Auth.redeemPath}`).pipe(
           HttpClientRequest.bodyJsonUnsafe({ code, name }),
           http.execute,
           Effect.mapError((error) => new PairingError({ reason: "Unreachable", message: error.message })),
         );
         if (response.status === 403) return yield* new PairingError({ reason: "Refused", message: "That code is used or expired. Run pnpm pair again." });
-        const device = yield* HttpClientResponse.schemaBodyJson(Paired)(response).pipe(
+        const device = yield* HttpClientResponse.schemaBodyJson(Auth.PairedToken)(response).pipe(
           Effect.mapError((error) => new PairingError({ reason: "Failed", message: error.message })),
         );
         // The code is used now. If keeping the token fails, the device the
@@ -184,7 +170,7 @@ const make = Effect.gen(function* () {
           yield* store.set(STORE_KEY, { ...known, [origin]: { deviceId: device.id } });
         }).pipe(
           Effect.tapError(() =>
-            HttpClientRequest.post(`${origin}/auth/revoke`).pipe(
+            HttpClientRequest.post(`${origin}${Auth.revokePath}`).pipe(
               HttpClientRequest.bearerToken(device.token),
               HttpClientRequest.bodyJsonUnsafe({ id: device.id }),
               http.execute,

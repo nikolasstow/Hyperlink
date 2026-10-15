@@ -3,4 +3,5 @@
  *
  * @since 0.0.1
  */
+export * as Auth from "./Auth";
 export * as Models from "./Models";

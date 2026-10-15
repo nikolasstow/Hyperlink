@@ -13,6 +13,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./Auth": {
+      "types": "./src/Auth.ts",
+      "default": "./src/Auth.ts"
+    },
     "./Models": {
       "types": "./src/Models.ts",
       "default": "./src/Models.ts"

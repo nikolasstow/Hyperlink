@@ -8,6 +8,7 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Host, Slider } from "@expo/ui/swift-ui";
+import type { Auth } from "agent-console-protocol";
 import {
   ActivityIndicator,
   Alert,
@@ -23,7 +24,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppContext } from "./AppContext";
-import type { PairedDevice } from "./auth/ServerAuth";
 import { originOf } from "./auth/serverTokens";
 import { revokeDevice, useServerDevices } from "./auth/useServerAuth";
 import { CARD_RADIUS, CardGlass } from "./CardGlass";
@@ -94,7 +94,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const serverOrigin = originOf(server) ?? server;
   const serverDevices = useServerDevices(serverOrigin);
   /** Asks, then removes a paired device; removing this phone goes back to choosing a server. */
-  const confirmRemoveDevice = (device: PairedDevice): void => {
+  const confirmRemoveDevice = (device: Auth.Device): void => {
     const isThisPhone = device.id === serverDevices?.thisDevice;
     Alert.alert(isThisPhone ? "Remove this phone?" : `Remove ${device.name}?`, isThisPhone ? "It stops reaching this server until it is paired again." : "Its token stops working at once.", [
       { text: "Cancel", style: "cancel" },

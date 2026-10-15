@@ -19,11 +19,12 @@
  *
  * @internal
  */
-import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, PubSub, Random, RcMap, Ref, Schedule, Schema, Semaphore, Stream, SubscriptionRef } from "effect";
+import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, PubSub, Random, RcMap, Ref, Schedule, Semaphore, Stream, SubscriptionRef } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { RpcClient, RpcSerialization } from "effect/rpc";
 import { Socket } from "effect/socket";
 import { FileSync } from "file-sync";
+import { Auth } from "agent-console-protocol";
 import { tokenFor } from "../auth/serverTokens";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
@@ -75,11 +76,6 @@ const apiOfKey = (key: string): string => key.slice(key.indexOf("#") + 1);
 
 const socketUrl = (api: string): string => `${api.replace(/^http/, "ws")}${FileSync.path}`;
 
-/** A WebSocket ticket from a paired server (docs/handoffs/app-auth.md). */
-const WebSocketTicket = Schema.Struct({
-  ticket: Schema.String,
-});
-
 /** The socket's address for each connection: with a fresh one-use ticket when
  * the server is paired (a WebSocket from React Native cannot carry the token
  * header), else as it is. A ticket that cannot be had is logged, and the
@@ -88,15 +84,13 @@ const WebSocketTicket = Schema.Struct({
 const socketAddress = (http: HttpClient.HttpClient, api: string): Effect.Effect<string> =>
   tokenFor(api) === undefined
     ? Effect.succeed(socketUrl(api))
-    : http.post(`${api}/auth/ticket`).pipe(
+    : http.post(`${api}${Auth.ticketPath}`).pipe(
         Effect.flatMap(HttpClientResponse.filterStatusOk),
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(WebSocketTicket)),
-        Effect.map(({ ticket }) => `${socketUrl(api)}?${TICKET_PARAM}=${encodeURIComponent(ticket)}`),
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(Auth.WebSocketTicket)),
+        Effect.map(({ ticket }) => `${socketUrl(api)}?${Auth.ticketParam}=${encodeURIComponent(ticket)}`),
         Effect.catch((error) => Effect.logWarning(`live files: no WebSocket ticket from ${api}`, error).pipe(Effect.as(socketUrl(api)))),
       );
 
-/** The query parameter a WebSocket ticket travels in (the server's `TICKET_PARAM`). */
-const TICKET_PARAM = "ticket";
 
 const connect = (api: string) =>
   Effect.gen(function* () {

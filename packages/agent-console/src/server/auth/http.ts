@@ -9,14 +9,12 @@
 import { Effect, Option } from "effect";
 import { Headers, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
+import { Auth } from "agent-console-protocol";
 import { api } from "../api";
-import { type Caller, DeviceAuth, NotAllowed } from "./DeviceAuth";
+import { type Caller, DeviceAuth } from "./DeviceAuth";
 
 /** Paths anyone may call. */
-const OPEN_PATHS: ReadonlySet<string> = new Set(["/health", "/auth/redeem"]);
-
-/** The query parameter a WebSocket ticket travels in. */
-export const TICKET_PARAM = "ticket";
+const OPEN_PATHS: ReadonlySet<string> = new Set([Auth.healthPath, Auth.redeemPath]);
 
 /** The bearer token on a request, if any. */
 const bearerOf = (request: HttpServerRequest.HttpServerRequest): Option.Option<string> =>
@@ -45,7 +43,7 @@ export const authMiddleware = HttpRouter.middleware(
         const request = yield* HttpServerRequest.HttpServerRequest;
         const url = new URL(request.originalUrl, "http://localhost");
         if (OPEN_PATHS.has(url.pathname) || request.method === "OPTIONS") return yield* httpEffect;
-        const ticket = url.searchParams.get(TICKET_PARAM);
+        const ticket = url.searchParams.get(Auth.ticketParam);
         const allowed = ticket === null ? Option.isSome(yield* callerOf(auth, request)) : Option.isSome(yield* auth.redeemTicket(ticket));
         return allowed ? yield* httpEffect : unauthorized;
       }).pipe(
@@ -58,7 +56,7 @@ export const authMiddleware = HttpRouter.middleware(
 );
 
 /** Open: whether this is a server, before pairing with it. */
-export const healthRoute = HttpRouter.add("GET", "/health", HttpServerResponse.jsonUnsafe({ status: "ok" }));
+export const healthRoute = HttpRouter.add("GET", Auth.healthPath, HttpServerResponse.jsonUnsafe({ status: "ok" }));
 
 export const authHandlers = HttpApiBuilder.group(api, "auth", (handlers) =>
   Effect.gen(function* () {
@@ -67,7 +65,7 @@ export const authHandlers = HttpApiBuilder.group(api, "auth", (handlers) =>
       .handle("pair", ({ request }) =>
         Effect.gen(function* () {
           const caller = yield* callerOf(auth, request);
-          if (Option.isNone(caller) || caller.value._tag !== "Admin") return yield* new NotAllowed();
+          if (Option.isNone(caller) || caller.value._tag !== "Admin") return yield* new Auth.NotAllowed();
           return yield* auth.pair;
         }),
       )
@@ -77,7 +75,7 @@ export const authHandlers = HttpApiBuilder.group(api, "auth", (handlers) =>
       .handle("ticket", ({ request }) =>
         Effect.gen(function* () {
           const caller = yield* callerOf(auth, request);
-          if (Option.isNone(caller) || caller.value._tag !== "Device") return yield* new NotAllowed();
+          if (Option.isNone(caller) || caller.value._tag !== "Device") return yield* new Auth.NotAllowed();
           return yield* auth.ticket(caller.value.id);
         }),
       );

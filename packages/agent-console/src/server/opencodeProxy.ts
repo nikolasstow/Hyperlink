@@ -12,7 +12,7 @@
  * @internal
  */
 import { Effect, Option } from "effect";
-import { TICKET_PARAM } from "./auth/http";
+import { Auth } from "agent-console-protocol";
 import { opencodePassword, opencodeUrl, withOpencodeAuth } from "./opencodeServer";
 import { Headers, HttpClient, HttpClientRequest, HttpRouter, HttpServerResponse } from "effect/http";
 
@@ -32,7 +32,7 @@ export const opencodeProxyRoute = HttpRouter.add("*", `${OPENCODE_PREFIX}/*`, (r
     const client = yield* HttpClient.HttpClient;
     const password = yield* opencodePassword;
     const incoming = new URL(request.originalUrl, "http://localhost");
-    incoming.searchParams.delete(TICKET_PARAM);
+    incoming.searchParams.delete(Auth.ticketParam);
     const rest = incoming.pathname.slice(OPENCODE_PREFIX.length);
     const target = `${base.replace(/\/+$/, "")}${rest === "" ? "/" : rest}${incoming.search}`;
     const contentType = Option.getOrUndefined(Headers.get(request.headers, "content-type"));

@@ -18,7 +18,7 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Config, Console, Effect, FileSystem, Path, Schema } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { renderUnicodeCompact } from "uqr";
-import { PairingCode } from "./auth/DeviceAuth";
+import { Auth } from "agent-console-protocol";
 import { appScheme, resolveVariant } from "../../../agent-console-native/variant";
 import { adminTokenFile, stateDirectory } from "./sessions/files";
 
@@ -45,11 +45,11 @@ const program = Effect.gen(function* () {
   const path = yield* Path.Path;
   const port = yield* Config.Int("AGENT_CONSOLE_API_PORT").pipe(Config.withDefault(5199));
   const admin = (yield* fs.readFileString(path.join(stateDirectory((...parts) => path.join(...parts)), adminTokenFile))).trim();
-  const pairing = yield* HttpClientRequest.post(`http://127.0.0.1:${port}/auth/pair`).pipe(
+  const pairing = yield* HttpClientRequest.post(`http://127.0.0.1:${port}${Auth.pairPath}`).pipe(
     HttpClientRequest.bearerToken(admin),
     HttpClient.execute,
     Effect.flatMap(HttpClientResponse.filterStatusOk),
-    Effect.flatMap(HttpClientResponse.schemaBodyJson(PairingCode)),
+    Effect.flatMap(HttpClientResponse.schemaBodyJson(Auth.PairingCode)),
   );
   const urls = reachableAddresses().map((address) => `http://${address}:${port}`);
   const appDir = path.join(path.dirname(path.dirname(process.cwd())), "packages", "agent-console-native");

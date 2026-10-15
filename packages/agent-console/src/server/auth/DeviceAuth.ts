@@ -18,6 +18,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { Clock, Context, Crypto, Effect, FileSystem, Layer, Option, Path, Ref, Schema, SynchronizedRef } from "effect";
 import { Base64Url, Hex } from "effect/encoding";
+import { Auth } from "agent-console-protocol";
 import { adminTokenFile, devicesFile, stateDirectory } from "../sessions/files";
 
 /** How long a pairing code can be redeemed. */
@@ -45,58 +46,11 @@ const PairedDevices = Schema.Record(Schema.String, PairedDevice);
 type PairedDevices = typeof PairedDevices.Type;
 const devicesJson = Schema.fromJsonString(PairedDevices);
 
-/** A device as listed to a paired device (no token hash). */
-export const DeviceInfo = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  pairedAt: Schema.Number,
-  lastSeenAt: Schema.Number,
-});
-export type DeviceInfo = typeof DeviceInfo.Type;
-
-/** The devices could not be read or written. */
-export class DeviceAuthError extends Schema.TaggedError<DeviceAuthError>()("DeviceAuthError", {
-  message: Schema.String,
-}) {}
-
-/** The pairing code is unknown, used or expired. */
-export class PairingRefused extends Schema.TaggedError<PairingRefused>()("PairingRefused", {}) {}
-
-/** The caller may not do this (only the Mac's tools may pair). */
-export class NotAllowed extends Schema.TaggedError<NotAllowed>()("NotAllowed", {}) {}
-
-/** A new pairing code. */
-export const PairingCode = Schema.Struct({
-  code: Schema.String,
-  expiresAt: Schema.Number,
-});
-
-/** What redeeming a code gives the device. */
-export const PairedToken = Schema.Struct({
-  id: Schema.String,
-  token: Schema.String,
-});
-
-export const redeemPayload = Schema.Struct({
-  code: Schema.String,
-  name: Schema.String,
-});
-
-export const revokePayload = Schema.Struct({
-  id: Schema.String,
-});
-
-/** A WebSocket ticket. */
-export const WebSocketTicket = Schema.Struct({
-  ticket: Schema.String,
-  expiresAt: Schema.Number,
-});
-
 /** What a request proved: a paired device, or the Mac's own tools. */
 export type Caller = { readonly _tag: "Device"; readonly id: string } | { readonly _tag: "Admin" };
 
 const failed = (message: string) => (cause: unknown) =>
-  new DeviceAuthError({ message: `${message}: ${cause instanceof Error ? cause.message : String(cause)}` });
+  new Auth.DeviceAuthError({ message: `${message}: ${cause instanceof Error ? cause.message : String(cause)}` });
 
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -195,7 +149,7 @@ const make = Effect.gen(function* () {
     redeem: (code: string, name: string) =>
       Effect.gen(function* () {
         const found = yield* takeLive(codes, code.trim().toUpperCase(), (expiresAt) => expiresAt);
-        if (Option.isNone(found)) return yield* new PairingRefused();
+        if (Option.isNone(found)) return yield* new Auth.PairingRefused();
         const token = yield* secret;
         const tokenHash = yield* hashOf(token);
         const id = yield* crypto.randomUUIDv4().pipe(Effect.mapError(failed("making a device id")));
@@ -204,7 +158,7 @@ const make = Effect.gen(function* () {
         return { id, token };
       }),
     /** Who `token` is: a paired device (now seen), the admin, or nobody. */
-    authorize: (token: string): Effect.Effect<Option.Option<Caller>, DeviceAuthError> =>
+    authorize: (token: string): Effect.Effect<Option.Option<Caller>, Auth.DeviceAuthError> =>
       hashOf(token).pipe(
         Effect.flatMap((hash) =>
           hash === adminHash
@@ -228,7 +182,7 @@ const make = Effect.gen(function* () {
       takeLive(tickets, ticket, (waiting) => waiting.expiresAt).pipe(Effect.map(Option.map((waiting) => waiting.id))),
     /** Every paired device. */
     devices: SynchronizedRef.get(devices).pipe(
-      Effect.map((all) => Object.entries(all).map(([id, device]): DeviceInfo => ({ id, name: device.name, pairedAt: device.pairedAt, lastSeenAt: device.lastSeenAt }))),
+      Effect.map((all) => Object.entries(all).map(([id, device]): Auth.Device => ({ id, name: device.name, pairedAt: device.pairedAt, lastSeenAt: device.lastSeenAt }))),
     ),
     /** Removes a device; its token stops working. */
     revoke: (id: string) => change((all) => Object.fromEntries(Object.entries(all).filter(([kept]) => kept !== id))),
