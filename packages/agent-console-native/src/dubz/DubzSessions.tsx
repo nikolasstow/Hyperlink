@@ -54,6 +54,7 @@ import { useSessionTitle, useSessionWatch } from "../sessions/useSessionWatch";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { groupSessions } from "./groupSessions";
 import { sessionsForFile } from "./sessionsForFile";
+import { DubzHomeNativeView, type DubzSessionRow, isDubzHomeNative } from "../../modules/dubz-home";
 
 /** The session a row/list opens. */
 export interface DubzOpenSession {
@@ -174,6 +175,9 @@ const DubzSessionAreaImpl = (props: {
   // the content, instead of a round-trip behind it.
   const reportActive = React.useCallback(
     (isExpanded: boolean): void => {
+      // The native home view owns its own expand and reports its own height;
+      // the JS reporter would fight it, so stand down when native is in play.
+      if (isDubzHomeNative) return;
       if (isExpanded && sessions.length > 0) {
         const extraCount = Math.min(sessions.length - 1, EXTRA);
         onActiveHeightRef.current?.(suggestionAreaHeight(1 + extraCount + 1));
@@ -188,6 +192,39 @@ const DubzSessionAreaImpl = (props: {
   const top = sessions[0];
   if (top === undefined) return null;
   const rowWidth = width - WINDOW_SIDE * 2 - (props.leftInset ?? 0);
+
+  // Native home (this build has it): the SwiftUI surface owns scroll,
+  // bottom-anchor, scroll-behind, expand and row animation — no JS in the loop.
+  // Falls back to the @expo/ui List below where the binary has no native module.
+  if (isDubzHomeNative && DubzHomeNativeView !== undefined) {
+    const rows: ReadonlyArray<DubzSessionRow> = sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      updated: session.time.updated,
+      directory: session.directory,
+      count: sessions.length,
+    }));
+    return (
+      <DubzHomeNativeView
+        style={{ flex: 1 }}
+        sessions={rows}
+        contentWidth={rowWidth}
+        topInset={DUBZ_TOP_BAR}
+        bottomInset={PILL_AREA}
+        leftInset={props.leftInset ?? 0}
+        compact={(props.leftInset ?? 0) > 0}
+        labelColor={textColors.label}
+        secondaryColor={textColors.secondaryLabel}
+        onOpenSession={(event) => {
+          const picked = sessions.find((candidate) => candidate.id === event.nativeEvent.id);
+          if (picked !== undefined) props.onOpen(toOpen(picked));
+        }}
+        onViewAll={() => props.onViewAll(props.file)}
+        onActiveHeight={(event) => props.onActiveHeight?.(event.nativeEvent.height > 0 ? event.nativeEvent.height : undefined)}
+      />
+    );
+  }
+
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - GAP);
   const extras = sessions.slice(1, 1 + EXTRA);
 

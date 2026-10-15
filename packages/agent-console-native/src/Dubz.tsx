@@ -33,6 +33,7 @@ import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } f
 import { DubzCompactSync } from "./dubz/DubzCompactSync";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
+import { isDubzHomeNative } from "../modules/dubz-home";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
 import { getBarPages, setBarPages, type BarPage } from "./settings";
@@ -404,7 +405,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <DubzCompactSync onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
-          <View style={[styles.mainArea, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
+          <View style={[styles.mainArea, isDubzHomeNative ? styles.mainAreaFill : null, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
             {suggestions.map((suggestion) =>
               suggestion._tag === "Sessions" ? (
                 <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={openViewAll} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
@@ -543,6 +544,12 @@ const makeStyles = (text: TextColors) =>
     bottom: 0,
     paddingHorizontal: 16,
     paddingBottom: PILL_AREA,
+  },
+  // Native home owns scroll-behind itself (contentMargins by the bar insets), so
+  // the surface must fill the whole window — no top gap, no bottom pill padding.
+  mainAreaFill: {
+    top: 0,
+    paddingBottom: 0,
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {

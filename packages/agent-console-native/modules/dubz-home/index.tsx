@@ -23,7 +23,7 @@
  */
 import { requireNativeView, requireOptionalNativeModule } from "expo";
 import type * as React from "react";
-import { type NativeSyntheticEvent, Platform, type ViewProps } from "react-native";
+import { type ColorValue, type NativeSyntheticEvent, Platform, type ViewProps } from "react-native";
 
 /** One session row's display data (derived on the JS side from the session
  * list, so the native view never fetches — it only renders what it is given). */
@@ -42,14 +42,6 @@ export interface DubzSessionRow {
   readonly muted?: boolean;
 }
 
-/** The colours the view draws in, from the active theme (hex strings). */
-export interface DubzHomeTheme {
-  readonly label?: string;
-  readonly secondaryLabel?: string;
-  /** Whether the theme is light: glass takes this appearance, not the phone's. */
-  readonly light?: boolean;
-}
-
 export interface DubzHomeNativeProps extends ViewProps {
   /** The session area's rows, most related first (the first is the big pill).
    * Empty hides the session suggestion. Other suggestion kinds (Tasks, applets)
@@ -66,7 +58,11 @@ export interface DubzHomeNativeProps extends ViewProps {
    * button has room. */
   readonly leftInset?: number;
   readonly compact?: boolean;
-  readonly theme?: DubzHomeTheme;
+  /** Text colours from the active theme (hex strings at runtime). */
+  readonly labelColor?: ColorValue;
+  readonly secondaryColor?: ColorValue;
+  /** Whether the theme is light: glass takes this appearance, not the phone's. */
+  readonly light?: boolean;
   /** Open a session (its row tapped). */
   readonly onOpenSession?: (event: NativeSyntheticEvent<{ readonly id: string }>) => void;
   /** Open the full list ("View All"). */
