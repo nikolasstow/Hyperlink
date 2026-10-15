@@ -55,6 +55,8 @@ import {
   type DefaultWorktreePreference,
 } from "./settings";
 import { setFullPaths, useFullPaths } from "./files/filePaths";
+import { SuggestionModelMenu } from "./files/SuggestionModelMenu";
+import { setSuggestionSettings, useSuggestionSettings } from "./files/suggestionSettings";
 import { RUN_DELAY_STOPS, setRunCountdownEnabled, setRunCountdownSeconds, useRunCountdownEnabled, useRunCountdownSeconds } from "./runCountdown";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
@@ -88,6 +90,7 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
   const runCountdown = useRunCountdownSeconds();
   const runDelayOn = useRunCountdownEnabled();
   const fullPaths = useFullPaths();
+  const suggestions = useSuggestionSettings();
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { server, backend, rootDir, onChangeRootDir, onChangeServer } = useAppContext();
@@ -408,6 +411,27 @@ export const SettingsScreen = (props: Props): React.ReactElement => {
             <Text style={styles.formLabel}>Full File Paths</Text>
             <Switch style={styles.switchAlone} value={fullPaths} onValueChange={setFullPaths} />
           </View>
+          {/* Inline suggestions in the editor (ghost text at the caret), and
+           * the model that writes them. */}
+          <View style={[styles.formRow, styles.optionRowBorder]}>
+            <Text style={styles.formLabel}>Suggestions</Text>
+            <Switch
+              style={styles.switchAlone}
+              value={suggestions.enabled}
+              onValueChange={(on) => {
+                LayoutAnimation.configureNext(LayoutAnimation.create(250, "easeInEaseOut", "opacity"));
+                setSuggestionSettings({ ...suggestions, enabled: on });
+              }}
+            />
+          </View>
+          {suggestions.enabled ? (
+            <View style={[styles.formRow, styles.optionRowBorder]}>
+              <Text style={styles.formLabel}>Model</Text>
+              <View style={styles.switchAlone}>
+                <SuggestionModelMenu />
+              </View>
+            </View>
+          ) : null}
         </View>
 
         <Text style={styles.sectionLabel}>Scripts</Text>

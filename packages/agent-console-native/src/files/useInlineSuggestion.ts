@@ -1,0 +1,55 @@
+/**
+ * The inline suggestion for the open file (docs/handoffs/code-intelligence.md):
+ * asked for once typing pauses with the caret in place, dropped as soon as
+ * anything moves, so a suggestion only ever shows for the text and caret it
+ * was made for. Off when the setting is off.
+ *
+ * @internal
+ */
+import { Effect } from "effect";
+import * as React from "react";
+import { useAppContext } from "../AppContext";
+import { runFs } from "../effect/runtime";
+import { completeAt } from "../language/complete";
+import { useModels } from "../models";
+import { defaultSuggestionModel, useSuggestionSettings } from "./suggestionSettings";
+
+/** How long typing must pause before a suggestion is asked for. */
+const PAUSE_MS = 600;
+
+export interface Suggestion {
+  readonly id: string;
+  readonly at: number;
+  readonly text: string;
+}
+
+/** The suggestion for `text` at `caret` (undefined: none, or not editing). */
+export const useInlineSuggestion = (path: string, text: string | undefined, caret: number | undefined): Suggestion | undefined => {
+  const { server } = useAppContext();
+  const settings = useSuggestionSettings();
+  const fallback = defaultSuggestionModel(useModels(undefined));
+  const providerID = settings.model?.providerID ?? fallback?.providerID;
+  const modelID = settings.model?.id ?? fallback?.modelID;
+  // One value per model, so the request waits on the model, not on renders.
+  const model = React.useMemo(() => (providerID === undefined || modelID === undefined ? undefined : { providerID, id: modelID }), [providerID, modelID]);
+  const [suggestion, setSuggestion] = React.useState<Suggestion | undefined>(undefined);
+  const asked = React.useRef(0);
+  React.useEffect(() => {
+    setSuggestion(undefined);
+    if (!settings.enabled || text === undefined || caret === undefined) return undefined;
+    const id = ++asked.current;
+    const timer = setTimeout(() => {
+      void runFs(
+        completeAt(server, path, text, caret, model).pipe(
+          Effect.catch((error) => Effect.logWarning(`[suggestions] none for ${path}`, error).pipe(Effect.as(""))),
+        ),
+      ).then((found) => {
+        // Only for the text and caret it was asked about.
+        if (asked.current !== id || found === "") return;
+        setSuggestion({ id: String(id), at: caret, text: found });
+      });
+    }, PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [server, path, text, caret, settings.enabled, model]);
+  return suggestion;
+};

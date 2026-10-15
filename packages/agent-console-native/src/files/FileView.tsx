@@ -33,6 +33,7 @@ import { getFileTextSync } from "./fileTextCache";
 import { isMarkdown, useMarkdownMode } from "./markdownMode";
 import { MarkdownReader } from "./MarkdownReader";
 import { shownDiagnostics } from "./shownDiagnostics";
+import { useInlineSuggestion } from "./useInlineSuggestion";
 import { useDiagnostics } from "../language/useLanguage";
 import { flashFile } from "./saveLight";
 import { editLiveFile, liveFileNow, resolveLiveConflict, saveLiveFile, useLiveFile, useLiveFileEvents, useLiveFileProblem, useOnScreen } from "./useLiveFiles";
@@ -183,6 +184,17 @@ export const FileView = (props: {
   // Its problems from the Mac's language server, where they are in the text
   // you see (unsaved edits move them).
   const problems = useDiagnostics(path);
+  // The caret while editing: the suggestion is made for it (and the screen's
+  // type preview follows it).
+  const [caret, setCaret] = React.useState<number | undefined>(undefined);
+  const caretMoved = React.useCallback(
+    (offset: number | undefined): void => {
+      setCaret(offset);
+      onCaret?.(offset);
+    },
+    [onCaret],
+  );
+  const suggestion = useInlineSuggestion(path, live?.text, caret);
   const liveBase = live?.base;
   const liveText = live?.text;
   const diagnostics = React.useMemo(
@@ -231,7 +243,8 @@ export const FileView = (props: {
             onConflictChoice={(index, keep) => resolveLiveConflict(path, index, keep)}
             {...(onOpenSession === undefined ? {} : { onOpenSession })}
             {...(onScopes === undefined ? {} : { onScopes })}
-            {...(onCaret === undefined ? {} : { onCaret })}
+            onCaret={caretMoved}
+            {...(suggestion === undefined ? {} : { suggestion })}
             {...(diagnostics === undefined ? {} : { diagnostics })}
             initialOffset={initialOffset}
             onScrollRest={(offset) => keepScrollOffset(path, offset)}

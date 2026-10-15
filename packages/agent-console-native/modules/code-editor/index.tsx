@@ -55,6 +55,9 @@ export interface EditorTheme {
   readonly diagnosticWarning?: string;
   readonly diagnosticInfo?: string;
   readonly diagnosticHint?: string;
+  /** An inline suggestion's ghost text (`editorGhostText.foreground`;
+   * `apiVersion` 15). */
+  readonly ghostText?: string;
   /** Whether the theme is light: glass drawn in the editor takes this
    * appearance, not the phone's. */
   readonly light?: boolean;
@@ -116,6 +119,11 @@ export interface CodeEditorNativeProps extends ViewProps {
   /** Where the caret is while editing, as it moves (`offset`, UTF-16); no
    * `offset` once editing ends (`apiVersion` 14). */
   readonly onCaretChange?: (event: NativeSyntheticEvent<{ readonly offset?: number }>) => void;
+  /** The suggestion for the caret: `{id, at, text}` as JSON, empty for none
+   * (`apiVersion` 15). Shown while the caret is at `at`. */
+  readonly inlineSuggestionJson?: string;
+  /** A suggestion was taken: a tap on it, or a double space (`apiVersion` 15). */
+  readonly onSuggestionAccept?: (event: NativeSyntheticEvent<{ readonly id: string }>) => void;
   /** The line you are at (0-based), when it changes: the caret's while
    * editing, else the top of the visible code (`apiVersion` 10). */
   readonly onLineChange?: (event: NativeSyntheticEvent<{ readonly line: number }>) => void;
@@ -188,6 +196,9 @@ export const canMarkChanges = apiVersion >= 8;
 /** Whether this build draws a file's problems and reports the caret
  * (`apiVersion` 14). */
 export const canShowDiagnostics = apiVersion >= 14;
+
+/** Whether this build shows inline suggestions (`apiVersion` 15). */
+export const canSuggestInline = apiVersion >= 15;
 
 /** Put the keyboard down but keep editing the file being edited (the caret
  * stays; `apiVersion` 9). False when no file is being edited, or this build

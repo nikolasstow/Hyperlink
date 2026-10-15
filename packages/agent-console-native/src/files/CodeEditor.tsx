@@ -13,7 +13,7 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
-import { canApplyChanges, canMarkChanges, canShowConflicts, canShowDiagnostics, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
+import { canApplyChanges, canMarkChanges, canShowConflicts, canShowDiagnostics, canSuggestInline, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
 import { FileSync, type Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
 import { cachedHighlightSync, type CodeToken, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
@@ -90,6 +90,8 @@ export const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: H
     diagnosticWarning: problem.warning,
     diagnosticInfo: problem.info,
     diagnosticHint: problem.hint,
+    // VS Code's `editorGhostText.foreground`, with its defaults.
+    ghostText: colors?.["editorGhostText.foreground"] ?? (light ? "#00000077" : "#FFFFFF56"),
     changeAdded: change.added,
     changeModified: change.modified,
     changeDeleted: change.deleted,
@@ -139,6 +141,11 @@ export const CodeEditor = (props: {
   /** Where the caret is while editing, as it moves; undefined once editing
    * ends. */
   readonly onCaret?: (offset: number | undefined) => void;
+  /** The suggestion for the caret, shown as ghost text while the caret is at
+   * `at`. */
+  readonly suggestion?: { readonly id: string; readonly at: number; readonly text: string };
+  /** A suggestion was taken (a tap, or a double space): its id. */
+  readonly onSuggestionAccept?: (id: string) => void;
   /** Where the code rests once laid out. */
   readonly initialOffset?: ScrollOffset;
   /** Where the code came to rest after a scroll. */
@@ -235,6 +242,7 @@ export const CodeEditor = (props: {
   // The problems as the native view takes them: one string, remade only when
   // they change.
   const diagnosticsJson = React.useMemo(() => JSON.stringify(props.diagnostics ?? []), [props.diagnostics]);
+  const inlineSuggestionJson = React.useMemo(() => (props.suggestion === undefined ? "" : JSON.stringify(props.suggestion)), [props.suggestion]);
   React.useEffect(() => {
     const plain = (conflicts ?? []).map((conflict) => ({
       from: conflict.from,
@@ -323,6 +331,8 @@ export const CodeEditor = (props: {
         {...(canShowConflicts ? { conflictsJson } : {})}
         {...(canShowDiagnostics ? { diagnosticsJson } : {})}
         {...(canShowDiagnostics && props.onCaret !== undefined ? { onCaretChange: (event) => props.onCaret?.(event.nativeEvent.offset) } : {})}
+        {...(canSuggestInline ? { inlineSuggestionJson } : {})}
+        {...(canSuggestInline && props.onSuggestionAccept !== undefined ? { onSuggestionAccept: (event) => props.onSuggestionAccept?.(event.nativeEvent.id) } : {})}
         editable={props.editable}
         tokensJson={tokensJson}
         stickyRangesJson={stickyJson}

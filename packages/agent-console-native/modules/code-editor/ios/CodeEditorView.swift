@@ -55,6 +55,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// Where the caret is while editing, when it moves: `{offset}` (UTF-16);
     /// `{}` once editing ends.
     let onCaretChange = EventDispatcher()
+    /// An inline suggestion was taken (a tap, or a double space): `{id}`.
+    let onSuggestionAccept = EventDispatcher()
     private var reportedCaret: Int?
     /// Where to rest the code once it is laid out (a file reopening where it
     /// was left); applied once.
@@ -204,6 +206,19 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         }
         return found
     }()
+    /// The inline suggestion at the caret, as ghost text (InlineSuggestion.swift).
+    private lazy var suggestion: InlineSuggestion = {
+        let ghost = InlineSuggestion(textView: textView)
+        ghost.font = { [weak self] in self?.codeFont() ?? UIFont.monospacedSystemFont(ofSize: 14, weight: .regular) }
+        ghost.rowHeight = { [weak self] in self?.stickyRowHeight() ?? 17 }
+        ghost.onAccept = { [weak self] id in
+            self?.onSuggestionAccept(["id": id])
+        }
+        ghost.onViewsChanged = { [weak self] in
+            self?.keepAboveGutter()
+        }
+        return ghost
+    }()
     /// Closes a change's popover on a tap anywhere else.
     private lazy var popoverDismissal: UITapGestureRecognizer = {
         let tap = UITapGestureRecognizer(target: self, action: #selector(tappedEditor(_:)))
@@ -213,7 +228,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     }()
 
     private func keepAboveGutter() {
-        textView.viewsAboveGutter = conflictZones.views + changeMarks.views + diagnostics.views
+        textView.viewsAboveGutter = conflictZones.views + changeMarks.views + diagnostics.views + suggestion.views
         textView.setNeedsLayout()
     }
 
@@ -303,6 +318,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     /// Mark lines an agent changed (`[{kind,from,to,sessionID?,title?,at}]`
     /// against the current text), until the file is closed.
+    /// The suggestion for the caret as JSON: `{id, at, text}`; empty: none.
+    func setInlineSuggestionJson(_ json: String) {
+        suggestion.set(json.isEmpty ? nil : decodeJson(InlineSuggestionNative.self, json))
+    }
+
     /// The file's problems as JSON: `[{start,end,severity,message,source?,code?}]`.
     func setDiagnosticsJson(_ json: String) {
         diagnostics.set(decodeJson([DiagnosticNative].self, json) ?? [])
@@ -579,6 +599,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             problemColors.light = value
         }
         diagnostics.colors = problemColors
+        if let value = theme.ghostText.flatMap({ UIColor(shikiHex: $0) }) {
+            suggestion.ghostColor = value
+        }
         if let value = theme.changeFlash.flatMap({ UIColor(shikiHex: $0) }) {
             flashColor = value
         }
@@ -652,6 +675,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.theme = theme
         textView.backgroundColor = background
         backgroundColor = background
+        suggestion.backing = background
         textView.insertionPointColor = caret
         textView.selectionBarColor = caret
         textView.selectionHighlightColor = selection.withAlphaComponent(0.35)
@@ -897,6 +921,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         conflictZones.layout()
         changeMarks.layout()
         diagnostics.layout()
+        suggestion.layout()
         updateSticky()
     }
 
@@ -931,6 +956,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // MARK: - TextViewDelegate
 
     func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        // A double space takes the suggestion instead (it puts it in itself).
+        guard suggestion.shouldChange(in: range, replacementText: text) else {
+            return false
+        }
         conflictZones.textWillChange(in: range, replacementLength: (text as NSString).length)
         changeMarks.textWillChange(in: range, replacementLength: (text as NSString).length)
         diagnostics.textWillChange(in: range, replacementLength: (text as NSString).length)
@@ -946,6 +975,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     func textViewDidChangeSelection(_ textView: TextView) {
         reportLine()
         reportCaret()
+        suggestion.layout()
     }
 
     func textViewDidEndEditing(_ textView: TextView) {
@@ -956,6 +986,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         }
         reportLine()
         reportCaret()
+        suggestion.layout()
     }
 
     func textViewDidChange(_ textView: TextView) {
@@ -968,6 +999,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         conflictZones.layout()
         changeMarks.layout()
         diagnostics.layout()
+        suggestion.layout()
         onTextChange(["text": textView.text])
     }
 }
