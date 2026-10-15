@@ -14,7 +14,7 @@ import { Effect, Fiber, HashMap, Option, Stream } from "effect";
 import * as React from "react";
 import { useAppContext } from "../AppContext";
 import { forkApp, runApp } from "../effect/runtime";
-import { useKeptPaths } from "./fileKeep";
+import { isKeptSync, removeFromDevice, useKeptPaths } from "./fileKeep";
 import { tabEntry } from "./FileNav";
 import { LiveFiles, type LiveFileProblem, type LiveFileUpdate } from "./LiveFiles";
 import type * as LiveFile from "./liveFile";
@@ -51,6 +51,13 @@ const start = (): void => {
       Stream.runForEach((next) =>
         Effect.sync(() => {
           problems = next;
+          // A kept path the hub says is NOT a file is a directory pinned by
+          // mistake — it can never sync, and re-reading it on every
+          // foreground/online stalls JS ~1s. Unpin it so it leaves the follow
+          // set and the persisted keep list for good (self-healing).
+          for (const [path, reason] of problems) {
+            if (reason === "NotAFile" && isKeptSync(path)) removeFromDevice(path);
+          }
           listeners.forEach((listener) => listener());
         }),
       ),
