@@ -5,4 +5,5 @@
  */
 export * as Auth from "./Auth";
 export * as Commands from "./Commands";
+export * as Language from "./Language";
 export * as Models from "./Models";

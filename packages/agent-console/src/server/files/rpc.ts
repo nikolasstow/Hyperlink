@@ -20,14 +20,13 @@ const handlers = FileSync.FileSyncRpcs.toLayer(
   ),
 );
 
-/** The route, with its own hub (reaching opencode through `fetch`). */
+/** The one hub the server's routes share (the live files, and the language
+ * servers that follow them), reaching opencode through `fetch`. */
+export const fileHubLayer = FileHub.layer.pipe(Layer.provide([NodeServices.layer, FetchHttpClient.layer]));
+
+/** The route. Needs the hub. */
 export const fileSyncLayer = RpcServer.layerHttp({
   group: FileSync.FileSyncRpcs,
   path: FileSync.path,
   protocol: "websocket",
-}).pipe(
-  Layer.provide([
-    handlers.pipe(Layer.provide(FileHub.layer.pipe(Layer.provide([NodeServices.layer, FetchHttpClient.layer])))),
-    RpcSerialization.layerJson,
-  ]),
-);
+}).pipe(Layer.provide([handlers, RpcSerialization.layerJson]));

@@ -21,6 +21,10 @@
       "types": "./src/Commands.ts",
       "default": "./src/Commands.ts"
     },
+    "./Language": {
+      "types": "./src/Language.ts",
+      "default": "./src/Language.ts"
+    },
     "./Models": {
       "types": "./src/Models.ts",
       "default": "./src/Models.ts"

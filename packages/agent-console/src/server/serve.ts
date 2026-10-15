@@ -23,7 +23,9 @@ import { DeviceAuth } from "./auth/DeviceAuth";
 import { authHandlers, authMiddleware, healthRoute } from "./auth/http";
 import { CollectionStates } from "./collections/state";
 import { ExtensionViews } from "./extensionHost/extensionViews";
-import { fileSyncLayer } from "./files/rpc";
+import { fileHubLayer, fileSyncLayer } from "./files/rpc";
+import { LanguageHost } from "./language/host";
+import { languageLayer } from "./language/rpc";
 import { commandsRoute } from "./commands/catalog";
 import { modelsRoute } from "./models/catalog";
 import { opencodeProxyRoute } from "./opencodeProxy";
@@ -167,6 +169,8 @@ const registryLive = PluginRegistry.layer.pipe(Layer.provide(NodeServices.layer)
 const viewsLive = ExtensionViews.layer.pipe(Layer.provide([workspacesLive, registryLive]));
 const statesLive = CollectionStates.layer.pipe(Layer.provide(registryLive));
 const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
+// One file hub for the live files and the language servers that follow them.
+const languageHostLive = LanguageHost.layer.pipe(Layer.provide([fileHubLayer, NodeServices.layer]));
 // One DeviceAuth for the gate (every request) and the auth endpoints.
 const authLive = DeviceAuth.layer;
 
@@ -191,7 +195,7 @@ const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 // Every route is behind the gate (auth/http.ts); `/health` and redeeming a
 // pairing code are open.
 const serverLive = HttpRouter.serve(
-  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer, opencodeProxyRoute, modelsRoute, commandsRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
+  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer.pipe(Layer.provide(fileHubLayer)), languageLayer.pipe(Layer.provide(languageHostLive)), opencodeProxyRoute, modelsRoute, commandsRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
 ).pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),
