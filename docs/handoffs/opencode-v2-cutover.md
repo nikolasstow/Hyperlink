@@ -1,9 +1,23 @@
 # opencode v2 cutover (shared servers)
 
-The app and the agent-console server speak opencode **v2 only** (branch
-`feat/live-file-sync`, eta). The shared servers still run v1. This is what
-moving them takes. Do it only with the owner's go, after epsilon has merged
-eta.
+**Done 2026-10-15.** Epsilon merged eta (`ee729296d`); the shared servers
+run v2. What was done, and the rollback, are below.
+
+- :4096 runs v2 from `~/Coding/opencode-serve.sh` (tmux `opencode-serve`),
+  password in `~/.config/opencode/server-password`. All 238 sessions
+  migrated. The 188 old `[worktree-setup]` sessions were then removed (the
+  backup keeps them).
+- Backup of the v1 data: `~/Coding/opencode-v1-backup-2026-10-15` (sqlite
+  `.backup` copies, integrity ok, and the old `servers-up.sh`).
+- **Watchdog:** LaunchAgent `cool.hyperlink.servers` runs
+  `~/bin/servers-up.sh` every 5 minutes and starts any of :8081, :4096,
+  :5195, :5199 that is down. It restarted v1 during the cutover. The script
+  now starts v2 and gives :5195 and :5199 the password. To stop a server on
+  purpose, change the script first.
+- The opencode account was connected with the device login.
+
+The plan as written before the cutover follows; the table shows the state
+before it.
 
 ## What is true now
 
@@ -59,6 +73,7 @@ eta.
 
 ## Rollback
 
-Stop v2, restore the backed-up `~/.local/share/opencode`, start v1 as
-before, restart :5199/:5195 without the password, run the pre-merge app
-build.
+Restore `~/Coding/opencode-v1-backup-2026-10-15/servers-up.sh.v1` to
+`~/bin/servers-up.sh` first (or the watchdog restarts v2). Stop v2, restore
+the backed-up `~/.local/share/opencode`, start v1 as before, restart
+:5199/:5195 without the password, run the pre-merge app build.
