@@ -72,6 +72,17 @@ describe("LanguageHost", () => {
     expect(SOURCE.slice(info?.start ?? 0, info?.end ?? 0)).toBe("ok");
   });
 
+  it("knows the names valid where a suggestion's prefix ends", { timeout: 60_000 }, async () => {
+    const context = await Effect.runPromise(withHost(({ host }) => host.contextAt(`${process.env.AGENT_CONSOLE_FS_ROOT ?? ""}/file.ts`, "export const ok = 1;\n")));
+    // The prefix ends at the end of the file: names from the file and the language are offered.
+    expect(context.names.some((name) => name.startsWith("ok"))).toBe(true);
+  });
+
+  it("knows nothing where the prefix is not in the server's copy (edits not saved yet)", { timeout: 60_000 }, async () => {
+    const context = await Effect.runPromise(withHost(({ host, file }) => host.contextAt(file, "text that is nowhere in the file")));
+    expect(context).toEqual({ names: [] });
+  });
+
   it("refuses a file no server here knows", { timeout: 60_000 }, async () => {
     const error = await Effect.runPromise(withHost(({ host, file }) => host.hover(file.replace(/\.ts$/, ".md"), 0)).pipe(Effect.flip));
     expect(error._tag === "LanguageError" ? error.reason : error._tag).toBe("Unsupported");

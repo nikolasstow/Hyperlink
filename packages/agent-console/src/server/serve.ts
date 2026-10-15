@@ -200,6 +200,8 @@ const serverLive = HttpRouter.serve(
 ).pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),
+  // Per request too: suggestions ask the language servers (the same host).
+  Layer.provide(languageHostLive),
   Layer.provide(NodeHttpServer.layer(createServer, { port })),
 );
 

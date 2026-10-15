@@ -1,8 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 import { Complete } from "agent-console-protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { LanguageHost, type PlaceContext } from "../language/host";
 import { completeRoute, insertionOf, promptOf } from "./complete";
 
 const UPSTREAM_PORT = 6300 + Math.floor(Math.random() * 100);
@@ -29,17 +30,26 @@ afterAll(() => {
   delete process.env.AGENT_CONSOLE_OPENCODE_URL;
 });
 
+/** What the language server knows at the caret, in these tests. */
+const PLACE: PlaceContext = { signature: "reduce(callback: (a: number, b: number) => number, initial: number): number", names: ["reduce: (callback) => number", "length: number"] };
+const knowing = Layer.succeed(LanguageHost, {
+  diagnostics: () => Stream.empty,
+  hover: () => Effect.succeed(Option.none()),
+  contextAt: () => Effect.succeed(PLACE),
+});
+
 const request: Complete.Request = { path: "src/math.ts", prefix: "export const sum = (values: number[]) =>\n  ", suffix: "\n", model: { providerID: "opencode", id: "claude-haiku-4-5" } };
 
 describe("POST /complete", () => {
   it("asks opencode's generate with the caret's surroundings and the model, and answers the insertion", async () => {
     const { handler, dispose } = HttpRouter.toWebHandler(completeRoute, { disableLogger: true });
-    const context = await Effect.runPromise(Layer.build(FetchHttpClient.layer).pipe(Effect.scoped));
+    const context = await Effect.runPromise(Layer.build(Layer.mergeAll(FetchHttpClient.layer, knowing)).pipe(Effect.scoped));
     try {
       const response = await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify(request), headers: { "content-type": "application/json" } }), context);
       expect(Schema.decodeUnknownSync(Schema.fromJsonString(Complete.Response))(await response.text())).toEqual({ text: "values.reduce((a, b) => a + b, 0);" });
       expect(asked[0]?.url).toBe("/api/experimental/generate");
-      expect(asked[0]?.body).toEqual({ prompt: promptOf(request), model: { providerID: "opencode", id: "claude-haiku-4-5" } });
+      expect(asked[0]?.body).toEqual({ prompt: promptOf(request, PLACE), model: { providerID: "opencode", id: "claude-haiku-4-5" } });
+      expect(promptOf(request, PLACE)).toContain("Names valid at the cursor (prefer these): reduce: (callback) => number; length: number");
     } finally {
       await dispose();
     }
@@ -49,6 +59,10 @@ describe("POST /complete", () => {
 describe("insertionOf", () => {
   it("does not repeat what is already after the caret", () => {
     expect(insertionOf("total + 1);", ");\nreturn")).toBe("total + 1");
+  });
+
+  it("stops at a prompt marker the model copied", () => {
+    expect(insertionOf("all([a, b]);\n  </CURSOR>", "\n")).toBe("all([a, b]);");
   });
 
   it("keeps a plain answer, without a trailing newline", () => {

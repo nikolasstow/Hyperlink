@@ -146,6 +146,6 @@ caret's offset (event), ghost text (inline suggestion, accept/dismiss).
 - [x] (2) Language servers on the API server (`server/language/`, `/language` RPC, `agent-console-protocol` Language); one `typescript-language-server` per repo, Effect plugin live.
 - [x] (2a) Errors: wavy lines + glass popover (native `Diagnostics.swift`, apiVersion 14; built on EAS), carried through unsaved edits.
 - [x] (2b) Type preview in the breadcrumb glass: caret (apiVersion 14) else innermost scope; prefetched. Compact type + docs; the expanded member shape (TS 5.9 `verbosityLevel`) is next.
-- [x] (3) AI inline suggestions: `/complete` (opencode generate) + ghost text (native `InlineSuggestion.swift`, apiVersion 15); tap or double space accepts; Settings → Files (on/off, model; default Claude Haiku 4.5). Language-server context in the prompt: next.
+- [x] (3) AI inline suggestions: `/complete` (opencode generate) + ghost text (native `InlineSuggestion.swift`, apiVersion 15); tap or double space accepts; Settings → Files (on/off, model; default Claude Haiku 4.5). The prompt carries the language server's context at the caret (the call being typed in, the names valid there; `contextAt`, 600 ms at most).
 - [ ] (4) Embedded TS language service (worklet runtime) + multiplexer.
 - [ ] (5) tree-sitter universal structure (if needed).

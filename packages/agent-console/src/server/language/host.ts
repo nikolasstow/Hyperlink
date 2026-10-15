@@ -66,6 +66,32 @@ const decodeHover = Schema.decodeUnknownEffect(HoverResult);
 
 const SEVERITIES: ReadonlyArray<Language.Severity> = ["error", "warning", "info", "hint"];
 
+const Completions = Schema.Union([
+  Schema.Array(Schema.Struct({ label: Schema.String, detail: Schema.optional(Schema.String) })),
+  Schema.Struct({ items: Schema.Array(Schema.Struct({ label: Schema.String, detail: Schema.optional(Schema.String) })) }),
+  Schema.Null,
+]);
+const decodeCompletions = Schema.decodeUnknownOption(Completions);
+const SignatureHelp = Schema.NullOr(
+  Schema.Struct({
+    signatures: Schema.Array(Schema.Struct({ label: Schema.String })),
+    activeSignature: Schema.optional(Schema.Number),
+  }),
+);
+const decodeSignatureHelp = Schema.decodeUnknownOption(SignatureHelp);
+
+/** What the language server knows at a place, for an inline suggestion's
+ * prompt: the call being typed in, and the names valid there. */
+export interface PlaceContext {
+  readonly signature?: string;
+  readonly names: ReadonlyArray<string>;
+}
+
+/** How many names a suggestion's prompt is given. */
+const NAMES = 40;
+/** How much of the text before the caret finds the caret in the server's copy. */
+const ANCHOR = 160;
+
 /** A server's diagnostic over `doc`'s text. */
 const diagnosticOf = (doc: Doc, diagnostic: LspDiagnostic): Language.Diagnostic => ({
   start: offsetOf(doc.text, doc.starts, diagnostic.range.start),
@@ -218,6 +244,37 @@ const make = Effect.gen(function* () {
         }),
       ),
     /** What is at `offset` in a file, if anything. */
+    /**
+     * What the server knows where `prefix` ends (the text before an app's
+     * caret, maybe unsaved): found in its copy by the end of `prefix`, then
+     * the call being typed in and the names valid there. Empty when the place
+     * is not in its copy (edits not saved yet) or the file is no server's.
+     */
+    contextAt: (requested: string, prefix: string): Effect.Effect<PlaceContext> =>
+      Effect.gen(function* () {
+        const { file, uri, server } = yield* open(requested);
+        const doc = server.docs.get(file);
+        const anchor = prefix.slice(-ANCHOR);
+        const at = doc === undefined || anchor === "" ? -1 : doc.text.lastIndexOf(anchor);
+        if (doc === undefined || at === -1) return { names: [] };
+        const position = positionOf(doc.starts, at + anchor.length);
+        const [signature, completions] = yield* Effect.all(
+          [
+            server.connection.request("textDocument/signatureHelp", { textDocument: { uri }, position }).pipe(Effect.map(decodeSignatureHelp)),
+            server.connection.request("textDocument/completion", { textDocument: { uri }, position, context: { triggerKind: 1 } }).pipe(Effect.map(decodeCompletions)),
+          ],
+          { concurrency: "unbounded" },
+        );
+        const help = Option.getOrNull(signature);
+        const label = help === null ? undefined : help.signatures[help.activeSignature ?? 0]?.label;
+        const found = Option.getOrNull(completions);
+        const items = found === null ? [] : Array.isArray(found) ? found : "items" in found ? found.items : [];
+        const names = items.slice(0, NAMES).map((item) => (item.detail === undefined ? item.label : `${item.label}: ${item.detail}`));
+        return label === undefined ? { names } : { signature: label, names };
+      }).pipe(
+        Effect.scoped,
+        Effect.catch((error) => Effect.logDebug(`[language] no context in ${requested}`, error).pipe(Effect.as({ names: [] }))),
+      ),
     hover: (requested: string, offset: number): Effect.Effect<Option.Option<Language.HoverInfo>, Language.LanguageError> =>
       Effect.gen(function* () {
         const { file, uri, server } = yield* open(requested);
