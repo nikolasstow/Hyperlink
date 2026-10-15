@@ -124,16 +124,55 @@ const visited = (place: FilePlace, entry: FileNavEntry): FilePlace => ({
   history: [{ entry, at: Date.now() }, ...place.history.filter((visit) => visit.entry.path !== entry.path)].slice(0, HISTORY_LIMIT),
 });
 
+/** Open `entry`, never duplicating: if a tab already shows that address, go to
+ * it (keeping its history); otherwise add one. EVERY way of opening goes
+ * through this — there is never a second tab on the same file. */
+const openOrSelectPlace = (place: FilePlace, entry: FileNavEntry): FilePlace => {
+  const existing = tabShowing(place, entry.path);
+  if (existing >= 0) return visited({ ...place, active: existing }, entry);
+  return visited({ ...place, tabs: [...place.tabs, { id: newTabId(), entries: [entry], index: 0 }], active: place.tabs.length }, entry);
+};
+
+/** Collapse a place whose tabs duplicated (a pre-dedupe build persisted them)
+ * down to the first tab per address, keeping `active` on the surviving tab.
+ * Tabs with no current entry keep their own identity (not folded together). */
+export const dedupedTabs = (place: FilePlace): FilePlace => {
+  const seen = new Map<string, number>();
+  const tabs: Array<FileTab> = [];
+  let active = 0;
+  place.tabs.forEach((tab, old) => {
+    const entry = tabEntry(tab);
+    const key = entry === undefined ? `#${tab.id}` : fromHome(entry.path);
+    const kept = seen.get(key);
+    if (kept === undefined) {
+      seen.set(key, tabs.length);
+      if (old === place.active) active = tabs.length;
+      tabs.push(tab);
+    } else if (old === place.active) {
+      active = kept;
+    }
+  });
+  if (tabs.length === place.tabs.length) return place;
+  return { ...place, tabs, active: Math.min(active, Math.max(tabs.length - 1, 0)) };
+};
+
 const make = Effect.gen(function* () {
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, Stored);
   const stored = yield* store.get(STORE_KEY).pipe(
     Effect.map(Option.getOrElse((): typeof Stored.Type => ({}))),
     Effect.catch((error) => Effect.logError("[files] the kept places could not be read; starting without them", error).pipe(Effect.as({}))),
   );
-  const state = yield* SubscriptionRef.make(HashMap.fromIterable(Object.entries(stored)));
+  // Collapse any duplicate tabs a pre-dedupe build left behind, so a place
+  // that piled up dozens of tabs on one file opens clean (and stops the
+  // per-tab preview/highlight work that stalled the JS thread).
+  const loaded = HashMap.map(HashMap.fromIterable(Object.entries(stored)), (place) => dedupedTabs(place));
+  const state = yield* SubscriptionRef.make(loaded);
 
   const save = (all: HashMap.HashMap<string, FilePlace>) =>
     store.set(STORE_KEY, Object.fromEntries(all)).pipe(Effect.catch((error) => Effect.logError("[files] saving the place failed", error)));
+
+  // Persist the de-duplication so the cleaned tabs survive the next launch.
+  yield* save(loaded);
 
   /** Changes a repo's place (when it has one), then keeps every repo's. */
   const update = (repo: string, f: (place: FilePlace) => FilePlace) =>
@@ -164,20 +203,16 @@ const make = Effect.gen(function* () {
     /** Opens an address the browser way: if a tab already shows it, go to that
      * tab (keeping its back/forward history); otherwise open it in a new tab.
      * No duplicate tabs for the same address. */
-    openOrSelect: (repo: string, entry: FileNavEntry) =>
-      update(repo, (place) => {
-        const existing = tabShowing(place, entry.path);
-        if (existing >= 0) return visited({ ...place, active: existing }, entry);
-        return visited({ ...place, tabs: [...place.tabs, { id: newTabId(), entries: [entry], index: 0 }], active: place.tabs.length }, entry);
-      }),
+    openOrSelect: (repo: string, entry: FileNavEntry) => update(repo, (place) => openOrSelectPlace(place, entry)),
     back: (repo: string) => update(repo, (place) => withActive(place, (tab) => (canGoBack(tab) ? { ...tab, index: tab.index - 1 } : tab))),
     forward: (repo: string) => update(repo, (place) => withActive(place, (tab) => (canGoForward(tab) ? { ...tab, index: tab.index + 1 } : tab))),
     /** Shows another tab. */
     select: (repo: string, index: number) =>
       update(repo, (place) => (index >= 0 && index < place.tabs.length ? { ...place, active: index } : place)),
-    /** A new tab, showing `entry` (the root, from the overview's +), shown. */
-    newTab: (repo: string, entry: FileNavEntry) =>
-      update(repo, (place) => ({ ...place, tabs: [...place.tabs, { id: newTabId(), entries: [entry], index: 0 }], active: place.tabs.length })),
+    /** Open `entry` from the overview's + / a row menu. Deduped like every
+     * other open: if a tab already shows it, that tab is shown — never a
+     * duplicate (owner: all tabs are deduped). */
+    newTab: (repo: string, entry: FileNavEntry) => update(repo, (place) => openOrSelectPlace(place, entry)),
     /** Closes a tab; the last one closed leaves one at the root. */
     close: (repo: string, index: number) =>
       update(repo, (place) => {

@@ -57,7 +57,7 @@ import { Button, ControlGroup, Host, Image, Label, Menu, RNHostView } from "@exp
 import { buttonStyle, menuActionDismissBehavior, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
-import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry, tabShowing } from "./FileNav";
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
@@ -387,8 +387,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // place it takes in the grid.
   const startTab = (entry: FileNavEntry): void => {
     if (place === undefined || overview.kind !== "open") return;
+    // Deduped: if the file is already open, zoom to THAT tab, not a new slot.
+    const existing = tabShowing(place, entry.path);
     newFileTab(repo, entry);
-    const added: TabRef = { repo, index: place.tabs.length };
+    const added: TabRef = { repo, index: existing >= 0 ? existing : place.tabs.length };
     zoomInto({ kind: "closing", tab: added, scroll: scroll.current, frame: frameOf(layoutFor(filter, entry), added, scroll.current), entry });
   };
 
