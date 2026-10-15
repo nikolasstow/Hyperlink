@@ -42,8 +42,8 @@ import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 /** DEV: swap the home suggestions for DubzActiveProbe — cycle active heights and
- * see the height-model math live. Flip off before shipping. */
-const DUBZ_PROBE: boolean = true;
+ * see the height-model math live. Kept wired; flip to true to troubleshoot. */
+const DUBZ_PROBE: boolean = false;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
