@@ -8,6 +8,7 @@ import { PermissionAutoApprover } from "./src/PermissionAutoApprover";
 import { type PairingLink, parsePairingLink } from "./src/auth/pairingLink";
 import { pairWithServer, serverAuthReadBack } from "./src/auth/useServerAuth";
 import { deviceInfo } from "./src/deviceName";
+import { CommandCatalogSync, commandCatalogReadBack } from "./src/commands/useCommandCatalog";
 import { ModelCatalogSync, modelCatalogReadBack } from "./src/models/useModelCatalog";
 import { conversationsReadBack } from "./src/conversations/useConversations";
 import { homeLayoutReadBack } from "./src/home/useHomeLayout";
@@ -119,7 +120,7 @@ const AppInner = (): React.ReactElement => {
       // Never longer than READ_BACK_WAIT_MS: a store that cannot be read must
       // not hold the app on the launch screen.
       const readBack = Promise.race([
-        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack, fileScrollsReadBack, extensionViewsReadBack, modelCatalogReadBack]),
+        Promise.all([conversationsReadBack, homeLayoutReadBack, sessionsReadBack, reposReadBack, keptNavReadBack, favoritesReadBack, keptThemesReadBack, codeFontsReadBack, fileScrollsReadBack, extensionViewsReadBack, modelCatalogReadBack, commandCatalogReadBack]),
         new Promise<void>((resolve) => setTimeout(resolve, READ_BACK_WAIT_MS)),
       ]);
       // The paired servers' tokens, before the first request to one.
@@ -321,6 +322,8 @@ const AppInner = (): React.ReactElement => {
           <CodeFontsInstaller />
           {/* The model lists, at open and on return: loaded before a picker opens. */}
           <ModelCatalogSync />
+          {/* The / lists, at open, on return, and as opencode changes them. */}
+          <CommandCatalogSync />
           {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}
           <KeyboardHeightProvider>
             <RootNavigator />
