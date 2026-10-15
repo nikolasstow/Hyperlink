@@ -1,8 +1,6 @@
 /**
  * Groups sessions by repo -> worktree, matched against a real repoScan.ts
- * result. Ported verbatim from packages/agent-console/src/opencode/
- * repoGrouping.ts — 100% pure logic (no platform dependency at all), a
- * direct candidate for a shared package once this proves out here.
+ * result. Pure logic, no platform dependency.
  *
  * @internal
  */

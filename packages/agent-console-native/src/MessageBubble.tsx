@@ -2,8 +2,7 @@
  * User = right-aligned bubble of glass tinted with the theme's primary;
  * assistant = plain left-aligned text,
  * no bubble — the pattern ChatGPT/Claude's own clients use, not a dev-tool
- * log. Ported from packages/agent-console/src/components/MessageBubble.tsx,
- * with markdown via `Markdown.tsx` (no Shiki — monospaced fences only).
+ * log. Markdown via `Markdown.tsx` (monospaced fences, no highlighting).
  *
  * Long-press any message (yours or the agent's) for the iOS context menu:
  * the bubble lifts, and Copy / Share act on its prose. Reasoning and tool

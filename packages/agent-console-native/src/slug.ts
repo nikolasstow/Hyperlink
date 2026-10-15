@@ -1,7 +1,6 @@
 /**
  * Adjective-noun name generator for auto-named worktrees, mirroring the
  * style of OpenCode's own session `slug` field (e.g. "playful-squid").
- * Ported from packages/agent-console/src/opencode/slug.ts.
  *
  * @internal
  */

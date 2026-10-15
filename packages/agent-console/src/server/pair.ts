@@ -55,7 +55,8 @@ const program = Effect.gen(function* () {
   const appDir = path.join(path.dirname(path.dirname(process.cwd())), "packages", "agent-console-native");
   const { expo } = yield* Schema.decodeUnknownEffect(AppJson)(yield* fs.readFileString(path.join(appDir, "app.json")));
   const scheme = appScheme(expo.scheme, resolveVariant(appDir));
-  const link = `${scheme}://pair?${new URLSearchParams([["code", pairing.code], ...urls.map((url) => ["url", url])]).toString()}`;
+  const query: Array<[string, string]> = [["code", pairing.code], ...urls.map((url): [string, string] => ["url", url])];
+  const link = `${scheme}://pair?${new URLSearchParams(query).toString()}`;
   const minutes = Math.round((pairing.expiresAt - Date.now()) / 60_000);
   yield* Console.log(
     [

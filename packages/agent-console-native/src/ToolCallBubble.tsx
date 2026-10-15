@@ -1,11 +1,8 @@
 /**
  * Renders one tool call inline in the transcript — read/edit/write/glob/grep/
  * etc. A tool's input is whatever the tool takes, so this reads it
- * defensively rather than assuming a schema. Ported from
- * packages/agent-console/src/components/ToolCallBubble.tsx, minus syntax
- * highlighting — that version's Shiki + `dangerouslySetInnerHTML` is a DOM
- * mechanism with no native equivalent short of a WebView; output renders as
- * plain monospace text here (a real, scoped v1 cut, not a placeholder).
+ * defensively rather than assuming a schema. Output renders as plain
+ * monospace text (no syntax highlighting).
  *
  * Open/closed comes from `useCollapsible`: the transcript auto-expands only
  * its newest collapsible, so a finished call folds away when the next one

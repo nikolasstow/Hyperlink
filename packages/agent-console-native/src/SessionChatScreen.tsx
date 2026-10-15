@@ -1,6 +1,5 @@
 /**
- * A session's chat transcript — ported from
- * packages/agent-console/src/pages/SessionChat.tsx.
+ * A session's chat transcript.
  *
  * The header is the real UINavigationBar (see RootNavigator), transparent
  * and empty apart from the system back button, a title set from this
