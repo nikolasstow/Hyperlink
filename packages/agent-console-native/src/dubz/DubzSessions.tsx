@@ -24,7 +24,7 @@ import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useAppContext } from "../AppContext";
-import { BarWindowResizeContext, HANDLE_CLEARANCE } from "../BarWindow";
+import { BarWindowResizeContext } from "../BarWindow";
 import { colors } from "../colors";
 import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 import { chatMessageOfQueued, pendingMessages, sameMessages } from "../chat/fromOutbox";
@@ -98,9 +98,10 @@ export const DUBZ_BOTTOM_BAR = PILL_AREA;
  * controls on their own row above and the composer pill below. */
 export const suggestionAreaHeight = (rows: number): number =>
   DUBZ_BOTTOM_BAR + GAP + (rows * PILL + Math.max(rows - 1, 0) * GAP) + DUBZ_TOP_BAR;
-/** The free-drag min / default: one row with only the grab handle's clearance at
- * the top (compact sizing — the top controls overlay, they do not get a row). */
-export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL + HANDLE_CLEARANCE;
+/** The free-drag min / default: just the composer pill area, a gap, and ONE
+ * suggestion row — nothing more. The grabber overlays the top (the native
+ * home's scroll-behind clearance), so it needs no reserved height here. */
+export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL;
 /** Scroll content clears the overlaid header at the top, and the floating
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = DUBZ_TOP_BAR;
