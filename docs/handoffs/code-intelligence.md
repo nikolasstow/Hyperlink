@@ -18,8 +18,8 @@ Separate by *what context a request needs*, which decides where it can run.
    JS context (`ExpoModulesWorklets`), so these run off the UI thread. Instant,
    same-file + globals; weaker cross-import (TS needs import types it may not
    have locally — the hybrid covers that seam).
-3. **Remote semantics — everything heavy / all other languages.** opencode on
-   the server runs the real language servers (gopls, rust-analyzer, clangd,
+3. **Remote semantics — everything heavy / all other languages.** The server
+   (our API server; see Remote host) runs the real language servers (gopls, rust-analyzer, clangd,
    tsserver with the full project). Queried over RPC. Complete, higher latency.
 
 Why not "just run the LSP locally": language servers are separate processes, and
@@ -85,23 +85,57 @@ This keeps "real parsing, on-device" while making the risky part (the binary)
 small and locally verifiable, and the improvable part (the algorithm) a free
 Metro update.
 
+## Remote host (owner, 2026-10-15)
+
+opencode v2 has no language-server runtime (its edit tool: `TODO: Add LSP … after
+LSP runtime exists`). So layer 3's servers run on **our API server** (:5199, same
+Mac) instead: `typescript-language-server` over stdio, using the workspace's own
+TypeScript so `@effect/language-service` loads from `tsconfig.json`; other
+languages later the same way. Fed from the file hub (the text it already keeps for
+followed files). If opencode gains an LSP runtime, the host can move there; the
+protocol does not change.
+
+## AI inline suggestions (Copilot-style), where they fit
+
+Planned in `native-ide.md` §3 (ghost text; configurable model; a dedicated
+`/complete` FIM endpoint, not the chat path). They share this plan's pieces:
+
+- **Native:** ghost text after the caret (Tab accepts) needs the caret's exact
+  offset, which the type preview needs too. Squiggles, the caret offset and ghost
+  text go into **one** native build.
+- **Server:** `/complete` lives on the API server beside the language servers.
+- **Context:** the language server makes the prompt better: the types and
+  signatures around the caret go with the prefix/suffix.
+- **Beside IntelliSense, as in VS Code:** language-server completions are a list;
+  the AI's is ghost text. Two providers, both routed by the multiplexer.
+
 ## Build order (each step ships value; hybrid is the capstone)
 
-1. **Sticky scroll + folding.** Native overlay (consumes ranges + scroll) +
-   JS structure from the TS AST. Delivers the requested feature; lays the
-   structure layer. Native piece SPM-compiled locally, then one EAS build.
-2. **Remote LSP client → opencode.** Full semantics, all languages, single
-   source. Real IntelliSense end-to-end.
-3. **Local embedded TS service + multiplexer/handoff.** The hybrid upgrade, on
-   top of a working remote, once we can measure where latency bites.
-4. **(optional) tree-sitter** for universal on-device structure, if the TS-AST +
-   remote split leaves gaps.
+1. **Sticky scroll + folding + breadcrumbs.** Native overlay + structure from
+   the TS AST / Markdown headings. **Done.**
+2. **Remote language servers on the API server** (above), streamed to the app
+   over the live-file connection:
+   - **a. Errors:** squiggles in the editor (native), the message on a tap.
+   - **b. Type preview** in the glass that expands from the breadcrumbs (above):
+     the type at the caret (else the innermost scope), dual form.
+3. **AI inline suggestions:** `/complete` (FIM, configurable model, language
+   server context) + ghost text. Its native part ships with 2's.
+4. **Local embedded TS service + multiplexer** (the hybrid): as-you-type errors,
+   type preview and completions instant on the phone; remote stays the
+   authority. Once we can measure where latency bites.
+5. **(optional) tree-sitter** for universal on-device structure.
+
+**One native build** for 2–3: diagnostics ranges (squiggles + gutter marks), the
+caret's offset (event), ghost text (inline suggestion, accept/dismiss).
 
 ## Status
 
 - [x] Architecture agreed (this doc).
-- [ ] (1) Native sticky-scroll/folding overlay — structure as a ranges prop.
-- [ ] (1) JS structure provider from the TS AST (TS/TSX/JS/JSON).
-- [ ] (2) Remote LSP client over opencode RPC.
-- [ ] (3) Embedded TS language service (worklet runtime) + multiplexer.
-- [ ] (4) tree-sitter universal structure (if needed).
+- [x] (1) Native sticky-scroll/folding overlay — structure as a ranges prop.
+- [x] (1) JS structure provider from the TS AST (TS/TSX/JS/JSON) + Markdown.
+- [ ] (2) Language servers on the API server, streamed over the live-file RPC.
+- [ ] (2a) Errors: squiggles + message.
+- [ ] (2b) Type preview in the breadcrumb glass.
+- [ ] (3) AI inline suggestions: `/complete` + ghost text.
+- [ ] (4) Embedded TS language service (worklet runtime) + multiplexer.
+- [ ] (5) tree-sitter universal structure (if needed).

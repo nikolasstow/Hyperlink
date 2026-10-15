@@ -107,7 +107,10 @@ open); text + token sync caches + preload (deferred so it doesn't block taps).
 above the header. Native — needs a build to verify; may need a push-off tweak as
 the innermost scope ends.
 
-## 3. Copilot-style inline completions (DECIDED model: configurable — build last)
+## 3. Copilot-style inline completions (DECIDED model: configurable)
+
+Where it fits in the language-intelligence order (step 3, native part shared with
+errors and the type preview): `code-intelligence.md`.
 
 Ghost-text inline suggestions like VS Code Copilot. Two halves:
 - **Native (Runestone):** render an inline suggestion after the caret, accept on
