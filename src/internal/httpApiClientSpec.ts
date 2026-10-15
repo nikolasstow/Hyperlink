@@ -9,8 +9,8 @@
  */
 
 import { Data, Schema } from "effect";
-import { HttpApi } from "effect/unstable/httpapi";
-import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApi } from "effect/http-api";
+import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/http-api";
 import * as Hyperlink from "../Hyperlink";
 import {
   apiUsageMetrics,

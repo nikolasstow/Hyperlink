@@ -4,7 +4,7 @@
  * @internal
  */
 import { Clock, Effect, Layer, Option } from "effect"
-import { HttpServer } from "effect/unstable/http"
+import { HttpServer } from "effect/http"
 import * as Hyperlink from "../Hyperlink"
 import {
   AddressLessClaimLost,
@@ -321,7 +321,7 @@ const ephemeralHttpListen = (
           Effect.gen(function* () {
             const server = yield* HttpServer.HttpServer;
             const port =
-              server.address._tag === "TcpAddress" ? server.address.port : 0;
+              server.address._tag === "UnixPathAddress" ? 0 : server.address.port;
             const url = `http://127.0.0.1:${String(port)}/rpc`;
             const addressed = Object.assign(
               Tag()(wireKey, { url, kind: "Http" as const }),

@@ -8,7 +8,7 @@
  * @internal
  */
 import { Context, Effect, Layer, Option, Stream, SubscriptionRef } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { type FavoriteTarget, fromLegacy, LegacyFavorites, reordered, type Scope, ScopedFavorites, toggled } from "./model";
 
 /** The scoped boards. */

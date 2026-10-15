@@ -12,7 +12,7 @@
 // ---cut---
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
-import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 import * as Daemon from "../../src/Daemon";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";

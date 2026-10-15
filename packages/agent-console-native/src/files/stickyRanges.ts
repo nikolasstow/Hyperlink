@@ -18,6 +18,7 @@
  * @internal
  */
 import type TS from "typescript";
+import { textHash } from "../textHash";
 
 /** A nestable scope: its header line (the `function foo() {` line), the line
  * span it covers, and how deeply nested it is. */
@@ -202,7 +203,27 @@ const markdownRanges = (text: string): ReadonlyArray<StickyRange> => {
 
 /** Sticky ranges for `text` in `lang` (the id from `langFromFilename`). Empty
  * for languages without an on-device parser yet. */
-export const stickyRanges = async (text: string, lang: string): Promise<ReadonlyArray<StickyRange>> => {
+/** Parsed structures by language and text, most recent last: the same text
+ * is asked for by the editor, its preview and the breadcrumbs. */
+const parsed = new Map<string, Promise<ReadonlyArray<StickyRange>>>();
+const PARSED_LIMIT = 24;
+
+export const stickyRanges = (text: string, lang: string): Promise<ReadonlyArray<StickyRange>> => {
+  const key = `${lang}:${text.length}:${textHash(text)}`;
+  const known = parsed.get(key);
+  parsed.delete(key);
+  const ranges = known ?? parse(text, lang);
+  parsed.set(key, ranges);
+  for (const oldest of parsed.keys()) {
+    if (parsed.size <= PARSED_LIMIT) break;
+    parsed.delete(oldest);
+  }
+  // A failure is not kept: the next ask tries again.
+  ranges.catch(() => parsed.delete(key));
+  return ranges;
+};
+
+const parse = async (text: string, lang: string): Promise<ReadonlyArray<StickyRange>> => {
   const canonical = CANONICAL[lang] ?? lang;
   if (canonical === "markdown") return markdownRanges(text);
   if (!TS_CANON.has(canonical)) return [];

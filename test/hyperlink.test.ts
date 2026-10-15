@@ -1,5 +1,5 @@
 import { Cause, Effect, Exit, Fiber, Layer, Schema, Stream } from "effect";
-import { RpcTest } from "effect/unstable/rpc";
+import { RpcTest } from "effect/rpc";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { forwardClient, groupOf, specOf } from "../src/Hyperlink";

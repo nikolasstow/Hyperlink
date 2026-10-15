@@ -16,9 +16,9 @@
  */
 import { NodeServices, NodeWorker } from "@effect/platform-node";
 import { Worker } from "node:worker_threads";
-import { Context, Duration, Effect, FileSystem, Layer, Option, Path } from "effect";
-import { RpcClient } from "effect/unstable/rpc";
-import { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import { Array as Arr, Context, Duration, Effect, FileSystem, Layer, Option, Path } from "effect";
+import { RpcClient } from "effect/rpc";
+import { RpcClientError } from "effect/rpc/RpcClientError";
 import { resolveWithin } from "../fs";
 import { PluginRegistry } from "../plugin/registry";
 import { Workspaces } from "../workspaces";
@@ -226,9 +226,16 @@ const make = Effect.gen(function* () {
         ),
       ),
     /** Register workspaces and walk their views now, so the first look at any
-     * of them is served from warm caches. */
+     * of them is served from warm caches. One that cannot be resolved (gone,
+     * outside the root) is left out, said here; its own load reports it. */
     warm: (workspaces: ReadonlyArray<string>) =>
-      Effect.forEach(workspaces, workspaceOf).pipe(
+      Effect.forEach(workspaces, (requested) =>
+        workspaceOf(requested).pipe(
+          Effect.map(Option.some),
+          Effect.catch((error) => Effect.logWarning(`views: not warming ${requested}`, error.message).pipe(Effect.as(Option.none<string>()))),
+        ),
+      ).pipe(
+        Effect.map(Arr.getSomes),
         Effect.flatMap((resolved) => withDeadline("warm", client.Warm({ workspaces: resolved }))),
       ),
   };

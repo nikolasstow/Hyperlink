@@ -11,7 +11,7 @@ Universal Effect-reactive bindings over a Hyperlink Tag (or a live handle field)
 `Atom.runtime(layer)`.
 
 ```ts
-import { Atom } from "effect/unstable/reactivity"
+import { Atom } from "effect/reactivity"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
 const rt = Atom.runtime(appLayer)

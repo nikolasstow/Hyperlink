@@ -11,7 +11,7 @@
 import { Effect, Schema } from "effect";
 
 /** Why a scripts change could not be made. */
-export class ScriptsEditError extends Schema.TaggedErrorClass<ScriptsEditError>()("ScriptsEditError", {
+export class ScriptsEditError extends Schema.TaggedError<ScriptsEditError>()("ScriptsEditError", {
   message: Schema.String,
 }) {}
 

@@ -8,7 +8,7 @@
  * to run the engine locally; the widgets don't change). No `REGISTRY`, no `TREE`.
  */
 import { Effect, Layer, Stream } from "effect";
-import { Atom, type AsyncResult } from "effect/unstable/reactivity";
+import { Atom, type AsyncResult } from "effect/reactivity";
 import * as Hyperlink from "../../../src/Hyperlink";
 import { kind as workPoolKind } from "../../../src/WorkPool";
 import { kind as daemonKind } from "../../../src/Daemon";

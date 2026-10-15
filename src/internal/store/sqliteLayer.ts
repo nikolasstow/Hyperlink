@@ -9,7 +9,7 @@
  */
 
 import { Effect } from "effect";
-import type { SqlError } from "effect/unstable/sql/SqlError";
+import type { SqlError } from "effect/sql/SqlError";
 import type { StorageApi } from "./bridge";
 import type { StoreBundle } from "./defineStore";
 import { StoreScopeNotRegistered, StoreSqliteConnectionError } from "./errors";

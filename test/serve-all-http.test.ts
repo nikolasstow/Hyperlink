@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -34,7 +34,7 @@ it("serves many resources on one node/port", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       const transport = Hyperlink.http(LeagueNode, { url: `http://127.0.0.1:${port}/rpc` });
       yield* Effect.gen(function* () {
         const a = yield* Alpha;

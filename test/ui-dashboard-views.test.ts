@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import * as DashboardViews from "../src/ui/DashboardViews";
 import * as PriorityView from "../src/ui/PriorityView";
 import * as DaemonView from "../src/ui/DaemonView";

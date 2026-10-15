@@ -9,7 +9,7 @@
     "start": "waku start --host 0.0.0.0 --port 5220"
   },
   "dependencies": {
-    "effect": "4.0.0-beta.102",
+    "effect": "4.0.4",
     "last-ts": "workspace:*",
     "react": "~19.2.6",
     "react-dom": "~19.2.6",

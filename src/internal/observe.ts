@@ -11,7 +11,7 @@ import {
   Stream,
   type Stream as StreamT,
 } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import {
   atom as hyperlinkAtom,
   fn as hyperlinkFn,
@@ -229,7 +229,7 @@ export const fold = <Svc, I, Acc>(
             ),
             live,
           );
-    const scanned = seeded.pipe(Stream.scan(options.initial(tag), options.step));
+    const scanned = seeded.pipe(Stream.scan(() => options.initial(tag), options.step));
     const stream =
       options.tap === undefined
         ? scanned

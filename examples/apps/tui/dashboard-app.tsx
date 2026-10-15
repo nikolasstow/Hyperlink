@@ -10,7 +10,7 @@
  */
 import { render } from "ink";
 import * as React from "react";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { Fleet } from "../dashboard/fleet";
 import { appLayer } from "../dashboard/queue-data";
 import { Dashboard } from "../../../src/tui";

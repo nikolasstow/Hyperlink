@@ -1,13 +1,15 @@
 /**
- * Connected models from `client.provider.list()`. Never log or touch the
- * raw provider `.key` field — the response includes API keys inline (not
- * in the SDK’s declared type); only `.id` / `.name` / `.models` are read.
+ * The models a composer can pick, from the model catalog
+ * (models/ModelCatalog.ts): kept on the device, read back at launch, fetched
+ * again at app open and on return to the foreground. A folder never loaded
+ * shows the server's own list while its own loads (opencode keeps one list
+ * per folder; `undefined` is the server's own).
  *
  * @internal
  */
 import * as React from "react";
-import { AppState } from "react-native";
-import type { OpencodeClient } from "./client";
+import type { Catalog } from "./models/ModelCatalog";
+import { catalogNow, hasOwnCatalog, refreshCatalog, useCatalog } from "./models/useModelCatalog";
 
 export type ModelOption = {
   readonly providerID: string;
@@ -20,141 +22,58 @@ export type ModelOption = {
 export const modelKey = (model: Pick<ModelOption, "providerID" | "modelID">): string =>
   `${model.providerID}/${model.modelID}`;
 
-type Cache = {
-  readonly options: ReadonlyArray<ModelOption>;
-  readonly defaultModel: ModelOption | undefined;
-};
-
 const EMPTY: ReadonlyArray<ModelOption> = [];
 
-/**
- * Lists by client, then by directory: opencode keeps one list per directory
- * (its instance there), so the models a session can run are its directory's.
- * `undefined` is the server's own directory.
- */
-const caches = new WeakMap<OpencodeClient, Map<string | undefined, Cache>>();
-const inFlight = new WeakMap<OpencodeClient, Map<string | undefined, Promise<Cache | undefined>>>();
-const listeners = new Set<() => void>();
-
-const subscribe = (listener: () => void): (() => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-};
-
-const cached = (client: OpencodeClient, directory: string | undefined): Cache | undefined => caches.get(client)?.get(directory);
-
-const inFlightFor = (client: OpencodeClient): Map<string | undefined, Promise<Cache | undefined>> => {
-  const existing = inFlight.get(client);
-  if (existing !== undefined) return existing;
-  const created = new Map<string | undefined, Promise<Cache | undefined>>();
-  inFlight.set(client, created);
-  return created;
-};
-
-const load = async (client: OpencodeClient, directory: string | undefined): Promise<Cache> => {
-  const { data, error } = await client.provider.list(directory !== undefined ? { query: { directory } } : undefined);
-  if (data === undefined) throw new Error(`Couldn't load the models: ${JSON.stringify(error)}`);
-
-  const connected = new Set(data.connected);
-  const options: Array<ModelOption> = [];
-  for (const provider of data.all) {
-    if (!connected.has(provider.id)) continue;
-    for (const model of Object.values(provider.models)) {
-      options.push({
-        providerID: provider.id,
-        providerName: provider.name,
-        modelID: model.id,
-        name: model.name,
-      });
-    }
-  }
-
-  const defaultProviderID = data.connected.find((id) => data.default[id] !== undefined);
-  const defaultModelID = defaultProviderID !== undefined ? data.default[defaultProviderID] : undefined;
-  const defaultModel =
-    defaultProviderID !== undefined && defaultModelID !== undefined
-      ? options.find((o) => o.providerID === defaultProviderID && o.modelID === defaultModelID)
-      : undefined;
-
-  return { options, defaultModel };
-};
-
-const sameModel = (a: ModelOption | undefined, b: ModelOption | undefined): boolean =>
-  a === undefined || b === undefined
-    ? a === b
-    : a.providerID === b.providerID && a.modelID === b.modelID && a.name === b.name && a.providerName === b.providerName;
-
-const sameCache = (a: Cache, b: Cache): boolean =>
-  a.options.length === b.options.length && a.options.every((option, index) => sameModel(option, b.options[index])) && sameModel(a.defaultModel, b.defaultModel);
-
-/**
- * Loads a directory's models afresh (one load at a time per directory),
- * keeping the last list if the load fails. Resolves to the list now known.
- */
-export const refreshModels = (client: OpencodeClient, directory: string | undefined): Promise<Cache | undefined> => {
-  const pending = inFlightFor(client);
-  const existing = pending.get(directory);
-  if (existing !== undefined) return existing;
-  const promise = load(client, directory)
-    .then(
-      (cache): Cache | undefined => {
-        const byDirectory = caches.get(client) ?? new Map<string | undefined, Cache>();
-        // The same list as before: keep it (and its identity), so nothing
-        // showing it re-renders.
-        const previous = byDirectory.get(directory);
-        if (previous !== undefined && sameCache(previous, cache)) return previous;
-        byDirectory.set(directory, cache);
-        caches.set(client, byDirectory);
-        for (const listener of listeners) listener();
-        return cache;
-      },
-      (cause: unknown) => {
-        console.warn("[models] refresh failed", directory, cause);
-        return cached(client, directory);
-      },
-    )
-    .finally(() => pending.delete(directory));
-  pending.set(directory, promise);
-  return promise;
+/** A catalog's models as options, made once per catalog (its identity). */
+const optionsByCatalog = new WeakMap<Catalog, ReadonlyArray<ModelOption>>();
+const optionsOf = (catalog: Catalog | undefined): ReadonlyArray<ModelOption> => {
+  if (catalog === undefined) return EMPTY;
+  const known = optionsByCatalog.get(catalog);
+  if (known !== undefined) return known;
+  const options = catalog.providers.flatMap((provider) =>
+    provider.models.map((model) => ({
+      providerID: provider.id,
+      providerName: provider.name,
+      modelID: model.id,
+      name: model.name,
+    })),
+  );
+  optionsByCatalog.set(catalog, options);
+  return options;
 };
 
 /**
- * Has the server fetch the models.dev catalog now and rebuild its model lists
- * from it (`POST /provider/refresh`, from our opencode patch; raw fetch, as
- * the pinned SDK has no such call), then loads the directory's list afresh.
- * Throws when the server can't refresh, so the caller can say so.
+ * A folder's models, as they change. Its own list is fetched the first time
+ * the folder is seen; the server's own shows meanwhile.
  */
-export const reloadModels = async (client: OpencodeClient, address: string, directory: string | undefined): Promise<void> => {
-  const response = await fetch(`${address}/provider/refresh`, { method: "POST" });
-  if (!response.ok) throw new Error(`Model refresh failed: HTTP ${response.status} ${await response.text()}`);
-  await refreshModels(client, directory);
-};
-
-/** A directory's models: the last-known list, or the first load's. */
-export const listModels = async (client: OpencodeClient, directory: string | undefined): Promise<ReadonlyArray<ModelOption>> =>
-  (cached(client, directory) ?? (await refreshModels(client, directory)))?.options ?? EMPTY;
-
-/**
- * A directory's models, refreshed when the caller mounts or its directory
- * changes, and whenever the app comes back to the foreground; the last-known
- * list meanwhile.
- */
-export const useModels = (client: OpencodeClient, directory: string | undefined): ReadonlyArray<ModelOption> => {
+export const useModels = (directory: string | undefined): ReadonlyArray<ModelOption> => {
   React.useEffect(() => {
-    void refreshModels(client, directory);
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void refreshModels(client, directory);
-    });
-    return () => subscription.remove();
-  }, [client, directory]);
-  return React.useSyncExternalStore(subscribe, () => cached(client, directory)?.options ?? EMPTY);
+    if (!hasOwnCatalog(directory)) void refreshCatalog(directory);
+  }, [directory]);
+  return optionsOf(useCatalog(directory));
 };
 
-/** A directory's default model once its models have loaded. */
-export const getDefaultModel = (client: OpencodeClient, directory: string | undefined): ModelOption | undefined =>
-  cached(client, directory)?.defaultModel;
+/** A folder's models now (fetching them first if nothing is kept). */
+export const listModels = async (directory: string | undefined): Promise<ReadonlyArray<ModelOption>> => {
+  if (catalogNow(directory) === undefined) await refreshCatalog(directory);
+  return optionsOf(catalogNow(directory));
+};
+
+/**
+ * A folder's default model: opencode's own last resort, the first configured
+ * provider's default (its config's `model` and the models used last come
+ * first, but are not served; the composer prefers the user's last model).
+ */
+export const getDefaultModel = (directory: string | undefined): ModelOption | undefined => {
+  const catalog = catalogNow(directory);
+  const provider = catalog?.providers.find((each) => catalog.defaults[each.id] !== undefined);
+  const modelID = provider === undefined ? undefined : catalog?.defaults[provider.id];
+  return provider === undefined || modelID === undefined ? undefined : findModel(optionsOf(catalog), provider.id, modelID);
+};
+
+/** Loads the folder's model list afresh (opencode v2 keeps its own catalog
+ * current; it has no refresh to ask for). A failure is logged (ModelCatalog). */
+export const reloadModels = (directory: string | undefined): Promise<void> => refreshCatalog(directory);
 
 export const findModel = (
   options: ReadonlyArray<ModelOption>,

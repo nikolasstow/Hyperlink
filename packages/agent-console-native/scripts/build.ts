@@ -16,8 +16,8 @@
  */
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, Path } from "effect";
-import { Argument, Command } from "effect/unstable/cli";
-import { FetchHttpClient } from "effect/unstable/http";
+import { Argument, Command } from "effect/cli";
+import { FetchHttpClient } from "effect/http";
 import packageJson from "../package.json" with { type: "json" };
 import { type EasBuildOptions, runEasBuild } from "./eas-build";
 
@@ -45,7 +45,7 @@ const withMarkerAside = <A, E, R>(pkgDir: string, build: Effect.Effect<A, E, R>)
   });
 
 const build = Command.make("build", {
-  mode: Argument.choice("mode", ["dev", "preview", "master"]).pipe(
+  mode: Argument.Literals("mode", ["dev", "preview", "master"]).pipe(
     Argument.withDescription("dev / preview build this worktree's variant; master builds the base app."),
   ),
 }).pipe(

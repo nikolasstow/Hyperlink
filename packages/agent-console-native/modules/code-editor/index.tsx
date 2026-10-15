@@ -92,11 +92,18 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly onConflictAction?: (event: NativeSyntheticEvent<{ readonly index: number; readonly keep: ConflictChoice }>) => void;
   /** Open session on an agent change's popover (`apiVersion` 8). */
   readonly onOpenSession?: (event: NativeSyntheticEvent<{ readonly sessionID: string }>) => void;
-  /** Native sticky-scroll diagnostics, surfaced for Metro logs. */
-  readonly onStickyDebug?: (event: NativeSyntheticEvent<Record<string, number | string>>) => void;
   /** The code's font family; the system's monospace while it is not
    * installed (`apiVersion` 11). */
   readonly fontFamily?: string;
+  /** Where the code rests once laid out, points from its top (a file
+   * reopening where it was left; `apiVersion` 12). */
+  readonly initialOffset?: number;
+  /** Where the code rests across once laid out, points from its left
+   * (`apiVersion` 13). */
+  readonly initialOffsetX?: number;
+  /** Where the code came to rest after a scroll, points from its top
+   * (`offset`) and its left (`offsetX`, from `apiVersion` 13). */
+  readonly onScrollRest?: (event: NativeSyntheticEvent<{ readonly offset: number; readonly offsetX?: number }>) => void;
   /** The line you are at (0-based), when it changes: the caret's while
    * editing, else the top of the visible code (`apiVersion` 10). */
   readonly onLineChange?: (event: NativeSyntheticEvent<{ readonly line: number }>) => void;
@@ -138,6 +145,7 @@ const nativeModule =
         readonly registerFont?: (uri: string) => Promise<ReadonlyArray<string>>;
         readonly unregisterFont?: (uri: string) => Promise<void>;
         readonly textImage?: (text: string, family: string, size: number, width: number, height: number, color: string) => Promise<string>;
+        readonly renderPreview?: (options: EditorPreviewOptions) => Promise<string>;
       }>("CodeEditor")
     : null;
 const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.apiVersion : 0;
@@ -189,6 +197,38 @@ export const unregisterFont = (uri: string): Promise<void> =>
  * cannot (`apiVersion` 11). */
 export const textImage = (text: string, family: string, size: number, width: number, height: number, color: string): Promise<string | undefined> =>
   canInstallFonts && nativeModule?.textImage !== undefined ? nativeModule.textImage(text, family, size, width, height, color) : Promise.resolve(undefined);
+
+/** What a preview draws: everything the editor is given on screen, and
+ * where it rests. */
+export interface EditorPreviewOptions {
+  /** The image's name: the same key is the same picture. */
+  readonly key: string;
+  readonly text: string;
+  readonly tokensJson: string;
+  readonly stickyRangesJson: string;
+  readonly theme: EditorTheme;
+  readonly fontFamily: string;
+  readonly fontSize: number;
+  readonly width: number;
+  readonly height: number;
+  readonly topInset: number;
+  readonly bottomInset: number;
+  readonly stickyFill: number;
+  /** Points from the code's top it rests at. */
+  readonly offset: number;
+  /** Points from the code's left it rests at (`apiVersion` 13). */
+  readonly offsetX: number;
+  /** Pixels per point of the image. */
+  readonly scale: number;
+}
+
+/** Whether the editor can draw previews of itself (`apiVersion` 12). */
+export const canRenderPreviews = apiVersion >= 12;
+
+/** A file as the editor shows it, drawn by the editor itself: the image
+ * file's URI. Undefined on a build that cannot. */
+export const renderPreview = (options: EditorPreviewOptions): Promise<string | undefined> =>
+  canRenderPreviews && nativeModule?.renderPreview !== undefined ? nativeModule.renderPreview(options) : Promise.resolve(undefined);
 
 /** Bring the keyboard back to a file kept editing without it. False when
  * there is none. */

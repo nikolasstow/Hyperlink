@@ -6,7 +6,7 @@
  */
 
 import { Effect, Option } from "effect";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+import { SqlClient } from "effect/sql/SqlClient";
 import { StoreJournalQueryError } from "./errors";
 
 const ENTRY_TABLE = "effect_event_journal" as const;

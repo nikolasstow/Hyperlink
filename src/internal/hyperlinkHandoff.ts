@@ -99,7 +99,7 @@ export type HandoffDeferralReason = typeof handoffDeferralReason.Type;
  * @category errors
  * @internal
  */
-export class HandoffDeferred extends Schema.TaggedErrorClass<HandoffDeferred>()(
+export class HandoffDeferred extends Schema.TaggedError<HandoffDeferred>()(
   "HandoffDeferred",
   {
     serviceKey: Schema.String,

@@ -274,7 +274,7 @@ const recordKeys = (config: Config.Config<unknown>): ReadonlyArray<string> => {
  *
  * @example
  * ```ts
- * const apiKey = DynamicConfig.globalSwappable(Config.redacted("API_KEY"));
+ * const apiKey = DynamicConfig.globalSwappable(Config.Redacted("API_KEY"));
  * yield* apiKey.set("new");                             // typed, in-process
  * yield* DynamicConfig.setByKey("API_KEY", "rotated");  // string path — allowed process-wide
  * ```
@@ -302,7 +302,7 @@ export const globalSwappable = <A>(
  *
  * @example
  * ```ts
- * const apiKey = DynamicConfig.swappable(Config.redacted("API_KEY"));
+ * const apiKey = DynamicConfig.swappable(Config.Redacted("API_KEY"));
  * yield* apiKey.set("new");   // typed swap; no process-wide allowlist entry
  * ```
  *
@@ -373,8 +373,8 @@ const toFieldRecord = (
  * @example
  * ```ts
  * const cfg = DynamicConfig.make({
- *   baseUrl: Config.string("BASE_URL").pipe(Config.withDefault("https://x")),
- *   apiKey: DynamicConfig.swappable(Config.redacted("API_KEY")),
+ *   baseUrl: Config.String("BASE_URL").pipe(Config.withDefault("https://x")),
+ *   apiKey: DynamicConfig.swappable(Config.Redacted("API_KEY")),
  * });
  * const url = yield* cfg.baseUrl;     // FixedField — read only
  * yield* cfg.apiKey.set("rotated");   // SwappableField — control on the field
@@ -428,7 +428,7 @@ export const all = <const F extends FieldsInput>(
  * ```ts
  * const base = DynamicConfig.make({ apiKey: DynamicConfig.swappable(...) });
  * const child = DynamicConfig.extend(base, {
- *   batchSize: Config.int("BATCH").pipe(Config.withDefault(100)),
+ *   batchSize: Config.Int("BATCH").pipe(Config.withDefault(100)),
  * });
  * yield* base.apiKey.set("x"); // child.apiKey (same env key) sees it
  * ```

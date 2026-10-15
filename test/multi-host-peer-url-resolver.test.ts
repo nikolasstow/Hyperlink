@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -26,7 +26,7 @@ it("peersLayer options.url overrides Node.url (resolver supplies a peer with no 
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((server) => server.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       yield* Effect.gen(function* () {
         const peers = yield* Hyperlink.peers(Fleet);
         const peer = peers["resolver/PeerNode"];

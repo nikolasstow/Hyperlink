@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Ref, Schema, Stream } from "effect";
 import { TestClock } from "effect/testing";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import type { HttpClientError } from "effect/unstable/http";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import type { HttpClientError } from "effect/http";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import * as Gate from "../src/Gate";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
 

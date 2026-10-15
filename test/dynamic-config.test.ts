@@ -6,42 +6,42 @@ import { DynamicConfigStore } from "../src/DynamicConfig";
 // `key` is a field name here — proves the bag has no Tag.key collision.
 const cfg = DynamicConfig.make({
   key: DynamicConfig.globalSwappable(
-    Config.redacted("DCFG3_KEY").pipe(Config.withDefault(Redacted.make(""))),
+    Config.Redacted("DCFG3_KEY").pipe(Config.withDefault(Redacted.make(""))),
   ),
-  baseUrl: Config.string("DCFG3_BASE").pipe(
+  baseUrl: Config.String("DCFG3_BASE").pipe(
     Config.withDefault("https://api.example.com"),
   ),
   retries: DynamicConfig.globalSwappable(
-    Config.int("DCFG3_RETRIES").pipe(Config.withDefault(3)),
+    Config.Int("DCFG3_RETRIES").pipe(Config.withDefault(3)),
   ),
 });
 
 // flat extension: clone of cfg's fields + one own field
 const child = DynamicConfig.extend(cfg, {
-  batchSize: Config.int("DCFG3_BATCH").pipe(Config.withDefault(100)),
+  batchSize: Config.Int("DCFG3_BATCH").pipe(Config.withDefault(100)),
 });
 
 // nested field — env key is the joined path DCFG3_DB_HOST
 const nestedCfg = DynamicConfig.make({
   host: DynamicConfig.globalSwappable(
-    Config.string("DCFG3_HOST").pipe(Config.nested("DCFG3_DB")),
+    Config.String("DCFG3_HOST").pipe(Config.nested("DCFG3_DB")),
   ),
 });
 
 // single field — swappable used on its own, no make()
 const loneKey = DynamicConfig.globalSwappable(
-  Config.redacted("DCFG3_LONE").pipe(Config.withDefault(Redacted.make(""))),
+  Config.Redacted("DCFG3_LONE").pipe(Config.withDefault(Redacted.make(""))),
 );
 
 // piped form — Config.x.pipe(..., DynamicConfig.globalSwappable)
-const pipedKey = Config.redacted("DCFG3_PIPED").pipe(
+const pipedKey = Config.Redacted("DCFG3_PIPED").pipe(
   Config.withDefault(Redacted.make("")),
   DynamicConfig.globalSwappable,
 );
 
 // scoped (pure) swappable — no global registration; allowed only via layer(config)
 const scopedKey = DynamicConfig.swappable(
-  Config.string("DCFG3_SCOPED").pipe(Config.withDefault("scoped-default")),
+  Config.String("DCFG3_SCOPED").pipe(Config.withDefault("scoped-default")),
 );
 
 const withLayer = <A, E>(
@@ -73,7 +73,7 @@ describe("DynamicConfig (bag + field-method control)", () => {
     withLayer(
       Effect.gen(function* () {
         yield* cfg.key.set("shared");
-        const raw = Config.redacted("DCFG3_KEY");
+        const raw = Config.Redacted("DCFG3_KEY");
         expect(Redacted.value(yield* raw)).toBe("shared");
       }),
     ),
@@ -204,7 +204,7 @@ describe("DynamicConfig (bag + field-method control)", () => {
     withLayer(
       Effect.gen(function* () {
         yield* nestedCfg.host.set("db.prod");
-        const raw = Config.string("DCFG3_HOST").pipe(Config.nested("DCFG3_DB"));
+        const raw = Config.String("DCFG3_HOST").pipe(Config.nested("DCFG3_DB"));
         expect(yield* raw).toBe("db.prod"); // DCFG3_DB_HOST override resolved
       }),
     ),

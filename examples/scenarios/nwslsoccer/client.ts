@@ -9,8 +9,8 @@
  *
  * Base URL: {@link NwslSoccerApiBaseUrl} (`NWSL_SOCCER_API_BASE_URL`, default `https://api-sdp.nwslsoccer.com`).
  */
-import { FetchHttpClient } from "effect/unstable/http";
-import { HttpApiClient } from "effect/unstable/httpapi";
+import { FetchHttpClient } from "effect/http";
+import { HttpApiClient } from "effect/http-api";
 import { NodeHttpClient } from "@effect/platform-node";
 import { Context, Effect, Layer } from "effect";
 import { acceptJson } from "../../../src";

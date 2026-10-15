@@ -14,7 +14,7 @@ import {
   Persistable,
   Persistence,
   PersistedQueue,
-} from "effect/unstable/persistence";
+} from "effect/persistence";
 import {
   nodeRedisLayer,
   redisAvailable,
@@ -115,15 +115,15 @@ describe.skipIf(!redisAvailable)("PersistedQueue.layerStoreRedis (live)", () => 
 
       yield* Effect.gen(function* () {
         const redis = yield* NodeRedis.NodeRedis;
-        const queue = yield* PersistedQueue.make({ name, schema: Item });
+        const queue = yield* PersistedQueue.make({ name, schema: Item, maxAttempts: 1 });
         const id = yield* queue.offer({ n: 9 });
         const error = yield* queue
-          .take(() => Effect.fail("boom"), { maxAttempts: 1 })
+          .take(() => Effect.fail("boom"))
           .pipe(Effect.flip);
         expect(error).toBe("boom");
 
         const failed = yield* redis.use((client) =>
-          client.lrange(`${prefix}${name}:failed`, 0, -1),
+          client.lRange(`${prefix}${name}:failed`, 0, -1),
         );
         expect(failed.length).toBe(1);
         const failedItem = yield* Schema.decodeUnknownEffect(FailedItemFromJson)(

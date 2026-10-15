@@ -6,7 +6,7 @@
 
 import * as React from "react";
 import "../styles/widgets.css";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { RegistryProvider, useAtomValue, useAtomSet } from "hyperlink-ts/ui/atom-react";
 import { runFn, inFlightAtom } from "./double-hyperlink.js";
 

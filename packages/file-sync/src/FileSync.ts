@@ -12,7 +12,7 @@
  * @since 0.0.1
  */
 import { Schema } from "effect";
-import { Rpc, RpcGroup } from "effect/unstable/rpc";
+import { Rpc, RpcGroup } from "effect/rpc";
 import { TextChange } from "./TextChange";
 
 /**
@@ -144,7 +144,7 @@ export type WriteResult = Accepted | Stale;
  *
  * @since 0.0.1
  */
-export class FileSyncError extends Schema.TaggedErrorClass<FileSyncError>()("FileSyncError", {
+export class FileSyncError extends Schema.TaggedError<FileSyncError>()("FileSyncError", {
   reason: Schema.Literals(["NotFound", "NotAFile", "TooLarge", "InvalidChanges", "Io"]),
   path: Schema.String,
 }) {}

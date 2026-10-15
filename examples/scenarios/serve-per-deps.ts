@@ -17,8 +17,8 @@ import { Console, Context, Duration, Effect, Layer, Schema } from "effect";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpClient } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as PmNode from "../../src/Node";
 

@@ -2,7 +2,7 @@
  * A v2 session's messages for React (v2Transcript.ts through the app
  * runtime), as the chat's view (fromV2.ts). Live while `enabled`; torn down
  * otherwise (the app in the background, the chat out of view), keeping what
- * it had.
+ * it had. A new `generation` loads it again from the start.
  *
  * Snapshots arrive per event (a streamed reply sends many a second); React
  * gets at most one per frame, the latest. Undefined until the history is in
@@ -20,11 +20,11 @@ import { chatMessagesOfV2 } from "./fromV2";
 import type { ChatMessage } from "./model";
 import { v2Transcript } from "./v2Transcript";
 
-export const useV2Transcript = (server: ServerAddress, sessionID: SessionID, enabled: boolean): ReadonlyArray<ChatMessage> | undefined => {
+export const useV2Transcript = (server: ServerAddress, sessionID: SessionID, enabled: boolean, generation: number = 0): ReadonlyArray<ChatMessage> | undefined => {
   const [messages, setMessages] = React.useState<ReadonlyArray<ChatMessage> | undefined>(undefined);
   React.useEffect(() => {
     if (!enabled) return undefined;
-    let latest: ReadonlyArray<SessionMessage.Message> | undefined;
+    let latest: ReadonlyArray<SessionMessage.Info> | undefined;
     let frame: number | undefined;
     const flush = (): void => {
       frame = undefined;
@@ -44,6 +44,6 @@ export const useV2Transcript = (server: ServerAddress, sessionID: SessionID, ena
       if (frame !== undefined) cancelAnimationFrame(frame);
       forkApp(Fiber.interrupt(fiber));
     };
-  }, [server, sessionID, enabled]);
+  }, [server, sessionID, enabled, generation]);
   return messages;
 };

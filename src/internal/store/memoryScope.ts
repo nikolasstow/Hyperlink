@@ -1,5 +1,5 @@
 /**
- * Store scope handles backed by {@link EventJournal} (`effect/unstable/eventlog`).
+ * Store scope handles backed by {@link EventJournal} (`effect/eventlog`).
  *
  * @module internal/store/memoryScope
  * @internal
@@ -7,7 +7,7 @@
 
 import { Effect, Schema, Stream } from "effect";
 import type { Scope } from "effect/Scope";
-import * as EventJournal from "effect/unstable/eventlog/EventJournal";
+import * as EventJournal from "effect/eventlog/EventJournal";
 import { StoreScopeNotRegistered, StoreWriteError } from "./errors";
 import { retype } from "../nodeServerCommon";
 import {

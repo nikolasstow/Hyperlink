@@ -2,7 +2,7 @@
 
 > **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
 
-**Status:** Store contract API shipped. **Backing:** `effect/unstable/eventlog` (`EventJournal` +
+**Status:** Store contract API shipped. **Backing:** `effect/eventlog` (`EventJournal` +
 `SqlEventJournal`) — see `docs/guides/store-backing.md`. Platform logs remain future work.
 
 Companion to the Store API consensus (Thermometer, `Store.append` / `Store.query`, `Hyperlink.store`,

@@ -9,9 +9,10 @@
  * @module storage/sqlite/durableWorkPool
  */
 import { Clock, Context, Effect, Layer, Option, Schema, Scope } from "effect";
+import { unknownJsonString } from "../../internal/json";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import type { SqliteClientConfig } from "@effect/sql-sqlite-node/SqliteClient";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+import { SqlClient } from "effect/sql/SqlClient";
 import {
   DurableWorkPoolError,
   DurableWorkPoolStore,
@@ -28,8 +29,8 @@ const TABLE = "durable_work_pool";
 
 // Opaque payload ⇄ JSON column (Schema-based, not raw JSON.parse/stringify). The payload is
 // already-encoded JSON owned by the caller, so the sync round-trip can't fail on our own data.
-const encodePayload = Schema.encodeSync(Schema.UnknownFromJsonString);
-const decodePayload = Schema.decodeUnknownSync(Schema.UnknownFromJsonString);
+const encodePayload = Schema.encodeSync(unknownJsonString);
+const decodePayload = Schema.decodeUnknownSync(unknownJsonString);
 
 const ddl: ReadonlyArray<string> = [
   `CREATE TABLE IF NOT EXISTS ${TABLE} (

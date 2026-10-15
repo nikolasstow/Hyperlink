@@ -6,8 +6,8 @@
  */
 import { NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient } from "effect/http";
+import { RpcSerialization, RpcServer } from "effect/rpc";
 import { FileSync } from "file-sync";
 import { FileHub } from "./hub";
 

@@ -1,11 +1,11 @@
 import { NodeServices } from "@effect/platform-node";
 import { Duration, Effect, FileSystem, Layer, Option, Path, Queue, Scope, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import { FileSync, TextChange } from "file-sync";
 import { describe, expect, it } from "vitest";
 import { FileHub } from "./hub";
 
-/** A stand-in for opencode's `/global/event`: lines pushed by the test. */
+/** A stand-in for opencode's `/api/event`: events pushed by the test. */
 const makeOpencode = () => {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
@@ -23,9 +23,9 @@ const makeOpencode = () => {
       ),
     ),
   );
-  const send = (payload: unknown) =>
+  const send = (event: unknown) =>
     Effect.sync(() => {
-      controller?.enqueue(encoder.encode(`data: ${JSON.stringify({ directory: "/", payload })}\n`));
+      controller?.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n`));
     });
   return {
     layer: Layer.succeed(HttpClient.HttpClient, client),
@@ -39,7 +39,7 @@ const withHub = <A, E>(
     readonly hub: FileHub["Service"];
     readonly file: string;
     readonly fs: FileSystem.FileSystem;
-    readonly send: (payload: unknown) => Effect.Effect<void>;
+    readonly send: (event: unknown) => Effect.Effect<void>;
   }) => Effect.Effect<A, E, FileHub | Scope.Scope>,
 ) =>
   Effect.gen(function* () {
@@ -193,23 +193,15 @@ describe("file hub", () => {
           const events = yield* follow(hub, file);
           yield* next(events);
           yield* send({
-            type: "message.part.updated",
-            properties: {
-              part: {
-                id: "prt_1",
-                type: "tool",
-                tool: "edit",
-                sessionID: "ses_agent",
-                state: {
-                  status: "running",
-                  input: {
-                    filePath: file,
-                  },
-                  time: {
-                    start: 1,
-                  },
-                },
+            type: "session.tool.called",
+            data: {
+              sessionID: "ses_agent",
+              assistantMessageID: "msg_1",
+              id: "call_1",
+              input: {
+                filePath: file,
               },
+              executed: true,
             },
           });
           // Let the hub read the event before the write lands.
@@ -222,22 +214,25 @@ describe("file hub", () => {
       ),
     ));
 
-  it("credits an agent for a file.edited with no tool call seen", () =>
+  it("names the agent for a write landing just after its tool call ended", () =>
     run(
       withHub(({ hub, file, fs, send }) =>
         Effect.gen(function* () {
           const events = yield* follow(hub, file);
           yield* next(events);
-          yield* fs.writeFileString(file, "rewritten\n");
           yield* send({
-            type: "file.edited",
-            properties: {
-              file,
-            },
+            type: "session.tool.called",
+            data: { sessionID: "ses_agent", assistantMessageID: "msg_1", id: "call_1", input: { path: file }, executed: true },
           });
+          yield* send({
+            type: "session.tool.success",
+            data: { sessionID: "ses_agent", assistantMessageID: "msg_1", id: "call_1", content: [{ type: "text", text: "ok" }], executed: true },
+          });
+          yield* Effect.sleep(Duration.millis(100));
+          yield* fs.writeFileString(file, "rewritten\n");
           const changed = yield* next(events);
           if (!(changed instanceof FileSync.Changed)) return expect(changed).toBeInstanceOf(FileSync.Changed);
-          expect(changed.author).toEqual(new FileSync.Agent({ sessionID: undefined }));
+          expect(changed.author).toEqual(new FileSync.Agent({ sessionID: "ses_agent" }));
         }),
       ),
     ));

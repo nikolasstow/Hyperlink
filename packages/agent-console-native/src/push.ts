@@ -22,6 +22,8 @@
  */
 import * as React from "react";
 import { AppState } from "react-native";
+import { authedFetch } from "./auth/serverTokens";
+import { deviceInfo } from "./deviceName";
 
 declare const require: (moduleName: string) => unknown;
 
@@ -223,16 +225,8 @@ export const registerForPush = async (backendAddress: string): Promise<PushResul
 
   // A simulator has no APNs registration; asking produces a confusing error
   // rather than a token.
-  let deviceName = "iOS";
-  try {
-    const device = require("expo-device");
-    if (isRecord(device)) {
-      if (device.isDevice === false) return { ok: false, reason: "not a physical device" };
-      if (typeof device.deviceName === "string") deviceName = device.deviceName;
-    }
-  } catch {
-    // expo-device is optional; its absence only costs a nicer label.
-  }
+  const { name: deviceName, physical } = deviceInfo();
+  if (!physical) return { ok: false, reason: "not a physical device" };
 
   const existing = await notifications.getPermissionsAsync().catch((error: unknown) => String(error));
   if (typeof existing === "string") return { ok: false, reason: `permission check failed: ${existing}` };
@@ -266,7 +260,7 @@ export const registerForPush = async (backendAddress: string): Promise<PushResul
     .catch((error: unknown) => String(error));
   if (!token.startsWith("ExponentPushToken")) return { ok: false, reason: `token failed: ${token}` };
 
-  const response = await fetch(`${backendAddress}/push/register`, {
+  const response = await authedFetch(`${backendAddress}/push/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ token, deviceName }),

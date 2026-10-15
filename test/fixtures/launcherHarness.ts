@@ -2,7 +2,7 @@
  * Shared helpers for `Launcher` runtime tests.
  */
 import { Effect, Schema } from "effect";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Launcher from "../../src/Launcher";
 

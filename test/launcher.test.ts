@@ -12,7 +12,7 @@ import {
   Redacted,
 } from "effect";
 import { TestClock } from "effect/testing";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 import * as Launcher from "../src/Launcher";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";

@@ -11,7 +11,7 @@ describe("Polling.dynamic", () => {
   it.effect("reads the field per tick — a swap changes the NEXT wait's duration", () =>
     Effect.gen(function* () {
       const interval = DynamicConfig.swappable(
-        Config.duration("PD1_INTERVAL").pipe(Config.withDefault(Duration.seconds(10))),
+        Config.Duration("PD1_INTERVAL").pipe(Config.withDefault(Duration.seconds(10))),
       );
       const polling = yield* Polling.current.pipe(Effect.provide(Polling.dynamic(interval)));
 
@@ -40,7 +40,7 @@ describe("Polling.dynamic", () => {
 
   it.effect("wakes the CURRENT wait on swap when the store is present", () => {
     const interval = DynamicConfig.swappable(
-      Config.duration("PD2_INTERVAL").pipe(Config.withDefault(Duration.minutes(10))),
+      Config.Duration("PD2_INTERVAL").pipe(Config.withDefault(Duration.minutes(10))),
     );
     return Effect.gen(function* () {
       const polling = yield* Polling.current;
@@ -71,7 +71,7 @@ describe("Polling.dynamic", () => {
   it.effect("without a store, reads still work — no wake subscription, R stays never", () =>
     Effect.gen(function* () {
       const interval = DynamicConfig.swappable(
-        Config.duration("PD3_INTERVAL").pipe(Config.withDefault(Duration.seconds(3))),
+        Config.Duration("PD3_INTERVAL").pipe(Config.withDefault(Duration.seconds(3))),
       );
       // NOTE: no DynamicConfig.layer() provided — presence-driven subscription must not leak R
       const polling = yield* Polling.current.pipe(Effect.provide(Polling.dynamic(interval)));
@@ -84,7 +84,7 @@ describe("Polling.dynamic", () => {
   it.effect("read failure uses the fallback when given", () =>
     Effect.gen(function* () {
       // no default and no env value → the read fails → fallback carries the cadence
-      const broken = DynamicConfig.swappable(Config.duration("PD4_MISSING"));
+      const broken = DynamicConfig.swappable(Config.Duration("PD4_MISSING"));
       const polling = yield* Polling.current.pipe(
         Effect.provide(Polling.dynamic(broken, { fallback: Duration.seconds(7) })),
       );
@@ -100,7 +100,7 @@ describe("Polling.dynamic", () => {
 
   it.effect("read failure without a fallback is a DEFECT, not a silent default", () =>
     Effect.gen(function* () {
-      const broken = DynamicConfig.swappable(Config.duration("PD5_MISSING"));
+      const broken = DynamicConfig.swappable(Config.Duration("PD5_MISSING"));
       const polling = yield* Polling.current.pipe(Effect.provide(Polling.dynamic(broken)));
       const exit = yield* Effect.exit(polling.awaitNextTick);
       expect(exit._tag).toBe("Failure");
@@ -113,7 +113,7 @@ describe("Polling.dynamic", () => {
   it.effect("requestWake ends the current wait (manual wake unchanged)", () =>
     Effect.gen(function* () {
       const interval = DynamicConfig.swappable(
-        Config.duration("PD6_INTERVAL").pipe(Config.withDefault(Duration.minutes(5))),
+        Config.Duration("PD6_INTERVAL").pipe(Config.withDefault(Duration.minutes(5))),
       );
       const polling = yield* Polling.current.pipe(Effect.provide(Polling.dynamic(interval)));
       const ticks = yield* Ref.make(0);

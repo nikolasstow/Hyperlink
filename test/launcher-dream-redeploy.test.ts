@@ -19,7 +19,7 @@ import {
 } from "effect";
 import { NodeFileSystem } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 import * as Directory from "../src/Directory";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Launcher from "../src/Launcher";

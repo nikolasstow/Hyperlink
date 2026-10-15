@@ -1,7 +1,7 @@
 /**
  * {@link ../RouterBuilder} — HttpApiBuilder analogue for UI catalogs.
  *
- * Structure mirrors `effect/unstable/httpapi/HttpApiBuilder`: `Handlers` builder
+ * Structure mirrors `effect/http-api/HttpApiBuilder`: `Handlers` builder
  * with `ValidateReturn`, `group` → `Layer.effectContext` under `group.key`,
  * `layer` collects implementations from Context.
  *

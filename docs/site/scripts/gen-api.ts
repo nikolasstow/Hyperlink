@@ -10,7 +10,7 @@ import * as nodePath from "node:path"; // pure path math only — no IO (keeps t
 import { fileURLToPath } from "node:url";
 import { Cause, Config, Console, Data, Effect, Exit, Layer, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { NodeServices } from "@effect/platform-node";
 import ts from "typescript";
 import { Option } from "effect";
@@ -31,7 +31,7 @@ const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
 // The documented package. `slug` is the URL segment (/api/<slug>/…); `name` is the npm name.
 const pkgSlug = "hyperlink-ts";
 
-// git, through effect/unstable/process (never node:child_process). Returns trimmed stdout, or "" if
+// git, through effect/process (never node:child_process). Returns trimmed stdout, or "" if
 // the command fails — every git call here is best-effort metadata (origin URL, branch, submodule SHA).
 const git = (
   ...args: ReadonlyArray<string>
@@ -52,7 +52,7 @@ const resolveRepoBaseUrl: Effect.Effect<string, never, ChildProcessSpawner.Child
     const m = remote.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/);
     if (m === null) return "";
     // SOURCE_REF (CI) overrides the branch; env flows through Config, never a raw process.env read.
-    const sourceRef = yield* Config.string("SOURCE_REF").pipe(Config.withDefault(""));
+    const sourceRef = yield* Config.String("SOURCE_REF").pipe(Config.withDefault(""));
     const ref = sourceRef || (yield* git("rev-parse", "--abbrev-ref", "HEAD")) || "main";
     return `https://github.com/${m[1]}/${m[2]}/blob/${ref}`;
   }).pipe(Effect.catch(() => Effect.succeed(""))); // best-effort: any Config/git failure -> no links

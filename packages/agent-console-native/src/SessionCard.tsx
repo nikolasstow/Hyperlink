@@ -21,14 +21,13 @@ import { Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { Easing, FadeIn, LinearTransition, runOnJS, useAnimatedStyle, useDerivedValue, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { ChatPreview } from "./ChatPreview";
-import type { OpencodeClient } from "./client";
 import { colors } from "./colors";
-import { useSessionPreview } from "./sessionPreview";
 import { lastSummary } from "./chat/model";
 import { SESSION_CARD_HEIGHT, sessionCardSize, titleLines } from "./home/homeLayout";
 import { useKeptConversation } from "./conversations/useConversations";
 import { useAppContext } from "./AppContext";
 import { serverAddressOf } from "./opencode/serverAddress";
+import { useSessionTitle } from "./sessions/useSessionWatch";
 import { takeReturning } from "./sessionArchive";
 import { SystemIcon } from "./SystemIcon";
 import { useCardTint, useTextColors, useTheme } from "./theme";
@@ -42,9 +41,8 @@ const CARD_GUTTER = 12;
 const PREVIEW_HEIGHT_FRACTION = 0.5;
 
 export type SessionCardProps = {
-  readonly client: OpencodeClient;
   readonly sessionId: string;
-  /** Server-side last-updated time; keys the preview transcript cache. */
+  /** Server-side last-updated time; a newer one fetches its messages again. */
   readonly updatedAt: number;
   readonly title: string;
   /** Repo badge — omitted on a repo's own page, where it's redundant. */
@@ -55,8 +53,6 @@ export type SessionCardProps = {
   readonly running: boolean;
   /** Whether the session has activity since it was last opened. */
   readonly unread: boolean;
-  /** Whether to lazily load the preview/summary (e.g. only while Home is focused). */
-  readonly previewEnabled: boolean;
   readonly onOpen: () => void;
   readonly onRename: () => void;
   readonly onStop: () => void;
@@ -249,15 +245,17 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const cardWidth = screenWidth - CARD_GUTTER * 2;
   const previewHeight = Math.round(screenHeight * PREVIEW_HEIGHT_FRACTION);
-  const transcript = useSessionPreview(props.client, props.sessionId, props.updatedAt, props.previewEnabled);
   // Its last message from the conversation kept on the device, so it is
   // there from the first frame and its size (worked out from the same) holds.
   const { address } = useAppContext();
-  const kept = useKeptConversation(serverAddressOf(address), props.sessionId);
+  const server = serverAddressOf(address);
+  const kept = useKeptConversation(server, props.sessionId);
+  // Named a moment after its first message: the name shows when given.
+  const title = useSessionTitle(server, props.sessionId, props.title);
   const summary = kept === undefined ? undefined : lastSummary(kept.messages);
   const scope = useFavoriteScope();
   const favorite = useIsFavorited(scope, sessionTarget(props.sessionId));
-  const size = sessionCardSize({ title: props.title, pills: props.repo !== undefined || props.worktree !== undefined, summary: summary !== undefined });
+  const size = sessionCardSize({ title, pills: props.repo !== undefined || props.worktree !== undefined, summary: summary !== undefined });
 
   // Archiving: the row slides off to the left, then the session leaves the
   // list, and the rows below glide up into its place (the lists' layout
@@ -346,7 +344,7 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
         </ContextMenu.Items>
         <ContextMenu.Preview>
           <RNHostView matchContents>
-            <ChatPreview transcript={transcript} width={cardWidth} height={previewHeight} />
+            <ChatPreview messages={kept?.messages} width={cardWidth} height={previewHeight} />
           </RNHostView>
         </ContextMenu.Preview>
         <ContextMenu.Trigger>
@@ -356,8 +354,8 @@ export const SessionCard = (props: SessionCardProps): React.ReactElement => {
             <CardBody
               width={cardWidth}
               height={SESSION_CARD_HEIGHT[size]}
-              titleLines={titleLines(props.title)}
-              title={props.title}
+              titleLines={titleLines(title)}
+              title={title}
               repo={props.repo}
               worktree={props.worktree}
               meta={props.meta}

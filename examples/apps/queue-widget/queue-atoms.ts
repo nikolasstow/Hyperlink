@@ -15,7 +15,7 @@
  */
 
 import { Effect } from "effect";
-import { Atom, type AtomRegistry, type Reactivity } from "effect/unstable/reactivity";
+import { Atom, type AtomRegistry, type Reactivity } from "effect/reactivity";
 import type { WorkPool } from "../../../src/WorkPool";
 
 /** What an atom on this runtime may additionally require (provided by the runtime). */

@@ -17,6 +17,7 @@
  * - the extension code themes fetched, for the first frame after a launch
  *   (their own prefix);
  * - the custom code fonts installed on the device (their own prefix);
+ * - where each file was left (its own prefix);
  * - where Files is, per repo (its own prefix);
  * - the pages open when the app was last used (its own prefix);
  * - Home's favorites (their own prefix);
@@ -28,22 +29,29 @@
  * @internal
  */
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
+import { FetchHttpClient, HttpClient } from "effect/http";
 import { Conversations } from "../conversations/Conversations";
 import { BarWindowStore } from "../dubz/BarWindowStore";
 import { Favorites } from "../favorites/Favorites";
 import { FileNav } from "../files/FileNav";
+import { FileScrolls } from "../files/FileScrolls";
 import { LiveFiles } from "../files/LiveFiles";
 import { HomeLayoutStore } from "../home/HomeLayoutStore";
 import { CodeFonts } from "../fonts/CodeFonts";
 import { KeptThemes } from "../KeptThemes";
 import { SessionBackgrounds } from "../sessions/SessionBackgrounds";
+import { SessionWatch } from "../sessions/SessionWatch";
 import { Opencode } from "../opencode/Opencode";
 import { layer as foldersLayer } from "../outbox/foldersNative";
 import { Outbox } from "../outbox/Outbox";
 import { Reachability } from "../outbox/Reachability";
 import { KeptNav } from "../navigation/KeptNav";
 import { layer as asyncStorageLayer } from "./asyncStorage";
+import { authedFetch } from "../auth/serverTokens";
+import { authedStreamingFetch } from "../auth/streamingFetch";
+import { ModelCatalog } from "../models/ModelCatalog";
+import { ServerAuth } from "../auth/ServerAuth";
+import { layer as secretStoreLayer } from "../auth/secretStoreNative";
 import { layer as deviceSignalsLayer } from "./deviceSignalsNative";
 
 const OUTBOX_STORAGE_PREFIX = "agent-console-native:outbox:";
@@ -52,12 +60,24 @@ const SESSIONS_STORAGE_PREFIX = "agent-console-native:sessions:";
 const HOME_STORAGE_PREFIX = "agent-console-native:home:";
 const THEMES_STORAGE_PREFIX = "agent-console-native:themes:";
 const FONTS_STORAGE_PREFIX = "agent-console-native:fonts:";
+const SCROLLS_STORAGE_PREFIX = "agent-console-native:scrolls:";
 const FILES_STORAGE_PREFIX = "agent-console-native:files:";
 const NAV_STORAGE_PREFIX = "agent-console-native:nav:";
 const FAVORITES_STORAGE_PREFIX = "agent-console-native:favorites:";
 const BAR_WINDOW_STORAGE_PREFIX = "agent-console-native:barWindow:";
 
-const platform = Layer.mergeAll(FetchHttpClient.layer, deviceSignalsLayer, foldersLayer);
+const AUTH_STORAGE_PREFIX = "agent-console-native:auth:";
+const MODELS_STORAGE_PREFIX = "agent-console-native:models:";
+
+// The model catalog and opencode's event stream read their responses as they
+// come, so their client streams (expo/fetch; React Native's own fetch reads a
+// body whole).
+const streamingHttpClient = FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch)(authedStreamingFetch)));
+
+// Every Effect HTTP request goes through `authedFetch`: a paired server's
+// requests carry its token (auth/serverTokens.ts).
+const httpClient = FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch)(authedFetch)));
+const platform = Layer.mergeAll(httpClient, deviceSignalsLayer, foldersLayer);
 
 const AppLayer = Layer.mergeAll(
   Outbox.layer,
@@ -66,14 +86,18 @@ const AppLayer = Layer.mergeAll(
   HomeLayoutStore.layer.pipe(Layer.provide(asyncStorageLayer(HOME_STORAGE_PREFIX))),
   KeptThemes.layer.pipe(Layer.provide(asyncStorageLayer(THEMES_STORAGE_PREFIX))),
   CodeFonts.layer.pipe(Layer.provide(asyncStorageLayer(FONTS_STORAGE_PREFIX))),
+  FileScrolls.layer.pipe(Layer.provide(asyncStorageLayer(SCROLLS_STORAGE_PREFIX))),
   FileNav.layer.pipe(Layer.provide(asyncStorageLayer(FILES_STORAGE_PREFIX))),
   KeptNav.layer.pipe(Layer.provide(asyncStorageLayer(NAV_STORAGE_PREFIX))),
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
   BarWindowStore.layer.pipe(Layer.provide(asyncStorageLayer(BAR_WINDOW_STORAGE_PREFIX))),
   LiveFiles.layer,
+  SessionWatch.layer,
+  ServerAuth.layer.pipe(Layer.provide([asyncStorageLayer(AUTH_STORAGE_PREFIX), secretStoreLayer])),
+  ModelCatalog.layer.pipe(Layer.provide([asyncStorageLayer(MODELS_STORAGE_PREFIX), streamingHttpClient])),
 ).pipe(
   Layer.provideMerge(Reachability.layer),
-  Layer.provideMerge(Opencode.layer),
+  Layer.provideMerge(Opencode.layer.pipe(Layer.provide(streamingHttpClient))),
   Layer.provide(asyncStorageLayer(OUTBOX_STORAGE_PREFIX)),
   Layer.provideMerge(platform),
 );

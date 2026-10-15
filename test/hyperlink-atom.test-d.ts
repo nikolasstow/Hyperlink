@@ -2,7 +2,7 @@
  * Hyperlink.atom / query / fn — type-level.
  */
 import { Schema, Stream } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import { expectTypeOf } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 

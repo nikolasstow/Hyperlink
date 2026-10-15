@@ -130,7 +130,7 @@ class Demo extends Gate.HttpApiClient<Demo>()("@app/Demo", DemoApi, {
 ``` ts
 import * as NodeRedis from "@effect/platform-node/NodeRedis"
 import { Layer } from "effect"
-import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
+import { RateLimiter } from "effect/persistence/RateLimiter"
 
 // Fleet root — one Redis store for every Gate / WorkPool with rateLimit
 const FleetLive = Layer.mergeAll(

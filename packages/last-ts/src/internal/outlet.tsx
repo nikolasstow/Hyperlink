@@ -5,7 +5,7 @@
  */
 import * as React from "react";
 import { Cause, Effect } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import * as AtomReact from "../AtomReact";
 import * as Layout from "../Layout";
 import type * as Route from "../Route";

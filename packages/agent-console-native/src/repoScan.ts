@@ -14,7 +14,7 @@
  * @internal
  */
 import { Data, Effect } from "effect";
-import type { HttpClient } from "effect/unstable/http";
+import type { HttpClient } from "effect/http";
 import { type FsEntry, fsList, fsReadText } from "./fsClient";
 
 export type ScannedWorktree = {

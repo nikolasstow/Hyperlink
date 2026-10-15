@@ -6,8 +6,8 @@
  */
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeServices } from "@effect/platform-node";
-import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
-import { HttpRouter } from "effect/unstable/http";
+import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Logger, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
+import { FetchHttpClient, HttpRouter } from "effect/http";
 import { describe, expect, it, vi } from "vitest";
 import { fileSyncLayer } from "../../../agent-console/src/server/files/rpc";
 import { type DeviceSignal, DeviceSignals } from "../effect/DeviceSignals";
@@ -72,7 +72,7 @@ const withHub = <A, E>(
     yield* Layer.launch(HttpRouter.serve(fileSyncLayer).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port: PORT })))).pipe(Effect.forkScoped);
     // Built in this test's scope, so the service lives as long as the test.
     const signals = yield* Queue.unbounded<DeviceSignal>();
-    const services = yield* Layer.build(LiveFiles.layer.pipe(Layer.provide(Layer.succeed(DeviceSignals)({ signals: Stream.fromQueue(signals) }))));
+    const services = yield* Layer.build(LiveFiles.layer.pipe(Layer.provide(Layer.succeed(DeviceSignals)({ signals: Stream.fromQueue(signals) })), Layer.provide(FetchHttpClient.layer)));
     const live = Context.get(services, LiveFiles);
     yield* live.follow(api, new Set([file]));
     yield* until(live, file, (text) => (text === "one\ntwo\nthree\n" ? true : undefined));
@@ -177,4 +177,24 @@ describe("LiveFiles against the file hub", () => {
         }),
       ),
     ), 20_000);
+
+  it("asks for a folder once, not every 2 s, and shows why", () => {
+    const warnings: Array<string> = [];
+    const logger = Logger.make(({ message }) => {
+      warnings.push(JSON.stringify(message));
+    });
+    return run(
+      withHub(({ live, file }) =>
+        Effect.gen(function* () {
+          const folder = file.slice(0, file.lastIndexOf("/"));
+          yield* live.follow(api, new Set([file, folder]));
+          // Two refollow spaces: a retry would have asked twice more.
+          yield* Effect.sleep(Duration.millis(4500));
+          const problems = yield* live.problems.pipe(Stream.take(1), Stream.runCollect);
+          expect(Option.flatMap(Option.fromNullishOr(problems[0]), HashMap.get(folder))).toEqual(Option.some("NotAFile"));
+          expect(warnings.filter((warning) => warning.includes(folder))).toHaveLength(1);
+        }),
+      ).pipe(Effect.provide(Logger.layer([logger]))),
+    );
+  }, 20_000);
 });

@@ -20,7 +20,7 @@
  */
 
 // ---cut---
-import { FetchHttpClient } from "effect/unstable/http";
+import { FetchHttpClient } from "effect/http";
 import { ConfigProvider, Effect, Layer } from "effect";
 import { Gate } from "../../../src";
 import { NwslsoccerApi } from "./api";

@@ -1,6 +1,6 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "../chat/model";
 import { DeviceSignals } from "../effect/DeviceSignals";
@@ -11,25 +11,21 @@ import { conversationKey } from "./model";
 
 const server = serverAddressOf("localhost:4096");
 
-/** A fake opencode with v1 sessions (v2 knows none): counts history fetches. */
+/** A fake opencode: counts history fetches. */
 const fakeServer = (history: ReadonlyArray<{ readonly id: string; readonly text: string }>) => {
   const fetched: Array<string> = [];
   const json = (request: Parameters<typeof HttpClientResponse.fromWeb>[0], body: unknown) =>
     HttpClientResponse.fromWeb(request, new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } }));
   const client = HttpClient.make((request, url) =>
     Effect.sync(() => {
-      const v2 = /^\/api\/session\/([^/]+)\/message$/.exec(url.pathname);
-      if (v2 !== null) return json(request, { data: [], cursor: {} });
-      const v1 = /^\/session\/([^/]+)\/message$/.exec(url.pathname);
-      if (v1 !== null) {
-        if (url.searchParams.get("limit") !== "1") fetched.push(v1[1] ?? "");
-        return json(
-          request,
-          history.map((message) => ({
-            info: { id: message.id, role: "user", time: { created: 1_700_000_000_000 } },
-            parts: [{ id: `${message.id}:p`, messageID: message.id, sessionID: v1[1], type: "text", text: message.text }],
-          })),
-        );
+      const messages = /^\/api\/session\/([^/]+)\/message$/.exec(url.pathname);
+      if (messages !== null) {
+        fetched.push(messages[1] ?? "");
+        return json(request, {
+          // Newest first, as asked for.
+          data: [...history].reverse().map((message) => ({ id: message.id, type: "user", text: message.text, time: { created: 1_700_000_000_000 } })),
+          cursor: {},
+        });
       }
       return json(request, {});
     }),
@@ -70,7 +66,7 @@ const keptWhen = (conversations: Conversations["Service"], id: string, updated: 
   );
 
 describe("Conversations", () => {
-  it("keeps a session's newest messages and its protocol", async () => {
+  it("keeps a session's newest messages", async () => {
     const fake = fakeServer([{ id: "msg_a", text: "hello" }]);
     const kept = await run(
       fake,
@@ -81,7 +77,6 @@ describe("Conversations", () => {
       }),
     );
     const conversation = Option.getOrThrow(kept);
-    expect(conversation.protocol).toBe("v1");
     expect(conversation.messages.map((message) => message.parts.map((part) => (part.kind === "text" ? part.text : "")))).toEqual([["hello"]]);
   });
 
@@ -131,8 +126,8 @@ describe("Conversations", () => {
       Effect.gen(function* () {
         const conversations = yield* Conversations;
         const message = (text: string): ChatMessage => ({ id: "msg_a", role: "user", parts: [{ kind: "text", id: "p", text }] });
-        yield* conversations.remember(server, "ses_1", "v2", [message("first")]);
-        yield* conversations.remember(server, "ses_1", "v2", [message("second")]);
+        yield* conversations.remember(server, "ses_1", [message("first")]);
+        yield* conversations.remember(server, "ses_1", [message("second")]);
         return yield* keptWhen(conversations, "ses_1", 0);
       }),
     );

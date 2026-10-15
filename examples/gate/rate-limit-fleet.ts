@@ -26,7 +26,7 @@ import { Config, Duration, Effect, Layer, Ref } from "effect";
 import {
   layerStoreMemory as rateLimiterStoreMemory,
   layerStoreRedis as rateLimiterStoreRedis,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import * as Gate from "../../src/Gate";
 import * as Store from "../../src/Store";
 
@@ -44,7 +44,7 @@ const redisEndpointFromUrl = (raw: string) => {
   return {
     host: url.hostname.length > 0 ? url.hostname : "127.0.0.1",
     port: url.port.length > 0 ? Number(url.port) : 6379,
-  } as const;
+  };
 };
 
 const rateLimiterStoreLayer = (
@@ -54,7 +54,7 @@ const rateLimiterStoreLayer = (
   useRedis
     ? Layer.provide(
         rateLimiterStoreRedis({ prefix: "hyperlink-demo:" }),
-        NodeRedis.layer(endpoint),
+        NodeRedis.layer({ socket: endpoint }),
       )
     : rateLimiterStoreMemory;
 
@@ -111,7 +111,7 @@ const program = (
   );
 
 const main = Effect.gen(function* () {
-  const rawUrl = yield* Config.string("REDIS_URL").pipe(
+  const rawUrl = yield* Config.String("REDIS_URL").pipe(
     Config.withDefault(DEFAULT_REDIS_URL),
   );
   const endpoint = redisEndpointFromUrl(rawUrl);
@@ -120,7 +120,7 @@ const main = Effect.gen(function* () {
     const pong = yield* redis.use((client) => client.ping());
     return pong === "PONG";
   }).pipe(
-    Effect.provide(NodeRedis.layer(endpoint)),
+    Effect.provide(NodeRedis.layer({ socket: endpoint })),
     Effect.scoped,
     Effect.orElseSucceed(() => false),
   );

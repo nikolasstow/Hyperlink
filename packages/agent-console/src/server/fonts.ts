@@ -16,7 +16,7 @@ const nodeRequire = createRequire(import.meta.url);
 const fontkit: { create: (buffer: Buffer) => Font | FontCollection } = nodeRequire("fontkit");
 const wawoff2: { decompress: (bytes: Uint8Array) => Promise<Uint8Array> } = nodeRequire("wawoff2");
 
-export class FontError extends Schema.TaggedErrorClass<FontError>()("FontError", {
+export class FontError extends Schema.TaggedError<FontError>()("FontError", {
   reason: Schema.Literals(["download", "parse", "io", "unsupported"]),
   detail: Schema.optional(Schema.String),
 }) {}

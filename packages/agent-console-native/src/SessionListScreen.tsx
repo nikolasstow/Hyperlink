@@ -16,6 +16,7 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
+import { serverAddressOf } from "./opencode/serverAddress";
 import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
@@ -29,7 +30,7 @@ import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { repoScope } from "./favorites/model";
 import { FavoriteScopeProvider } from "./favorites/useFavorites";
 import { relativeTime } from "./time";
-import { useSessionActivity } from "./useSessionActivity";
+import { useSessionWatch } from "./sessions/useSessionWatch";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SessionList">;
@@ -41,10 +42,10 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
   // Favoriting a session from this repo's list pins to the repo's scope (shown
   // on its repo page), not Home.
   const favScope = React.useMemo(() => repoScope(repo), [repo]);
-  const { client, address, server } = useAppContext();
+  const { address, server } = useAppContext();
   const headerHeight = useHeaderHeight();
   const isFocused = useIsFocused();
-  const { busy: busySessions, activityAt } = useSessionActivity(client, isFocused);
+  const { busy: busySessions, activityAt } = useSessionWatch(serverAddressOf(address), isFocused);
 
   const [sessions, setSessions] = React.useState<ReadonlyArray<SessionSummary>>([]);
   const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>([]);
@@ -118,7 +119,6 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
         ListEmptyComponent={<Text style={styles.empty}>No sessions.</Text>}
         renderItem={({ item }) => (
           <SessionCard
-            client={client}
             sessionId={item.id}
             updatedAt={item.time.updated}
             title={item.title}
@@ -126,11 +126,10 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
             meta={relativeTime(item.time.updated)}
             running={busySessions.has(item.id)}
             unread={isUnread(item)}
-            previewEnabled={isFocused}
             onOpen={() => props.navigation.navigate("Chat", { sessionID: item.id })}
-            onRename={() => promptRenameSession(client, item.id, item.title, () => void load())}
-            onStop={() => abortSession(client, item.id, () => void load())}
-            onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void load())}
+            onRename={() => promptRenameSession(serverAddressOf(address), item.id, item.title, () => void load())}
+            onStop={() => abortSession(serverAddressOf(address), item.id, () => void load())}
+            onDelete={() => confirmDeleteSession(serverAddressOf(address), item.id, item.title, () => void load())}
             onArchive={() => archiveWithUndo(server, item.id)}
             muted={mutedSet.has(item.id)}
             onMute={() => toggleMute(server, item.id)}

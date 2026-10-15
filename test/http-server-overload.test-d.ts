@@ -1,5 +1,5 @@
 import { Layer } from "effect";
-import type { HttpServer } from "effect/unstable/http";
+import type { HttpServer } from "effect/http";
 import { expectTypeOf } from "vitest";
 import * as Node from "../src/Node";
 

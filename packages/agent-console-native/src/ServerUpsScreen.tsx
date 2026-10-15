@@ -22,6 +22,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop, Text as RNSvgText } from "react-native-svg";
 import type { RootStackParamList } from "./RootNavigator";
 import { type TextColors, useScreenBackground, useThemedStyles } from "./theme";
+import { authedFetch } from "./auth/serverTokens";
 
 /** The UPS dashboard runs on each server at :5196 (~/ups-monitor/server.js).
  * The server's address is passed in by route, never hardcoded, so the same
@@ -110,7 +111,7 @@ const useUps = (baseUrl: string, mins: number): { readonly data: UpsData | undef
   React.useEffect(() => {
     let alive = true;
     const tick = (): void => {
-      void fetch(`${baseUrl}/api/ups?mins=${mins}`, { cache: "no-store" })
+      void authedFetch(`${baseUrl}/api/ups?mins=${mins}`, { cache: "no-store" })
         .then((r) => r.json())
         .then((d: UpsData) => {
           if (!alive) return;

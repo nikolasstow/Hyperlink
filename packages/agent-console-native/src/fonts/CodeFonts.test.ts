@@ -1,5 +1,5 @@
 import { Effect, Stream } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CodeFonts } from "./CodeFonts";
 

@@ -99,8 +99,8 @@ import {
   layer as rateLimiterLayer,
   layerStoreMemory,
   make as makeRateLimiter,
-} from "effect/unstable/persistence/RateLimiter";
-import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
+import type { RateLimiter as EffectRateLimiter } from "effect/persistence/RateLimiter";
 import { withLogScope } from "./logs/scope";
 import { isJsonValue } from "./json";
 import type { JsonValue } from "./json";
@@ -979,7 +979,7 @@ export type WorkPoolRateLimitOptions = Omit<
 };
 
 /** @public Re-export of Effect rate-limiter consume metadata. */
-export type { ConsumeResult } from "effect/unstable/persistence/RateLimiter";
+export type { ConsumeResult } from "effect/persistence/RateLimiter";
 
 /**
  * Shared queue configuration fields (see {@link WorkPoolConfig}).

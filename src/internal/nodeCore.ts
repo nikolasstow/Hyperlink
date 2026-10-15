@@ -7,9 +7,9 @@
  */
 import { Context, Data, Predicate, Result } from "effect"
 import type { Effect, Layer, Redacted, Stream } from "effect"
-import type { HttpRouter } from "effect/unstable/http"
-import type { RpcClient } from "effect/unstable/rpc"
-import type { RpcSerialization } from "effect/unstable/rpc"
+import type { HttpRouter } from "effect/http"
+import type { RpcClient } from "effect/rpc"
+import type { RpcSerialization } from "effect/rpc"
 import type { LogEntry } from "../LogEntry"
 import type { NodeStatus as NodeStatusSnapshot } from "./nodeStatus"
 

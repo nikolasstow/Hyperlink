@@ -6,7 +6,7 @@
  * @internal
  */
 import { Context, Effect, HashMap, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 
 export const SessionBackground = Schema.Struct({
   light: Schema.optional(Schema.String),

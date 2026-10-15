@@ -2,7 +2,7 @@ import { Duration, Effect, Layer, Schema } from "effect";
 import type { ClientVerifyError } from "../src/Hyperlink";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { WorkPool } from "../src";
@@ -35,7 +35,7 @@ const onServer = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     return yield* check(port);
   }).pipe(Effect.provide(server), Effect.scoped);
 
@@ -45,7 +45,7 @@ const onWarmingServer = <A>(check: VerifyCheck<A>) => {
   ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
   return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     return yield* check(port);
   }).pipe(Effect.provide(server), Effect.scoped);
 };
@@ -215,7 +215,7 @@ describe("Hyperlink.verifyConnection", () => {
   it.live("verifyConnection uses selectEndpoint on a multi-protocol node", () =>
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = address._tag === "TcpAddress" ? address.port : 0;
+      const port = address._tag === "UnixPathAddress" ? 0 : address.port;
       // Http+ws declared; only http is live — selectEndpoint (node) prefers Http, so tier-1 ok.
       class Dual extends Node.Service<Dual>()("verify/dual", {
         http: `http://127.0.0.1:${port}/rpc`,
@@ -233,7 +233,7 @@ describe("Hyperlink.verifyConnection", () => {
   it.live("verifyConnection treats a relative url as WebSocket (not Http GET)", () =>
     Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = address._tag === "TcpAddress" ? address.port : 0;
+      const port = address._tag === "UnixPathAddress" ? 0 : address.port;
       // Fake browser location so toWebSocketUrl("/rpc") → ws://127.0.0.1:<port>/rpc.
       const prevLocation = (globalThis as { location?: unknown }).location;
       ;(globalThis as { location: { protocol: string; host: string } }).location = {

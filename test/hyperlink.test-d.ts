@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema, Stream } from "effect";
-import { RpcClient } from "effect/unstable/rpc";
+import { RpcClient } from "effect/rpc";
 import * as Hyperlink from "../src/Hyperlink";
 import type { ServiceOf } from "../src/Hyperlink";
 import * as Node from "../src/Node";

@@ -13,7 +13,7 @@ import * as SchemaAST from "effect/SchemaAST";
 import {
   HttpApiEndpoint,
   HttpApiSchema,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 
 declare module "effect/Schema" {
   namespace Annotations {

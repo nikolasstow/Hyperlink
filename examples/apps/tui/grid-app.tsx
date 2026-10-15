@@ -18,7 +18,7 @@
 import { Box, Text, useApp, useInput, useStdin, useStdout } from "ink";
 import * as React from "react";
 import { Effect, Layer, Schema } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import * as Hyperlink from "../../../src/Hyperlink";
 import { makeHyperlinkAtoms } from "../atoms/hyperlink-atoms";
 import {

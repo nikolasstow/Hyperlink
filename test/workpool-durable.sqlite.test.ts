@@ -1,7 +1,7 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+import { SqlClient } from "effect/sql/SqlClient";
 import { DurableWorkPoolStore } from "../src/DurableWorkPoolStore";
 import * as WorkPool from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";

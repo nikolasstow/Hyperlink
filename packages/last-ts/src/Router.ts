@@ -27,7 +27,7 @@
  */
 import * as errors from "./internal/errors";
 import * as React from "react";
-import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
+import type { HttpApi, HttpApiGroup } from "effect/http-api";
 import * as fileRouter from "./internal/fileRouter";
 import * as outlet from "./internal/outlet";
 import * as internal from "./internal/router";

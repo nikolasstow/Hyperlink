@@ -1,5 +1,5 @@
 import { Effect, Layer, Option, Schema, Stream } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
@@ -20,7 +20,7 @@ describe("NodeStatus Subscribable", () => {
   it.effect("NodeStatus exposes status as Subscribable and nested logs over http", () =>
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       yield* Effect.gen(function* () {
         const node = yield* NodeStatusTag;
         expect("get" in node.status).toBe(true);

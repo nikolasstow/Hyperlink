@@ -2,11 +2,12 @@
  * @module internal/launcherToken
  *
  * Opaque assume-token mint — Effect-wrapped CSPRNG (`globalThis.crypto.getRandomValues`)
- * + {@link Encoding.encodeHex}, branded as {@link Token}, never cleartext in logs
+ * + {@link Hex.encode}, branded as {@link Token}, never cleartext in logs
  * ({@link Redacted}). Isolates the Web Crypto primitive behind an Effect boundary
  * (Effect's `Random` is seeded PRNG, not CSPRNG).
  */
-import { Effect, Encoding, Redacted } from "effect";
+import { Effect, Redacted } from "effect";
+import { Hex } from "effect/encoding";
 
 /** Bytes minted into a hex assume token. @internal */
 export const LAUNCHER_TOKEN_BYTES = 32;
@@ -44,6 +45,6 @@ export const randomTokenBytes = (
 export const mintAssumeToken: Effect.Effect<Redacted.Redacted<Token>> =
   randomTokenBytes(LAUNCHER_TOKEN_BYTES).pipe(
     Effect.map((bytes) =>
-      Redacted.make(brandToken(Encoding.encodeHex(bytes))),
+      Redacted.make(brandToken(Hex.encode(bytes))),
     ),
   );

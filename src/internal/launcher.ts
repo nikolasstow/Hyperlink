@@ -31,7 +31,7 @@ import type { PlatformError } from "effect/PlatformError";
 import {
   ChildProcess,
   ChildProcessSpawner,
-} from "effect/unstable/process";
+} from "effect/process";
 import * as Hyperlink from "../Hyperlink";
 import * as Identity from "../Identity";
 import * as Lookup from "../Lookup";
@@ -92,7 +92,7 @@ const READY_PROBE_TIMEOUT = Duration.seconds(2);
  * @public
  */
 export const readyTimeoutConfig: Config.Config<Duration.Duration> =
-  Config.duration("HYPERLINK_LAUNCHER_READY_TIMEOUT").pipe(
+  Config.Duration("HYPERLINK_LAUNCHER_READY_TIMEOUT").pipe(
     Config.withDefault(DEFAULT_READY_TIMEOUT),
   );
 
@@ -104,7 +104,7 @@ export const readyTimeoutConfig: Config.Config<Duration.Duration> =
  * @public
  */
 export const readyPollConfig: Config.Config<Duration.Duration> =
-  Config.duration("HYPERLINK_LAUNCHER_READY_POLL").pipe(
+  Config.Duration("HYPERLINK_LAUNCHER_READY_POLL").pipe(
     Config.withDefault(DEFAULT_READY_POLL),
   );
 

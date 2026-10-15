@@ -14,7 +14,6 @@ import * as React from "react";
 import type { ChatMessage } from "../chat/model";
 import { forkApp, runApp } from "../effect/runtime";
 import { serverAddressOf, type ServerAddress } from "../opencode/serverAddress";
-import type { Protocol } from "../outbox/model";
 import type { SessionSummary } from "../sessions/sessionList";
 import { conversationChanges, Conversations, type Wanted } from "./Conversations";
 import { type Conversation, conversationKey } from "./model";
@@ -53,7 +52,7 @@ export const startConversations = (): void => {
   );
 };
 
-/** A session's kept conversation (its newest messages, its protocol), or
+/** A session's kept conversation (its newest messages, its title), or
  * undefined when none is kept. */
 export const useKeptConversation = (server: ServerAddress, sessionID: string): Conversation | undefined =>
   React.useSyncExternalStore(subscribe, () => Option.getOrUndefined(HashMap.get(kept, conversationKey(server, sessionID))));
@@ -87,11 +86,11 @@ export const keepRecentConversations = (address: string, shown: (sessions: Reado
 };
 
 /** Keeps an open chat's newest messages (once they stop changing). */
-export const rememberConversation = (server: ServerAddress, sessionID: string, protocol: Protocol, messages: ReadonlyArray<ChatMessage>): Promise<void> =>
+export const rememberConversation = (server: ServerAddress, sessionID: string, messages: ReadonlyArray<ChatMessage>): Promise<void> =>
   runApp(
     Effect.gen(function* () {
       const conversations = yield* Conversations;
-      yield* conversations.remember(server, sessionID, protocol, messages);
+      yield* conversations.remember(server, sessionID, messages);
     }),
   );
 

@@ -27,7 +27,7 @@ export const nodeOwnership = Schema.Literals(["launcher", "self"]);
  * @category errors
  * @public
  */
-export class AssumeTokenMismatch extends Schema.TaggedErrorClass<AssumeTokenMismatch>()(
+export class AssumeTokenMismatch extends Schema.TaggedError<AssumeTokenMismatch>()(
   "AssumeTokenMismatch",
   {
     node: Schema.String,
@@ -44,7 +44,7 @@ export class AssumeTokenMismatch extends Schema.TaggedErrorClass<AssumeTokenMism
  * @category errors
  * @public
  */
-export class AssumeTokenReused extends Schema.TaggedErrorClass<AssumeTokenReused>()(
+export class AssumeTokenReused extends Schema.TaggedError<AssumeTokenReused>()(
   "AssumeTokenReused",
   {
     node: Schema.String,
@@ -62,7 +62,7 @@ export class AssumeTokenReused extends Schema.TaggedErrorClass<AssumeTokenReused
  * @category errors
  * @public
  */
-export class AssumeNotReady extends Schema.TaggedErrorClass<AssumeNotReady>()(
+export class AssumeNotReady extends Schema.TaggedError<AssumeNotReady>()(
   "AssumeNotReady",
   {
     node: Schema.String,

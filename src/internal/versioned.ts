@@ -8,7 +8,6 @@ import {
   Effect,
   Exit,
   Hash,
-  Option,
   Predicate,
   Schema,
   SchemaIssue,
@@ -31,7 +30,7 @@ export const VersionedTypeId = "~hyperlink-ts/Versioned" as const;
  * @category errors
  * @public
  */
-export class MigrationPathMissing extends Schema.TaggedErrorClass<MigrationPathMissing>()(
+export class MigrationPathMissing extends Schema.TaggedError<MigrationPathMissing>()(
   "MigrationPathMissing",
   {
     serviceKey: Schema.String,
@@ -48,7 +47,7 @@ export class MigrationPathMissing extends Schema.TaggedErrorClass<MigrationPathM
  * @category errors
  * @public
  */
-export class MigrationDecodeFailed extends Schema.TaggedErrorClass<MigrationDecodeFailed>()(
+export class MigrationDecodeFailed extends Schema.TaggedError<MigrationDecodeFailed>()(
   "MigrationDecodeFailed",
   {
     serviceKey: Schema.String,
@@ -195,7 +194,7 @@ const buildWireSchema = <Current extends Schema.Top>(
   steps: ReadonlyArray<ChainStep>,
 ): Schema.Top => {
   const tipId = tipVersionOf(tip);
-  const transformation = SchemaTransformation.transformOrFail({
+  const transformation = SchemaTransformation.transformEffect({
     decode: (input: unknown): Effect.Effect<Schema.Schema.Type<Current>, SchemaIssue.Issue> => {
       for (let i = steps.length - 1; i >= 0; i--) {
         const step = steps[i]!;
@@ -213,16 +212,18 @@ const buildWireSchema = <Current extends Schema.Top>(
             return Effect.succeed(up.value as Schema.Schema.Type<Current>);
           }
           return Effect.fail(
-            new SchemaIssue.InvalidValue(Option.some(input), {
-              message: `MigrationDecodeFailed at ${step.version}`,
-            }),
+            new SchemaIssue.InvalidValue(
+              { message: `MigrationDecodeFailed at ${step.version}` },
+              input,
+            ),
           );
         }
       }
       return Effect.fail(
-        new SchemaIssue.InvalidValue(Option.some(input), {
-          message: `MigrationPathMissing: cannot decode into ${tipId}`,
-        }),
+        new SchemaIssue.InvalidValue(
+          { message: `MigrationPathMissing: cannot decode into ${tipId}` },
+          input,
+        ),
       );
     },
     encode: (
@@ -234,9 +235,9 @@ const buildWireSchema = <Current extends Schema.Top>(
       return Exit.isSuccess(encoded)
         ? Effect.succeed(encoded.value)
         : Effect.fail(
-            new SchemaIssue.InvalidValue(Option.some(value), {
+            new SchemaIssue.InvalidValue({
               message: "MigrationDecodeFailed: encode tip",
-            }),
+            }, value),
           );
     },
   });

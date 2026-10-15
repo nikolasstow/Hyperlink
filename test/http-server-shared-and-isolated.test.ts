@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpClient, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
@@ -56,7 +56,7 @@ describe("httpServer — shared majority + isolated outlier", () => {
   it.effect("one /rpc: shared dep memoized; outlier keeps a private dep; /health lists all", () =>
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       const base = `http://127.0.0.1:${port}`;
 
       yield* Effect.gen(function* () {

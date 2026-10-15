@@ -9,7 +9,8 @@
  * @internal
  */
 import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
+import { DeviceAuthError, DeviceInfo, NotAllowed, PairedToken, PairingCode, PairingRefused, WebSocketTicket, redeemPayload, revokePayload } from "./auth/DeviceAuth";
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
 import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";
@@ -279,6 +280,34 @@ const pluginsGroup = HttpApiGroup.make("plugins").add(
   }),
 );
 
+/** Pairing and the paired devices (auth/DeviceAuth.ts). `redeem` is the one
+ * open endpoint; the rest need a device token (or, for `pair`, the admin
+ * token). */
+const authGroup = HttpApiGroup.make("auth").add(
+  HttpApiEndpoint.post("pair", "/auth/pair", {
+    success: PairingCode,
+    error: [DeviceAuthError, NotAllowed.pipe(HttpApiSchema.status(403))],
+  }),
+  HttpApiEndpoint.post("redeem", "/auth/redeem", {
+    payload: redeemPayload,
+    success: PairedToken,
+    error: [DeviceAuthError, PairingRefused.pipe(HttpApiSchema.status(403))],
+  }),
+  HttpApiEndpoint.get("devices", "/auth/devices", {
+    success: Schema.Array(DeviceInfo),
+    error: DeviceAuthError,
+  }),
+  HttpApiEndpoint.post("revoke", "/auth/revoke", {
+    payload: revokePayload,
+    success: Schema.Array(DeviceInfo),
+    error: DeviceAuthError,
+  }),
+  HttpApiEndpoint.post("ticket", "/auth/ticket", {
+    success: WebSocketTicket,
+    error: [DeviceAuthError, NotAllowed.pipe(HttpApiSchema.status(403))],
+  }),
+);
+
 export const api = HttpApi.make("agent-console")
   .add(extensionsGroup)
   .add(configGroup)
@@ -287,4 +316,5 @@ export const api = HttpApi.make("agent-console")
   .add(pagesGroup)
   .add(processesGroup)
   .add(pluginsGroup)
-  .add(sessionsGroup);
+  .add(sessionsGroup)
+  .add(authGroup);

@@ -1,16 +1,13 @@
 /**
- * Ported verbatim from packages/agent-console/src/opencode/agentConstants.ts
- * — shared by homeDir.ts (worktree.ts/settingsFile.ts equivalents don't
- * exist here yet). Kept in its own leaf module for the same reason as the
- * web app's copy: avoids an import cycle once this is used from more than
- * one place.
+ * Kept in its own leaf module to avoid an import cycle (session lists use it).
  *
  * @internal
  */
 
-/** Every session title created by a background operation (worktree setup,
- * settings-file writes) — session lists filter these out, they're not
- * something the owner should see mixed into their chats. */
+/** The title v1's background operations (worktree setup, settings-file
+ * writes) gave the sessions they ran in. v2 runs commands without a session
+ * (opencode/shell.ts); session lists still filter out the old ones. */
 export const WORKTREE_SETUP_PREFIX = "[worktree-setup]";
 
-export const REPO_ADMIN_AGENT = "repo-admin";
+/** Every session the app makes runs under the no-edit "console" agent. */
+export const AGENT = "console";

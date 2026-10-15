@@ -5,8 +5,8 @@
  */
 
 import { Duration, Effect, Schema } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { responseBodyJson } from "../../src/internal/json";
+import { HttpClient, HttpClientRequest } from "effect/http";
+import { unknownJsonString } from "../../src/internal/json";
 
 export const requestJson = (
   port: number,
@@ -17,7 +17,7 @@ export const requestJson = (
       HttpClientRequest.get(`http://127.0.0.1:${String(port)}${path}`),
     ).pipe(Effect.orDie);
     const text = yield* response.text.pipe(Effect.orDie);
-    return yield* Schema.decodeUnknownEffect(responseBodyJson)(text).pipe(
+    return yield* Schema.decodeUnknownEffect(unknownJsonString)(text).pipe(
       Effect.orDie,
     );
   });

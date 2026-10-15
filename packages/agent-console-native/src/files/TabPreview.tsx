@@ -1,36 +1,34 @@
 /**
- * A tab, shrunk: what it shows (a folder's listing, or a file's first lines),
- * drawn at the screen's size and scaled down, so it reads as the screen it
- * opens to and the overview's zoom lines up with it. Kept up to date: a
- * folder from the listing cache (refreshed from the server), a file read again
- * whenever the preview is shown.
+ * A tab, shrunk: what it shows (a folder's listing, or a file as its editor
+ * shows it, drawn by the editor itself), at the screen's size and scaled
+ * down, so it reads as the screen it opens to and the overview's zoom lines
+ * up with it. Kept up to date: a folder from the listing cache (refreshed from
+ * the server), a file drawn again whenever what it shows changes.
  *
- * Plain views only (no glass, no web view), so it can be scaled and many can
- * be on screen.
+ * Plain views and images only (no glass, no web view), so it can be scaled
+ * and many can be on screen.
  *
  * @internal
  */
 import * as React from "react";
-import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Image, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useAppContext } from "../AppContext";
 import { runFs } from "../effect/runtime";
 import { iconForFile } from "../fileIcon";
 import { getCachedListing, loadTree } from "../fileListingCache";
 import { type FsEntry, fsReadText } from "../fsClient";
-import { langFromFilename, type HighlightResult, tokenizeCode } from "../shikiHighlighter";
-import { useCodeTheme } from "../useCodeTheme";
 import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
 import { type TextColors, useScreenBackground, useThemedStyles } from "../theme";
 import type { FileNavEntry } from "./FileNav";
+import { useCodeTheme } from "../useCodeTheme";
+import { editorThemeOf } from "./CodeEditor";
+import { useFilePreview } from "./filePreview";
 import { notePath } from "./missingPaths";
 import { PREVIEW_ASPECT } from "./tabShape";
 
-/** Rows and lines drawn: more than a screen holds, so it is always full. */
+/** Rows drawn: more than a screen holds, so it is always full. */
 const ROWS = 24;
-const LINES = 80;
-/** The code font size, shared by the gutter and the lines. */
-const CODE_FONT_SIZE = 12;
 
 /** Files' text as last read, so a preview paints at once and then refreshes. */
 const texts = new Map<string, string>();
@@ -111,68 +109,17 @@ const FolderPage = (props: { readonly path: string }): React.ReactElement => {
   );
 };
 
-/** Menlo's advance at the code font size, to size the line-number gutter from
- * the digit count (nothing measured). */
-const CODE_GLYPH_WIDTH = CODE_FONT_SIZE * 0.6;
-
-/** A file's first lines tokenised by Shiki, cached (shikiHighlighter.ts) — the
- * same colours the chat blocks and the real viewer resolve. Undefined until
- * the (async) tokenise lands; the raw text shows meanwhile. */
-const useHighlight = (text: string, name: string): HighlightResult | undefined => {
-  const theme = useCodeTheme();
-  const lang = React.useMemo(() => langFromFilename(name), [name]);
-  const themeName = typeof theme === "string" ? theme : (theme.name ?? "custom");
-  const code = React.useMemo(() => text.split("\n").slice(0, LINES).join("\n"), [text]);
-  const [result, setResult] = React.useState<HighlightResult | undefined>(undefined);
-  React.useEffect(() => {
-    let alive = true;
-    tokenizeCode({ code, lang, theme })
-      .then((next) => {
-        if (alive) setResult(next);
-      })
-      .catch((error: unknown) => console.error(`[files] highlighting ${name} for its preview failed`, error));
-    return () => {
-      alive = false;
-    };
-  }, [code, lang, themeName]); // eslint-disable-line react-hooks/exhaustive-deps -- theme keyed by name
-  return result;
-};
-
-const FilePage = (props: { readonly path: string; readonly name: string }): React.ReactElement => {
+/** A file as its editor shows it: the editor's own drawing, laid over the
+ * page at the screen's size (filePreview.ts); the editor's background until
+ * the first one is drawn. */
+const FilePage = (props: { readonly path: string; readonly name: string; readonly topInset: number }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const text = useText(props.path);
-  const highlight = useHighlight(text === "missing" ? "" : text, props.name);
+  const image = useFilePreview(props.path, props.name, props.topInset, text === "missing" || text === "" ? undefined : text);
+  const { width, height } = useWindowDimensions();
+  const background = editorThemeOf(useCodeTheme(), undefined).background;
   if (text === "missing") return <Missing />;
-  // A line per line, never wrapped — clipped at the edge as the editor shows
-  // it — each with its number in a gutter, and its tokens coloured once the
-  // highlight lands (the raw line until then).
-  const rawLines = text.split("\n").slice(0, LINES);
-  const lines = highlight?.lines ?? rawLines;
-  const gutterWidth = Math.ceil(String(lines.length).length * CODE_GLYPH_WIDTH);
-  return (
-    <>
-      {lines.map((line, index) => (
-        <View key={index} style={styles.codeLine}>
-          <Text style={[styles.gutter, { width: gutterWidth }]} numberOfLines={1}>
-            {index + 1}
-          </Text>
-          <Text style={styles.code} numberOfLines={1} ellipsizeMode="clip">
-            {typeof line === "string"
-              ? line === ""
-                ? " "
-                : line
-              : line.length === 0
-                ? " "
-                : line.map((token, tokenIndex) => (
-                    <Text key={tokenIndex} style={{ color: token.color, fontStyle: token.italic === true ? "italic" : "normal", fontWeight: token.bold === true ? "700" : "400" }}>
-                      {token.content}
-                    </Text>
-                  ))}
-          </Text>
-        </View>
-      ))}
-    </>
-  );
+  return image === undefined ? <View style={[styles.file, { width, height, backgroundColor: background }]} /> : <Image source={{ uri: image }} style={[styles.file, { width, height }]} />;
 };
 
 export const TabPreview = (props: {
@@ -204,7 +151,7 @@ export const TabPreview = (props: {
           },
         ]}
       >
-        {props.entry.kind === "directory" ? <FolderPage path={props.entry.path} /> : <FilePage path={props.entry.path} name={props.entry.name} />}
+        {props.entry.kind === "directory" ? <FolderPage path={props.entry.path} /> : <FilePage path={props.entry.path} name={props.entry.name} topInset={props.topInset} />}
       </View>
     </View>
   );
@@ -238,23 +185,10 @@ const makeStyles = (text: TextColors) =>
       fontWeight: "600",
       textAlign: "center",
     },
-    codeLine: {
-      flexDirection: "row",
-    },
-    // The line number, right-aligned in its gutter, dim as the editor's.
-    gutter: {
-      color: text.tertiaryLabel,
-      fontFamily: "Menlo",
-      fontSize: CODE_FONT_SIZE,
-      lineHeight: 17,
-      textAlign: "right",
-      marginRight: 10,
-    },
-    code: {
-      flex: 1,
-      color: text.label,
-      fontFamily: "Menlo",
-      fontSize: CODE_FONT_SIZE,
-      lineHeight: 17,
+    // The file's picture fills the page, under its padding.
+    file: {
+      position: "absolute",
+      top: 0,
+      left: 0,
     },
   });

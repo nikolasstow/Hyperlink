@@ -22,8 +22,8 @@
  */
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Data, Effect, FileSystem, Layer, Path } from "effect";
-import { Argument, Command, Flag } from "effect/unstable/cli";
-import { FetchHttpClient } from "effect/unstable/http";
+import { Argument, Command, Flag } from "effect/cli";
+import { FetchHttpClient } from "effect/http";
 import packageJson from "../package.json" with { type: "json" };
 import { slugify } from "../variant";
 import { probe, runInherit } from "./command";
@@ -36,12 +36,12 @@ class InvalidVariantError extends Data.TaggedError("InvalidVariantError")<{
 const packageSubpath = "packages/agent-console-native";
 
 const newVariant = Command.make("variant:new", {
-  name: Argument.string("name").pipe(Argument.withDescription("Worktree / variant name (also the branch name).")),
-  base: Flag.string("base").pipe(
+  name: Argument.String("name").pipe(Argument.withDescription("Worktree / variant name (also the branch name).")),
+  base: Flag.String("base").pipe(
     Flag.withDescription("Branch/commit to fork from."),
     Flag.withDefault("HEAD"),
   ),
-  build: Flag.boolean("build").pipe(Flag.withDescription("Start the EAS dev build right away (headless).")),
+  build: Flag.Boolean("build").pipe(Flag.withDescription("Start the EAS dev build right away (headless).")),
 }).pipe(
   Command.withDescription("Create a git worktree wired up as its own installable app variant."),
   Command.withHandler(({ name, base, build }) =>

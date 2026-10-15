@@ -72,8 +72,8 @@ plugin.
   follow stream), rebases on it, and writes again. So the hub keeps no history.
   Its own disk write coming back through the watcher is no change (the text
   matches).
-- **Transport.** Effect RPC over a WebSocket (`effect/unstable/rpc` +
-  `effect/unstable/socket`). The browser dashboard already requires WebSocket,
+- **Transport.** Effect RPC over a WebSocket (`effect/rpc` +
+  `effect/socket`). The browser dashboard already requires WebSocket,
   and RN has a native one. Group `FileSync`: `follow(paths) → Stream<FileEvent>`
   and `write(...)`. Schemas are `_tag` unions, one Struct per payload.
 - **Diffing.** A small dependency (`fast-diff`, also used by Quill, pure JS)
@@ -205,3 +205,17 @@ cycle logged ~5 `[live]` lines per file over the RN bridge.
   is `repos/effect/.../src` (and a directory path, not a file) being followed at
   all? A directory follow that errors should not re-follow on a 2 s loop
   forever; cap/stop re-follow after N failures, and never follow a non-file.
+
+**Fixed on eta (2026-10-13).** The device's logs show 8 followed paths, not
+thousands. One is a folder (`…/effect/src`) held in a tab or the kept list.
+Two faults made the storm:
+
+- A path the server can never follow (`NotAFile`, `TooLarge`, `NotFound`) was
+  asked for again every 2 s, for ever. Now it is asked for once: its problem
+  shows and it is left until the followed list changes or the app returns to
+  the foreground (`settled` in `LiveFiles.ts`; test "asks for a folder once").
+- Every network-details report from iOS counted as "online", and every
+  inactive → active (Control Centre, a system sheet) as "foreground". Each one
+  re-followed every file at once (81 times in that log). `deviceSignalsNative.ts`
+  now reports a change of state only: online after offline, foreground after
+  background.

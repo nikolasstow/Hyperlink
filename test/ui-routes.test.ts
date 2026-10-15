@@ -7,7 +7,7 @@ import {
   HttpApi,
   HttpApiEndpoint,
   HttpApiGroup,
-} from "effect/unstable/httpapi";
+} from "effect/http-api";
 import * as Route from "../src/ui/Route";
 
 describe("Route", () => {

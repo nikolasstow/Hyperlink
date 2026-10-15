@@ -15,7 +15,7 @@
  * @internal
  */
 import { Clock, Context, Deferred, Effect, Fiber, FileSystem, Layer, Option, Path, PubSub, Ref, Schema, Scope, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { resolveWithin } from "../fs";
 import { Workspaces } from "../workspaces";
 
@@ -50,13 +50,13 @@ const backlogLines = 2000;
 const logFolder = [".agent-console", "logs"];
 
 /** The request was refused (not allowed, or no such process). */
-export class ProcessRequestError extends Schema.TaggedErrorClass<ProcessRequestError>()("ProcessRequestError", {
+export class ProcessRequestError extends Schema.TaggedError<ProcessRequestError>()("ProcessRequestError", {
   reason: Schema.Literals(["CommandNotAllowed", "OutsideWorkspaces", "UnknownProcess"]),
   message: Schema.String,
 }) {}
 
 /** The process could not be started. */
-export class ProcessStartError extends Schema.TaggedErrorClass<ProcessStartError>()("ProcessStartError", {
+export class ProcessStartError extends Schema.TaggedError<ProcessStartError>()("ProcessStartError", {
   message: Schema.String,
 }) {}
 

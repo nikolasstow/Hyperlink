@@ -1,6 +1,6 @@
 import { Duration, Effect, Layer, Option, Schema, Stream } from "effect";
-import { FetchHttpClient, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { Daemon, HistoryStore, Lifecycle, WorkPool } from "../src";
@@ -63,7 +63,7 @@ const withQueueServer = <A, E>(
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((s) => s.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     return yield* use.pipe(
       Effect.provide(
         Hyperlink.client(RemoteJobs).pipe(Layer.provide(httpProtocol(port))),
@@ -89,7 +89,7 @@ const withDaemonServer = <A, E>(
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((s) => s.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     return yield* use.pipe(
       Effect.provide(
         Hyperlink.client(RemoteSweeper).pipe(

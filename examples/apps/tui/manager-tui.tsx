@@ -11,7 +11,7 @@
 
 import { render } from "ink";
 import * as React from "react";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { services, servicesLayer } from "../cli/manager-services";
 import { make } from "../../../src/tui";
 

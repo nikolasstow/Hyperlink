@@ -2,7 +2,7 @@
  * Licenses the reflect-built Spec cast in `Gate.HttpApiClient` — Client locals + metrics nest.
  */
 import { Schema } from "effect";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import * as Gate from "../src/Gate";
 import * as Hyperlink from "../src/Hyperlink";
 

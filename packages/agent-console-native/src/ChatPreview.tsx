@@ -16,9 +16,8 @@ import { StyleSheet, Text, View } from "react-native";
 import { CollapsiblePartsProvider } from "./CollapsibleParts";
 import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
-import { chatMessageOfV1 } from "./chat/fromV1";
+import type { ChatMessage } from "./chat/model";
 import { MessageBubble } from "./MessageBubble";
-import type { Transcript } from "./useSessionStream";
 import { type TextColors, useThemedStyles } from "./theme";
 
 /** Trailing messages to mount — bounded so a long history stays cheap; the
@@ -26,24 +25,23 @@ import { type TextColors, useThemedStyles } from "./theme";
 const TAIL = 12;
 
 export const ChatPreview = (props: {
-  readonly transcript: Transcript | undefined;
+  /** The session's newest messages, as the device keeps them (Conversations). */
+  readonly messages: ReadonlyArray<ChatMessage> | undefined;
   readonly width: number;
   readonly height: number;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
-  const order = props.transcript?.order ?? [];
-  const tail = order.slice(-TAIL);
+  const tail = (props.messages ?? []).slice(-TAIL);
 
   return (
     <View style={[styles.card, { width: props.width, height: props.height }]}>
       {tail.length === 0 ? (
-        <Text style={styles.empty}>{props.transcript === undefined ? "Loading preview…" : "No messages yet."}</Text>
+        <Text style={styles.empty}>{props.messages === undefined ? "Loading preview…" : "No messages yet."}</Text>
       ) : (
         <CollapsiblePartsProvider newestID={undefined}>
-          {tail.map((id) => {
-            const message = props.transcript?.messages.get(id);
-            return message === undefined ? null : <MessageBubble key={id} message={chatMessageOfV1(message)} noMenu />;
-          })}
+          {tail.map((message) => (
+            <MessageBubble key={message.id} message={message} noMenu />
+          ))}
         </CollapsiblePartsProvider>
       )}
     </View>

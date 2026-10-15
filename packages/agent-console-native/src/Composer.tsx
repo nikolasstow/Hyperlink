@@ -31,19 +31,18 @@
  *
  * @internal
  */
-import { useRoute } from "@react-navigation/native";
+import { useIsFocused, useRoute } from "@react-navigation/native";
 import * as React from "react";
 import { Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { useAppContext } from "./AppContext";
 import { useAgentButtonVisible } from "./agentButtonSettings";
 import { type BarGeometry, INPUT_LINE_HEIGHT, INPUT_PADDING_VERTICAL, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT, setBarOpen, setInputHeight, useBarGeometry } from "./barGeometry";
 import { type BarTopSection, BottomBar } from "./BottomBar";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import type { DubzContext } from "./dubzSuggestions";
-import { findModel, getDefaultModel, type ModelOption, refreshModels, reloadModels, useModels } from "./models";
+import { findModel, getDefaultModel, type ModelOption, reloadModels, useModels } from "./models";
 import { ModelPicker, ModelWindow } from "./ModelPicker";
 import type { CloseReason } from "./BarWindow";
 import { recordModelUse } from "./modelUsage";
@@ -81,13 +80,12 @@ export const Composer = (props: {
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { client, address } = useAppContext();
   const routeKey = useRoute().key;
   const inputRef = React.useRef<TextInput>(null);
   const [text, setText] = React.useState("");
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [focused, setFocused] = React.useState(false);
-  const models = useModels(client, props.directory);
+  const models = useModels(props.directory);
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
   // Held expanded while it is a page sliding (away to Dubz, or back), when its
   // input is not the focused one.
@@ -127,28 +125,34 @@ export const Composer = (props: {
       cancelled = true;
     };
   }, []);
+  // Only a model the server offers is ever chosen (one it does not have fails
+  // the turn): the choice is checked against the list whenever the list
+  // changes, falling back to the conversation's model, the last one used,
+  // the server's default, then the first.
+  const seedProviderID = props.seedModel?.providerID;
+  const seedModelID = props.seedModel?.modelID;
+  const directory = props.directory;
   React.useEffect(() => {
-    if (selectedModel !== undefined || models.length === 0 || lastModel === null) return;
-    const fromSeed =
-      props.seedModel !== undefined
-        ? findModel(models, props.seedModel.providerID, props.seedModel.modelID) ?? props.seedModel
-        : undefined;
-    const fromLast = lastModel !== undefined ? findModel(models, lastModel.providerID, lastModel.modelID) : undefined;
-    setSelectedModel(fromSeed ?? fromLast ?? getDefaultModel(client, props.directory) ?? models[0]);
-  }, [models, lastModel]); // eslint-disable-line react-hooks/exhaustive-deps -- seed applied in the effect below
+    if (models.length === 0 || lastModel === null) return;
+    const offered = (pick: { readonly providerID: string; readonly modelID: string } | undefined): ModelOption | undefined =>
+      pick === undefined ? undefined : findModel(models, pick.providerID, pick.modelID);
+    const seed = seedProviderID === undefined || seedModelID === undefined ? undefined : { providerID: seedProviderID, modelID: seedModelID };
+    setSelectedModel((current) => offered(current) ?? offered(seed) ?? offered(lastModel) ?? getDefaultModel(directory) ?? models[0]);
+  }, [models, lastModel, seedProviderID, seedModelID, directory]);
 
+  // The conversation's model, when it changes and the server offers it.
   React.useEffect(() => {
-    if (props.seedModel === undefined || models.length === 0) return;
-    const match = findModel(models, props.seedModel.providerID, props.seedModel.modelID);
-    setSelectedModel(match ?? props.seedModel);
-  }, [props.seedModel?.providerID, props.seedModel?.modelID, models]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (seedProviderID === undefined || seedModelID === undefined) return;
+    const match = findModel(models, seedProviderID, seedModelID);
+    if (match !== undefined) setSelectedModel(match);
+  }, [seedProviderID, seedModelID, models]);
 
   // Whether the message had the keyboard when the model window opened: leaving
   // the window puts it back as it was.
   const refocusAfterModels = React.useRef(false);
   const openModels = (): void => {
     refocusAfterModels.current = inputRef.current?.isFocused() === true;
-    void refreshModels(client, props.directory);
+    // The list is already loaded (at open and on return); the tap only shows it.
     setModelsOpen(true);
   };
   const closeModels = React.useCallback((reason: CloseReason): void => {
@@ -175,8 +179,7 @@ export const Composer = (props: {
     },
     [pickModel, closeModels],
   );
-  const directory = props.directory;
-  const refreshCatalog = React.useCallback(() => reloadModels(client, address, directory), [client, address, directory]);
+  const refreshCatalog = React.useCallback(() => reloadModels(directory), [directory]);
 
   // The input sizes itself to its text (one line to MAX_INPUT_HEIGHT, then it
   // scrolls); its section follows, animated, by the height Yoga gave it. Not
@@ -310,6 +313,16 @@ export const Composer = (props: {
   const onBlur = (): void => {
     setFocused(false);
   };
+
+  // Its page left (a send opened the chat, a tap opened another page): the
+  // input lets go and the bar collapses, so coming back finds it closed
+  // unless it holds unsent text.
+  const pageFocused = useIsFocused();
+  React.useEffect(() => {
+    if (pageFocused) return;
+    inputRef.current?.blur();
+    setFocused(false);
+  }, [pageFocused]);
 
   // One send at a time: the text stays until it is on its way.
   const sending = React.useRef(false);

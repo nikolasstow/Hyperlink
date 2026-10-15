@@ -9,6 +9,9 @@ import { startSessionBackgrounds } from "./src/sessions/useSessionBackground";
 import { startHomeLayout } from "./src/home/useHomeLayout";
 import { startKeptThemes } from "./src/useCodeTheme";
 import { startCodeFonts } from "./src/fonts/useCodeFonts";
+import { startFileScrolls } from "./src/files/useFileScrolls";
+import { startServerAuth } from "./src/auth/useServerAuth";
+import { startModelCatalog } from "./src/models/useModelCatalog";
 import { startBarWindow } from "./src/dubz/useBarWindow";
 import { startFileNav } from "./src/files/useFileNav";
 import { startKeptNav } from "./src/navigation/useKeptNav";
@@ -18,17 +21,9 @@ import { loadDirtyEdits } from "./src/files/fileEdits";
 import { loadKept } from "./src/files/fileKeep";
 import { startOutbox } from "./src/outbox/useOutbox";
 
-// The OpenCode SDK's SSE helper (client.event.subscribe, used by
-// useSessionStream.ts for live chat updates) calls the bare `fetch`
-// identifier directly rather than the SDK client's injectable `fetch`
-// config — confirmed by reading its generated source
-// (@opencode-ai/sdk/dist/gen/core/serverSentEvents.gen.js). RN's default
-// fetch can't expose a streamable response body, so without this override
-// the "live" stream only ever resolves once fully buffered — which reads
-// as "nothing updates until you leave and reopen the session" (a fresh
-// `session.messages` history fetch, which does go through the client's
-// own request path and picks up whatever finished in the background).
-// Must run before any module reaches for `fetch`, hence first line here.
+// Every bare `fetch` in the app is expo/fetch (it can stream a response
+// body; React Native's own reads it whole). Must run before any module
+// reaches for `fetch`, hence first here.
 globalThis.fetch = expoFetch;
 
 // The outbox resumes what was queued (and defines its background task, which
@@ -42,6 +37,9 @@ startSessionBackgrounds();
 startHomeLayout();
 startKeptThemes();
 startCodeFonts();
+startFileScrolls();
+startServerAuth();
+startModelCatalog();
 startBarWindow();
 startFileNav();
 startKeptNav();

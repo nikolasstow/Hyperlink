@@ -37,10 +37,16 @@ const Tool = Schema.Struct({
   metadata: Schema.optional(Schema.Unknown),
 });
 
+const Failure = Schema.Struct({
+  kind: Schema.Literal("error"),
+  id: Schema.String,
+  text: Schema.String,
+});
+
 const Message = Schema.Struct({
   id: Schema.String,
   role: Schema.Literals(["user", "assistant"]),
-  parts: Schema.Array(Schema.Union([Text, Reasoning, Tool])),
+  parts: Schema.Array(Schema.Union([Text, Reasoning, Tool, Failure])),
   model: Schema.optional(
     Schema.Struct({
       providerID: Schema.String,
@@ -57,7 +63,6 @@ const Message = Schema.Struct({
 });
 
 export const Conversation = Schema.Struct({
-  protocol: Schema.Literals(["v1", "v2"]),
   /** When the server last changed the session, as of these messages (ms). */
   updated: Schema.Number,
   /** Its title, for the chat's header from the first frame. */

@@ -4,7 +4,7 @@
  * @internal
  */
 import { Effect, Stream } from "effect";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 import type { NodeBundle, NodeRef } from "./data";
 import {
   bumpLogIdFrom,

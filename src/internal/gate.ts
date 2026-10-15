@@ -32,11 +32,11 @@ import {
   layer as rateLimiterLayer,
   layerStoreMemory,
   make as makeRateLimiter,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import type {
   ConsumeResult,
   RateLimiter as EffectRateLimiter,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 import {
   builtInGateStoreContract,
   type GateStateChangeReason,

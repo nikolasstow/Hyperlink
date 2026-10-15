@@ -1,6 +1,6 @@
 import { Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -49,7 +49,7 @@ it("default is identical REMOTE — same value, no wire round-trip", () =>
 
       yield* Effect.gen(function* () {
         const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-        const port = addr._tag === "TcpAddress" ? addr.port : 0;
+        const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
         const base = `http://127.0.0.1:${port}`;
 
         yield* Effect.gen(function* () {
@@ -196,7 +196,7 @@ it("client still sees Tag-baked default when server layer overrode locally", () 
 
       yield* Effect.gen(function* () {
         const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-        const port = addr._tag === "TcpAddress" ? addr.port : 0;
+        const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
         const base = `http://127.0.0.1:${port}`;
 
         yield* Effect.gen(function* () {
@@ -246,7 +246,7 @@ it("defaults bag is on the REMOTE client too", () =>
 
       yield* Effect.gen(function* () {
         const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-        const port = addr._tag === "TcpAddress" ? addr.port : 0;
+        const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
         const base = `http://127.0.0.1:${port}`;
 
         yield* Effect.gen(function* () {

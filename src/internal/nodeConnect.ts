@@ -6,7 +6,7 @@
  * @internal
  */
 import { Context, Effect, Layer, Stream } from "effect"
-import { RpcClient } from "effect/unstable/rpc"
+import { RpcClient } from "effect/rpc"
 import type {
   AddressedNode,
   AnyNode,

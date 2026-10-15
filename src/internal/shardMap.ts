@@ -8,6 +8,7 @@
  * @internal
  */
 import { Hash, Schema } from "effect";
+import { unknownJsonString } from "./json";
 import {
   keyOfSym,
   keySchemaSym,
@@ -65,5 +66,5 @@ export const keyWire = (key: unknown): string => {
   ) {
     return String(key);
   }
-  return Schema.encodeSync(Schema.UnknownFromJsonString)(key);
+  return Schema.encodeSync(unknownJsonString)(key);
 };

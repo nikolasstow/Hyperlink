@@ -9,26 +9,26 @@
  * the app rebases and writes again. So no write ever lands over a change its
  * writer has not seen. Protocol: `file-sync/FileSync`.
  *
- * Who made a disk change comes from opencode's event stream: an edit/write
- * tool call running on the file, or a `file.edited` just before. Anything else
- * is `External`.
+ * Who made a disk change comes from opencode's (v2) event stream: a tool call
+ * on the file, running or just ended. Anything else is `External`.
  *
  * Followed files are kept (text, version, watcher) while anyone follows them,
  * and a short while after.
  *
  * @internal
  */
-import { Clock, Config, Context, Duration, Effect, FileSystem, Layer, Option, Path, PubSub, Random, RcMap, Ref, Schedule, Schema, Semaphore, Stream } from "effect";
-import { HttpClient } from "effect/unstable/http";
+import { Clock, Context, Duration, Effect, FileSystem, Layer, Option, Path, PubSub, Random, RcMap, Ref, Schedule, Schema, Semaphore, Stream } from "effect";
+import { Headers, HttpClient } from "effect/http";
 import { FileSync, TextChange } from "file-sync";
 import { FsError, MAX_READ_BYTES, resolveWithin } from "../fs";
+import { opencodePassword, opencodeUrl, withOpencodeAuth } from "../opencodeServer";
 
 /** Quiet time after a disk event before reading the file: one read for a burst
  * of writes (an agent's write, then its formatter's). */
 const SETTLE = Duration.millis(150);
 /** How long a followed file stays kept after its last follower leaves. */
 const KEEP_IDLE = Duration.seconds(30);
-/** A `file.edited` or finished tool call this recent names the writer. */
+/** A tool call on the file that ended this recently names the writer. */
 const AGENT_WINDOW_MS = 3_000;
 
 interface FileState {
@@ -72,30 +72,25 @@ const syncError = (error: FsError) =>
     path: error.path,
   });
 
-/** The `/global/event` lines the hub reads; the rest are skipped. */
-const opencodeEvent = Schema.Struct({
-  payload: Schema.Union([
-    Schema.Struct({
-      type: Schema.Literal("file.edited"),
-      properties: Schema.Struct({
-        file: Schema.String,
-      }),
+/** The `/api/event` events the hub reads (a tool call starting, and ending);
+ * the rest are skipped. */
+const opencodeEvent = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("session.tool.called"),
+    data: Schema.Struct({
+      sessionID: Schema.String,
+      id: Schema.String,
+      input: Schema.Record(Schema.String, Schema.Unknown),
     }),
-    Schema.Struct({
-      type: Schema.Literal("message.part.updated"),
-      properties: Schema.Struct({
-        part: Schema.Struct({
-          type: Schema.Literal("tool"),
-          sessionID: Schema.String,
-          state: Schema.Struct({
-            status: Schema.String,
-            input: Schema.Record(Schema.String, Schema.Unknown),
-          }),
-        }),
-      }),
+  }),
+  Schema.Struct({
+    type: Schema.Literals(["session.tool.success", "session.tool.failed"]),
+    data: Schema.Struct({
+      sessionID: Schema.String,
+      id: Schema.String,
     }),
-  ]),
-});
+  }),
+]);
 const decodeOpencodeEvent = Schema.decodeUnknownResult(Schema.fromJsonString(opencodeEvent));
 
 /** The file a tool call's input names, as opencode's tools spell it. */
@@ -111,7 +106,8 @@ const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const http = yield* HttpClient.HttpClient;
-  const opencodeUrl = yield* Config.string("AGENT_CONSOLE_OPENCODE_URL").pipe(Config.withDefault("http://127.0.0.1:4096"));
+  const opencode = yield* opencodeUrl;
+  const password = yield* opencodePassword;
   // Tells this run of the hub from the last, whose versions mean nothing now.
   const startedAt = yield* Clock.currentTimeMillis;
   const salt = yield* Random.nextInt;
@@ -119,8 +115,8 @@ const make = Effect.gen(function* () {
 
   /** Tool calls on files, by real path. */
   const toolMarks = yield* Ref.make<ReadonlyMap<string, ToolMark>>(new Map());
-  /** When opencode last said it edited a file, by real path. */
-  const editedMarks = yield* Ref.make<ReadonlyMap<string, number>>(new Map());
+  /** The file each running tool call is on, by call id. */
+  const toolFiles = yield* Ref.make<ReadonlyMap<string, string>>(new Map());
 
   const realPath = (file: string) => fs.realPath(file).pipe(Effect.orElseSucceed(() => path.resolve(file)));
 
@@ -128,13 +124,10 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const tools = yield* Ref.get(toolMarks);
-      const edited = yield* Ref.get(editedMarks);
       const tool = tools.get(file);
-      const toolWrote = tool !== undefined && (tool.running || now - tool.at < AGENT_WINDOW_MS);
-      const editedAt = edited.get(file);
-      if (toolWrote || (editedAt !== undefined && now - editedAt < AGENT_WINDOW_MS)) {
+      if (tool !== undefined && (tool.running || now - tool.at < AGENT_WINDOW_MS)) {
         return new FileSync.Agent({
-          sessionID: toolWrote ? tool.sessionID : undefined,
+          sessionID: tool.sessionID,
         });
       }
       return new FileSync.External({});
@@ -240,7 +233,7 @@ const make = Effect.gen(function* () {
     );
 
   /** opencode's events, for who wrote a file. Reconnects; never ends. */
-  const listen = http.get(`${opencodeUrl}/global/event`).pipe(
+  const listen = http.get(`${opencode}/api/event`, { headers: withOpencodeAuth(Headers.empty, password) }).pipe(
     Effect.map((response) => response.stream),
     Stream.unwrap,
     Stream.decodeText,
@@ -250,23 +243,23 @@ const make = Effect.gen(function* () {
     Stream.runForEach((event) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        const { payload } = event;
-        if (payload.type === "file.edited") {
-          const file = yield* realPath(payload.properties.file);
-          yield* Ref.update(editedMarks, (marks) => new Map(marks).set(file, now));
+        const { sessionID, id } = event.data;
+        if (event.type === "session.tool.called") {
+          const named = toolFile(event.data.input);
+          if (named === undefined) return;
+          const file = yield* realPath(named);
+          yield* Ref.update(toolFiles, (files) => new Map(files).set(id, file));
+          yield* Ref.update(toolMarks, (marks) => new Map(marks).set(file, { sessionID, running: true, at: now }));
           return;
         }
-        const { part } = payload.properties;
-        const named = toolFile(part.state.input);
-        if (named === undefined) return;
-        const file = yield* realPath(named);
-        yield* Ref.update(toolMarks, (marks) =>
-          new Map(marks).set(file, {
-            sessionID: part.sessionID,
-            running: part.state.status === "pending" || part.state.status === "running",
-            at: now,
-          }),
-        );
+        const file = (yield* Ref.get(toolFiles)).get(id);
+        if (file === undefined) return;
+        yield* Ref.update(toolFiles, (files) => {
+          const next = new Map(files);
+          next.delete(id);
+          return next;
+        });
+        yield* Ref.update(toolMarks, (marks) => new Map(marks).set(file, { sessionID, running: false, at: now }));
       }),
     ),
     Effect.tapError((error) => Effect.logWarning("file hub: opencode event stream dropped, reconnecting", error)),

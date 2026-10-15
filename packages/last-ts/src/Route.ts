@@ -38,7 +38,7 @@
 import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
-import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
+import type { HttpApi, HttpApiGroup } from "effect/http-api";
 import type { ReactNode } from "react";
 import type * as pageModule from "./Page";
 import * as pageMint from "./internal/pageMint";

@@ -20,11 +20,11 @@ import { colors } from "./colors";
 import { ROW_GUTTER } from "./layout";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTheme, useThemedStyles } from "./theme";
-import type { PendingPermission, PermissionReply } from "./sessionPermissions";
+import type { Permission } from "./opencode/schema/permission";
 
 export const PermissionPrompt = (props: {
-  readonly pending: PendingPermission;
-  readonly onReply: (reply: PermissionReply) => void;
+  readonly pending: Permission.Request;
+  readonly onReply: (reply: Permission.Reply) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const { pending } = props;

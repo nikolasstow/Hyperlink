@@ -31,7 +31,7 @@
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
 import { Effect, Layer, Ref, Schema } from "effect";
-import type { RpcClient } from "effect/unstable/rpc";
+import type { RpcClient } from "effect/rpc";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Node from "../../src/Node";

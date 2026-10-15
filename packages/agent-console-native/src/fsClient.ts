@@ -17,7 +17,8 @@
  * @internal
  */
 import { Data, Effect, Schema } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { authedFetch } from "./auth/serverTokens";
 
 export const FsEntry = Schema.Struct({
   name: Schema.String,
@@ -78,7 +79,7 @@ export const fsTree = (base: string, path: string, session: string | undefined):
       // No AbortSignal: RN's fetch handles it inconsistently and this request is
       // short-lived anyway.
       try: () =>
-        fetch(treeUrl(base), {
+        authedFetch(treeUrl(base), {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ path, session }),

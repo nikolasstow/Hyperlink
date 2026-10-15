@@ -18,7 +18,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { Cause, DateTime, HashMap, Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Lock, LockOpen, Maximize2, Pause, Play, Power, RotateCw, Square, Trash2 } from "lucide-react";
 import * as Group from "../Group";
 import {

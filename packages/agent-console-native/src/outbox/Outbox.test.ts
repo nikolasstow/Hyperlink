@@ -1,6 +1,6 @@
 import { Effect, Layer, Stream } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { KeyValueStore } from "effect/unstable/persistence";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { Opencode } from "../opencode/Opencode";
@@ -17,10 +17,8 @@ const directory = AbsolutePath.make("/work/repo");
 
 /** A fake opencode v2 server: sessions it made, prompts it admitted (in
  * order), and how it answers a given message text. */
-const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse" | "fail", sessions = new Set<string>(), busyChecks = 0) => {
+const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse" | "fail", sessions = new Set<string>()) => {
   const admitted: Array<string> = [];
-  // v1: the session reads busy for this many status checks, then idle.
-  const status = { checks: 0 };
   const attempts = new Map<string, number>();
   const json = (request: Parameters<typeof HttpClientResponse.fromWeb>[0], status: number, body: unknown) =>
     HttpClientResponse.fromWeb(request, new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
@@ -28,18 +26,7 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
     Effect.gen(function* () {
       const path = url.pathname;
       const body: unknown = request.body._tag === "Uint8Array" ? JSON.parse(new TextDecoder().decode(request.body.body)) : undefined;
-      if (path === "/api/health") return json(request, 200, { healthy: true });
-      if (path === "/session/status") {
-        status.checks += 1;
-        return json(request, 200, status.checks <= busyChecks ? Object.fromEntries([...sessions].map((id) => [id, { type: "busy" }])) : {});
-      }
-      const v1Prompt = /^\/session\/([^/]+)\/prompt_async$/.exec(path);
-      if (request.method === "POST" && v1Prompt !== null) {
-        const parts = typeof body === "object" && body !== null && "parts" in body && Array.isArray(body.parts) ? body.parts : [];
-        const first: unknown = parts[0];
-        admitted.push(typeof first === "object" && first !== null && "text" in first && typeof first.text === "string" ? `${first.text} after ${status.checks} checks` : "");
-        return HttpClientResponse.fromWeb(request, new Response(null, { status: 204 }));
-      }
+      if (path === "/api/info") return json(request, 200, { version: "test", pid: 1, urls: [], paths: { tmp: "/tmp" } });
       if (request.method === "POST" && path === "/api/session") {
         const id = typeof body === "object" && body !== null && "id" in body && typeof body.id === "string" ? body.id : "ses_unknown";
         sessions.add(id);
@@ -52,7 +39,7 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
         const sessionID = prompt[1] ?? "";
         if (!sessions.has(sessionID)) return json(request, 404, { _tag: "SessionNotFoundError", sessionID, message: "not found" });
         const payload = typeof body === "object" && body !== null ? body : {};
-        const text = "prompt" in payload && typeof payload.prompt === "object" && payload.prompt !== null && "text" in payload.prompt && typeof payload.prompt.text === "string" ? payload.prompt.text : "";
+        const text = "text" in payload && typeof payload.text === "string" ? payload.text : "";
         const attempt = (attempts.get(text) ?? 0) + 1;
         attempts.set(text, attempt);
         const outcome = answer(text, attempt);
@@ -60,12 +47,12 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
         if (outcome === "fail") return json(request, 500, { error: "boom" });
         admitted.push(text);
         const id = "id" in payload && typeof payload.id === "string" ? payload.id : "msg_unknown";
-        return json(request, 200, { data: { admittedSeq: admitted.length, id, sessionID, prompt: { text }, delivery: "queue", timeCreated: 1 } });
+        return json(request, 200, { data: { id, sessionID, time: { created: 1 }, type: "user", payload: { text }, delivery: "queue" } });
       }
       return json(request, 404, { error: `no route ${request.method} ${path}` });
     }),
   );
-  return { client, admitted, attempts, sessions, status };
+  return { client, admitted, attempts, sessions };
 };
 
 /** A device's storage that outlives one outbox (the app being killed and
@@ -98,26 +85,12 @@ const run = <A, E>(fake: ReturnType<typeof fakeServer>, program: Effect.Effect<A
   );
 
 const send = (outbox: Outbox["Service"], sessionID: SessionID, text: string, create: boolean) =>
-  outbox.send({ server, sessionID, protocol: "v2", directory, create: create ? {} : undefined, text, files: [], agent: Agent.ID.make("build") });
+  outbox.send({ server, sessionID, directory, create: create ? {} : undefined, text, files: [], agent: Agent.ID.make("build") });
 
 /** Waits until the outbox has nothing it can send (every lane empty or held). */
 const settled = (outbox: Outbox["Service"]) => outbox.drain.pipe(Effect.timeout("10 seconds"));
 
 describe("Outbox", () => {
-  it("holds a v1 message while its session runs a turn, then sends it", async () => {
-    const sessionID = SessionID.create();
-    const fake = fakeServer(() => "admit", new Set([sessionID]), 2);
-    await run(
-      fake,
-      Effect.gen(function* () {
-        const outbox = yield* Outbox;
-        yield* outbox.send({ server, sessionID, protocol: "v1", directory, text: "later", files: [], agent: Agent.ID.make("build") });
-        yield* settled(outbox);
-      }),
-    );
-    expect(fake.admitted).toEqual(["later after 3 checks"]);
-  }, 15_000);
-
   it("makes the session, then sends a lane's messages in order", async () => {
     const fake = fakeServer(() => "admit");
     await run(

@@ -1,7 +1,7 @@
 import { it, describe, expect } from "@effect/vitest"
 import { Effect, Ref } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
-import type { HttpClientError } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
+import type { HttpClientError } from "effect/http"
 import { HttpClientGate, Gate } from "../src"
 
 const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number>): HttpClient.HttpClient =>

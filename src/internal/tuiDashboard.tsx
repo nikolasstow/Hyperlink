@@ -5,7 +5,7 @@
 import { Box, Text } from "ink";
 import * as React from "react";
 import { Option, Layer } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import * as Group from "../Group";
 import * as Observe from "../Observe";
 import { RegistryProvider, useAtomValue } from "../ui/atom-react";

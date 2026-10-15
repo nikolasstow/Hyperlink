@@ -16,7 +16,7 @@
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer"
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import { Effect, Layer, Schema } from "effect"
-import { HttpServer } from "effect/unstable/http"
+import { HttpServer } from "effect/http"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 import * as LookupPolicy from "../../src/LookupPolicy"
@@ -33,7 +33,7 @@ const Server = Node.httpServer([
 
 const program = Effect.gen(function* () {
   const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address))
-  const port = address._tag === "TcpAddress" ? address.port : 0
+  const port = address._tag === "UnixPathAddress" ? 0 : address.port
   const url = `http://127.0.0.1:${port}/rpc`
   const node = Node.Service()("verify/Droplet", { url, kind: "Http" })
 

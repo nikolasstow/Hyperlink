@@ -22,8 +22,9 @@
  * Auth: `EXPO_TOKEN` if set, else the eas-cli login session in ~/.expo/state.json.
  */
 import { sign } from "node:crypto";
-import { Clock, Config, Data, Effect, Encoding, FileSystem, Option, Path, Schema } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
+import { Clock, Config, Data, Effect, FileSystem, Option, Path, Schema } from "effect";
+import { Base64Url } from "effect/encoding";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { runString } from "./command";
 
 // ── Errors ─────────────────────────────────────────────────────────────────────
@@ -111,13 +112,13 @@ const expoState = Schema.Struct({
 
 /** `EXPO_TOKEN` (robot / CI) if set, else the eas-cli login session. */
 const easAuthHeaders = Effect.gen(function* () {
-  const token = yield* Config.option(Config.string("EXPO_TOKEN"));
+  const token = yield* Config.option(Config.String("EXPO_TOKEN"));
   if (Option.isSome(token)) {
     return {
       authorization: `Bearer ${token.value}`,
     };
   }
-  const home = yield* Config.string("HOME");
+  const home = yield* Config.String("HOME");
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const state = yield* fs
@@ -226,7 +227,7 @@ interface AscKey {
   readonly keyP8: string;
 }
 
-const base64url = (value: unknown) => Encoding.encodeBase64Url(JSON.stringify(value));
+const base64url = (value: unknown) => Base64Url.encode(JSON.stringify(value));
 
 /** ES256 JWT for the App Store Connect API. Effect ships no signing primitive, so
  * node:crypto is isolated here. Minted per request (20-minute expiry). */
@@ -249,7 +250,7 @@ const ascJwt = (key: AscKey) =>
       ].join(".");
       return Effect.try({
         try: () =>
-          Encoding.encodeBase64Url(
+          Base64Url.encode(
             sign("sha256", new TextEncoder().encode(unsigned), {
               key: key.keyP8,
               dsaEncoding: "ieee-p1363",

@@ -2,7 +2,7 @@
  * `hyp file-router` — emit / check typed `paths.gen.ts` for the file router.
  */
 import { Effect } from "effect";
-import { Command, Flag } from "effect/unstable/cli";
+import { Command, Flag } from "effect/cli";
 import * as Path from "effect/Path";
 import {
   checkPaths,
@@ -10,12 +10,12 @@ import {
   nodeLayer,
 } from "../../src/internal/fileRouterPaths";
 
-const pagesFlag = Flag.string("pages").pipe(
+const pagesFlag = Flag.String("pages").pipe(
   Flag.withDescription("Pages directory to walk."),
   Flag.withDefault("src/pages"),
 );
 
-const outFlag = Flag.string("out").pipe(
+const outFlag = Flag.String("out").pipe(
   Flag.withDescription("Generated paths module."),
   Flag.withDefault("src/paths.gen.ts"),
 );

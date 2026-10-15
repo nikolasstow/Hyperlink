@@ -21,6 +21,7 @@ import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
+import { serverAddressOf } from "./opencode/serverAddress";
 import { colors } from "./colors";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, matchSession } from "./repoGrouping";
@@ -32,7 +33,7 @@ import { fetchArchive, toggleMute, unarchiveWithUndo, useArchivedSessions, useMu
 import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { SkeletonList } from "./Skeleton";
 import { relativeTime } from "./time";
-import { useSessionActivity } from "./useSessionActivity";
+import { useSessionWatch } from "./sessions/useSessionWatch";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Archived">;
@@ -53,10 +54,10 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { repo } = props.route.params;
-  const { client, address, server: apiBase } = useAppContext();
+  const { address, server: apiBase } = useAppContext();
   const headerHeight = useHeaderHeight();
   const isFocused = useIsFocused();
-  const { busy } = useSessionActivity(client, isFocused);
+  const { busy } = useSessionWatch(serverAddressOf(address), isFocused);
   const [load, setLoad] = React.useState<Load>({ kind: "loading" });
   const [refreshing, setRefreshing] = React.useState(false);
   // Still archived now: one unarchived here leaves the list at once.
@@ -142,7 +143,6 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
             const match = matchSession(item.directory, load.scanned);
             return (
               <SessionCard
-                client={client}
                 sessionId={item.id}
                 updatedAt={item.time.updated}
                 title={item.title}
@@ -151,12 +151,11 @@ export const ArchivedScreen = (props: Props): React.ReactElement => {
                 meta={`Archived ${relativeTime(load.archivedAt[item.id] ?? item.time.updated)}`}
                 running={busy.has(item.id)}
                 unread={false}
-                previewEnabled={isFocused}
                 archived
                 onOpen={() => props.navigation.navigate("Chat", { sessionID: item.id })}
-                onRename={() => promptRenameSession(client, item.id, item.title, () => void fetchAll())}
-                onStop={() => abortSession(client, item.id, () => void fetchAll())}
-                onDelete={() => confirmDeleteSession(client, item.id, item.title, () => void fetchAll())}
+                onRename={() => promptRenameSession(serverAddressOf(address), item.id, item.title, () => void fetchAll())}
+                onStop={() => abortSession(serverAddressOf(address), item.id, () => void fetchAll())}
+                onDelete={() => confirmDeleteSession(serverAddressOf(address), item.id, item.title, () => void fetchAll())}
                 onArchive={() => unarchiveWithUndo(apiBase, item.id)}
                 muted={mutedSet.has(item.id)}
                 onMute={() => toggleMute(apiBase, item.id)}

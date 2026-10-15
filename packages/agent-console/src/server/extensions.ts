@@ -71,7 +71,7 @@ export interface ExtensionManifest {
 }
 
 /** Schema-backed so it doubles as the HttpApi error channel. */
-export class ExtensionError extends Schema.TaggedErrorClass<ExtensionError>()("ExtensionError", {
+export class ExtensionError extends Schema.TaggedError<ExtensionError>()("ExtensionError", {
   reason: Schema.Literals(["download", "unzip", "manifest", "io", "not-found"]),
   detail: Schema.optional(Schema.String),
 }) {}

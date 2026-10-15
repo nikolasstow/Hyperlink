@@ -25,6 +25,7 @@ import { useAppContext } from "./AppContext";
 import { colors } from "./colors";
 import { SystemIcon } from "./SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
+import { authedFetch } from "./auth/serverTokens";
 
 declare const require: (moduleName: string) => unknown;
 
@@ -108,7 +109,7 @@ export const HtmlToolBlock = (props: { readonly payload: HtmlPayload }): React.R
     setOpening(true);
     setServeError(undefined);
     try {
-      const response = await fetch(`${backend}/preview`, {
+      const response = await authedFetch(`${backend}/preview`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ html: payload.html }),

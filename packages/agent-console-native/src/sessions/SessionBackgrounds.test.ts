@@ -1,5 +1,5 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
 import { SessionBackgrounds } from "./SessionBackgrounds";
 

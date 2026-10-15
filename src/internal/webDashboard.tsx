@@ -35,7 +35,7 @@ import * as WorkPoolView from "../ui/WorkPoolView";
 import { type WidgetRegistry } from "../ui/widgetRegistry";
 import { RegistryProvider, useAtomValue } from "../ui/atom-react";
 import { WidgetsProvider } from "../ui/widgetsContext";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import * as Observe from "../Observe";
 import { RuntimeProvider } from "../web/runtime";
 import { ViewTransitionProvider } from "../web/useViewTransition";

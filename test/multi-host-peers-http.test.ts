@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
@@ -45,7 +45,7 @@ it("serves a peers-gathering combined field over http; a client gets the fleet t
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       const transport = Hyperlink.http(DbNode, { url: `http://127.0.0.1:${port}/rpc` });
       yield* Effect.gen(function* () {
         const db = yield* Database;

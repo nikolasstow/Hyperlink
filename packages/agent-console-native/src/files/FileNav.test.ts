@@ -1,5 +1,5 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
 import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, rerooted, tabEntry, tabRerooted } from "./FileNav";
 

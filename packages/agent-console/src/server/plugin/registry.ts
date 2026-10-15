@@ -14,7 +14,7 @@ import { manifestFile, pluginManifest } from "./manifest";
 /** The plugins that ship with the backend, as folders under ../plugins. */
 const builtinPlugins: ReadonlyArray<string> = ["npm"];
 
-export class PluginRegistryError extends Schema.TaggedErrorClass<PluginRegistryError>()("PluginRegistryError", {
+export class PluginRegistryError extends Schema.TaggedError<PluginRegistryError>()("PluginRegistryError", {
   message: Schema.String,
 }) {}
 

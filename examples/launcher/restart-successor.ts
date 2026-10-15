@@ -22,7 +22,7 @@
 // ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Clock, Context, Effect, Layer, Schema } from "effect";
-import { ChildProcess } from "effect/unstable/process";
+import { ChildProcess } from "effect/process";
 import * as Directory from "../../src/Directory";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Launcher from "../../src/Launcher";

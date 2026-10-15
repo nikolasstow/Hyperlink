@@ -13,7 +13,7 @@ import {
   RateLimiter,
   layer as rateLimiterLayer,
   layerStoreRedis as rateLimiterStoreRedis,
-} from "effect/unstable/persistence/RateLimiter";
+} from "effect/persistence/RateLimiter";
 
 const arg = (name: string): string | undefined => {
   const prefix = `--${name}=`;
@@ -36,7 +36,7 @@ const port = Number(arg("port") ?? "6379");
 const dbRaw = arg("db");
 const db = dbRaw !== undefined && dbRaw.length > 0 ? Number(dbRaw) : undefined;
 
-const redis = NodeRedis.layer({ host, port, db });
+const redis = NodeRedis.layer({ socket: { host, port }, ...(db === undefined ? {} : { database: db }) });
 const store = Layer.provide(rateLimiterStoreRedis({ prefix }), redis);
 const live = Layer.provide(rateLimiterLayer, store);
 

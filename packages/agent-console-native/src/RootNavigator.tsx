@@ -15,7 +15,11 @@ import { AppState, Linking, useColorScheme } from "react-native";
 import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
 import { PerfMonitor, setPerfScreen } from "./perfMonitor";
-import { AGENT, normalizeServerAddress } from "./client";
+import { AGENT } from "./agentConstants";
+import { normalizeServerAddress, serverAddressOf } from "./opencode/serverAddress";
+import { Agent } from "./opencode/schema/agent";
+import { SessionID } from "./opencode/schema/session-id";
+import { sendMessage } from "./outbox/useOutbox";
 import { useCustomBackground, useScreenBackground, useTheme } from "./theme";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
@@ -50,12 +54,11 @@ import { serverById } from "./servers";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
 import { RepoScreen } from "./RepoScreen";
 import { SessionListScreen } from "./SessionListScreen";
+import { authedFetch } from "./auth/serverTokens";
 
 export type RootStackParamList = {
   Home: undefined;
-  /** `protocol`: known when the app just made the session (v2); found out
-   * otherwise (sessions/protocol.ts). */
-  Chat: { sessionID: string; protocol?: "v1" | "v2" };
+  Chat: { sessionID: string };
   SessionSettings: { sessionID: string };
   Settings: undefined;
   Extensions: undefined;
@@ -152,7 +155,7 @@ export const RootNavigator = (): React.ReactElement => {
   const navigationTheme =
     customBackground === undefined ? baseTheme : { ...baseTheme, colors: { ...baseTheme.colors, background: customBackground } };
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
-  const { client, address, server } = useAppContext();
+  const { address, server } = useAppContext();
   // The pages open when the app was last used (read back before the app
   // shows): it opens on them again, after being closed.
   const [initialState] = React.useState(() => {
@@ -195,7 +198,7 @@ export const RootNavigator = (): React.ReactElement => {
     let unsubscribe = (): void => {};
     void getBackendAddress(server).then((backend) => {
       unsubscribe = subscribeActivityPushTokens((sessionID, token) => {
-        void fetch(`${backend}/push/activity`, {
+        void authedFetch(`${backend}/push/activity`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ sessionID, token }),
@@ -221,9 +224,14 @@ export const RootNavigator = (): React.ReactElement => {
       // need to open the app. A plain tap falls through to opening the chat.
       const reply = replyFromResponse(response);
       if (reply !== undefined) {
-        void client.session
-          .promptAsync({ path: { id: reply.sessionID }, body: { agent: AGENT, parts: [{ type: "text", text: reply.text }] } })
-          .catch(() => undefined);
+        // Through the outbox: sent when the server can take it, in order.
+        sendMessage({
+          server: serverAddressOf(address),
+          sessionID: SessionID.make(reply.sessionID),
+          text: reply.text,
+          files: [],
+          agent: Agent.ID.make(AGENT),
+        }).catch((error: unknown) => console.error("[notifications] queueing the reply failed", error));
         return;
       }
       const payload = payloadOfResponse(response);
@@ -252,7 +260,7 @@ export const RootNavigator = (): React.ReactElement => {
       cancelled = true;
       subscription.remove();
     };
-  }, [navigationRef, client]);
+  }, [navigationRef, address]);
 
   return (
     <NavigationContainer

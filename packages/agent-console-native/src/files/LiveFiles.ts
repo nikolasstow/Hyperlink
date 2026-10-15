@@ -19,10 +19,12 @@
  *
  * @internal
  */
-import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, PubSub, Random, RcMap, Ref, Schedule, Semaphore, Stream, SubscriptionRef } from "effect";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import { Socket } from "effect/unstable/socket";
+import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, PubSub, Random, RcMap, Ref, Schedule, Schema, Semaphore, Stream, SubscriptionRef } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
+import { Socket } from "effect/socket";
 import { FileSync } from "file-sync";
+import { tokenFor } from "../auth/serverTokens";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
 import { getFileEdit, setFileEdit, clearFileEdit } from "./fileEdits";
@@ -54,6 +56,14 @@ const liveLog = (...args: ReadonlyArray<unknown>): void => {
   if (LIVE_LOG) console.log(...args);
 };
 
+/** Whether following failed for a reason trying again in a moment will not
+ * change: the path is a folder, too large, or not there. Such a path is left
+ * (its problem shown) until the list of followed files changes or the app
+ * comes back to the foreground; else a folder in a tab was asked for every
+ * 2 s, for ever. */
+const settled = (error: { readonly _tag: string }): boolean =>
+  error instanceof FileSync.FileSyncError && (error.reason === "NotAFile" || error.reason === "TooLarge" || error.reason === "NotFound");
+
 /** Raised to follow a file again: the hub's changes skipped a version. */
 class OutOfStep extends Data.TaggedError("OutOfStep")<{
   readonly path: string;
@@ -65,13 +75,37 @@ const apiOfKey = (key: string): string => key.slice(key.indexOf("#") + 1);
 
 const socketUrl = (api: string): string => `${api.replace(/^http/, "ws")}${FileSync.path}`;
 
+/** A WebSocket ticket from a paired server (docs/handoffs/app-auth.md). */
+const WebSocketTicket = Schema.Struct({
+  ticket: Schema.String,
+});
+
+/** The socket's address for each connection: with a fresh one-use ticket when
+ * the server is paired (a WebSocket from React Native cannot carry the token
+ * header), else as it is. A ticket that cannot be had is logged, and the
+ * connection goes without one (the server then refuses it, and it is tried
+ * again). */
+const socketAddress = (http: HttpClient.HttpClient, api: string): Effect.Effect<string> =>
+  tokenFor(api) === undefined
+    ? Effect.succeed(socketUrl(api))
+    : http.post(`${api}/auth/ticket`).pipe(
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(WebSocketTicket)),
+        Effect.map(({ ticket }) => `${socketUrl(api)}?${TICKET_PARAM}=${encodeURIComponent(ticket)}`),
+        Effect.catch((error) => Effect.logWarning(`live files: no WebSocket ticket from ${api}`, error).pipe(Effect.as(socketUrl(api)))),
+      );
+
+/** The query parameter a WebSocket ticket travels in (the server's `TICKET_PARAM`). */
+const TICKET_PARAM = "ticket";
+
 const connect = (api: string) =>
   Effect.gen(function* () {
     // DIAG(live-files): temporary.
     yield* Effect.sync(() => liveLog("[live] connect", socketUrl(api)));
+    const http = yield* HttpClient.HttpClient;
     const protocol = yield* Layer.build(
       RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
-        Layer.provide(Socket.layerWebSocket(socketUrl(api))),
+        Layer.provide(Socket.layerWebSocket(socketAddress(http, api))),
         Layer.provide(Socket.layerWebSocketConstructorGlobal),
         Layer.provide(RpcSerialization.layerJson),
       ),
@@ -107,11 +141,6 @@ const make = Effect.gen(function* () {
     Ref.get(generation).pipe(Effect.flatMap((current) => RcMap.get(connections, connectionKey(api, current))));
   const follows = yield* FiberMap.make<string>();
   const followed = yield* Ref.make<ReadonlySet<string>>(new Set());
-  // Paths the hub PERMANENTLY rejects (a directory → NotAFile, or TooLarge):
-  // skip re-following them, so one dead path (e.g. a folder in the follow set)
-  // does not stall the thread ~1.3s on every foreground/online re-follow. Not
-  // NotFound — an agent may create that file, so it keeps being followed.
-  const giveUp = yield* Ref.make<ReadonlySet<string>>(new Set());
   const device = yield* DeviceSignals;
 
   const fileOf = (path: string) => SubscriptionRef.get(files).pipe(Effect.map((map) => HashMap.get(map, path)));
@@ -245,24 +274,18 @@ const make = Effect.gen(function* () {
       Effect.tapError((error) => Effect.sync(() => liveLog("[live] follow failed", path, String(error)))),
       Effect.tapError((error) =>
         SubscriptionRef.update(problems, HashMap.set(path, error._tag === "FileSyncError" ? error.reason : error._tag === "OutOfStep" ? "Io" : "Unreachable")).pipe(
-          Effect.andThen(Effect.logWarning(`live files: following ${path} stopped; following again`, error)),
+          Effect.andThen(
+            settled(error)
+              ? Effect.logWarning(`live files: ${path} cannot be followed; left until it is listed again or the app returns`, error)
+              : Effect.logWarning(`live files: following ${path} stopped; following again`, error),
+          ),
         ),
       ),
-      // A PERMANENT reject (a directory → NotAFile, or TooLarge): give up on the
-      // path so it is not re-followed and re-stalled on every foreground/online.
-      Effect.tapError((error) =>
-        error._tag === "FileSyncError" && (error.reason === "NotAFile" || error.reason === "TooLarge")
-          ? Ref.update(giveUp, (set) => new Set(set).add(path))
-          : Effect.void,
-      ),
-      // Retry only TRANSIENT failures (a dropped connection, an OutOfStep that
-      // resyncs). A FileSyncError is the hub permanently rejecting the path
-      // (e.g. following a directory or a too-large/absent file); retrying it
-      // every 2s forever is a storm that stalls JS app-wide. Stop on it — the
-      // path is re-followed on the next foreground/online or access instead.
-      Effect.retry({ schedule: REFOLLOW, while: (error) => error._tag !== "FileSyncError" }),
+      Effect.retry({ schedule: REFOLLOW, while: (error) => !settled(error) }),
       // The hub ended the stream (it should not): follow again.
       Effect.repeat(REFOLLOW),
+      // Its problem is shown; the error is kept there, not here.
+      Effect.ignore,
     );
 
   // Back in the foreground (or online), follow every file afresh: iOS pauses a
@@ -276,10 +299,8 @@ const make = Effect.gen(function* () {
         const api = yield* Ref.get(server);
         if (api === undefined) return;
         const paths = yield* Ref.get(followed);
-        const skip = yield* Ref.get(giveUp);
         yield* Ref.update(generation, (current) => current + 1);
         for (const path of paths) {
-          if (skip.has(path)) continue;
           yield* FiberMap.run(follows, path, followOn(api, path));
         }
       }),
@@ -298,15 +319,10 @@ const make = Effect.gen(function* () {
         const previous = yield* Ref.getAndSet(server, api);
         const running = yield* Ref.getAndSet(followed, paths);
         if (previous !== api) yield* FiberMap.clear(follows);
-        // Forget give-ups for paths no longer followed (a closed tab) — a new
-        // server starts over; otherwise a permanently-bad path stays skipped.
-        yield* Ref.update(giveUp, (set) => (previous !== api ? new Set() : new Set([...set].filter((p) => paths.has(p)))));
-        const skip = previous !== api ? new Set<string>() : yield* Ref.get(giveUp);
         for (const path of running) {
           if (!paths.has(path)) yield* FiberMap.remove(follows, path);
         }
         for (const path of paths) {
-          if (skip.has(path)) continue;
           yield* FiberMap.run(follows, path, followOn(api, path), { onlyIfMissing: true });
         }
       }),

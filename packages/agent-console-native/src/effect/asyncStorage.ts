@@ -9,7 +9,7 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Effect, Layer } from "effect";
-import { KeyValueStore } from "effect/unstable/persistence";
+import * as KeyValueStore from "effect/persistence/KeyValueStore";
 
 const attempt = <A>(method: string, key: string | undefined, run: () => Promise<A>) =>
   Effect.tryPromise({

@@ -1,8 +1,8 @@
 import { Duration, Effect, Fiber, Layer, Schema, Scope, Stream } from "effect";
-import { HttpServer } from "effect/unstable/http";
-import { FetchHttpClient } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import * as Socket from "effect/unstable/socket/Socket";
+import { HttpServer } from "effect/http";
+import { FetchHttpClient } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
+import * as Socket from "effect/socket/Socket";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { WorkPool } from "../src";
@@ -51,7 +51,7 @@ const withServer = <A, E>(
 ) =>
   Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     return yield* use(port).pipe(
       Effect.provide(Hyperlink.client(WsQueue).pipe(Layer.provide(clientLayer(port)))),
       Effect.scoped,

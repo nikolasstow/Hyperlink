@@ -6,8 +6,8 @@ import * as Context from "effect/Context";
 import { dual } from "effect/Function";
 import * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
-import type * as HttpMethod from "effect/unstable/http/HttpMethod";
-import { HttpApiEndpoint } from "effect/unstable/httpapi";
+import type * as HttpMethod from "effect/http/HttpMethod";
+import { HttpApiEndpoint } from "effect/http-api";
 import * as pageSuccess from "./pageSuccess";
 import type { RequestOptions } from "./routeRequest";
 

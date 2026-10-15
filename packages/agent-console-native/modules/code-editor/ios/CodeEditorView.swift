@@ -43,15 +43,22 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     private let tokenStore = ShikiTokenStore()
     private let sticky = StickyScrollOverlay()
     let onTextChange = EventDispatcher()
-    /// Reports native sticky-scroll decisions to JS so they surface in Metro logs
-    /// (NSLog only reaches the device console, which we can't read remotely).
-    let onStickyDebug = EventDispatcher()
     /// A choice on a conflict's buttons: `{index, keep: "Mine" | "Theirs"}`.
     let onConflictAction = EventDispatcher()
     /// Open session on an agent change's popover: `{sessionID}`.
     let onOpenSession = EventDispatcher()
     /// The line you are at, when it changes: `{line}` (0-based).
     let onLineChange = EventDispatcher()
+    /// Where the code came to rest after a scroll: `{offset}`, points from the
+    /// code's top (0 at the top, whatever the insets).
+    let onScrollRest = EventDispatcher()
+    /// Where to rest the code once it is laid out (a file reopening where it
+    /// was left); applied once.
+    private var pendingOffset: CGPoint?
+    // Where the code is to rest across, while it is not yet that wide: the
+    // width is known only as lines are laid out, a moment after it rests.
+    private var acrossToGo: CGFloat?
+    private var widthObservation: NSKeyValueObservation?
     private var reportedLine = -1
 
     /// True while we set `text` programmatically, so the delegate's change
@@ -134,6 +141,24 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         // A font installed while the file is open (CodeFonts.swift) is drawn
         // in at once.
         NotificationCenter.default.addObserver(self, selector: #selector(fontsChanged), name: CodeFonts.changed, object: nil)
+        // After the change: Runestone puts the offset back as it was once it
+        // has set the size.
+        widthObservation = textView.observe(\.contentSize) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.goAcross()
+            }
+        }
+    }
+
+    /// Goes on across to where the code was left, as far as it is wide now.
+    private func goAcross() {
+        guard let acrossToGo else { return }
+        let inset = textView.adjustedContentInset
+        let maxX = max(-inset.left, textView.contentSize.width + inset.right - textView.bounds.width)
+        textView.contentOffset.x = min(acrossToGo, maxX)
+        if maxX >= acrossToGo {
+            self.acrossToGo = nil
+        }
     }
 
     @objc private func fontsChanged() {
@@ -337,6 +362,40 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         reportLine()
     }
 
+    /// Rest the code `offset` points from its top, once it is laid out.
+    func setInitialOffset(_ offset: Double) {
+        pendingOffset = CGPoint(x: pendingOffset?.x ?? 0, y: CGFloat(offset))
+        setNeedsLayout()
+    }
+
+    /// Rest the code `offset` points from its left, once it is laid out.
+    func setInitialOffsetX(_ offset: Double) {
+        pendingOffset = CGPoint(x: CGFloat(offset), y: pendingOffset?.y ?? 0)
+        setNeedsLayout()
+    }
+
+    /// The code `offset.y` points from its top and `offset.x` from its left,
+    /// now (kept within the text).
+    func scrollToOffset(_ offset: CGPoint) {
+        let inset = textView.adjustedContentInset
+        let minY = -inset.top
+        let maxY = max(minY, textView.contentSize.height + inset.bottom - textView.bounds.height)
+        textView.contentOffset.y = min(max(offset.y - topInset, minY), maxY)
+        // The width is known only for lines laid out: lay out the ones now
+        // shown before going across.
+        textView.layoutIfNeeded()
+        let minX = -inset.left
+        let maxX = max(minX, textView.contentSize.width + inset.right - textView.bounds.width)
+        textView.contentOffset.x = min(max(offset.x, minX), maxX)
+    }
+
+    private func reportScrollRest() {
+        onScrollRest([
+            "offset": Double(textView.contentOffset.y + topInset),
+            "offsetX": Double(textView.contentOffset.x),
+        ])
+    }
+
     func setEditable(_ editable: Bool) {
         textView.isEditable = editable
         textView.isSelectable = true
@@ -380,7 +439,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         shownHeaders = []
         displayedHeader = -1
         displayedEnd = -1
-        onStickyDebug(["event": "ranges", "ranges": stickyRanges.count])
         updateSticky()
     }
 
@@ -718,16 +776,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             ) { [weak self] target in
                 _ = self?.textView.goToLine(target)
             }
-            onStickyDebug([
-                "event": "update",
-                "line": line,
-                "header": header,
-                "rows": rowCount,
-                "rowHeight": Double(rowHeight),
-                "stickyFill": Double(stickyFill),
-                "contentOffsetY": Double(textView.contentOffset.y),
-                "topInset": Double(topInset)
-            ])
         }
         // Push-off: the block is pinned at the top, but once the scope's last
         // line rises to the block's bottom it rides the scroll up and off — like
@@ -736,21 +784,6 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         let endTopViewY = textView.contentY(ofLine: end) - textView.contentOffset.y
         let pushY = min(0, endTopViewY - stickyHeight)
         sticky.frame = CGRect(x: 0, y: pushY, width: bounds.width, height: stickyHeight)
-        // DIAG: the actual push-off geometry, every frame the block is riding, so
-        // the real numbers are visible in the [sticky-native] log.
-        if pushY < 0 {
-            onStickyDebug([
-                "event": "ride",
-                "end": end,
-                "endTopViewY": Double(endTopViewY),
-                "stickyHeight": Double(stickyHeight),
-                "pushY": Double(pushY),
-                "topInset": Double(topInset),
-                "stickyFill": Double(stickyFill),
-                "contentOffsetY": Double(textView.contentOffset.y),
-                "boundsH": Double(bounds.height)
-            ])
-        }
         // Track horizontal scroll so the frozen code lines up with the editor.
         sticky.setHorizontalOffset(textView.contentOffset.x)
     }
@@ -805,6 +838,12 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        if let pendingOffset, bounds.height > 0, textView.contentSize.height > 0 {
+            self.pendingOffset = nil
+            textView.layoutIfNeeded()
+            scrollToOffset(pendingOffset)
+            acrossToGo = textView.contentOffset.x < pendingOffset.x ? pendingOffset.x : nil
+        }
         conflictZones.layout()
         changeMarks.layout()
         updateSticky()
@@ -817,6 +856,24 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         changeMarks.followHorizontalScroll()
         updateSticky()
         reportLine()
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        acrossToGo = nil
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            reportScrollRest()
+        }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        reportScrollRest()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        reportScrollRest()
     }
 
     // MARK: - TextViewDelegate

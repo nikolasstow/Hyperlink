@@ -1,6 +1,6 @@
 import { Duration, Effect, Layer, Metric, Stream } from "effect";
-import { FetchHttpClient, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -40,7 +40,7 @@ it("serves the Metric registry — a labeled counter round-trips via snapshot ov
     Effect.gen(function* () {
       yield* emitProbe;
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-      const port = addr._tag === "TcpAddress" ? addr.port : 0;
+      const port = addr._tag === "UnixPathAddress" ? 0 : addr.port;
       const base = `http://127.0.0.1:${port}`;
 
       const snap = yield* Effect.gen(function* () {

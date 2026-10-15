@@ -22,7 +22,6 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
-import { chatMessageOfV1 } from "./chat/fromV1";
 import { chatMessageOfQueued, pendingMessages, sameMessages } from "./chat/fromOutbox";
 import { answering, answerStartedAt, type ChatMessage } from "./chat/model";
 import { useV2Transcript } from "./chat/useV2Transcript";
@@ -34,12 +33,15 @@ import { Provider } from "./opencode/schema/provider";
 import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import { SessionMessage } from "./opencode/schema/session-message";
-import type { Protocol } from "./outbox/model";
 import { removeQueued, retryLane, sendMessage, useLane } from "./outbox/useOutbox";
 import { rememberConversation, retitleConversation, useKeptConversation } from "./conversations/useConversations";
 import { cachedSessionTitle } from "./sessionCache";
-import { interruptSession, sessionProtocol } from "./sessions/protocol";
-import { AGENT } from "./client";
+import { getSession, interruptSession } from "./sessions/sessionCommands";
+import { replyToAsk, useSessionTitle, useSessionWatch } from "./sessions/useSessionWatch";
+import { NEW_SESSION_TITLE } from "./sessions/sessionTitle";
+import type { Permission } from "./opencode/schema/permission";
+import { getPermissionMode } from "./sessionPermissions";
+import { AGENT } from "./agentConstants";
 import { promptRenameSession } from "./sessionActions";
 import { BUSY_ROW_GAP, BUSY_ROW_HEIGHT, BusyRow } from "./BusyRow";
 import { startLiveActivity } from "../modules/live-activity";
@@ -65,7 +67,6 @@ import { SessionHeaderTitle } from "./SessionHeaderTitle";
 import { useKeyboardHeightValue } from "./keyboardHeight";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
-import { useSessionStream } from "./useSessionStream";
 import { useStreamEnabled } from "./useStreamEnabled";
 import { BackgroundOverride, type TextColors, useScreenBackground, useThemedStyles } from "./theme";
 import { useSessionBackground } from "./sessions/useSessionBackground";
@@ -95,7 +96,7 @@ const PERMISSION_ROW_ID = "__permission__";
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
-  const { client, address } = useAppContext();
+  const { address } = useAppContext();
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
@@ -123,59 +124,39 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       void markSessionRead(sessionID, Date.now());
     };
   }, [streamEnabled, sessionID]);
-  // The live connection: a v1 session's conversation, and permission asks
-  // (both APIs' asks come over it, so it runs for a v2 session too).
-  const { transcript, loaded, pendingPermission, replyPermission, clearBusy, connected, refresh } = useSessionStream(client, sessionID, address, streamEnabled);
-
   const server = React.useMemo(() => serverAddressOf(address), [address]);
   const session = React.useMemo(() => SessionID.make(sessionID), [sessionID]);
+  // The server's sessions, live: whether the connection is up, and this
+  // session's permission ask when it is set to ask (sessionPermissions.ts).
+  const watch = useSessionWatch(server, streamEnabled);
+  const connected = watch.connected;
+  const pendingPermission = React.useMemo(
+    () => (getPermissionMode(sessionID) === "ask" ? watch.asks.find((ask) => ask.sessionID === sessionID) : undefined),
+    [watch.asks, sessionID],
+  );
+  const replyPermission = React.useCallback(
+    (reply: Permission.Reply): Promise<void> => (pendingPermission === undefined ? Promise.resolve() : replyToAsk(server, pendingPermission, reply)),
+    [server, pendingPermission],
+  );
   // What the device kept of the conversation (conversations/): the chat opens
   // on it, nothing to fetch, and shows it until its whole history is in.
   const kept = useKeptConversation(server, sessionID);
   // Its own background, when it has one (Session Settings).
   const background = useSessionBackground(sessionID);
-  // Which API the session is spoken to over (sessions/protocol.ts): known
-  // when the app just made it or kept it, found out otherwise.
-  const [foundProtocol, setProtocol] = React.useState<Protocol | undefined>(props.route.params.protocol);
-  const protocol = foundProtocol ?? kept?.protocol;
-  // Being found out: a send made meanwhile waits for it.
-  const finding = React.useRef<Promise<Protocol> | undefined>(undefined);
-  React.useEffect(() => {
-    if (protocol !== undefined) return undefined;
-    let cancelled = false;
-    const found = runApp(sessionProtocol(server, session));
-    finding.current = found;
-    void found.then((answer) => {
-      if (!cancelled) setProtocol(answer);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [server, session, protocol]);
-
   // The conversation (what the server has), then what is still in the
   // outbox, until the server has it too (same id) and the
   // conversation shows it.
-  const v2Messages = useV2Transcript(server, session, protocol === "v2" && streamEnabled);
+  // Refresh (the More menu) loads it again from the start.
+  const [loads, setLoads] = React.useState(0);
+  const refresh = React.useCallback(() => setLoads((count) => count + 1), []);
   // The whole conversation, once in: undefined until then.
-  const live = React.useMemo(
-    (): ReadonlyArray<ChatMessage> | undefined =>
-      protocol === "v2"
-        ? v2Messages
-        : protocol === "v1" && loaded
-          ? transcript.order.flatMap((id) => {
-              const message = transcript.messages.get(id);
-              return message === undefined ? [] : [chatMessageOfV1(message)];
-            })
-          : undefined,
-    [protocol, v2Messages, loaded, transcript],
-  );
+  const live = useV2Transcript(server, session, streamEnabled, loads);
   const delivered = live ?? kept?.messages ?? NO_MESSAGES;
   // The newest of it kept as it changes, so the next open starts from here.
   React.useEffect(() => {
-    if (live === undefined || protocol === undefined) return;
-    rememberConversation(server, sessionID, protocol, live).catch((error: unknown) => console.error("[conversations] keeping the chat failed", error));
-  }, [server, sessionID, protocol, live]);
+    if (live === undefined) return;
+    rememberConversation(server, sessionID, live).catch((error: unknown) => console.error("[conversations] keeping the chat failed", error));
+  }, [server, sessionID, live]);
   const lane = useLane(server, session);
   // After the conversation: what is queued, and what the server took that the
   // conversation does not show yet (fromOutbox.ts). Carried from render to
@@ -198,25 +179,24 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const byID = React.useMemo(() => new Map(messages.map((message) => [message.id, message])), [messages]);
   const receipt = React.useMemo(() => latestReceipt(messages, lane?.held?.messageID), [messages, lane]);
   const headers = React.useMemo(() => dateHeaders(messages), [messages]);
-  // Busy: v2 from the conversation (the answer still being written); v1 from
-  // the live connection's run status.
-  const busy = protocol === "v2" ? answering(delivered) : transcript.busy;
+  // Busy: the answer still being written.
+  const busy = answering(delivered);
 
   // The files the agent has been touching, as chips over the bar. Relative
   // paths resolve against the session's folder.
   const [directory, setDirectory] = React.useState<string | undefined>(undefined);
   React.useEffect(() => {
     let cancelled = false;
-    client.session.get({ path: { id: sessionID } }).then(
-      ({ data }) => {
-        if (!cancelled && data !== undefined) setDirectory(data.directory);
+    runApp(getSession(server, session)).then(
+      (info) => {
+        if (!cancelled) setDirectory(info.location.directory);
       },
       (error: unknown) => console.error("[chat] reading the session's folder failed", error),
     );
     return () => {
       cancelled = true;
     };
-  }, [client, sessionID]);
+  }, [server, session]);
   // Every file seen this session stays: a transcript that reloads or
   // reconnects (briefly empty) never empties the row.
   const seenFiles = React.useRef<ReadonlyArray<SessionFile>>([]);
@@ -294,10 +274,11 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     setSelected((current) => (current.includes(file.path) ? current.filter((path) => path !== file.path) : [file.path, ...current]));
     setOrderVersion((version) => version + 1);
   };
-  // Its title from the first frame: kept with the conversation, or from the
-  // session list read this launch; renamed here, the new one.
+  // Its title from the first frame: renamed here, else as named live (v2
+  // names it a moment after the first message), else kept with the
+  // conversation or from the session list; never blank (the placeholder).
   const [renamed, setRenamed] = React.useState<string | undefined>(undefined);
-  const title = renamed ?? kept?.title ?? cachedSessionTitle(sessionID);
+  const title = useSessionTitle(server, sessionID, renamed ?? kept?.title ?? cachedSessionTitle(sessionID));
   // Newest-first — paired with `inverted` below, which should anchor the
   // list to the newest message on its own. In practice it wasn't sticking
   // reliably, so this still explicitly re-pins to `offset: 0` (an
@@ -357,7 +338,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         sessionID,
         repo: "",
         worktree: "",
-        title: title ?? "Session",
+        title,
         action: "Working…",
       });
     }
@@ -375,11 +356,12 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
 
   // Rename via the shared action; apply the new title locally on success.
   const renameSession = React.useCallback(() => {
-    promptRenameSession(client, sessionID, title ?? "", (next) => {
+    // The placeholder is not a name to edit.
+    promptRenameSession(server, sessionID, title === NEW_SESSION_TITLE ? "" : title, (next) => {
       setRenamed(next);
       retitleConversation(server, sessionID, next).catch((error: unknown) => console.error("[conversations] keeping the new title failed", error));
     });
-  }, [client, server, sessionID, title]);
+  }, [server, sessionID, title]);
 
   // Title and connection state are screen state, so they reach the header
   // through setOptions rather than static screen options; before the first
@@ -388,7 +370,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     props.navigation.setOptions({
       // The id while its name is not on the device (opened from a notification
       // before the session list is read, a subagent's session).
-      headerTitle: () => <SessionHeaderTitle title={title ?? sessionID} connected={connected} />,
+      headerTitle: () => <SessionHeaderTitle title={title} connected={connected} />,
       unstable_headerRightItems: () => [
         {
           type: "menu",
@@ -422,17 +404,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     });
   }, [props.navigation, title, sessionID, connected, refresh, renameSession]);
 
-  // Abort the running turn. `clearBusy` runs regardless: if the request
-  // fails the run may still be going server-side, but leaving the UI pinned
-  // to "busy" with a Stop button that did nothing is worse — session.idle
-  // will correct it either way.
+  // Stop the running turn; the conversation shows it ending.
   const onStop = async (): Promise<void> => {
-    try {
-      if (protocol === "v2") await runApp(interruptSession(server, session));
-      else await client.session.abort({ path: { id: sessionID } });
-    } finally {
-      clearBusy();
-    }
+    await runApp(interruptSession(server, session));
   };
 
   // A queued message: send its lane again from the first message (frees a
@@ -461,8 +435,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // Into the outbox: sent from there, in order, when the server can take it
   // (sessions/../outbox). The bubble shows at once; its receipt says how far it got.
   const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
-    const spoken = protocol ?? (await finding.current);
-    if (spoken === undefined) throw new Error("The session's protocol is not known");
     // The chips selected go with this message, as file references; the
     // selection clears.
     const attached = files.filter((file) => selectedSet.has(file.path));
@@ -476,7 +448,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       sessionID,
       repo: "",
       worktree: "",
-      title: title ?? "Session",
+      title,
       action: "Working…",
     });
     const id = SessionMessage.ID.create();
@@ -509,7 +481,6 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       id,
       server,
       sessionID: session,
-      protocol: spoken,
       directory: directory === undefined ? undefined : AbsolutePath.make(directory),
       text,
       files: attached.map((file) => ({ path: file.path, name: file.name })),
@@ -528,20 +499,24 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   }, [messages]);
 
   const [resolvedSeed, setResolvedSeed] = React.useState<ModelOption | undefined>(undefined);
+  // Keyed on the ids: a new `seedModel` object with the same model is no change.
+  const seedProviderID = seedModel?.providerID;
+  const seedModelID = seedModel?.modelID;
   React.useEffect(() => {
-    if (seedModel === undefined) {
+    if (seedProviderID === undefined || seedModelID === undefined) {
       setResolvedSeed(undefined);
       return;
     }
+    const fallback: ModelOption = { providerID: seedProviderID, providerName: seedProviderID, modelID: seedModelID, name: seedModelID };
     let cancelled = false;
-    void listModels(client, directory).then((options) => {
+    void listModels(directory).then((options) => {
       if (cancelled) return;
-      setResolvedSeed(findModel(options, seedModel.providerID, seedModel.modelID) ?? seedModel);
+      setResolvedSeed(findModel(options, seedProviderID, seedModelID) ?? fallback);
     });
     return () => {
       cancelled = true;
     };
-  }, [client, directory, seedModel?.providerID, seedModel?.modelID]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [directory, seedProviderID, seedModelID]);
 
   // Stable while the conversation is: the list re-renders a row only when
   // that row's own data changes, not whenever the screen does (the keyboard
@@ -667,8 +642,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       <Animated.View style={[styles.composerFloat, composerSlide]} pointerEvents="box-none">
         <Composer
           onSend={onSend}
-          // Send any time: a message waits in the outbox (v1) or on the server
-          // (v2) until the agent is free.
+          // Send any time: a message waits on the server until the agent is
+          // free.
           disabled={false}
           directory={directory}
           bottomInset={0}

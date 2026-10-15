@@ -1,7 +1,7 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer, Option, Scope } from "effect";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+import { SqlClient } from "effect/sql/SqlClient";
 import { SQLiteDurableWorkPoolStore } from "../src/storage/sqlite";
 
 // A fresh in-memory SQLite store per test — real SQL semantics, no shared state.

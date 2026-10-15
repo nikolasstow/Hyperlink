@@ -13,8 +13,8 @@
 // ---cut---
 import { NodeHttpServer } from "@effect/platform-node";
 import { Duration, Effect, Layer, Schema } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
-import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpRouter, HttpServer } from "effect/http";
+import { RpcClient, RpcSerialization, RpcServer } from "effect/rpc";
 import { Hyperlink, WorkPool } from "../../src";
 
 const ServedJob = Schema.Struct({
@@ -55,7 +55,7 @@ const program = Effect.gen(function* () {
   const address = yield* HttpServer.HttpServer.pipe(
     Effect.map((server) => server.address),
   );
-  const port = address._tag === "TcpAddress" ? address.port : 0;
+  const port = address._tag === "UnixPathAddress" ? 0 : address.port;
   const transport = RpcClient.layerProtocolHttp({
     url: `http://127.0.0.1:${String(port)}/rpc`,
   }).pipe(

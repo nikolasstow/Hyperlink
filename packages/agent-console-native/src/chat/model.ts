@@ -1,7 +1,7 @@
 /**
  * The chat's view of a conversation, whatever protocol it came over: the
- * bubbles render this, and adapters make it from opencode's v1 transcript
- * (fromV1.ts) and its v2 messages (fromV2.ts). Times are epoch ms.
+ * bubbles render this, made from opencode's v2 messages (fromV2.ts). Times
+ * are epoch ms.
  *
  * @internal
  */
@@ -33,7 +33,15 @@ export interface ChatTool {
   readonly metadata?: unknown;
 }
 
-export type ChatPart = ChatText | ChatReasoning | ChatTool;
+/** Why a turn failed (the agent could not answer: no model, a provider
+ * error). */
+export interface ChatError {
+  readonly kind: "error";
+  readonly id: string;
+  readonly text: string;
+}
+
+export type ChatPart = ChatText | ChatReasoning | ChatTool | ChatError;
 
 export interface ChatMessage {
   readonly id: string;

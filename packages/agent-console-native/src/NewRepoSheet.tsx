@@ -69,6 +69,7 @@ import {
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAppContext } from "./AppContext";
+import { serverAddressOf } from "./opencode/serverAddress";
 import { getBackendAddress } from "./settings";
 import { colors } from "./colors";
 import {
@@ -176,7 +177,7 @@ const PreviewMetaSkeleton = (): React.ReactElement => (
 );
 
 export const NewRepoSheet = (props: Props): React.ReactElement => {
-  const { client, server, rootDir } = useAppContext();
+  const { address, server, rootDir } = useAppContext();
   const colorScheme = useColorScheme();
   const queryState = useNativeState("");
   const nameState = useNativeState("");
@@ -244,7 +245,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     setCreateDraft(undefined);
     setCreateDestination(undefined);
     try {
-      const next = await previewRemote(client, rootDir, raw);
+      const next = await previewRemote(serverAddressOf(address), rootDir, raw);
       if (seq !== probeSeq.current) return undefined;
       setPreview(next);
       applyFolderName(next.remote.name);
@@ -352,7 +353,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     }
     let cancelled = false;
     const folder = nameState.get().trim() || createDraft;
-    void previewInitDestination(client, rootDir, folder).then((dest) => {
+    void previewInitDestination(serverAddressOf(address), rootDir, folder).then((dest) => {
       if (!cancelled) setCreateDestination(dest);
     });
     return () => {
@@ -360,7 +361,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
     };
     // nameState is a stable native ref; re-run when draft changes or prefs open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [createDraft, client, rootDir, prefsOpen, folderEpoch]);
+  }, [createDraft, address, rootDir, prefsOpen, folderEpoch]);
 
   const submit = (): void => {
     if (busy || probing) return;
@@ -373,7 +374,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
           if (!isFolderName(repoName)) return;
           setBusy(true);
           setError(undefined);
-          const path = await cloneRepo(client, rootDir, preview.remote.url, repoName, branch);
+          const path = await cloneRepo(serverAddressOf(address), rootDir, preview.remote.url, repoName, branch);
           props.onCreated(repoName, path);
           props.onClose();
           return;
@@ -384,7 +385,7 @@ export const NewRepoSheet = (props: Props): React.ReactElement => {
         if (!isFolderName(repoName)) return;
         setBusy(true);
         setError(undefined);
-        const path = await initRepo(client, rootDir, repoName);
+        const path = await initRepo(serverAddressOf(address), rootDir, repoName);
         props.onCreated(repoName, path);
         props.onClose();
       } catch (err) {

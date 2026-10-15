@@ -16,12 +16,15 @@
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Effect, Layer } from "effect";
-import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/unstable/http";
-import { HttpApiBuilder } from "effect/unstable/httpapi";
+import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
 import { api } from "./api";
+import { DeviceAuth } from "./auth/DeviceAuth";
+import { authHandlers, authMiddleware, healthRoute } from "./auth/http";
 import { CollectionStates } from "./collections/state";
 import { ExtensionViews } from "./extensionHost/extensionViews";
 import { fileSyncLayer } from "./files/rpc";
+import { modelsRoute } from "./models/catalog";
 import { opencodeProxyRoute } from "./opencodeProxy";
 import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
@@ -163,6 +166,8 @@ const registryLive = PluginRegistry.layer.pipe(Layer.provide(NodeServices.layer)
 const viewsLive = ExtensionViews.layer.pipe(Layer.provide([workspacesLive, registryLive]));
 const statesLive = CollectionStates.layer.pipe(Layer.provide(registryLive));
 const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
+// One DeviceAuth for the gate (every request) and the auth endpoints.
+const authLive = DeviceAuth.layer;
 
 const apiLive = HttpApiBuilder.layer(api).pipe(
   Layer.provide([
@@ -174,6 +179,7 @@ const apiLive = HttpApiBuilder.layer(api).pipe(
     processesHandlers.pipe(Layer.provide(runnerLive)),
     pluginsHandlers.pipe(Layer.provide(registryLive)),
     sessionsHandlers.pipe(Layer.provide(SessionArchive.layer)),
+    authHandlers.pipe(Layer.provide(authLive)),
   ]),
 );
 
@@ -181,7 +187,11 @@ const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 
 // The stream route needs the runner per request, so it is provided to the
 // served router as a whole (the same instance the API's handlers use).
-const serverLive = HttpRouter.serve(Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer, opencodeProxyRoute)).pipe(
+// Every route is behind the gate (auth/http.ts); `/health` and redeeming a
+// pairing code are open.
+const serverLive = HttpRouter.serve(
+  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer, opencodeProxyRoute, modelsRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
+).pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),
   Layer.provide(NodeHttpServer.layer(createServer, { port })),

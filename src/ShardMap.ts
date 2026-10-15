@@ -22,7 +22,7 @@
  */
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Effect, Layer, Option, Ref, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+import { SqlClient } from "effect/sql/SqlClient";
 import { combineByNode, combineQuery, combineSum } from "./MultiNode";
 import * as Hyperlink from "./Hyperlink";
 import {
@@ -92,7 +92,8 @@ const withSqlite = <A, E, R>(
   );
   return layer.pipe(
     Layer.provide(install),
-    Layer.provide(SqliteClient.layer({ filename })),
+    // Opening the database failing is a defect here, as before Effect 4.0 typed it.
+    Layer.provide(Layer.orDie(SqliteClient.layer({ filename }))),
   );
 };
 
@@ -413,7 +414,7 @@ const buildImpl = <
       .pipe(Effect.orDie);
     // SAFE: loadScope yields opaque JSON values; Schema.Top Value can't constrain
     // DecodingServices for a boot-time decode Effect, and the wire Schema re-validates on RPC.
-    // Rows already passed UnknownFromJsonString in shardMapSql.loadScope.
+    // Rows already passed unknownJsonString in shardMapSql.loadScope.
     const seeded = seededUnknown as Map<string, ValueT<Value>>;
     const store = yield* Ref.make(seeded);
     const peers = yield* Hyperlink.peers(tag);

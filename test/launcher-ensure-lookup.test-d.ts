@@ -2,7 +2,7 @@
  * Type-level lock: Launcher.ensureLookup / UpOptions.lookup channels.
  */
 import type { Effect, Scope } from "effect";
-import type { ChildProcessSpawner } from "effect/unstable/process";
+import type { ChildProcessSpawner } from "effect/process";
 import type * as Launcher from "../src/Launcher";
 
 type ErrOf<T> = T extends Effect.Effect<infer _A, infer E, infer _R> ? E : never;

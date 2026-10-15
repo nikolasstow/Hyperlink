@@ -1,135 +1,105 @@
 /**
- * A v2 session's messages, live: opencode's own projection (the vendored
- * message updater) folded over the session's events, exactly as the server
- * builds them.
+ * A v2 session's messages, live (opencode v2's model: a snapshot, then events).
  *
- * - **Durable events** come from the session's event stream
- *   (`/api/session/:id/event?after=seq`): every durable event after a
- *   sequence, in order, then new ones as they happen. Dropped, it reconnects
- *   after the last one applied, so nothing is missed or applied twice.
- * - **Deltas** (text and reasoning arriving as they are written) are not
- *   durable; they come from the server's event stream, filtered to this
- *   session. A delta for text that has ended is dropped, so a late one cannot
- *   add to finished text (the durable "ended" carries the full text anyway).
+ * Each connection: subscribe to the server's event stream first (events
+ * waiting in a queue), then load the session's messages, then apply what
+ * waited and what follows (messageProjection.ts: durable events through
+ * opencode's own updater, the streamed text as its client applies it). The
+ * stream misses what happens while it is down (by contract), so when it ends
+ * or fails the whole thing starts again from a fresh load, backing off.
  *
- * Both reconnect with backoff for as long as the stream is read. Nothing is
- * published while the history replays (a chat shows the messages the device
- * kept meanwhile); once events go quiet for `REPLAY_QUIET` it is caught up,
- * and from then a snapshot is published after each change; consumers
- * coalesce them (useV2Transcript.ts).
+ * The first load is published as soon as it is in; after that, a snapshot
+ * after each change (consumers coalesce them, useV2Transcript.ts).
  *
  * @internal
  */
-import { Duration, Effect, FiberHandle, HashSet, Ref, Schedule, Stream, SubscriptionRef } from "effect";
-import { memory, type MemoryState, update } from "../opencode/core/message-updater";
+import { Cause, Data, Duration, Effect, Queue, Schedule, Schema, Stream, SubscriptionRef } from "effect";
 import { Opencode } from "../opencode/Opencode";
 import type { ServerAddress } from "../opencode/serverAddress";
-import type { SessionEvent } from "../opencode/schema/session-event";
+import { SessionEvent } from "../opencode/schema/session-event";
 import type { SessionID } from "../opencode/schema/session-id";
 import type { SessionMessage } from "../opencode/schema/session-message";
+import { applyDurable, applyStreaming, isStreaming, type Projection } from "./messageProjection";
 
 const RECONNECT_FIRST = "500 millis";
 const RECONNECT_LONGEST = Duration.seconds(10);
-/** No event for this long while replaying: the history is in. */
-const REPLAY_QUIET = Duration.millis(250);
+/** Messages a page of the history holds (the most the server gives). */
+const PAGE = 200;
 
 const reconnect = Schedule.exponential(RECONNECT_FIRST).pipe(
   Schedule.modifyDelay(({ duration }) => Effect.succeed(Duration.min(duration, RECONNECT_LONGEST))),
   Schedule.jittered,
 );
 
-/** Runs `connect` again whenever it ends or fails, backing off, forever. */
-const keepConnected = <E, R>(name: string, connect: Effect.Effect<void, E, R>) =>
-  connect.pipe(
-    Effect.catchCause((cause) => Effect.logWarning(`[transcript] ${name} dropped`, cause)),
-    Effect.repeat(reconnect),
-    Effect.asVoid,
-  );
+const isSessionEvent = Schema.is(SessionEvent.All);
+const isDurable = Schema.is(SessionEvent.Durable);
 
-/** A delta's event: what it adds to, and which session. */
-type Delta = Extract<SessionEvent.Event, { readonly type: "session.next.text.delta" | "session.next.reasoning.delta" }>;
+/** A loaded message the projection keeps: every type but the location switch,
+ * which the server sends in its public form and the chat does not show. */
+const projected = <M extends { readonly type: string }>(message: M): message is Exclude<M, { readonly type: "location-switched" }> =>
+  message.type !== "location-switched";
 
-const isDelta = (event: { readonly type: string }): event is Delta =>
-  event.type === "session.next.text.delta" || event.type === "session.next.reasoning.delta";
-
-/** The id of the text or reasoning a delta or its "ended" belongs to. */
-const blockOf = (event: SessionEvent.Event): string | undefined => {
-  switch (event.type) {
-    case "session.next.text.delta":
-    case "session.next.text.ended":
-      return event.data.textID;
-    case "session.next.reasoning.delta":
-    case "session.next.reasoning.ended":
-      return event.data.reasoningID;
-    default:
-      return undefined;
-  }
-};
+/** The event stream ended or failed: the connection starts again. */
+class EventsDropped extends Data.TaggedError("EventsDropped")<{
+  readonly cause: unknown;
+}> {}
 
 /** The session's messages, in order, as they change. */
-export const v2Transcript = (server: ServerAddress, sessionID: SessionID): Stream.Stream<ReadonlyArray<SessionMessage.Message>, never, Opencode> =>
+export const v2Transcript = (server: ServerAddress, sessionID: SessionID): Stream.Stream<ReadonlyArray<SessionMessage.Info>, never, Opencode> =>
   Stream.unwrap(
     Effect.gen(function* () {
       const opencode = yield* Opencode;
       const client = yield* opencode.client(server);
-      // The updater's in-memory projection: it replaces a message it touches
-      // (immer) and appends new ones, in this array.
-      const state: MemoryState = { messages: [] };
-      const adapter = memory(state);
-      const messages = yield* SubscriptionRef.make<ReadonlyArray<SessionMessage.Message>>([]);
-      const lastSeq = yield* Ref.make(0);
-      const ended = yield* Ref.make(HashSet.empty<string>());
-      // A snapshot of the projection as it is when this runs.
-      const publish = Effect.suspend(() => SubscriptionRef.set(messages, [...state.messages]));
-      // Caught up once the replay goes quiet; until then each event only
-      // pushes that moment back.
-      const caughtUp = yield* Ref.make(false);
-      const quiet = yield* FiberHandle.make();
-      const settle = FiberHandle.run(quiet, Effect.sleep(REPLAY_QUIET).pipe(Effect.andThen(Ref.set(caughtUp, true)), Effect.andThen(publish)));
-      const changed = Effect.flatMap(Ref.get(caughtUp), (live) => (live ? publish : settle));
+      const messages = yield* SubscriptionRef.make<ReadonlyArray<SessionMessage.Info>>([]);
+      const projection: Projection = { messages: [], inbox: new Map() };
+      const publish = Effect.suspend(() => SubscriptionRef.set(messages, projection.messages));
 
-      const applyDurable = (event: SessionEvent.Event) =>
-        Effect.gen(function* () {
-          const seq = event.durable?.seq;
-          if (seq !== undefined && seq <= (yield* Ref.get(lastSeq))) return;
-          yield* update(adapter, event);
-          if (seq !== undefined) yield* Ref.set(lastSeq, seq);
-          const block = blockOf(event);
-          if (block !== undefined) yield* Ref.update(ended, HashSet.add(block));
-          yield* changed;
-        });
+      /** Every message, oldest first, page by page. */
+      const loadAll = Effect.gen(function* () {
+        const loaded: Array<SessionMessage.Info> = [];
+        let cursor: string | undefined;
+        for (;;) {
+          const page = yield* client["server.message"]["session.messages"]({
+            params: { sessionID },
+            query: cursor === undefined ? { limit: PAGE, order: "asc" } : { limit: PAGE, cursor },
+          });
+          loaded.push(...page.data.filter(projected));
+          if (page.cursor.next === undefined || page.data.length === 0) return loaded;
+          cursor = page.cursor.next;
+        }
+      });
 
-      const applyDelta = (event: Delta) =>
-        Effect.gen(function* () {
-          const block = blockOf(event);
-          if (block !== undefined && HashSet.has(yield* Ref.get(ended), block)) return;
-          yield* update(adapter, event);
-          yield* changed;
-        });
+      const connection = Effect.gen(function* () {
+        const waiting = yield* Queue.unbounded<SessionEvent.Event, EventsDropped | Cause.Done>();
+        const events = yield* client["server.event"]["event.subscribe"]();
+        yield* events.pipe(
+          Stream.mapError((cause) => new EventsDropped({ cause })),
+          Stream.filter(isSessionEvent),
+          Stream.filter((event) => event.data.sessionID === sessionID),
+          Stream.runIntoQueue(waiting),
+          Effect.forkScoped,
+        );
+        // What was enqueued and not yet delivered (delivered later, it becomes
+        // a message), read before the messages: one delivered in between is
+        // then in the messages, and its delivery a repeat.
+        const inbox = yield* client["server.session"]["session.inbox.list"]({ params: { sessionID } });
+        projection.inbox = new Map(inbox.data.map((item) => [item.id, item]));
+        projection.messages = yield* loadAll;
+        yield* publish;
+        yield* Stream.fromQueue(waiting).pipe(
+          Stream.runForEach((event) =>
+            (isDurable(event) ? applyDurable(projection, event) : Effect.sync(() => (isStreaming(event) ? applyStreaming(projection, event) : undefined))).pipe(
+              Effect.andThen(publish),
+            ),
+          ),
+        );
+      }).pipe(Effect.scoped);
 
-      // A session with no history yet is caught up as soon as it is quiet.
-      yield* settle;
-
-      yield* keepConnected(
-        "session events",
-        Effect.gen(function* () {
-          const after = yield* Ref.get(lastSeq);
-          const events = yield* client["server.session"]["session.events"]({ params: { sessionID }, query: { after } });
-          yield* Stream.runForEach(events, applyDurable);
-        }),
-      ).pipe(Effect.forkScoped);
-
-      yield* keepConnected(
-        "deltas",
-        Effect.gen(function* () {
-          const events = yield* client["server.event"]["event.subscribe"]();
-          yield* events.pipe(
-            Stream.filter(isDelta),
-            Stream.filter((event) => event.data.sessionID === sessionID),
-            Stream.runForEach(applyDelta),
-          );
-        }),
-      ).pipe(Effect.forkScoped);
+      yield* connection.pipe(
+        Effect.catchCause((cause) => Effect.logWarning("[transcript] the session's events dropped; loading again", cause)),
+        Effect.repeat(reconnect),
+        Effect.forkScoped,
+      );
 
       return SubscriptionRef.changes(messages);
     }),

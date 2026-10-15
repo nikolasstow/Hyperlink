@@ -7,7 +7,7 @@
 import { Box, Text, useInput } from "ink";
 import * as React from "react";
 import { Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { nodeOf } from "../Hyperlink";
 import {
   type CommandAtom,

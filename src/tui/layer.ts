@@ -7,7 +7,7 @@
 import { render } from "ink";
 import * as React from "react";
 import { Effect, Layer } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import * as Group from "../Group";
 import { Tui, type TuiOpenInput } from "../cli/Tui";
 import type { CliTree } from "../cli/types";

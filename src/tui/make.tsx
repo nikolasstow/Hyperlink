@@ -18,7 +18,7 @@
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import * as React from "react";
 import { Effect } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import {
   methodMeta,
   specOf,

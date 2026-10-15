@@ -1,7 +1,7 @@
 import { Duration, Effect, Layer, Option, Schema, Stream } from "effect";
-import { FetchHttpClient, HttpServer } from "effect/unstable/http";
-import { ServeError } from "effect/unstable/http/HttpServerError";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient, HttpServer } from "effect/http";
+import { ServeError } from "effect/http/HttpServerError";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -59,7 +59,7 @@ const withServer = <A, E>(
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((s) => s.address),
     );
-    const port = address._tag === "TcpAddress" ? address.port : 0;
+    const port = address._tag === "UnixPathAddress" ? 0 : address.port;
     return yield* use(port).pipe(
       Effect.provide(
         Hyperlink.client(RemoteGate).pipe(Layer.provide(httpProtocol(port))),

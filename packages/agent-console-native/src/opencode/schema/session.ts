@@ -8,40 +8,55 @@ import { Project } from "./project"
 import { DateTimeUtcFromMillis, optional, RelativePath } from "./schema"
 import { SessionEvent } from "./session-event"
 import { SessionID } from "./session-id"
-import { Revert } from "./revert"
+import { SessionMetadata } from "./session-metadata"
+import { Money } from "./money"
+import { Permission } from "./permission"
+import { TokenUsage } from "./token-usage"
+import { Revert } from "./session-revert"
+import { SessionFork } from "./session-fork"
 
 export const ID = SessionID
 export type ID = SessionID
 
+export const Metadata = SessionMetadata
+export type Metadata = SessionMetadata
+
 export const Event = SessionEvent
+
+export { Revert }
+export const ForkBoundary = SessionFork.Boundary
+export type ForkBoundary = SessionFork.Boundary
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 export const Info = Schema.Struct({
   id: ID,
   parentID: ID.pipe(optional),
+  fork: Schema.Struct({
+    sessionID: ID,
+    boundary: ForkBoundary,
+  }).pipe(optional),
   projectID: Project.ID,
   agent: Agent.ID.pipe(optional),
   model: Model.Ref.pipe(optional),
-  cost: Schema.Finite,
-  tokens: Schema.Struct({
-    input: Schema.Finite,
-    output: Schema.Finite,
-    reasoning: Schema.Finite,
-    cache: Schema.Struct({
-      read: Schema.Finite,
-      write: Schema.Finite,
-    }),
-  }),
+  cost: Money.USD,
+  tokens: TokenUsage.Info,
+  /** Outcome of the last completed execution, recorded at `time.idle`. Absent until a run reaches a terminal transition. */
+  outcome: Schema.Literals(["succeeded", "failed", "interrupted"]).pipe(optional),
   time: Schema.Struct({
     created: DateTimeUtcFromMillis,
     updated: DateTimeUtcFromMillis,
+    idle: DateTimeUtcFromMillis.pipe(optional),
+    viewed: DateTimeUtcFromMillis.pipe(optional),
     archived: DateTimeUtcFromMillis.pipe(optional),
   }),
-  title: Schema.String,
+  title: Schema.String.pipe(optional),
   location: Location.Ref,
   subpath: RelativePath.pipe(optional),
-  revert: Revert.State.pipe(optional),
-}).annotate({ identifier: "SessionV2.Info" })
+  metadata: Metadata.pipe(optional),
+  /** Evaluated after the agent's rules; the last matching rule wins. */
+  permissions: Permission.Ruleset.pipe(optional),
+  revert: Revert.pipe(optional),
+}).annotate({ identifier: "Session.Info" })
 
 export const ListAnchor = Schema.Struct({
   id: ID,

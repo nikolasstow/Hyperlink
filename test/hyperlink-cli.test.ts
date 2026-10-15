@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Cause, Effect, Exit, Layer, Option, Schema } from "effect";
-import { Command } from "effect/unstable/cli";
+import { Command } from "effect/cli";
 import * as Group from "../src/Group";
 import * as Hyperlink from "../src/Hyperlink";
 import { byName, cli, render, Tui, TuiNotConfigured } from "../src/cli";

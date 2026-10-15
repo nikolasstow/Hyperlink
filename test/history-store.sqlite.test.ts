@@ -1,7 +1,7 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer, Scope } from "effect";
-import { SqlClient } from "effect/unstable/sql/SqlClient";
+import { SqlClient } from "effect/sql/SqlClient";
 import { SQLiteHistoryStore } from "../src/storage/sqlite";
 
 const withSql = <A, E>(
@@ -10,7 +10,7 @@ const withSql = <A, E>(
   Effect.gen(function* () {
     const scope = yield* Scope.Scope;
     const context = yield* Layer.buildWithScope(
-      SqliteClient.layer({ filename: ":memory:" }),
+      Layer.orDie(SqliteClient.layer({ filename: ":memory:" })),
       scope,
     );
     return yield* f(Context.get(context, SqlClient));

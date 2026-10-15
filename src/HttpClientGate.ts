@@ -11,8 +11,8 @@
  * @module HttpClientGate
  */
 
-import { HttpClient } from "effect/unstable/http";
-import type { RateLimiterError } from "effect/unstable/persistence/RateLimiter";
+import { HttpClient } from "effect/http";
+import type { RateLimiterError } from "effect/persistence/RateLimiter";
 import type { Runner } from "./Gate";
 
 /**

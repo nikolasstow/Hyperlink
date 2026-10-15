@@ -16,7 +16,7 @@ import { StyleSheet, View } from "react-native";
 import { canApplyChanges, canMarkChanges, canShowConflicts, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
 import { FileSync, type Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
-import { cachedHighlightSync, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
+import { cachedHighlightSync, type CodeToken, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
 import { cachedSessionTitle } from "../sessionCache";
 import { type ChangeColors, changeColorsOf } from "./changeColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
@@ -25,14 +25,18 @@ import { pinnable, type ScopeSymbol, type StickyRange, stickyRanges } from "./st
 import { codeFontSizeOf } from "../settings";
 import { textFor, useTheme } from "../theme";
 import { useCodeTheme } from "../useCodeTheme";
+import type { ScrollOffset } from "./FileScrolls";
 
 /** Re-tokenise no more than this often while typing. */
 const RETOKENIZE_MS = 150;
+/** Lines past the top one shown that are coloured before the first are shown:
+ * a screenful and some. */
+const FIRST_COLOURED_LINES = 100;
 
 /** Each line's coloured runs as offset ranges (what the native view wants) from
  * Shiki's per-line content tokens. UTF-16 lengths, since JS string length is UTF-16. */
 /** Tokens for the native view: with the text's length where it can check it. */
-const tokensJsonOf = (text: string, result: HighlightResult): string =>
+export const tokensJsonOf = (text: string, result: HighlightResult): string =>
   JSON.stringify(
     canVersionTokens
       ? {
@@ -71,7 +75,7 @@ const changeLabel = (change: ChangeColors, background: string): string => {
   return labels.every((label) => label === labels[0]) && typeof labels[0] === "string" ? labels[0] : "#FFFFFF";
 };
 
-const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: HighlightResult | undefined): EditorTheme => {
+export const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: HighlightResult | undefined): EditorTheme => {
   const colors = typeof theme === "string" ? undefined : theme.colors;
   const background = highlight?.background ?? colors?.["editor.background"];
   const foreground = highlight?.foreground ?? colors?.["editor.foreground"];
@@ -123,6 +127,10 @@ export const CodeEditor = (props: {
    * change (breadcrumbs.ts), and whether the line moved on down the file
    * (else back up). */
   readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>, onward: boolean) => void;
+  /** Where the code rests once laid out. */
+  readonly initialOffset?: ScrollOffset;
+  /** Where the code came to rest after a scroll. */
+  readonly onScrollRest?: (offset: ScrollOffset) => void;
   readonly ref?: React.Ref<CodeEditorApi>;
   /** Room above it (the transparent header). */
   readonly topInset: number;
@@ -179,10 +187,6 @@ export const CodeEditor = (props: {
     setText(props.text);
   }, [props.text]);
   const native = React.useRef<CodeEditorHandle>(null);
-  // DIAG(live-files): temporary — which native editor this build carries.
-  React.useEffect(() => {
-    console.log("[live] editor", props.name, "applyChanges", canApplyChanges, "conflict zones", canShowConflicts);
-  }, [props.name]);
   React.useImperativeHandle(
     props.ref,
     () => ({
@@ -245,6 +249,8 @@ export const CodeEditor = (props: {
   // The first tokenise is immediate (no flash); only re-tokenising while typing
   // is debounced.
   const firstRun = React.useRef(true);
+  // The last colouring, so the next colours only what an edit changed.
+  const lastHighlight = React.useRef<HighlightResult | undefined>(undefined);
 
   React.useEffect(() => {
     setEditorTheme(editorThemeOf(theme, undefined));
@@ -252,12 +258,25 @@ export const CodeEditor = (props: {
 
   React.useEffect(() => {
     let alive = true;
-    const delay = firstRun.current ? 0 : RETOKENIZE_MS;
+    const first = firstRun.current;
+    const delay = first ? 0 : RETOKENIZE_MS;
     firstRun.current = false;
     const handle = setTimeout(() => {
-      void tokenizeCode({ code: text, lang, theme })
+      // A large file shows coloured from the top while the rest is done: first
+      // once the lines on screen are, then each time the coloured part has
+      // doubled (each send carries every line so far).
+      let sendAt = atLine.current + FIRST_COLOURED_LINES;
+      const progress = (lines: ReadonlyArray<ReadonlyArray<CodeToken>>) => {
+        if (!alive || lines.length < sendAt) return;
+        sendAt = lines.length * 2;
+        setTokensJson(tokensJsonOf(text, { lines }));
+      };
+      // Kept on the device as opened; each version after is memory only, and
+      // colours only the lines it changed.
+      void tokenizeCode({ code: text, lang, theme, keep: first, previous: lastHighlight.current, stillWanted: () => alive, progress })
         .then((highlight) => {
           if (!alive) return;
+          lastHighlight.current = highlight;
           setTokensJson(tokensJsonOf(text, highlight));
           setEditorTheme(editorThemeOf(theme, highlight));
         })
@@ -265,7 +284,6 @@ export const CodeEditor = (props: {
       void stickyRanges(text, lang)
         .then((parsed) => {
           if (!alive) return;
-          console.log(`[sticky] ${lang}: ${parsed.length} ranges`);
           setStickyJson(JSON.stringify(pinnable(parsed)));
           ranges.current = parsed;
           reportScopesLatest.current();
@@ -297,9 +315,12 @@ export const CodeEditor = (props: {
         stickyFill={props.stickyFill}
         fontSize={codeFontSizeOf(appTheme)}
         fontFamily={appTheme.codeFont}
+        {...(props.initialOffset === undefined ? {} : { initialOffset: props.initialOffset.y, initialOffsetX: props.initialOffset.x })}
+        {...(props.onScrollRest === undefined
+          ? {}
+          : { onScrollRest: (event) => props.onScrollRest?.({ x: event.nativeEvent.offsetX ?? 0, y: event.nativeEvent.offset }) })}
         showLineNumbers
         wrapLines={false}
-        onStickyDebug={(event) => console.log("[sticky-native]", event.nativeEvent)}
         onLineChange={(event) => {
           atLine.current = event.nativeEvent.line;
           reportScopes();

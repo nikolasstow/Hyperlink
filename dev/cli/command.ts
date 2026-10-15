@@ -5,7 +5,7 @@
  * composes app tags; this one owns typecheck, lint, test, verify, docs, etc.
  * Examples stay out of this tree until rewritten one by one.
  */
-import { Command, Flag } from "effect/unstable/cli";
+import { Command, Flag } from "effect/cli";
 import * as checks from "./checks";
 import * as docs from "./docs";
 import { fileRouterCommand } from "./fileRouter";
@@ -77,7 +77,7 @@ const typecheck = Command.make("typecheck").pipe(
 );
 
 const test = Command.make("test", {
-  watch: Flag.boolean("watch").pipe(
+  watch: Flag.Boolean("watch").pipe(
     Flag.withAlias("w"),
     Flag.withDescription("Watch mode (`vitest` instead of `vitest run`)."),
     Flag.withDefault(false),

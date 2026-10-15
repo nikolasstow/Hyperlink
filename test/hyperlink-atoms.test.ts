@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { makeHyperlinkAtoms } from "../examples/apps/atoms/hyperlink-atoms";

@@ -23,7 +23,7 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { WorkPool } from "../../../src";
 import * as LogEntry from "../../../src/LogEntry";
 import * as Hyperlink from "../../../src/Hyperlink";
