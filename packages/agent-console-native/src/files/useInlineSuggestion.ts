@@ -9,15 +9,15 @@
  *
  * @internal
  */
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
 import * as React from "react";
 import { useAppContext } from "../AppContext";
-import { runFs } from "../effect/runtime";
+import { forkApp } from "../effect/runtime";
 import { completeAt } from "../language/complete";
 import { useSuggestionSettings } from "./suggestionSettings";
 
 /** How long typing must pause before a suggestion is asked for. */
-const PAUSE_MS = 600;
+const PAUSE_MS = 150;
 
 export interface Suggestion {
   readonly id: string;
@@ -43,18 +43,26 @@ export const useInlineSuggestion = (path: string, text: string | undefined, care
     }
     if (text === undefined || caret === undefined) return undefined;
     const id = ++asked.current;
+    // Typing on cancels the request in flight (its fetch is aborted), as the
+    // best editors do: only the latest pause is asked about.
+    let request: Fiber.Fiber<unknown> | undefined;
     const timer = setTimeout(() => {
-      void runFs(
+      request = forkApp(
         completeAt(server, path, text, caret, model).pipe(
-          Effect.catch((error) => Effect.logWarning(`[suggestions] none for ${path}`, error).pipe(Effect.as(""))),
+          Effect.tap((found) =>
+            Effect.sync(() => {
+              // Only for the text and caret it was asked about.
+              if (asked.current === id && found !== "") setSuggestion({ id: String(id), at: caret, text: found });
+            }),
+          ),
+          Effect.catch((error) => Effect.logWarning(`[suggestions] none for ${path}`, error)),
         ),
-      ).then((found) => {
-        // Only for the text and caret it was asked about.
-        if (asked.current !== id || found === "") return;
-        setSuggestion({ id: String(id), at: caret, text: found });
-      });
+      );
     }, PAUSE_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      if (request !== undefined) forkApp(Fiber.interrupt(request));
+    };
   }, [server, path, text, caret, settings.enabled, model]);
   return suggestion;
 };

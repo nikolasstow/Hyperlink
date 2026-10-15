@@ -15,6 +15,8 @@ import { Complete } from "agent-console-protocol";
 import { setSuggestionSettings, useSuggestionSettings } from "./suggestionSettings";
 
 const WIDTH = 200;
+/** The local fill-in-the-middle model on the Mac (Complete.local). */
+const LOCAL_LABEL = "Local (Qwen2.5-Coder)";
 const HEIGHT = 32;
 
 export const SuggestionModelMenu = (): React.ReactElement => {
@@ -22,11 +24,13 @@ export const SuggestionModelMenu = (): React.ReactElement => {
   const settings = useSuggestionSettings();
   const models = useModels(undefined);
   const chosen = settings.model === undefined ? undefined : models.find((model) => model.providerID === settings.model?.providerID && model.modelID === settings.model.id);
-  // What Default stands for: the server's pick, by the same rule.
+  // What Default stands for: the local model when it runs, else the server's
+  // pick of a chat model, by the same rule.
   const fallbackRef = Complete.defaultModel(models.map((model) => ({ providerID: model.providerID, id: model.modelID })));
   const fallback = fallbackRef === undefined ? undefined : models.find((model) => model.providerID === fallbackRef.providerID && model.modelID === fallbackRef.id);
-  const defaultLabel = fallback === undefined ? "Default" : `Default (${fallback.name})`;
-  const label = settings.model === undefined ? (fallback?.name ?? "Default") : (chosen?.name ?? settings.model.id);
+  const defaultLabel = `Default (Local Qwen, else ${fallback?.name ?? "a chat model"})`;
+  const isLocal = settings.model?.providerID === Complete.local.providerID;
+  const label = settings.model === undefined ? "Default" : isLocal ? LOCAL_LABEL : (chosen?.name ?? settings.model.id);
   const byProvider = React.useMemo(() => {
     const groups = new Map<string, { readonly name: string; readonly models: Array<ModelOption> }>();
     for (const model of models) {
@@ -50,6 +54,11 @@ export const SuggestionModelMenu = (): React.ReactElement => {
         modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
       >
         <Button label={defaultLabel} {...(settings.model === undefined ? { systemImage: "checkmark" } : {})} onPress={() => choose(undefined)} />
+        <Button
+          label={LOCAL_LABEL}
+          {...(isLocal ? { systemImage: "checkmark" } : {})}
+          onPress={() => setSuggestionSettings({ enabled: settings.enabled, model: Complete.local })}
+        />
         {byProvider.map(([providerID, group]) => (
           <Menu key={providerID} label={group.name}>
             {group.models.map((model) => (

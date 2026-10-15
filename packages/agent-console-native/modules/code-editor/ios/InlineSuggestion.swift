@@ -11,7 +11,8 @@ struct InlineSuggestionNative: Decodable {
 /// An inline suggestion drawn as ghost text at the caret, the way VS Code
 /// shows one: its first line goes on from the caret, the rest below it over a
 /// backing in the editor's colour. It shows only while the caret is where it
-/// was made for. A tap on it takes it; so does a double space (the second
+/// was made for; typing what it starts with shortens it (typed through). A
+/// tap on it takes it; so does a double space (the second
 /// space takes it, and the first is taken back; iOS's period shortcut, which
 /// turns two spaces into ". ", counts too). Anything else typed lets it go.
 final class InlineSuggestion {
@@ -100,6 +101,19 @@ final class InlineSuggestion {
                 current = InlineSuggestionNative(id: suggestion.id, at: space, text: suggestion.text)
                 return true
             }
+        }
+        // Typing what the suggestion starts with: it gets shorter, as it is
+        // typed through (no new one asked for, as the best editors do).
+        if !text.isEmpty, range.length == 0, range.location == suggestion.at, suggestion.text.hasPrefix(text) {
+            let rest = String(suggestion.text.dropFirst(text.count))
+            pendingSpace = nil
+            if rest.isEmpty {
+                current = nil
+                hide()
+            } else {
+                current = InlineSuggestionNative(id: suggestion.id, at: suggestion.at + (text as NSString).length, text: rest)
+            }
+            return true
         }
         // A first space at the caret: the suggestion waits for a second.
         if text == " " && range.length == 0 && range.location == suggestion.at && pendingSpace == nil {
