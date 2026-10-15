@@ -211,7 +211,8 @@ const DubzSessionAreaImpl = (props: {
       <Host style={{ flex: 1 }} ignoreSafeArea="all">
         <DubzHomeNativeView
           sessions={rows}
-          contentWidth={rowWidth}
+          // Full content width; the native view subtracts the left gap once.
+          contentWidth={width - WINDOW_SIDE * 2}
           topInset={DUBZ_TOP_BAR}
           bottomInset={PILL_AREA}
           leftInset={props.leftInset ?? 0}
