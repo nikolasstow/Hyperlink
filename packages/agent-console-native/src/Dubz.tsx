@@ -31,6 +31,7 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzCompactSync } from "./dubz/DubzCompactSync";
+import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { isDubzHomeNative } from "../modules/dubz-home";
@@ -39,6 +40,10 @@ import { useDubzWindow } from "./dubz/useDubzWindow";
 import { getBarPages, setBarPages, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
+
+/** DEV: swap the home suggestions for DubzActiveProbe — cycle active heights and
+ * see the height-model math live. Flip off before shipping. */
+const DUBZ_PROBE: boolean = true;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
@@ -405,13 +410,17 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <DubzCompactSync onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
-          <View style={[styles.mainArea, isDubzHomeNative ? styles.mainAreaFill : null, leftInset > 0 && !isDubzHomeNative ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
-            {suggestions.map((suggestion) =>
-              suggestion._tag === "Sessions" ? (
-                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={openViewAll} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
-              ) : (
-                <Suggestion key={suggestion._tag} suggestion={suggestion} />
-              ),
+          <View style={[styles.mainArea, isDubzHomeNative && !DUBZ_PROBE ? styles.mainAreaFill : null, leftInset > 0 && !isDubzHomeNative ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
+            {DUBZ_PROBE ? (
+              <DubzActiveProbe state={winState} onActiveHeight={onSuggestionActiveHeight} />
+            ) : (
+              suggestions.map((suggestion) =>
+                suggestion._tag === "Sessions" ? (
+                  <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={openViewAll} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
+                ) : (
+                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
+                ),
+              )
             )}
           </View>
           {/* The page, slid in from the right natively; kept mounted through the
