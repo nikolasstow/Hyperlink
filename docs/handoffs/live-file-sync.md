@@ -200,6 +200,8 @@ cycle logged ~5 `[live]` lines per file over the RN bridge.
 - Done (Dubz side, merge-safe): gated the chatty `[live]` `console.log`s behind
   `LIVE_LOG` in `LiveFiles.ts` (the `DIAG(live-files): temporary` lines). Cuts
   the bridge churn; does NOT change sync behaviour.
+  **Removed 2026-10-15** (eta): the device test passed, so the `[live]` logs
+  and `LIVE_LOG` are gone.
 - **Still needed (eta owns):** fix the FOLLOW SCOPE. The app should not follow
   giant / unopened trees — only files actually open in a tab or on screen. Why
   is `repos/effect/.../src` (and a directory path, not a file) being followed at
