@@ -11,7 +11,8 @@ import { buttonStyle, font, foregroundStyle, frame, lineLimit, menuIndicator, me
 import * as React from "react";
 import { type ModelOption, useModels } from "../models";
 import { useTextColors } from "../theme";
-import { defaultSuggestionModel, setSuggestionSettings, useSuggestionSettings } from "./suggestionSettings";
+import { Complete } from "agent-console-protocol";
+import { setSuggestionSettings, useSuggestionSettings } from "./suggestionSettings";
 
 const WIDTH = 200;
 const HEIGHT = 32;
@@ -21,7 +22,9 @@ export const SuggestionModelMenu = (): React.ReactElement => {
   const settings = useSuggestionSettings();
   const models = useModels(undefined);
   const chosen = settings.model === undefined ? undefined : models.find((model) => model.providerID === settings.model?.providerID && model.modelID === settings.model.id);
-  const fallback = defaultSuggestionModel(models);
+  // What Default stands for: the server's pick, by the same rule.
+  const fallbackRef = Complete.defaultModel(models.map((model) => ({ providerID: model.providerID, id: model.modelID })));
+  const fallback = fallbackRef === undefined ? undefined : models.find((model) => model.providerID === fallbackRef.providerID && model.modelID === fallbackRef.id);
   const defaultLabel = fallback === undefined ? "Default" : `Default (${fallback.name})`;
   const label = settings.model === undefined ? (fallback?.name ?? "Default") : (chosen?.name ?? settings.model.id);
   const byProvider = React.useMemo(() => {

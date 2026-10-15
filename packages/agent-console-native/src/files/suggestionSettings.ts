@@ -1,16 +1,14 @@
 /**
  * Inline suggestions in the editor (docs/handoffs/code-intelligence.md): on
- * or off, and the model that writes them. Without one chosen, a fast one the
- * server offers (`defaultSuggestionModel`): opencode's own default is its free
- * tier, which answers only opencode's apps. A setting (Settings → Files),
- * remembered on this device.
+ * or off, and the model that writes them; without one chosen, the server
+ * picks (agent-console-protocol `Complete.defaultModel`). A setting
+ * (Settings → Files), remembered on this device.
  *
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Schema } from "effect";
 import * as React from "react";
-import type { ModelOption } from "../models";
 
 const storageKey = "editorSuggestions";
 
@@ -54,8 +52,3 @@ export const setSuggestionSettings = (next: SuggestionSettings): void => {
 export const suggestionSettingsNow = (): SuggestionSettings => settings;
 
 export const useSuggestionSettings = (): SuggestionSettings => React.useSyncExternalStore(subscribe, () => settings);
-
-/** The model suggestions use when none is chosen: Claude Haiku 4.5 when the
- * server offers it (quick, and good at this), else another Haiku. */
-export const defaultSuggestionModel = (models: ReadonlyArray<ModelOption>): ModelOption | undefined =>
-  models.find((model) => model.providerID === "opencode" && model.modelID === "claude-haiku-4-5") ?? models.find((model) => model.modelID.includes("haiku"));

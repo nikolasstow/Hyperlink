@@ -17,7 +17,7 @@ export const Request = Schema.Struct({
   prefix: Schema.String,
   /** The text after the caret (its start). */
   suffix: Schema.String,
-  /** The model to ask; the server's default without one. */
+  /** The model to ask; without one, the server picks (`defaultModel`). */
   model: Schema.optionalKey(Schema.Struct({ providerID: Schema.String, id: Schema.String })),
 });
 export type Request = typeof Request.Type;
@@ -27,3 +27,9 @@ export const Response = Schema.Struct({
   text: Schema.String,
 });
 export type Response = typeof Response.Type;
+
+/** The model a suggestion is written by when none is chosen: Claude Haiku 4.5
+ * when offered (quick, and good at this), else another Haiku. Not opencode's
+ * own default: that is its free tier, which answers only opencode's apps. */
+export const defaultModel = <M extends { readonly providerID: string; readonly id: string }>(models: ReadonlyArray<M>): M | undefined =>
+  models.find((model) => model.providerID === "opencode" && model.id === "claude-haiku-4-5") ?? models.find((model) => model.id.includes("haiku"));

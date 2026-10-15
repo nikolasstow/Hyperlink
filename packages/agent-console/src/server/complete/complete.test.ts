@@ -14,6 +14,11 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
   let body = "";
   request.on("data", (chunk: Buffer) => (body += chunk.toString()));
   request.on("end", () => {
+    if (request.url === "/api/model") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ data: [{ id: "big-pickle", providerID: "opencode", enabled: true }, { id: "claude-haiku-4-5", providerID: "opencode", enabled: true }] }));
+      return;
+    }
     asked.push({ url: request.url ?? "", body: JSON.parse(body) });
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ data: { text: "```ts\nvalues.reduce((a, b) => a + b, 0);\n```" } }));
@@ -50,6 +55,21 @@ describe("POST /complete", () => {
       expect(asked[0]?.url).toBe("/api/experimental/generate");
       expect(asked[0]?.body).toEqual({ prompt: promptOf(request, PLACE), model: { providerID: "opencode", id: "claude-haiku-4-5" } });
       expect(promptOf(request, PLACE)).toContain("Names valid at the cursor (prefer these): reduce: (callback) => number; length: number");
+    } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("POST /complete without a model", () => {
+  it("asks with the server's pick (Claude Haiku 4.5), never opencode's own default", async () => {
+    const { handler, dispose } = HttpRouter.toWebHandler(completeRoute, { disableLogger: true });
+    const context = await Effect.runPromise(Layer.build(Layer.mergeAll(FetchHttpClient.layer, knowing)).pipe(Effect.scoped));
+    try {
+      asked.length = 0;
+      const { model: _model, ...noModel } = request;
+      await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify(noModel), headers: { "content-type": "application/json" } }), context);
+      expect(asked[0]?.body).toMatchObject({ model: { providerID: "opencode", id: "claude-haiku-4-5" } });
     } finally {
       await dispose();
     }

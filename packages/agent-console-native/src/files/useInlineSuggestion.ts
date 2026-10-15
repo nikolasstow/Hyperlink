@@ -11,8 +11,7 @@ import * as React from "react";
 import { useAppContext } from "../AppContext";
 import { runFs } from "../effect/runtime";
 import { completeAt } from "../language/complete";
-import { useModels } from "../models";
-import { defaultSuggestionModel, useSuggestionSettings } from "./suggestionSettings";
+import { useSuggestionSettings } from "./suggestionSettings";
 
 /** How long typing must pause before a suggestion is asked for. */
 const PAUSE_MS = 600;
@@ -27,10 +26,10 @@ export interface Suggestion {
 export const useInlineSuggestion = (path: string, text: string | undefined, caret: number | undefined): Suggestion | undefined => {
   const { server } = useAppContext();
   const settings = useSuggestionSettings();
-  const fallback = defaultSuggestionModel(useModels(undefined));
-  const providerID = settings.model?.providerID ?? fallback?.providerID;
-  const modelID = settings.model?.id ?? fallback?.modelID;
-  // One value per model, so the request waits on the model, not on renders.
+  // The model chosen (none: the server picks). One value per model, so the
+  // request waits on the model, not on renders.
+  const providerID = settings.model?.providerID;
+  const modelID = settings.model?.id;
   const model = React.useMemo(() => (providerID === undefined || modelID === undefined ? undefined : { providerID, id: modelID }), [providerID, modelID]);
   const [suggestion, setSuggestion] = React.useState<Suggestion | undefined>(undefined);
   const asked = React.useRef(0);

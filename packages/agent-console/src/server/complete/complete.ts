@@ -17,6 +17,9 @@ import { opencodePassword, opencodeUrl, withOpencodeAuth } from "../opencodeServ
 /** How long the language server is given for its part of the prompt. */
 const CONTEXT_WAIT = Duration.millis(600);
 
+/** What is read of opencode's `GET /api/model`. */
+const OpencodeModels = Schema.Struct({ data: Schema.Array(Schema.Struct({ id: Schema.String, providerID: Schema.String, enabled: Schema.Boolean })) });
+
 const Generated = Schema.Struct({ data: Schema.Struct({ text: Schema.String }) });
 
 /** The prompt: the file's name, then the text either side of the caret. */
@@ -61,13 +64,30 @@ export const completeRoute = HttpRouter.add("POST", Complete.path, (request) =>
     const base = yield* opencodeUrl;
     const password = yield* opencodePassword;
     const http = yield* HttpClient.HttpClient;
-    const generated = yield* HttpClientRequest.post(`${base.replace(/\/+$/, "")}/api/experimental/generate`).pipe(
+    // No model asked for: the server's pick (Complete.defaultModel), never
+    // opencode's own default (its free tier refuses us).
+    const model =
+      asked.model ??
+      (yield* http.get(`${base.replace(/\/+$/, "")}/api/model`, { headers: withOpencodeAuth(Headers.empty, password) }).pipe(
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.flatMap(HttpClientResponse.schemaBodyJson(OpencodeModels)),
+        Effect.map((models) => {
+          const picked = Complete.defaultModel(models.data.filter((each) => each.enabled));
+          return picked === undefined ? undefined : { providerID: picked.providerID, id: picked.id };
+        }),
+      ));
+    const response = yield* HttpClientRequest.post(`${base.replace(/\/+$/, "")}/api/experimental/generate`).pipe(
       HttpClientRequest.setHeaders(withOpencodeAuth(Headers.empty, password)),
-      HttpClientRequest.bodyJsonUnsafe({ prompt: promptOf(asked, context), ...(asked.model === undefined ? {} : { model: asked.model }) }),
+      HttpClientRequest.bodyJsonUnsafe({ prompt: promptOf(asked, context), ...(model === undefined ? {} : { model }) }),
       http.execute,
-      Effect.flatMap(HttpClientResponse.filterStatusOk),
-      Effect.flatMap(HttpClientResponse.schemaBodyJson(Generated)),
     );
+    // opencode's refusal says why (no model, a model it will not run): kept.
+    if (response.status < 200 || response.status >= 300) {
+      const why = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
+      const asking = model === undefined ? "opencode's default model" : `${model.providerID}/${model.id}`;
+      return yield* Effect.fail(new Error(`generate answered ${response.status} for ${asking}: ${why.slice(0, 300)}`));
+    }
+    const generated = yield* HttpClientResponse.schemaBodyJson(Generated)(response);
     return yield* HttpServerResponse.schemaJson(Complete.Response)({ text: insertionOf(generated.data.text, asked.suffix) });
   }).pipe(
     Effect.provideService(HttpServerRequest.HttpServerRequest, request),
