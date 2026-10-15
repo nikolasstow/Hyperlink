@@ -32,6 +32,8 @@ import { registerSave, unregisterSave } from "./fileSave";
 import { getFileTextSync } from "./fileTextCache";
 import { isMarkdown, useMarkdownMode } from "./markdownMode";
 import { MarkdownReader } from "./MarkdownReader";
+import { shownDiagnostics } from "./shownDiagnostics";
+import { useDiagnostics } from "../language/useLanguage";
 import { flashFile } from "./saveLight";
 import { editLiveFile, liveFileNow, resolveLiveConflict, saveLiveFile, useLiveFile, useLiveFileEvents, useLiveFileProblem, useOnScreen } from "./useLiveFiles";
 
@@ -70,10 +72,12 @@ export const FileView = (props: {
   readonly onOpenSession?: (sessionID: string) => void;
   /** The named scopes the line you are at is in, when they change. */
   readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>, onward: boolean) => void;
+  /** Where the caret is while editing, as it moves; undefined once editing ends. */
+  readonly onCaret?: (offset: number | undefined) => void;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
-  const { path, name, line, repo, topInset, bottomInset, onOpenSession, onScopes } = props;
+  const { path, name, line, repo, topInset, bottomInset, onOpenSession, onScopes, onCaret } = props;
   // Opens where it was left (and its tab's preview shows the same place).
   const [initialOffset] = React.useState(() => scrollOffsetOf(path));
   // Followed while on screen (and before, when it is open in a tab or kept).
@@ -176,6 +180,15 @@ export const FileView = (props: {
   );
 
   const conflicts = live?.conflicts ?? noConflicts;
+  // Its problems from the Mac's language server, where they are in the text
+  // you see (unsaved edits move them).
+  const problems = useDiagnostics(path);
+  const liveBase = live?.base;
+  const liveText = live?.text;
+  const diagnostics = React.useMemo(
+    () => (problems === undefined ? undefined : liveBase === undefined || liveText === undefined ? problems.diagnostics : shownDiagnostics(problems.diagnostics, liveBase, liveText)),
+    [problems, liveBase, liveText],
+  );
 
   // A Markdown file can show rendered (read) or in the editor (write), from
   // its top bar. Rendered, it lies over the editor, which stays mounted with
@@ -218,6 +231,8 @@ export const FileView = (props: {
             onConflictChoice={(index, keep) => resolveLiveConflict(path, index, keep)}
             {...(onOpenSession === undefined ? {} : { onOpenSession })}
             {...(onScopes === undefined ? {} : { onScopes })}
+            {...(onCaret === undefined ? {} : { onCaret })}
+            {...(diagnostics === undefined ? {} : { diagnostics })}
             initialOffset={initialOffset}
             onScrollRest={(offset) => keepScrollOffset(path, offset)}
             topInset={topInset + EDITOR_TOP_MARGIN}

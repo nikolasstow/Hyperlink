@@ -49,6 +49,12 @@ export interface EditorTheme {
   readonly changeDeleted?: string;
   readonly changeFlash?: string;
   readonly changeLabel?: string;
+  /** A problem's wavy line, by severity (diagnosticColors.ts;
+   * `apiVersion` 14). */
+  readonly diagnosticError?: string;
+  readonly diagnosticWarning?: string;
+  readonly diagnosticInfo?: string;
+  readonly diagnosticHint?: string;
   /** Whether the theme is light: glass drawn in the editor takes this
    * appearance, not the phone's. */
   readonly light?: boolean;
@@ -104,6 +110,12 @@ export interface CodeEditorNativeProps extends ViewProps {
   /** Where the code came to rest after a scroll, points from its top
    * (`offset`) and its left (`offsetX`, from `apiVersion` 13). */
   readonly onScrollRest?: (event: NativeSyntheticEvent<{ readonly offset: number; readonly offsetX?: number }>) => void;
+  /** The file's problems, as wavy lines: `[{start,end,severity,message,source?,code?}]`
+   * (UTF-16 offsets into `text`; `apiVersion` 14). */
+  readonly diagnosticsJson?: string;
+  /** Where the caret is while editing, as it moves (`offset`, UTF-16); no
+   * `offset` once editing ends (`apiVersion` 14). */
+  readonly onCaretChange?: (event: NativeSyntheticEvent<{ readonly offset?: number }>) => void;
   /** The line you are at (0-based), when it changes: the caret's while
    * editing, else the top of the visible code (`apiVersion` 10). */
   readonly onLineChange?: (event: NativeSyntheticEvent<{ readonly line: number }>) => void;
@@ -172,6 +184,10 @@ export const canVersionTokens = apiVersion >= 7;
 
 /** Whether the editor marks an agent's changes in the gutter (`markChanges`). */
 export const canMarkChanges = apiVersion >= 8;
+
+/** Whether this build draws a file's problems and reports the caret
+ * (`apiVersion` 14). */
+export const canShowDiagnostics = apiVersion >= 14;
 
 /** Put the keyboard down but keep editing the file being edited (the caret
  * stays; `apiVersion` 9). False when no file is being edited, or this build

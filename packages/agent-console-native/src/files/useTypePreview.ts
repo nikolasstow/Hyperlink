@@ -1,7 +1,8 @@
 /**
  * The type preview's content for the open file (typePreview.ts): asked of the
- * Mac's language server as the scope you are in changes, a moment after it
- * settles, so tapping the breadcrumbs only shows what is already here.
+ * Mac's language server as the caret moves (while editing) or the scope you
+ * are in changes, a moment after it settles, so tapping the breadcrumbs only
+ * shows what is already here.
  *
  * @internal
  */
@@ -10,7 +11,7 @@ import { Option } from "effect";
 import * as React from "react";
 import { hoverAt } from "../language/useLanguage";
 import type { ScopeSymbol } from "./stickyRanges";
-import { type HoverParts, hoverParts, scopeAnchor } from "./typePreview";
+import { caretAnchor, type HoverParts, hoverParts, scopeAnchor } from "./typePreview";
 import { useLiveFile } from "./useLiveFiles";
 
 /** How long the place must stay put before it is asked about. */
@@ -18,12 +19,15 @@ const SETTLE_MS = 300;
 
 export type TypePreview = { readonly kind: "loading" } | { readonly kind: "none" } | { readonly kind: "ready"; readonly parts: HoverParts };
 
-/** The preview for `path` at `scopes` (the breadcrumbs'); undefined for a file
- * no language server here knows (no preview at all). */
-export const useTypePreview = (path: string | undefined, scopes: ReadonlyArray<ScopeSymbol>): TypePreview | undefined => {
+/** The preview for `path` at the caret, else at `scopes` (the breadcrumbs');
+ * undefined for a file no language server here knows (no preview at all). */
+export const useTypePreview = (path: string | undefined, scopes: ReadonlyArray<ScopeSymbol>, caret: number | undefined): TypePreview | undefined => {
   const supported = path !== undefined && Language.languageOf(path) !== undefined;
   const text = useLiveFile(path ?? "")?.text;
-  const anchor = React.useMemo(() => (text === undefined ? undefined : scopeAnchor(text, scopes)), [text, scopes]);
+  const anchor = React.useMemo(
+    () => (text === undefined ? undefined : caret !== undefined ? caretAnchor(text, caret) : scopeAnchor(text, scopes)),
+    [text, scopes, caret],
+  );
   const [preview, setPreview] = React.useState<TypePreview>({ kind: "loading" });
   React.useEffect(() => {
     if (!supported || path === undefined) return undefined;

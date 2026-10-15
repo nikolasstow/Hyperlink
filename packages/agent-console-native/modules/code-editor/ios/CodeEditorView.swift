@@ -52,6 +52,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// Where the code came to rest after a scroll: `{offset}`, points from the
     /// code's top (0 at the top, whatever the insets).
     let onScrollRest = EventDispatcher()
+    /// Where the caret is while editing, when it moves: `{offset}` (UTF-16);
+    /// `{}` once editing ends.
+    let onCaretChange = EventDispatcher()
+    private var reportedCaret: Int?
     /// Where to rest the code once it is laid out (a file reopening where it
     /// was left); applied once.
     private var pendingOffset: CGPoint?
@@ -192,6 +196,14 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         }
         return marks
     }()
+    /// The file's problems, as wavy lines (Diagnostics.swift).
+    private lazy var diagnostics: Diagnostics = {
+        let found = Diagnostics(textView: textView)
+        found.onViewsChanged = { [weak self] in
+            self?.keepAboveGutter()
+        }
+        return found
+    }()
     /// Closes a change's popover on a tap anywhere else.
     private lazy var popoverDismissal: UITapGestureRecognizer = {
         let tap = UITapGestureRecognizer(target: self, action: #selector(tappedEditor(_:)))
@@ -201,12 +213,13 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     }()
 
     private func keepAboveGutter() {
-        textView.viewsAboveGutter = conflictZones.views + changeMarks.views
+        textView.viewsAboveGutter = conflictZones.views + changeMarks.views + diagnostics.views
         textView.setNeedsLayout()
     }
 
     @objc private func tappedEditor(_ tap: UITapGestureRecognizer) {
         changeMarks.tapped(at: tap.location(in: textView))
+        diagnostics.tapped(at: tap.location(in: textView))
     }
     private var flashGeneration = 0
     /// The flash holds, then fades out.
@@ -290,6 +303,11 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     /// Mark lines an agent changed (`[{kind,from,to,sessionID?,title?,at}]`
     /// against the current text), until the file is closed.
+    /// The file's problems as JSON: `[{start,end,severity,message,source?,code?}]`.
+    func setDiagnosticsJson(_ json: String) {
+        diagnostics.set(decodeJson([DiagnosticNative].self, json) ?? [])
+    }
+
     func markChanges(_ marksJson: String) {
         changeMarks.add(decodeJson([ChangeMarkNative].self, marksJson) ?? [])
     }
@@ -544,6 +562,23 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             markColors.light = value
         }
         changeMarks.colors = markColors
+        var problemColors = diagnostics.colors
+        if let value = theme.diagnosticError.flatMap({ UIColor(shikiHex: $0) }) {
+            problemColors.error = value
+        }
+        if let value = theme.diagnosticWarning.flatMap({ UIColor(shikiHex: $0) }) {
+            problemColors.warning = value
+        }
+        if let value = theme.diagnosticInfo.flatMap({ UIColor(shikiHex: $0) }) {
+            problemColors.info = value
+        }
+        if let value = theme.diagnosticHint.flatMap({ UIColor(shikiHex: $0) }) {
+            problemColors.hint = value
+        }
+        if let value = theme.light {
+            problemColors.light = value
+        }
+        diagnostics.colors = problemColors
         if let value = theme.changeFlash.flatMap({ UIColor(shikiHex: $0) }) {
             flashColor = value
         }
@@ -705,6 +740,21 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         onLineChange(["line": line])
     }
 
+    /// The caret's offset while editing, when it moves (the type preview and
+    /// suggestions follow it); none once editing ends.
+    private func reportCaret() {
+        let caret = textView.isEditing ? textView.selectedRange.location : nil
+        guard caret != reportedCaret else {
+            return
+        }
+        reportedCaret = caret
+        if let caret {
+            onCaretChange(["offset": caret])
+        } else {
+            onCaretChange([:])
+        }
+    }
+
     private func hideSticky() {
         if !sticky.isHidden {
             sticky.isHidden = true
@@ -846,6 +896,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         }
         conflictZones.layout()
         changeMarks.layout()
+        diagnostics.layout()
         updateSticky()
     }
 
@@ -854,6 +905,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         conflictZones.followHorizontalScroll()
         changeMarks.followHorizontalScroll()
+        diagnostics.scrolled()
         updateSticky()
         reportLine()
     }
@@ -881,6 +933,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         conflictZones.textWillChange(in: range, replacementLength: (text as NSString).length)
         changeMarks.textWillChange(in: range, replacementLength: (text as NSString).length)
+        diagnostics.textWillChange(in: range, replacementLength: (text as NSString).length)
         tokenStore.textWillChange(in: range, replacement: text)
         return true
     }
@@ -892,6 +945,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
 
     func textViewDidChangeSelection(_ textView: TextView) {
         reportLine()
+        reportCaret()
     }
 
     func textViewDidEndEditing(_ textView: TextView) {
@@ -901,6 +955,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             Self.editing = nil
         }
         reportLine()
+        reportCaret()
     }
 
     func textViewDidChange(_ textView: TextView) {
@@ -912,6 +967,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         lineStarts = lineStartOffsets(textView.text as NSString)
         conflictZones.layout()
         changeMarks.layout()
+        diagnostics.layout()
         onTextChange(["text": textView.text])
     }
 }

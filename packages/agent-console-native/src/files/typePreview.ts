@@ -24,6 +24,13 @@ export const scopeAnchor = (text: string, scopes: ReadonlyArray<ScopeSymbol>): n
   return word === null ? undefined : start + word.index;
 };
 
+const WORD = /[\w$]/;
+
+/** What the preview asks about at the caret: the word the caret is on, or
+ * the one just before it (a caret usually sits right after what was typed). */
+export const caretAnchor = (text: string, caret: number): number =>
+  WORD.test(text.charAt(caret)) || !WORD.test(text.charAt(caret - 1)) ? caret : caret - 1;
+
 /** A hover, as the preview shows it: its code (the type, compact), then its
  * docs (Markdown). */
 export interface HoverParts {

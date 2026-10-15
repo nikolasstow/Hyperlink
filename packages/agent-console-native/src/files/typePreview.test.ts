@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hoverParts, scopeAnchor } from "./typePreview";
+import { caretAnchor, hoverParts, scopeAnchor } from "./typePreview";
 
 const text = ["export class Store {", "  get(key: string) {", "    return getter(key);", "  }", "}"].join("\n");
 
@@ -30,5 +30,14 @@ describe("hoverParts", () => {
   it("keeps docs alone, and code alone", () => {
     expect(hoverParts("Just words.")).toEqual({ code: [], docs: "Just words." });
     expect(hoverParts("```ts\nlet a: 1\n```")).toEqual({ code: [{ lang: "ts", text: "let a: 1" }], docs: "" });
+  });
+});
+
+describe("caretAnchor", () => {
+  it("is the word the caret is on, or the one just before it", () => {
+    const line = "const total = count + 1;";
+    expect(caretAnchor(line, line.indexOf("count") + 2)).toBe(line.indexOf("count") + 2);
+    expect(caretAnchor(line, line.indexOf("count") + 5)).toBe(line.indexOf("count") + 4);
+    expect(caretAnchor(line, line.indexOf("+"))).toBe(line.indexOf("+"));
   });
 });

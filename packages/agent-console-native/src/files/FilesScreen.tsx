@@ -274,8 +274,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const [scopes, setScopes] = React.useState<{ readonly path: string; readonly scopes: ReadonlyArray<ScopeSymbol> } | undefined>(undefined);
   const crumbPath = pathCrumbs(current.path, currentWt?.path ?? primary.dir);
   const crumbSymbols = scopes?.path === current.path ? scopes.scopes : [];
+  // Where the caret is while editing the file shown, for the type preview.
+  const [caret, setCaret] = React.useState<{ readonly path: string; readonly offset: number } | undefined>(undefined);
   // The type of what you are at, ready before the breadcrumbs open to show it.
-  const typePreview = useTypePreview(current.kind === "file" ? current.path : undefined, crumbSymbols);
+  const typePreview = useTypePreview(current.kind === "file" ? current.path : undefined, crumbSymbols, caret?.path === current.path ? caret.offset : undefined);
   // Which way the scopes roll as they change: set before they do.
   const crumbRoll = useSharedValue<RollDirection>(1);
   // The breadcrumbs dropped open below the top buttons; a new page, or the
@@ -763,7 +765,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                 <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + EDITOR_BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} onScopes={(next, onward) => {
                     crumbRoll.value = onward ? 1 : -1;
                     setScopes({ path: current.path, scopes: next });
-                  }} />
+                  }} onCaret={(offset) => setCaret(offset === undefined ? undefined : { path: current.path, offset })} />
               )}
               {cover === undefined ? null : (
                 <Reanimated.View style={[StyleSheet.absoluteFill, coverStyle]} pointerEvents="none">

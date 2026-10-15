@@ -56,6 +56,14 @@ const lines = source.split("\n");
 const edited = (at: number, replace: number, insert: ReadonlyArray<string>): string => [...lines.slice(0, at), ...insert, ...lines.slice(at + replace)].join("\n");
 /** A comment line well into the file: deleting it leaves the rest reading alike. */
 const aComment = lines.findIndex((line, index) => index > 40 && line.trim().startsWith("//"));
+/** A one-line statement in a function well into the file: replacing it, or
+ * adding lines before it, leaves the rest reading alike. Found, not fixed:
+ * the file is this app's own source, and changes. */
+const STATEMENT = /^( +)const \w+ = [^{(\[]*;$/;
+const aStatement = lines.findIndex((line, index) => index > 100 && STATEMENT.test(line));
+const laterStatement = lines.findIndex((line, index) => index > aStatement + 30 && STATEMENT.test(line));
+/** Lines at the indent of the statement they go by. */
+const at = (index: number, insert: ReadonlyArray<string>): ReadonlyArray<string> => insert.map((line) => `${STATEMENT.exec(lines[index] ?? "")?.[1] ?? ""}${line}`);
 
 describe("tokenizeInSlices", () => {
   it("colours as Shiki does the whole text at once", async () => {
@@ -65,7 +73,9 @@ describe("tokenizeInSlices", () => {
 
   it("after an edit, colours only the lines about it, and the result is as fresh", async () => {
     const { result: first } = await sliced(source);
-    for (const code of [edited(120, 1, ["  const changed = 1;"]), edited(200, 0, ["// a new line", "const more = 2;"]), edited(aComment, 1, [])]) {
+    expect(aStatement).toBeGreaterThan(0);
+    expect(laterStatement).toBeGreaterThan(0);
+    for (const code of [edited(aStatement, 1, at(aStatement, ["const changed = 1;"])), edited(laterStatement, 0, at(laterStatement, ["// a new line", "const more = 2;"])), edited(aComment, 1, [])]) {
       const { result, coloured } = await sliced(code, first);
       expect(result.lines).toEqual(whole(code));
       expect(coloured).toBeLessThan(10);

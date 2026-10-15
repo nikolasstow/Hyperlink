@@ -13,12 +13,14 @@
 import type { ThemeRegistrationRaw } from "shiki/core";
 import * as React from "react";
 import { StyleSheet, View } from "react-native";
-import { canApplyChanges, canMarkChanges, canShowConflicts, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
+import { canApplyChanges, canMarkChanges, canShowConflicts, canShowDiagnostics, canVersionTokens, CodeEditorNativeView, type CodeEditorHandle, type ConflictChoice, type EditorTheme, type LineToken } from "../../modules/code-editor";
 import { FileSync, type Rebase } from "file-sync";
 import type { EditorUpdate } from "./liveFile";
 import { cachedHighlightSync, type CodeToken, type HighlightResult, langFromFilename, tokenizeCode } from "../shikiHighlighter";
 import { cachedSessionTitle } from "../sessionCache";
+import type { Language } from "agent-console-protocol";
 import { type ChangeColors, changeColorsOf } from "./changeColors";
+import { diagnosticColorsOf } from "./diagnosticColors";
 import { isLightTheme, type MergeColors, mergeColorsOf, seenOver } from "./mergeColors";
 import { scopesAt } from "./breadcrumbs";
 import { pinnable, type ScopeSymbol, type StickyRange, stickyRanges } from "./stickyRanges";
@@ -82,7 +84,12 @@ export const editorThemeOf = (theme: string | ThemeRegistrationRaw, highlight: H
   const light = isLightTheme(typeof theme === "string" ? undefined : theme.type, background);
   const merge = mergeColorsOf(colors);
   const change = changeColorsOf(colors, light);
+  const problem = diagnosticColorsOf(colors, light);
   return {
+    diagnosticError: problem.error,
+    diagnosticWarning: problem.warning,
+    diagnosticInfo: problem.info,
+    diagnosticHint: problem.hint,
     changeAdded: change.added,
     changeModified: change.modified,
     changeDeleted: change.deleted,
@@ -127,6 +134,11 @@ export const CodeEditor = (props: {
    * change (breadcrumbs.ts), and whether the line moved on down the file
    * (else back up). */
   readonly onScopes?: (scopes: ReadonlyArray<ScopeSymbol>, onward: boolean) => void;
+  /** The file's problems (offsets into `text` as shown), drawn as wavy lines. */
+  readonly diagnostics?: ReadonlyArray<Language.Diagnostic>;
+  /** Where the caret is while editing, as it moves; undefined once editing
+   * ends. */
+  readonly onCaret?: (offset: number | undefined) => void;
   /** Where the code rests once laid out. */
   readonly initialOffset?: ScrollOffset;
   /** Where the code came to rest after a scroll. */
@@ -220,6 +232,9 @@ export const CodeEditor = (props: {
   // again with tokens once they are in.
   const conflicts = props.conflicts;
   const [conflictsJson, setConflictsJson] = React.useState("[]");
+  // The problems as the native view takes them: one string, remade only when
+  // they change.
+  const diagnosticsJson = React.useMemo(() => JSON.stringify(props.diagnostics ?? []), [props.diagnostics]);
   React.useEffect(() => {
     const plain = (conflicts ?? []).map((conflict) => ({
       from: conflict.from,
@@ -306,6 +321,8 @@ export const CodeEditor = (props: {
         style={styles.fill}
         text={nativeText}
         {...(canShowConflicts ? { conflictsJson } : {})}
+        {...(canShowDiagnostics ? { diagnosticsJson } : {})}
+        {...(canShowDiagnostics && props.onCaret !== undefined ? { onCaretChange: (event) => props.onCaret?.(event.nativeEvent.offset) } : {})}
         editable={props.editable}
         tokensJson={tokensJson}
         stickyRangesJson={stickyJson}

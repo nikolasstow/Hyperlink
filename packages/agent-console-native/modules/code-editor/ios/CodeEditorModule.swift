@@ -25,6 +25,12 @@ struct ThemeRecord: Record {
     @Field var changeDeleted: String?
     @Field var changeFlash: String?
     @Field var changeLabel: String?
+    /// A problem's wavy line, by severity, from the theme
+    /// (`editorError.foreground`, …; diagnosticColors.ts).
+    @Field var diagnosticError: String?
+    @Field var diagnosticWarning: String?
+    @Field var diagnosticInfo: String?
+    @Field var diagnosticHint: String?
     /// Whether the theme is light: glass in the editor takes this appearance.
     @Field var light: Bool?
 
@@ -54,8 +60,10 @@ public final class CodeEditorModule: Module {
         //     code resting where it was left (`initialOffset`, `onScrollRest`).
         // 13: across too (`initialOffsetX`, `onScrollRest`'s `offsetX`, a
         //     preview's `offsetX`).
+        // 14: a file's problems as wavy lines (`diagnosticsJson`, the theme's
+        //     `diagnostic*` colours), and the caret's offset (`onCaretChange`).
         Constants([
-            "apiVersion": 13,
+            "apiVersion": 14,
         ])
 
         AsyncFunction("registerFont") { (uri: String) -> [String] in
@@ -83,7 +91,7 @@ public final class CodeEditorModule: Module {
         }.runOnQueue(.main)
 
         View(CodeEditorView.self) {
-            Events("onTextChange", "onConflictAction", "onOpenSession", "onLineChange", "onScrollRest")
+            Events("onTextChange", "onConflictAction", "onOpenSession", "onLineChange", "onScrollRest", "onCaretChange")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)
@@ -126,6 +134,9 @@ public final class CodeEditorModule: Module {
             }
             Prop("initialOffsetX") { (view: CodeEditorView, value: Double) in
                 view.setInitialOffsetX(value)
+            }
+            Prop("diagnosticsJson") { (view: CodeEditorView, value: String) in
+                view.setDiagnosticsJson(value)
             }
             Prop("conflictsJson") { (view: CodeEditorView, value: String) in
                 view.setConflictsJson(value)
