@@ -58,6 +58,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// An inline suggestion was taken (a tap, or a double space): `{id}`.
     let onSuggestionAccept = EventDispatcher()
     private var reportedCaret: Int?
+    /// True while Return's indent goes in, so that edit is not indented again.
+    private var isIndenting = false
     /// Where to rest the code once it is laid out (a file reopening where it
     /// was left); applied once.
     private var pendingOffset: CGPoint?
@@ -130,6 +132,15 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         textView.gutterLeadingPadding = 10
         textView.gutterTrailingPadding = 10
         textView.isLineWrappingEnabled = false
+        // The keyboard's own formatting is off: it is code, and the editor does
+        // its own (AutoIndent.swift; suggestions take a double space, which iOS
+        // would make ". ").
+        textView.autocorrectionType = .no
+        textView.autocapitalizationType = .none
+        textView.smartQuotesType = .no
+        textView.smartDashesType = .no
+        textView.smartInsertDeleteType = .no
+        textView.spellCheckingType = .no
         textView.alwaysBounceVertical = true
         textView.contentInsetAdjustmentBehavior = .never
         textView.setLanguageMode(ShikiLanguageMode(store: tokenStore))
@@ -959,6 +970,19 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         // A double space takes the suggestion instead (it puts it in itself).
         guard suggestion.shouldChange(in: range, replacementText: text) else {
             return false
+        }
+        // Return indents the new line (AutoIndent.swift), as one edit.
+        if text == "\n", range.length == 0, !isApplyingText, !isIndenting, !suggestion.isAccepting {
+            let line = AutoIndent.newline(in: textView.text as NSString, at: range.location)
+            if line.insert != "\n",
+               let from = textView.position(from: textView.beginningOfDocument, offset: range.location),
+               let at = textView.textRange(from: from, to: from) {
+                isIndenting = true
+                textView.replace(at, withText: line.insert)
+                isIndenting = false
+                textView.selectedRange = NSRange(location: range.location + line.caret, length: 0)
+                return false
+            }
         }
         conflictZones.textWillChange(in: range, replacementLength: (text as NSString).length)
         changeMarks.textWillChange(in: range, replacementLength: (text as NSString).length)

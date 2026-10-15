@@ -1,8 +1,11 @@
 /**
  * The inline suggestion for the open file (docs/handoffs/code-intelligence.md):
- * asked for once typing pauses with the caret in place, dropped as soon as
- * anything moves, so a suggestion only ever shows for the text and caret it
- * was made for. Off when the setting is off.
+ * asked for once typing pauses with the caret in place; an answer that comes
+ * after the text or caret moved is dropped. What shows, and when it goes, is
+ * the editor's (InlineSuggestion.swift: only while the caret is where it was
+ * made for; a first space keeps it for the double space). So a suggestion is
+ * not cleared here as typing goes on: that would take it away between the
+ * two spaces. Off when the setting is off.
  *
  * @internal
  */
@@ -34,8 +37,11 @@ export const useInlineSuggestion = (path: string, text: string | undefined, care
   const [suggestion, setSuggestion] = React.useState<Suggestion | undefined>(undefined);
   const asked = React.useRef(0);
   React.useEffect(() => {
-    setSuggestion(undefined);
-    if (!settings.enabled || text === undefined || caret === undefined) return undefined;
+    if (!settings.enabled) {
+      setSuggestion(undefined);
+      return undefined;
+    }
+    if (text === undefined || caret === undefined) return undefined;
     const id = ++asked.current;
     const timer = setTimeout(() => {
       void runFs(

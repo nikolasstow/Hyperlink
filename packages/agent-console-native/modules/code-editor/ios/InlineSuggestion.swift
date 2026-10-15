@@ -44,6 +44,10 @@ final class InlineSuggestion {
     /// Where a space was typed with the suggestion showing: a second one
     /// right after it takes the suggestion.
     private var pendingSpace: Int?
+    /// Where iOS took the first space back to put in ". " (its period
+    /// shortcut, done as a delete then an insert): that insert takes the
+    /// suggestion.
+    private var pendingPeriod: Int?
     /// True while the suggestion is put in, so that edit is not taken for
     /// typing.
     private(set) var isAccepting = false
@@ -59,6 +63,7 @@ final class InlineSuggestion {
     func set(_ suggestion: InlineSuggestionNative?) {
         current = suggestion?.text.isEmpty == false ? suggestion : nil
         pendingSpace = nil
+        pendingPeriod = nil
         layout()
     }
 
@@ -69,6 +74,14 @@ final class InlineSuggestion {
         guard !isAccepting, let suggestion = current else {
             return true
         }
+        // iOS's period shortcut, second half: ". " where the space was.
+        if let at = pendingPeriod {
+            pendingPeriod = nil
+            if text == ". " && range.length == 0 && range.location == at {
+                accept(replacing: NSRange(location: at, length: 0))
+                return false
+            }
+        }
         // The second of two spaces: the first goes, the suggestion comes.
         if let space = pendingSpace {
             if text == " " && range.length == 0 && range.location == space + 1 {
@@ -78,6 +91,14 @@ final class InlineSuggestion {
             if text == ". " && range.location == space && range.length == 1 {
                 accept(replacing: NSRange(location: space, length: 1))
                 return false
+            }
+            // iOS's period shortcut, first half: the space taken back. The
+            // suggestion goes back to where it was, for the ". " to come.
+            if text.isEmpty && range.location == space && range.length == 1 {
+                pendingSpace = nil
+                pendingPeriod = space
+                current = InlineSuggestionNative(id: suggestion.id, at: space, text: suggestion.text)
+                return true
             }
         }
         // A first space at the caret: the suggestion waits for a second.
@@ -158,6 +179,7 @@ final class InlineSuggestion {
         }
         current = nil
         pendingSpace = nil
+        pendingPeriod = nil
         hide()
         isAccepting = true
         textView.replace(textRange, withText: suggestion.text)
