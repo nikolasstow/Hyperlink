@@ -61,7 +61,7 @@ const MARGIN = 12;
 /** Corner radius of the window, and of the pill (the bar's). */
 export const WINDOW_RADIUS = 30;
 /** Grow/shrink duration (ms) for opening and collapsing. */
-const ANIM_MS = 320;
+const ANIM_MS = 220;
 /** The window's glass fades in over the first ~55% of the grow: native
  * glassEffectStyle `animate` (seconds), the only opacity-free way to fade
  * glass. */

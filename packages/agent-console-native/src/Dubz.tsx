@@ -411,7 +411,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <View style={[styles.mainArea, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
             {suggestions.map((suggestion) =>
               suggestion._tag === "Sessions" ? (
-                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={() => openViewAll(suggestion.file)} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
+                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={openViewAll} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
               ) : (
                 <Suggestion key={suggestion._tag} suggestion={suggestion} />
               ),

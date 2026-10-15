@@ -149,10 +149,10 @@ export const DubzTopBack = (props: { readonly onPress: () => void }): React.Reac
 /** The session row, collapsed or expanded. Lives in a bottom-anchored native
  * scroll, so the content always sits just above the pill and expanding grows it
  * upward (and scrolls if it runs past the window). */
-export const DubzSessionArea = (props: {
+const DubzSessionAreaImpl = (props: {
   readonly file: FileRef;
   readonly onOpen: (session: DubzOpenSession) => void;
-  readonly onViewAll: () => void;
+  readonly onViewAll: (file: FileRef) => void;
   /** True while a sub-page is open: the area slides out to the left. */
   readonly shifted?: boolean;
   /** Report the height Dubz should grow to while expanded (undefined when it
@@ -266,7 +266,7 @@ export const DubzSessionArea = (props: {
                     frame({ width: viewAllWidth, height: PILL, alignment: "center" }),
                     glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
                     contentShape(shapes.capsule()),
-                    onTapGesture(props.onViewAll),
+                    onTapGesture(() => props.onViewAll(props.file)),
                   ]}
                 >
                   <UIText modifiers={[font({ size: 15, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>View All</UIText>
@@ -315,6 +315,11 @@ export const DubzSessionArea = (props: {
     </Host>
   );
 };
+
+/** Memoized: the native session List is heavy to rebuild, so block the parent's
+ * re-renders (keyboard, compact, requested-height changes) — it only needs to
+ * rebuild when its own props or its expand store change. */
+export const DubzSessionArea = React.memo(DubzSessionAreaImpl);
 
 /** A round glass icon button (PILL), the page bar's trailing control. */
 const GlassIconButton = (props: { readonly systemName: React.ComponentProps<typeof Image>["systemName"]; readonly onPress: () => void }): React.ReactElement => {
