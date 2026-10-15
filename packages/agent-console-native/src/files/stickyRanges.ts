@@ -40,6 +40,9 @@ export type SymbolKind = "function" | "method" | "constructor" | "property" | "c
 export interface ScopeSymbol {
   readonly kind: SymbolKind;
   readonly name: string;
+  /** Its scope's header line (0-based), where the name is: set on the
+   * breadcrumbs' scopes (breadcrumbs.ts `scopesAt`). */
+  readonly line?: number;
 }
 
 /** The scopes sticky scroll pins: those over more than one line. */

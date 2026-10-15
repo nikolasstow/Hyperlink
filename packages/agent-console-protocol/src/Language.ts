@@ -15,6 +15,22 @@ import { Rpc, RpcGroup } from "effect/rpc";
 /** Where the RPC is served. */
 export const path = "/language";
 
+/** The language server's id for each file kind a server here knows, by
+ * extension. */
+const LANGUAGES: Readonly<Record<string, string>> = {
+  ts: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  tsx: "typescriptreact",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  jsx: "javascriptreact",
+};
+
+/** The language a file is, by its extension, when a server here knows it. */
+export const languageOf = (path: string): string | undefined => LANGUAGES[/\.([^./]+)$/.exec(path)?.[1] ?? ""];
+
 export const Severity = Schema.Literals(["error", "warning", "info", "hint"]);
 export type Severity = typeof Severity.Type;
 

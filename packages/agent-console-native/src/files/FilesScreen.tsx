@@ -82,6 +82,8 @@ import { preloadFile } from "./preloadFile";
 import { resolveAutosave, setAutosave, useAutosaveSettings } from "./autosaveSettings";
 import { TAB_TOP_ACTIONS_WIDTH, TabTopActions } from "./TabTopActions";
 import { isMarkdown, setMarkdownMode, useMarkdownMode } from "./markdownMode";
+import { TypePreviewView } from "./TypePreviewView";
+import { useTypePreview } from "./useTypePreview";
 import { useMissingPaths } from "./missingPaths";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Files">;
@@ -123,6 +125,8 @@ const BAR_HIDE = NAV_BAR_HEIGHT + 20;
 
 /** The top bar's side margin, and the least room between its pieces. */
 const TOP_SIDE = 16;
+/** How far the breadcrumbs' glass grows to show the type preview. */
+const TYPE_PREVIEW_HEIGHT = 240;
 const TOP_GAP = 8;
 /** The narrowest a back button with a name is drawn (else just the
  * chevron). */
@@ -270,6 +274,8 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const [scopes, setScopes] = React.useState<{ readonly path: string; readonly scopes: ReadonlyArray<ScopeSymbol> } | undefined>(undefined);
   const crumbPath = pathCrumbs(current.path, currentWt?.path ?? primary.dir);
   const crumbSymbols = scopes?.path === current.path ? scopes.scopes : [];
+  // The type of what you are at, ready before the breadcrumbs open to show it.
+  const typePreview = useTypePreview(current.kind === "file" ? current.path : undefined, crumbSymbols);
   // Which way the scopes roll as they change: set before they do.
   const crumbRoll = useSharedValue<RollDirection>(1);
   // The breadcrumbs dropped open below the top buttons; a new page, or the
@@ -791,6 +797,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                 onToggle={toggleCrumbs}
                 expandedWidth={screen.width - TOP_SIDE * 2}
                 slotStyle={styles.crumbs}
+                {...(typePreview === undefined
+                  ? {}
+                  : { under: { content: <TypePreviewView preview={typePreview} width={screen.width - TOP_SIDE * 2} height={TYPE_PREVIEW_HEIGHT} />, height: TYPE_PREVIEW_HEIGHT } })}
               />
             ) : (
               <View style={styles.topSpacer} pointerEvents="none" />

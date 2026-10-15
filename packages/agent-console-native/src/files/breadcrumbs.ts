@@ -15,7 +15,7 @@ export const scopesAt = (ranges: ReadonlyArray<StickyRange>, line: number): Read
   [...ranges]
     .filter((range) => range.header <= line && line <= range.end)
     .sort((a, b) => a.start - b.start || a.depth - b.depth)
-    .flatMap((range) => (range.symbol === undefined ? [] : [range.symbol]));
+    .flatMap((range) => (range.symbol === undefined ? [] : [{ ...range.symbol, line: range.header }]));
 
 /** The file's path as crumbs: from `root` when it is under it, else whole. */
 export const pathCrumbs = (path: string, root: string | undefined): ReadonlyArray<string> => {

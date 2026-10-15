@@ -35,21 +35,6 @@ const SCRIPT = (() => {
   return require.resolve("typescript-language-server/lib/cli.mjs");
 })();
 
-/** The language each file kind is, by extension. */
-const LANGUAGES: Readonly<Record<string, string>> = {
-  ts: "typescript",
-  mts: "typescript",
-  cts: "typescript",
-  tsx: "typescriptreact",
-  js: "javascript",
-  mjs: "javascript",
-  cjs: "javascript",
-  jsx: "javascriptreact",
-};
-
-/** The language a file is, by its extension, when a server here knows it. */
-const languageOf = (file: string): string | undefined => LANGUAGES[/\.([^./]+)$/.exec(file)?.[1] ?? ""];
-
 /** A file as its server has it. */
 interface Doc {
   readonly uri: string;
@@ -159,7 +144,7 @@ const make = Effect.gen(function* () {
       const files = yield* RcMap.make({
         lookup: (file: string) =>
           Effect.gen(function* () {
-            const languageId = languageOf(file);
+            const languageId = Language.languageOf(file);
             if (languageId === undefined) return yield* unsupported(`No language server for ${path.basename(file)}.`);
             const uri = pathToFileURL(file).href;
             const ready = yield* Deferred.make<void, Language.LanguageError>();
@@ -205,7 +190,7 @@ const make = Effect.gen(function* () {
   /** `requested`'s real path, its server, and the file held open in it. */
   const open = (requested: string) =>
     Effect.gen(function* () {
-      if (languageOf(requested) === undefined) return yield* unsupported(`No language server for ${path.basename(requested)}.`);
+      if (Language.languageOf(requested) === undefined) return yield* unsupported(`No language server for ${path.basename(requested)}.`);
       const file = yield* resolveWithin(requested).pipe(
         Effect.mapError((error) => new Language.LanguageError({ reason: "NotFound", message: `${error.reason}: ${error.path}` })),
         Effect.provide(services),

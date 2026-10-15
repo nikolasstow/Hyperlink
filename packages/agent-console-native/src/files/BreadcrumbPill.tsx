@@ -67,6 +67,9 @@ export const BreadcrumbPill = (props: {
   readonly expandedWidth: number;
   /** Its slot in the bar. */
   readonly slotStyle: ViewStyle;
+  /** What shows under the crumbs while it is open (the type preview), and
+   * how tall: the glass grows down by that much. None: it only widens. */
+  readonly under?: { readonly content: React.ReactNode; readonly height: number };
 }): React.ReactElement => {
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -109,13 +112,15 @@ export const BreadcrumbPill = (props: {
       runOnJS(settled)();
     });
   }, [expanded, open, scroller, settled]);
+  const underHeight = props.under?.height ?? 0;
   const frame = useAnimatedStyle(() => {
     const progress = open.value;
-    if (progress === 0 || slotW.value === 0) return { left: 0, top: 0, width: "100%" };
+    if (progress === 0 || slotW.value === 0) return { left: 0, top: 0, width: "100%", height: HOME_HEADER_HEIGHT };
     return {
       left: -slotX.value * progress,
       top: (HOME_HEADER_HEIGHT + DROP_GAP) * progress,
       width: slotW.value + (expandedWidth - slotW.value) * progress,
+      height: HOME_HEADER_HEIGHT + underHeight * progress,
     };
   });
   const { onToggle } = props;
@@ -181,12 +186,14 @@ export const BreadcrumbPill = (props: {
         slotW.value = event.nativeEvent.layout.width;
       }}
     >
-      <GestureDetector gesture={tap}>
-        <Reanimated.View style={[styles.shadow, frame]} accessibilityRole="button" accessibilityLabel={[...props.path, ...props.symbols.map((symbol) => symbol.name)].join(", ")}>
-          <View style={styles.clip}>
-            <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
+      <Reanimated.View style={[styles.shadow, frame]}>
+        <View style={styles.clip}>
+          <GlassView style={StyleSheet.absoluteFill} glassEffectStyle="regular" colorScheme={scheme} />
+          <GestureDetector gesture={tap}>
             <MaskedView
-              style={styles.fill}
+              style={styles.crumbs}
+              accessibilityRole="button"
+              accessibilityLabel={[...props.path, ...props.symbols.map((symbol) => symbol.name)].join(", ")}
               maskElement={
                 <View style={maskStyles.mask}>
                   <View style={maskStyles.edge}>
@@ -228,9 +235,10 @@ export const BreadcrumbPill = (props: {
                 </LayoutAnimationConfig>
               </Reanimated.ScrollView>
             </MaskedView>
-          </View>
-        </Reanimated.View>
-      </GestureDetector>
+          </GestureDetector>
+          {props.expanded && props.under !== undefined ? props.under.content : null}
+        </View>
+      </Reanimated.View>
     </View>
   );
 };
@@ -263,8 +271,10 @@ const styles = StyleSheet.create({
   slot: {
     height: HOME_HEADER_HEIGHT,
   },
-  fill: {
-    flex: 1,
+  // The crumbs' row: the pill's height, at its top (what is under it shows
+  // below while open).
+  crumbs: {
+    height: HOME_HEADER_HEIGHT,
   },
   shadow: {
     position: "absolute",
