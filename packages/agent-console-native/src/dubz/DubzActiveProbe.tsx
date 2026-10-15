@@ -57,13 +57,15 @@ export const DubzActiveProbe = (props: {
   const inZone = isCompact(requested);
 
   return (
-    <View style={styles.root} pointerEvents="box-none">
-      <View style={styles.card}>
-        <Pressable onPress={() => setIndex((n) => (n + 1) % PROBE_HEIGHTS.length)} style={styles.btn}>
-          <Text style={styles.btnText}>
-            active = {height}   ·   tap to cycle ({index + 1}/{PROBE_HEIGHTS.length})
-          </Text>
-        </Pressable>
+    // The WHOLE area is tappable (cycle), and it fills the content box (flex:1)
+    // so the "component" resizes with the window as each height is reported —
+    // you can watch the window grow/shrink to fit it.
+    <Pressable onPress={() => setIndex((n) => (n + 1) % PROBE_HEIGHTS.length)} style={styles.root}>
+      <Text style={styles.caption}>
+        active = {height}px   ·   tap anywhere to cycle ({index + 1}/{PROBE_HEIGHTS.length})
+      </Text>
+      <View style={styles.fill} />
+      <View style={styles.readout}>
         <Row label="reporting active" value={`${height}`} />
         <Row label="state.activeHeight" value={state.activeHeight === undefined ? "—" : `${Math.round(state.activeHeight)}`} />
         <Row label="state.default" value={`${Math.round(state.defaultHeight)}`} />
@@ -74,17 +76,18 @@ export const DubzActiveProbe = (props: {
         <Row label={`isCompact(requested ≤ ${COMPACT_ZONE_MAX})`} value={inZone ? "yes" : "no"} flag={inZone} />
         <Row label="zone min..max" value={`${SINGLE_SUGGESTION_HEIGHT}..${COMPACT_ZONE_MAX}`} />
       </View>
-    </View>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, justifyContent: "flex-end", padding: 12 },
-  card: { backgroundColor: "rgba(0,0,0,0.62)", borderRadius: 14, padding: 12, gap: 4 },
-  btn: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6 },
-  btnText: { color: "#fff", fontSize: 14, fontWeight: "600", textAlign: "center" },
+  // Fills the content box (so it resizes with the window) and shows its extent.
+  root: { flex: 1, backgroundColor: "rgba(74,222,128,0.1)", borderColor: "rgba(74,222,128,0.5)", borderWidth: 1, borderRadius: 14, padding: 12 },
+  caption: { color: "#fff", fontSize: 13, fontWeight: "600", textAlign: "center", marginBottom: 6 },
+  fill: { flex: 1 },
+  readout: { backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 10, padding: 10, gap: 4 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   label: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
-  value: { color: "#fff", fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"], padding: 0, minWidth: 64, textAlign: "right" },
+  value: { color: "#fff", fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"], minWidth: 64, textAlign: "right" },
   flagOn: { color: "#4ade80" },
 });
