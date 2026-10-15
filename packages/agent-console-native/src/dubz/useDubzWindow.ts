@@ -15,10 +15,12 @@ import * as React from "react";
 import { type DubzWindowEvent, type DubzWindowState, initialDubzWindowState, reduceDubzWindow, requestedHeightOf } from "./dubzWindowMachine";
 import { saveDubzDefaultHeight } from "./useBarWindow";
 
-/** Log a transition. Discrete, never per frame. console.log (not Effect.logDebug)
- * so it is actually visible in Metro while we debug the window behaviour. */
+/** Log a transition. OFF by default — console.log crosses the RN bridge, and
+ * one per transition adds up under interaction. Flip to trace the window. */
+const DUBZ_LOG = false;
 const h = (n: number | undefined): string => (n === undefined ? "-" : String(Math.round(n)));
 const logTransition = (routeKey: string, event: DubzWindowEvent, prev: DubzWindowState, next: DubzWindowState): void => {
+  if (!DUBZ_LOG) return;
   const show = (s: DubzWindowState): string => `${s.phase}/${s.keyboard} def=${h(s.defaultHeight)} act=${h(s.activeHeight)}${s.pinned ? " PIN" : ""} c=${s.compact ? 1 : 0}`;
   console.log(`[dubz] ${routeKey} ${event._tag}: ${show(prev)} → ${show(next)} req=${h(requestedHeightOf(next))}`);
 };
