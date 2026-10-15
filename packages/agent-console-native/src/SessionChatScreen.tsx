@@ -71,7 +71,8 @@ import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useStreamEnabled } from "./useStreamEnabled";
 import { BackgroundOverride, type TextColors, useScreenBackground, useThemedStyles } from "./theme";
 import { useSessionBackground } from "./sessions/useSessionBackground";
-import { repoOfDirectory } from "./primaryWorktree";
+import { repoOfDirectory, worktreesOf } from "./primaryWorktree";
+import { skillPlace } from "./files/skillPlace";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Chat">;
 
@@ -97,7 +98,7 @@ const PERMISSION_ROW_ID = "__permission__";
 
 export const SessionChatScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
-  const { address } = useAppContext();
+  const { address, rootDir } = useAppContext();
   const sessionID = props.route.params.sessionID;
   const insets = useSafeAreaInsets();
   const keyboardHeight = useKeyboardHeight();
@@ -300,8 +301,15 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         Alert.alert(`/${id}`, entry === undefined ? "This skill is not in the folder's list." : `${entry.description ?? ""}\n\nBuilt into opencode: it has no file to open.`.trim());
         return;
       }
-      const folder = entry.path.slice(0, entry.path.lastIndexOf("/"));
-      props.navigation.navigate("Files", { repo: folder.split("/").filter(Boolean).pop() ?? folder, dir: folder, open: { path: entry.path, name: entry.path.slice(entry.path.lastIndexOf("/") + 1), kind: "file" } });
+      // In the workspace it belongs to (its repo, its agent folder), not a
+      // workspace of its own folder.
+      const place = skillPlace(entry.path, rootDir, (folder) => {
+        const repo = repoOfDirectory(folder);
+        if (repo === undefined) return undefined;
+        const worktree = worktreesOf(repo).find((each) => folder === each.path || folder.startsWith(`${each.path.replace(/\/+$/, "")}/`));
+        return { repo, dir: worktree?.path ?? folder };
+      });
+      props.navigation.navigate("Files", { repo: place.repo, dir: place.dir, open: { path: entry.path, name: entry.path.slice(entry.path.lastIndexOf("/") + 1), kind: "file" } });
       return;
     }
     setSelectedSkills((current) => (current.includes(id) ? current.filter((each) => each !== id) : [id, ...current]));
