@@ -10,7 +10,7 @@
  */
 import { Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
-import { Auth } from "agent-console-protocol";
+import { Auth, LocalModel } from "agent-console-protocol";
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
 import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";
@@ -289,4 +289,5 @@ export const api = HttpApi.make("agent-console")
   .add(processesGroup)
   .add(pluginsGroup)
   .add(sessionsGroup)
-  .add(Auth.group);
+  .add(Auth.group)
+  .add(LocalModel.group);

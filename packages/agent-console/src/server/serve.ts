@@ -26,6 +26,7 @@ import { ExtensionViews } from "./extensionHost/extensionViews";
 import { fileHubLayer, fileSyncLayer } from "./files/rpc";
 import { LanguageHost } from "./language/host";
 import { languageLayer } from "./language/rpc";
+import { LocalModel } from "./localModel/LocalModel";
 import { commandsRoute } from "./commands/catalog";
 import { completeRoute } from "./complete/complete";
 import { modelsRoute } from "./models/catalog";
@@ -126,6 +127,18 @@ const sessionsHandlers = HttpApiBuilder.group(api, "sessions", (handlers) =>
   ),
 );
 
+const localModelHandlers = HttpApiBuilder.group(api, "localModel", (handlers) =>
+  LocalModel.pipe(
+    Effect.map((model) =>
+      handlers
+        .handle("overview", () => model.overview)
+        .handle("settings", ({ payload }) => model.setSettings(payload))
+        .handle("install", () => model.install)
+        .handle("restart", () => model.restart),
+    ),
+  ),
+);
+
 // A process's output as server-sent events: `?id=<process id>`. Raw, since
 // it streams. 404 for an unknown process.
 const processStreamRoute = HttpRouter.add("GET", "/processes/stream", (request) =>
@@ -172,6 +185,9 @@ const statesLive = CollectionStates.layer.pipe(Layer.provide(registryLive));
 const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
 // One file hub for the live files and the language servers that follow them.
 const languageHostLive = LanguageHost.layer.pipe(Layer.provide([fileHubLayer, NodeServices.layer]));
+// One local model for its page (the API) and the suggestions (/complete):
+// started with the server, stopped with it.
+const localModelLive = LocalModel.layer.pipe(Layer.provide([NodeServices.layer, FetchHttpClient.layer]));
 // One DeviceAuth for the gate (every request) and the auth endpoints.
 const authLive = DeviceAuth.layer;
 
@@ -186,6 +202,7 @@ const apiLive = HttpApiBuilder.layer(api).pipe(
     pluginsHandlers.pipe(Layer.provide(registryLive)),
     sessionsHandlers.pipe(Layer.provide(SessionArchive.layer)),
     authHandlers.pipe(Layer.provide(authLive)),
+    localModelHandlers.pipe(Layer.provide(localModelLive)),
   ]),
 );
 
@@ -203,6 +220,7 @@ const serverLive = HttpRouter.serve(
   // Per request too: suggestions ask the language servers and read the open
   // files (the same host, the same hub).
   Layer.provide(languageHostLive),
+  Layer.provide(localModelLive),
   Layer.provide(fileHubLayer),
   Layer.provide(NodeHttpServer.layer(createServer, { port })),
 );

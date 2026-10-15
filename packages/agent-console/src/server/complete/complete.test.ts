@@ -5,12 +5,13 @@ import { Complete } from "agent-console-protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FileHub } from "../files/hub";
 import { LanguageHost, type PlaceContext } from "../language/host";
+import { LocalModel } from "../localModel/LocalModel";
 import { completeRoute, fitsAt, insertionOf, promptOf } from "./complete";
 import { snippetsFor } from "./snippets";
 
 const UPSTREAM_PORT = 6300 + Math.floor(Math.random() * 100);
 const asked: Array<{ readonly url: string; readonly body: unknown }> = [];
-/** Whether the local model's server says it is up. */
+/** Whether the local model is ready. */
 let localUp = false;
 
 /** A stand-in for opencode v2's one-shot generate: answers in a fence, as models sometimes do. */
@@ -18,11 +19,6 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
   let body = "";
   request.on("data", (chunk: Buffer) => (body += chunk.toString()));
   request.on("end", () => {
-    if (request.url === "/health") {
-      response.writeHead(localUp ? 200 : 503, { "content-type": "application/json" });
-      response.end("{}");
-      return;
-    }
     if (request.url === "/infill") {
       asked.push({ url: request.url, body: JSON.parse(body) });
       response.writeHead(200, { "content-type": "application/json" });
@@ -44,13 +40,11 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
 beforeAll(async () => {
   await new Promise<void>((resolve) => upstream.listen(UPSTREAM_PORT, "127.0.0.1", resolve));
   process.env.AGENT_CONSOLE_OPENCODE_URL = `http://127.0.0.1:${UPSTREAM_PORT}`;
-  process.env.AGENT_CONSOLE_COMPLETE_URL = `http://127.0.0.1:${UPSTREAM_PORT}`;
 });
 
 afterAll(() => {
   if (upstream.listening) upstream.close();
   delete process.env.AGENT_CONSOLE_OPENCODE_URL;
-  delete process.env.AGENT_CONSOLE_COMPLETE_URL;
 });
 
 /** What the language server knows at the caret, in these tests. */
@@ -66,6 +60,15 @@ const knowing = Layer.mergeAll(
     follow: () => Stream.empty,
     write: () => Effect.die("not written in these tests"),
     openFiles: Effect.succeed([{ path: "/r/helpers.ts", text: "export const sumValues = (values: number[]) => values.reduce((a, b) => a + b, 0);" }]),
+  }),
+  // The local model: the stand-in server, ready when `localUp`.
+  Layer.succeed(LocalModel, {
+    url: `http://127.0.0.1:${UPSTREAM_PORT}`,
+    ready: Effect.sync(() => localUp),
+    overview: Effect.die("not read in these tests"),
+    setSettings: () => Effect.die("not set in these tests"),
+    install: Effect.die("not installed in these tests"),
+    restart: Effect.die("not restarted in these tests"),
   }),
 );
 

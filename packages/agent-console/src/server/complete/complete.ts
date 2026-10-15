@@ -17,18 +17,15 @@
  * @internal
  */
 import { Complete } from "agent-console-protocol";
-import { Config, Duration, Effect, Schema } from "effect";
+import { Duration, Effect, Schema } from "effect";
 import { Headers, HttpClient, HttpClientRequest, HttpClientResponse, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { FileHub } from "../files/hub";
 import { LanguageHost, type PlaceContext } from "../language/host";
+import { LocalModel } from "../localModel/LocalModel";
 import { opencodePassword, opencodeUrl, withOpencodeAuth } from "../opencodeServer";
 import { isOwnLine, shape } from "./shape";
 import { type Snippet, snippetsFor } from "./snippets";
 
-/** The local fill-in-the-middle server (llama.cpp's, with Qwen2.5-Coder). */
-const localUrl = Config.String("AGENT_CONSOLE_COMPLETE_URL").pipe(Config.withDefault("http://127.0.0.1:8012"));
-/** How long the local server is given to say it is up. */
-const HEALTH_WAIT = Duration.millis(300);
 /** The most the local model writes: a line, or a block. */
 const LINE_TOKENS = 64;
 const BLOCK_TOKENS = 192;
@@ -108,18 +105,12 @@ export const completeRoute = HttpRouter.add("POST", Complete.path, (request) =>
     const context = yield* language.contextAt(asked.path, asked.prefix).pipe(Effect.timeoutOrElse({ duration: CONTEXT_WAIT, orElse: () => Effect.succeed<PlaceContext>({ names: [] }) }));
     const snippets = snippetsFor(asked.path, asked.prefix, yield* hub.openFiles);
 
-    // The local model: chosen, or (none chosen) when it is up.
-    const local = (yield* localUrl).replace(/\/+$/, "");
-    const useLocal =
-      asked.model === undefined
-        ? yield* http.get(`${local}/health`).pipe(
-            Effect.map((response) => response.status === 200),
-            Effect.timeoutOrElse({ duration: HEALTH_WAIT, orElse: () => Effect.succeed(false) }),
-            Effect.orElseSucceed(() => false),
-          )
-        : asked.model.providerID === Complete.local.providerID;
+    // The local model (the server runs it, localModel/): chosen, or (none
+    // chosen) when it is ready.
+    const localModel = yield* LocalModel;
+    const useLocal = asked.model === undefined ? yield* localModel.ready : asked.model.providerID === Complete.local.providerID;
     if (useLocal) {
-      const response = yield* HttpClientRequest.post(`${local}/infill`).pipe(
+      const response = yield* HttpClientRequest.post(`${localModel.url}/infill`).pipe(
         HttpClientRequest.bodyJsonUnsafe({
           input_prefix: asked.prefix,
           input_suffix: asked.suffix,

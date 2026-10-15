@@ -42,6 +42,13 @@ const ENTRIES: ReadonlyArray<Entry> = [
     icon: "bolt.fill",
     open: (navigation, server) => navigation.navigate("ServerUps", { serverName: server.name, serverAddress: server.address }),
   },
+  {
+    id: "local-model",
+    title: "Local model",
+    subtitle: "Inline suggestions (Qwen2.5-Coder)",
+    icon: "cpu",
+    open: (navigation) => navigation.navigate("ServerLocalModel"),
+  },
 ];
 
 /** The little always-on server on each box (~/ups-monitor/server.js) exposes

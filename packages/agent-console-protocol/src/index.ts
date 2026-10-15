@@ -7,4 +7,5 @@ export * as Auth from "./Auth";
 export * as Commands from "./Commands";
 export * as Complete from "./Complete";
 export * as Language from "./Language";
+export * as LocalModel from "./LocalModel";
 export * as Models from "./Models";

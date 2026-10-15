@@ -126,10 +126,20 @@ model; 200-500 ms; context = current file > other open files' similar chunks > l
 cancel in flight; type-through; one line mid-line, a block on a line of its own; next-edit
 prediction is the newest step. Owner: support several backends; personally Qwen.
 
-- **Local:** llama.cpp (`brew install llama.cpp`) serving the base **Qwen2.5-Coder 7B, Q4_K_M**
-  (`QuantFactory/Qwen2.5-Coder-7B-GGUF`) with the 0.5B as a draft model, tmux `eta-qwen`:
-  `llama-server -hf QuantFactory/Qwen2.5-Coder-7B-GGUF:Q4_K_M -hfd ggml-org/Qwen2.5-Coder-0.5B-Q8_0-GGUF --host 127.0.0.1 --port 8012 -ub 1024 -b 1024 --cache-reuse 256`
-  (the API server's `AGENT_CONSOLE_COMPLETE_URL`, default `http://127.0.0.1:8012`).
+- **Local:** llama.cpp serving the base **Qwen2.5-Coder 7B, Q4_K_M**
+  (`QuantFactory/Qwen2.5-Coder-7B-GGUF`) with the 0.5B as a draft model, on `127.0.0.1:8012`.
+  **The API server manages it; nothing is started by hand** (owner, 2026-10-15). Its
+  `LocalModel` service (agent-console `server/localModel/`, protocol `LocalModel`) starts it
+  with the server when it is on, watches `/health` until it answers (`ready`), starts it again
+  with backoff if it stops, and stops it with the server (not detached: a server killed
+  outright takes it along). If another server on the machine already runs one on the port, it
+  uses that one and takes over when it goes. Settings (on/off, model: 7B Q4 / 7B Q8 / 3B) are
+  kept in the state folder (`local-model.json`). llama.cpp itself is installed with Homebrew
+  from the app. `/complete` uses it when it is `ready` (no model chosen) or when chosen.
+- **App:** Server → Services → **Local model**: on/off switch, state light (with download
+  progress or why it stopped), model choice, Install llama.cpp / Restart. Fetched at app open
+  and on return to the foreground; polled while the page is open. Endpoints: `GET /local-model`,
+  `PUT /local-model/settings`, `POST /local-model/install`, `POST /local-model/restart`.
 - **Measured on the M4 (24 GB):** 7B Q8 13 tok/s (1.6 s a line), right; 7B Q4 21 tok/s (1.0 s),
   right; 3B 0.1 s but wrong (`raceAll` for `all`). First call in a file ~4.7 s (reads it); after
   that a keystroke costs only the new text (prompt cache), as long as the extra context is stable.

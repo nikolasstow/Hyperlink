@@ -9,6 +9,7 @@ import { type PairingLink, parsePairingLink } from "./src/auth/pairingLink";
 import { pairWithServer, serverAuthReadBack } from "./src/auth/useServerAuth";
 import { deviceInfo } from "./src/deviceName";
 import { CommandCatalogSync, commandCatalogReadBack } from "./src/commands/useCommandCatalog";
+import { LocalModelSync } from "./src/localModel/useLocalModel";
 import { commandEchoesReadBack } from "./src/commands/useCommandEchoes";
 import { ModelCatalogSync, modelCatalogReadBack } from "./src/models/useModelCatalog";
 import { conversationsReadBack } from "./src/conversations/useConversations";
@@ -328,6 +329,7 @@ const AppInner = (): React.ReactElement => {
           <ModelCatalogSync />
           {/* The / lists, at open, on return, and as opencode changes them. */}
           <CommandCatalogSync />
+          <LocalModelSync />
           {/* The one keyboard tracker for the whole app (keyboardHeight.tsx). */}
           <KeyboardHeightProvider>
             <RootNavigator />

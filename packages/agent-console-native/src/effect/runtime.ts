@@ -52,6 +52,7 @@ import { authedStreamingFetch } from "../auth/streamingFetch";
 import { CommandCatalog } from "../commands/CommandCatalog";
 import { CommandEchoes } from "../commands/CommandEchoes";
 import { LanguageClient } from "../language/LanguageClient";
+import { LocalModelClient } from "../localModel/LocalModelClient";
 import { ModelCatalog } from "../models/ModelCatalog";
 import { ServerAuth } from "../auth/ServerAuth";
 import { layer as secretStoreLayer } from "../auth/secretStoreNative";
@@ -98,6 +99,7 @@ const AppLayer = Layer.mergeAll(
   BarWindowStore.layer.pipe(Layer.provide(asyncStorageLayer(BAR_WINDOW_STORAGE_PREFIX))),
   LiveFiles.layer,
   LanguageClient.layer,
+  LocalModelClient.layer,
   SessionWatch.layer,
   ServerAuth.layer.pipe(Layer.provide([asyncStorageLayer(AUTH_STORAGE_PREFIX), secretStoreLayer])),
   ModelCatalog.layer.pipe(Layer.provide([asyncStorageLayer(MODELS_STORAGE_PREFIX), streamingHttpClient])),

@@ -29,6 +29,10 @@
       "types": "./src/Language.ts",
       "default": "./src/Language.ts"
     },
+    "./LocalModel": {
+      "types": "./src/LocalModel.ts",
+      "default": "./src/LocalModel.ts"
+    },
     "./Models": {
       "types": "./src/Models.ts",
       "default": "./src/Models.ts"

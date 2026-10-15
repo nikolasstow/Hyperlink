@@ -50,6 +50,7 @@ import { ExtensionViewScreen } from "./ExtensionViewScreen";
 import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ServerScreen } from "./ServerScreen";
+import { ServerLocalModelScreen } from "./ServerLocalModelScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
 import { serverById } from "./servers";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
@@ -118,6 +119,7 @@ export type RootStackParamList = {
   // A server's UPS page, rendered from that server's UPS dashboard API. The
   // server's address is threaded in (no hardcoded host) so it's multi-server.
   ServerUps: { serverName: string; serverAddress: string };
+  ServerLocalModel: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -345,6 +347,7 @@ export const RootNavigator = (): React.ReactElement => {
           options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={serverById(route.params.serverId)?.name ?? "Server"} /> })}
         />
         <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
+        <Stack.Screen name="ServerLocalModel" component={ServerLocalModelScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Local model" /> }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
