@@ -405,7 +405,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <DubzCompactSync onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
-          <View style={[styles.mainArea, isDubzHomeNative ? styles.mainAreaFill : null, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
+          <View style={[styles.mainArea, isDubzHomeNative ? styles.mainAreaFill : null, leftInset > 0 && !isDubzHomeNative ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
             {suggestions.map((suggestion) =>
               suggestion._tag === "Sessions" ? (
                 <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={openViewAll} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
