@@ -57,15 +57,14 @@ export const DubzActiveProbe = (props: {
   const inZone = isCompact(requested);
 
   return (
-    // The WHOLE area is tappable (cycle), and it fills the content box (flex:1)
-    // so the "component" resizes with the window as each height is reported —
-    // you can watch the window grow/shrink to fit it.
+    // Whole area tappable (cycle). The "active component" is a block of EXACTLY
+    // its claimed height — it changes when you cycle, NOT when you drag the
+    // window. A manual drag resizes the window around it (pins a default); the
+    // component keeps its claim. The two are no longer locked.
     <Pressable onPress={() => setIndex((n) => (n + 1) % PROBE_HEIGHTS.length)} style={styles.root}>
-      <Text style={styles.caption}>
-        active = {height}px   ·   tap anywhere to cycle ({index + 1}/{PROBE_HEIGHTS.length})
-      </Text>
-      <View style={styles.fill} />
-      <View style={styles.readout}>
+      <View style={[styles.component, { height }]} />
+      <View style={styles.readout} pointerEvents="none">
+        <Text style={styles.caption}>active component = {height}px · tap to cycle ({index + 1}/{PROBE_HEIGHTS.length})</Text>
         <Row label="reporting active" value={`${height}`} />
         <Row label="state.activeHeight" value={state.activeHeight === undefined ? "—" : `${Math.round(state.activeHeight)}`} />
         <Row label="state.default" value={`${Math.round(state.defaultHeight)}`} />
@@ -81,11 +80,13 @@ export const DubzActiveProbe = (props: {
 };
 
 const styles = StyleSheet.create({
-  // Fills the content box (so it resizes with the window) and shows its extent.
-  root: { flex: 1, backgroundColor: "rgba(74,222,128,0.1)", borderColor: "rgba(74,222,128,0.5)", borderWidth: 1, borderRadius: 14, padding: 12 },
-  caption: { color: "#fff", fontSize: 13, fontWeight: "600", textAlign: "center", marginBottom: 6 },
-  fill: { flex: 1 },
-  readout: { backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 10, padding: 10, gap: 4 },
+  // Content box: the component block sits at the bottom (like a real suggestion).
+  root: { flex: 1, justifyContent: "flex-end" },
+  // The active component — exactly its claimed height; width fills.
+  component: { alignSelf: "stretch", backgroundColor: "rgba(74,222,128,0.14)", borderColor: "rgba(74,222,128,0.6)", borderWidth: 1, borderRadius: 14 },
+  // Always-visible math overlay; taps pass through to the Pressable.
+  readout: { position: "absolute", top: 8, left: 8, right: 8, backgroundColor: "rgba(0,0,0,0.6)", borderRadius: 10, padding: 10, gap: 4 },
+  caption: { color: "#fff", fontSize: 13, fontWeight: "600", textAlign: "center", marginBottom: 4 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   label: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
   value: { color: "#fff", fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"], minWidth: 64, textAlign: "right" },
