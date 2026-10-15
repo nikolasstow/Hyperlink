@@ -50,6 +50,15 @@ dead window (the key requirement). A **client-side multiplexer** in the editor:
 It degrades perfectly: remote-only is already a complete editor; local is pure
 latency on the hot path, added last, so it can't block or break the baseline.
 
+## Where the type preview goes (owner, decided earlier; written down 2026-10-15)
+
+The **type preview lives in the glass that expands from the breadcrumbs** (the top
+pill in Files, `BreadcrumbPill`). Collapsed, the pill is the breadcrumbs (path ›
+scopes); expanded, the same glass grows to hold the type of what you are at, in the
+dual form the docs site already uses: the compact named type
+(`QueueResource<EmailJob>`), the expanded member shape, and the JSDoc as Markdown
+with Shiki-coloured code. Not a separate hover popover.
+
 ## Build decomposition (how to ship it without blind native churn)
 
 Key move: **structure is a prop into a native overlay.** The native editor can't
