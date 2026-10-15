@@ -27,6 +27,7 @@ import { fileHubLayer, fileSyncLayer } from "./files/rpc";
 import { LanguageHost } from "./language/host";
 import { languageLayer } from "./language/rpc";
 import { commandsRoute } from "./commands/catalog";
+import { completeRoute } from "./complete/complete";
 import { modelsRoute } from "./models/catalog";
 import { opencodeProxyRoute } from "./opencodeProxy";
 import { PluginRegistry } from "./plugin/registry";
@@ -195,7 +196,7 @@ const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 // Every route is behind the gate (auth/http.ts); `/health` and redeeming a
 // pairing code are open.
 const serverLive = HttpRouter.serve(
-  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer.pipe(Layer.provide(fileHubLayer)), languageLayer.pipe(Layer.provide(languageHostLive)), opencodeProxyRoute, modelsRoute, commandsRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
+  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer.pipe(Layer.provide(fileHubLayer)), languageLayer.pipe(Layer.provide(languageHostLive)), opencodeProxyRoute, modelsRoute, commandsRoute, completeRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
 ).pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),

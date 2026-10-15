@@ -21,6 +21,10 @@
       "types": "./src/Commands.ts",
       "default": "./src/Commands.ts"
     },
+    "./Complete": {
+      "types": "./src/Complete.ts",
+      "default": "./src/Complete.ts"
+    },
     "./Language": {
       "types": "./src/Language.ts",
       "default": "./src/Language.ts"
