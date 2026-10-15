@@ -109,6 +109,16 @@ Planned in `native-ide.md` §3 (ghost text; configurable model; a dedicated
 - **Beside IntelliSense, as in VS Code:** language-server completions are a list;
   the AI's is ghost text. Two providers, both routed by the multiplexer.
 
+### Accepting a suggestion (owner, 2026-10-15)
+
+A phone keyboard has no Tab. A suggestion is accepted by **tapping it**, or by a
+**double space** (the second space accepts; the first is taken back). iOS may turn
+two spaces into ". " (its period shortcut): that counts as a double space too.
+
+**Model call:** opencode v2's one-shot `POST /api/experimental/generate`
+(`{ prompt, model? }`, no session, no agent; ~1.3 s with Haiku 4.5). The API
+server's `/complete` builds the fill-in-the-middle prompt and calls it.
+
 ## Build order (each step ships value; hybrid is the capstone)
 
 1. **Sticky scroll + folding + breadcrumbs.** Native overlay + structure from
