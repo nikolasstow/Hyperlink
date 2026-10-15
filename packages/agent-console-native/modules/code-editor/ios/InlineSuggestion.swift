@@ -66,8 +66,14 @@ final class InlineSuggestion {
     /// The suggestion to show (none: whatever showed goes).
     func set(_ suggestion: InlineSuggestionNative?) {
         current = suggestion?.text.isEmpty == false ? suggestion : nil
-        pendingSpace = nil
-        spaceTypedThrough = false
+        // A new one made for the caret after a first space (it was asked for
+        // as that space went in): the space still counts as the first of
+        // two (and stays only if it was the old suggestion's own).
+        let afterSpace = pendingSpace.map { current?.at == $0 + 1 } ?? false
+        if !afterSpace {
+            pendingSpace = nil
+            spaceTypedThrough = false
+        }
         pendingPeriod = nil
         layout()
     }

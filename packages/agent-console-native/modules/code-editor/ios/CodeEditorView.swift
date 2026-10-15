@@ -60,6 +60,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     private var reportedCaret: Int?
     /// True while Return's indent goes in, so that edit is not indented again.
     private var isIndenting = false
+    private var periodShortcut = PeriodShortcut()
     /// Where to rest the code once it is laid out (a file reopening where it
     /// was left); applied once.
     private var pendingOffset: CGPoint?
@@ -969,6 +970,15 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         // A double space takes the suggestion instead (it puts it in itself).
         guard suggestion.shouldChange(in: range, replacementText: text) else {
+            periodShortcut.reset()
+            return false
+        }
+        // iOS's period shortcut: what was typed was two spaces.
+        if let over = periodShortcut.spaces(over: range, in: textView.text as NSString, replacement: text),
+           let from = textView.position(from: textView.beginningOfDocument, offset: over.location),
+           let to = textView.position(from: from, offset: over.length),
+           let spaces = textView.textRange(from: from, to: to) {
+            textView.replace(spaces, withText: "  ")
             return false
         }
         // Return indents the new line (AutoIndent.swift), as one edit.
