@@ -90,7 +90,7 @@ describe("POST /complete", () => {
 });
 
 describe("POST /complete with the local model up", () => {
-  it("asks it to fill in the middle, with the open files' chunks and the language server's note, and keeps one line mid-line", async () => {
+  it("asks it to fill in the middle, with the open files' chunks, greedy, and keeps one line mid-line", async () => {
     const { handler, dispose } = HttpRouter.toWebHandler(completeRoute, { disableLogger: true });
     const context = await Effect.runPromise(Layer.build(Layer.mergeAll(FetchHttpClient.layer, knowing)).pipe(Effect.scoped));
     localUp = true;
@@ -100,9 +100,11 @@ describe("POST /complete with the local model up", () => {
       const response = await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify({ ...noModel, prefix: "const total = sumValues(values) + ", suffix: "\n" }), headers: { "content-type": "application/json" } }), context);
       expect(await response.json()).toEqual({ text: "values.reduce((a, b) => a + b, 0);" });
       expect(asked[0]?.url).toBe("/infill");
-      expect(asked[0]?.body).toMatchObject({ input_prefix: "const total = sumValues(values) + ", input_suffix: "\n", stop: ["\n"], cache_prompt: true });
+      expect(asked[0]?.body).toMatchObject({ input_prefix: "const total = sumValues(values) + ", input_suffix: "\n", stop: ["\n"], temperature: 0, top_k: 1, cache_prompt: true });
       expect(JSON.stringify(asked[0]?.body)).toContain("/r/helpers.ts");
-      expect(JSON.stringify(asked[0]?.body)).toContain("Names valid at the cursor");
+      // Not the language server's names (they change at every caret, and would
+      // make it read the whole prompt again).
+      expect(JSON.stringify(asked[0]?.body)).not.toContain("Names valid at the cursor");
     } finally {
       localUp = false;
       await dispose();

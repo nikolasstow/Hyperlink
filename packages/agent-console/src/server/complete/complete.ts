@@ -6,8 +6,9 @@
  * - **A fill-in-the-middle model** when there is one: the local Qwen2.5-Coder
  *   on llama.cpp's server (`/infill`), given the text either side of the
  *   caret and, as extra context, the chunks of other open files most like the
- *   code at the caret (snippets.ts) and what the language server knows there
- *   (language/host.ts `contextAt`). Without one chosen it is used when it
+ *   code at the caret (snippets.ts): they change rarely, so its prompt cache
+ *   holds and a keystroke costs only the new text. The chat path also gets
+ *   what the language server knows there (language/host.ts `contextAt`). Without one chosen it is used when it
  *   answers; else a chat model through opencode's one-shot generate, told to
  *   reply only `<INSERT>…</INSERT>`.
  * - **Only where one fits** (`fitsAt`), and **shaped** (shape.ts): one line
@@ -94,23 +95,6 @@ export const withoutOverlap = (text: string, suffix: string): string => {
  * Mid-line, with code after the caret, the line is already written. */
 export const fitsAt = (suffix: string): boolean => !/[^\s)\]}"'`;,]/.test(suffix.split("\n", 1)[0] ?? "");
 
-/** The extra context a fill-in-the-middle model is given: the other files'
- * chunks, then what the language server knows, as a note on this file. */
-const extraOf = (path: string, snippets: ReadonlyArray<Snippet>, context: PlaceContext): ReadonlyArray<{ readonly filename: string; readonly text: string }> => [
-  ...snippets.map((snippet) => ({ filename: snippet.path, text: snippet.text })),
-  ...(context.signature === undefined && context.names.length === 0
-    ? []
-    : [
-        {
-          filename: `${path} (language server)`,
-          text: [
-            ...(context.signature === undefined ? [] : [`// The call at the cursor: ${context.signature}`]),
-            ...(context.names.length === 0 ? [] : [`// Names valid at the cursor: ${context.names.join("; ")}`]),
-          ].join("\n"),
-        },
-      ]),
-];
-
 export const completeRoute = HttpRouter.add("POST", Complete.path, (request) =>
   Effect.gen(function* () {
     const asked = yield* HttpServerRequest.schemaBodyJson(Complete.Request);
@@ -139,9 +123,15 @@ export const completeRoute = HttpRouter.add("POST", Complete.path, (request) =>
         HttpClientRequest.bodyJsonUnsafe({
           input_prefix: asked.prefix,
           input_suffix: asked.suffix,
-          input_extra: extraOf(asked.path, snippets, context),
+          // Only what changes rarely: Qwen reads the extra context before the
+          // file, so a change there makes it read the whole prompt again (the
+          // language server's names change at every caret: the chat path only).
+          input_extra: snippets.map((snippet) => ({ filename: snippet.path, text: snippet.text })),
           n_predict: ownLine ? BLOCK_TOKENS : LINE_TOKENS,
           ...(ownLine ? {} : { stop: ["\n"] }),
+          // Greedy: the same place gives the same suggestion.
+          temperature: 0,
+          top_k: 1,
           cache_prompt: true,
         }),
         http.execute,
