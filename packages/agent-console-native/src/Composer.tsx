@@ -48,7 +48,9 @@ import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import type { DubzContext } from "./dubzSuggestions";
 import { findModel, getDefaultModel, type ModelOption, reloadModels, useModels } from "./models";
-import { ModelPicker, ModelWindow } from "./ModelPicker";
+import { modelRefOf } from "./models/effort";
+import { EffortPicker, ModelPicker, ModelWindow } from "./ModelPicker";
+import type { Model } from "./opencode/schema/model";
 import type { CloseReason } from "./BarWindow";
 import { recordModelUse } from "./modelUsage";
 import { getLastModel, setLastModel } from "./settings";
@@ -58,7 +60,8 @@ const noop = (): void => undefined;
 
 export const Composer = (props: {
   /** `invocation`: what the text's leading `/name` runs, when it names one. */
-  readonly onSend: (text: string, model: ModelOption | undefined, invocation: Invocation | undefined) => Promise<void>;
+  /** `model`: the chosen model at the chosen effort. */
+  readonly onSend: (text: string, model: Model.Ref | undefined, invocation: Invocation | undefined) => Promise<void>;
   readonly disabled: boolean;
   /** Where the message will run: the models offered are this directory's
    * (undefined until it is known). */
@@ -99,6 +102,12 @@ export const Composer = (props: {
   // of the text.
   const [token, setToken] = React.useState<Commands.Entry | undefined>(undefined);
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
+  // The effort chosen by hand (undefined: the model's own default). Kept
+  // while the model offers it.
+  const [effort, setEffort] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (effort !== undefined && selectedModel?.variants.includes(effort) !== true) setEffort(undefined);
+  }, [effort, selectedModel]);
   // Held expanded while it is a page sliding (away to Dubz, or back), when its
   // input is not the focused one.
   const [held, setHeld] = React.useState(false);
@@ -365,7 +374,7 @@ export const Composer = (props: {
     try {
       // Cleared once it is on its way: the chat's bubble starts where the
       // text is, so the two swap in place.
-      await props.onSend(value, selectedModel, token === undefined ? invocationOf(value, commands) : invocationWith(token, rest));
+      await props.onSend(value, selectedModel === undefined ? undefined : modelRefOf(selectedModel, effort), token === undefined ? invocationOf(value, commands) : invocationWith(token, rest));
       setText("");
       setToken(undefined);
       if (selectedModel !== undefined) void recordModelUse(selectedModel);
@@ -422,7 +431,14 @@ export const Composer = (props: {
                 }}
               />
             }
-            expandedCenter={<ModelPicker models={models} selected={selectedModel} onPress={openModels} />}
+            expandedCenter={
+              <View style={styles.pickers}>
+                <ModelPicker models={models} selected={selectedModel} onPress={openModels} />
+                {selectedModel !== undefined && selectedModel.variants.length > 0 ? (
+                  <EffortPicker efforts={selectedModel.variants} selected={effort} onSelect={setEffort} />
+                ) : null}
+              </View>
+            }
             collapsedCenter={
               <Text style={[styles.mirrorText, text.length === 0 && token === undefined && styles.mirrorPlaceholder]} numberOfLines={1}>
                 {token !== undefined ? withName(token, text) : text.length > 0 ? text : props.placeholder}
@@ -517,6 +533,12 @@ const makeStyles = (text: TextColors) =>
     bottom: 0,
     left: 0,
     right: 0,
+  },
+  // The model, then its effort, side by side in the bar's centre.
+  pickers: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
   },
   mirrorText: {
     color: text.label,

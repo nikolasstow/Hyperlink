@@ -17,6 +17,9 @@ export const path = "/models";
 export const Model = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
+  /** Its effort levels (opencode's variants: `low`, `high`, …), when it has
+   * any; without one chosen, the model's own default applies. */
+  variants: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 export type Model = typeof Model.Type;
 

@@ -23,7 +23,7 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
               model("deepseek", "deepseek-v4-pro", "DeepSeek V4 Pro"),
               model("opencode", "big-pickle", "Big Pickle"),
               model("opencode", "old", "Old", false),
-              model("opencode", "fable", "Fable"),
+              { ...model("opencode", "fable", "Fable"), variants: [{ id: "low", settings: {} }, { id: "max", settings: {} }] },
             ],
           }
         : { data: model("opencode", "big-pickle", "Big Pickle") };
@@ -56,7 +56,7 @@ describe("GET /models", () => {
         .filter((line) => line.length > 0)
         .map((line) => Schema.decodeUnknownSync(Schema.fromJsonString(Models.Line))(line));
       expect(lines.map((line) => (line._tag === "Provider" ? line.provider.id : "defaults"))).toEqual(["deepseek", "opencode", "defaults"]);
-      expect(lines[1]).toEqual({ _tag: "Provider", provider: { id: "opencode", name: "OpenCode", models: [{ id: "big-pickle", name: "Big Pickle" }, { id: "fable", name: "Fable" }] } });
+      expect(lines[1]).toEqual({ _tag: "Provider", provider: { id: "opencode", name: "OpenCode", models: [{ id: "big-pickle", name: "Big Pickle" }, { id: "fable", name: "Fable", variants: ["low", "max"] }] } });
       expect(lines.at(-1)).toEqual({ _tag: "Defaults", defaults: { opencode: "big-pickle" } });
       expect([...asked].sort()).toEqual(["/api/model", "/api/model/default", "/api/provider"].map((path) => `${path}?location%5Bdirectory%5D=%2Frepo+a`).sort());
     } finally {

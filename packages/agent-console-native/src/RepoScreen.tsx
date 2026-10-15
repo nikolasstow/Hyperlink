@@ -17,8 +17,7 @@
 import { canReload, reloadApp } from "./reload";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { Agent } from "./opencode/schema/agent";
-import { Model } from "./opencode/schema/model";
-import { Provider } from "./opencode/schema/provider";
+import type { Model } from "./opencode/schema/model";
 import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import { sendMessage } from "./outbox/useOutbox";
@@ -40,7 +39,6 @@ import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { HomeTargetPickers, sessionDirectory, type SessionTarget, TARGET_PICKERS_HEIGHT } from "./HomeTargetPickers";
 import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
-import type { ModelOption } from "./models";
 import { useKeyboardHeight } from "./useKeyboardHeight";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { useBarCover } from "./dubz/useBarWindow";
@@ -226,7 +224,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   );
 
   const onSend = React.useCallback(
-    async (text: string, model: ModelOption | undefined, invocation: Invocation | undefined): Promise<void> => {
+    async (text: string, model: Model.Ref | undefined, invocation: Invocation | undefined): Promise<void> => {
       if (target === undefined || sending) return;
       setSending(true);
       try {
@@ -241,7 +239,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           create: target.kind === "newFolder" ? { folder: { root: rootDir, name: target.name } } : {},
           text,
           files: [],
-          model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
+          model,
           agent: Agent.ID.make(AGENT),
           invocation,
         });

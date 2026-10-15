@@ -30,9 +30,16 @@ const OpencodeModel = Schema.Struct({
   providerID: Schema.String,
   name: Schema.String,
   enabled: Schema.Boolean,
+  variants: Schema.optional(Schema.Array(Schema.Struct({ id: Schema.String }))),
 });
 const OpencodeModels = Schema.Struct({ data: Schema.Array(OpencodeModel) });
 const OpencodeDefault = Schema.Struct({ data: Schema.optional(OpencodeModel) });
+
+/** A model as a picker shows it: its effort levels only when it has some. */
+const modelOf = (model: typeof OpencodeModel.Type): Models.Model => {
+  const variants = (model.variants ?? []).map((variant) => variant.id);
+  return variants.length === 0 ? { id: model.id, name: model.name } : { id: model.id, name: model.name, variants };
+};
 
 /** The catalog's lines: each provider with its enabled models (in opencode's
  * order), then the default (opencode has one, not one per provider). */
@@ -45,7 +52,7 @@ const linesOf = (
     const own = models.data.filter((model) => model.enabled && model.providerID === provider.id);
     return own.length === 0
       ? []
-      : [{ _tag: "Provider", provider: { id: provider.id, name: provider.name, models: own.map((model) => ({ id: model.id, name: model.name })) } }];
+      : [{ _tag: "Provider", provider: { id: provider.id, name: provider.name, models: own.map(modelOf) } }];
   }),
   { _tag: "Defaults", defaults: fallback.data === undefined ? {} : { [fallback.data.providerID]: fallback.data.id } },
 ];

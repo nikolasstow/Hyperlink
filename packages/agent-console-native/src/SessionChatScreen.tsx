@@ -27,8 +27,7 @@ import { useV2Transcript } from "./chat/useV2Transcript";
 import { runApp } from "./effect/runtime";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { Agent } from "./opencode/schema/agent";
-import { Model } from "./opencode/schema/model";
-import { Provider } from "./opencode/schema/provider";
+import type { Model } from "./opencode/schema/model";
 import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import { SessionMessage } from "./opencode/schema/session-message";
@@ -468,7 +467,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
 
   // Into the outbox: sent from there, in order, when the server can take it
   // (sessions/../outbox). The bubble shows at once; its receipt says how far it got.
-  const onSend = async (text: string, model: ModelOption | undefined, invocation: Invocation | undefined): Promise<void> => {
+  const onSend = async (text: string, model: Model.Ref | undefined, invocation: Invocation | undefined): Promise<void> => {
     // The chips selected go with this message, as file references; the
     // selection clears.
     const attached = files.filter((file) => selectedSet.has(file.path));
@@ -520,7 +519,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       directory: directory === undefined ? undefined : AbsolutePath.make(directory),
       text,
       files: attached.map((file) => ({ path: file.path, name: file.name })),
-      model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
+      model,
       agent: Agent.ID.make(AGENT),
       invocation,
       skills,
@@ -533,7 +532,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   // The model the conversation was last answered with, for the composer.
   const seedModel = React.useMemo((): ModelOption | undefined => {
     const model = messages.findLast((message) => message.role === "assistant" && message.model !== undefined)?.model;
-    return model === undefined ? undefined : { providerID: model.providerID, providerName: model.providerID, modelID: model.modelID, name: model.modelID };
+    return model === undefined ? undefined : { providerID: model.providerID, providerName: model.providerID, modelID: model.modelID, name: model.modelID, variants: [] };
   }, [messages]);
 
   const [resolvedSeed, setResolvedSeed] = React.useState<ModelOption | undefined>(undefined);
@@ -545,7 +544,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       setResolvedSeed(undefined);
       return;
     }
-    const fallback: ModelOption = { providerID: seedProviderID, providerName: seedProviderID, modelID: seedModelID, name: seedModelID };
+    const fallback: ModelOption = { providerID: seedProviderID, providerName: seedProviderID, modelID: seedModelID, name: seedModelID, variants: [] };
     let cancelled = false;
     void listModels(directory).then((options) => {
       if (cancelled) return;

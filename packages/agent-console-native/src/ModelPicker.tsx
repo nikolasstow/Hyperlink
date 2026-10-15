@@ -15,11 +15,12 @@
  * @internal
  */
 import { Feather } from "@expo/vector-icons";
-import { Divider, Host, HStack, Image, LazyVStack, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, Divider, Host, HStack, Image, LazyVStack, Menu, ScrollView, Spacer, TabView, Text, VStack } from "@expo/ui/swift-ui";
 import {
   Animation,
   animation,
   background,
+  buttonStyle,
   clipped,
   contentShape,
   fixedSize,
@@ -28,6 +29,8 @@ import {
   frame,
   glassEffect,
   lineLimit,
+  menuIndicator,
+  menuStyle,
   onTapGesture,
   padding,
   refreshable,
@@ -46,12 +49,15 @@ import { BarWindow, type CloseReason, HANDLE_CLEARANCE } from "./BarWindow";
 import { CARD_RADIUS } from "./CardGlass";
 import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { modelKey, type ModelOption } from "./models";
+import { effortLabel } from "./models/effort";
 import { type ModelUsage, useModelUsage } from "./modelUsage";
 import { type TextColors, useCardTint, useTextColors, useTheme, useThemedStyles } from "./theme";
 
 const RECENTS = "recents";
 const RECENTS_LIMIT = 8;
 const LABEL_MAX_WIDTH = 220;
+/** The effort picker's box: its widest label ("Extra High"), icon and chevron. */
+const EFFORT_WIDTH = 112;
 /** The list's side margin, for the tabs and the list alike. */
 const SIDE = 16;
 /** The tabs' row: a tab and its 10pt above and below. */
@@ -170,7 +176,7 @@ export const ModelPicker = (props: {
           padding({ trailing: 4 }),
           contentShape(shapes.rectangle()),
           onTapGesture(props.onPress),
-          frame({ width: LABEL_MAX_WIDTH, height: COMPOSER_CHIP_SIZE, alignment: "leading" }),
+          frame({ maxWidth: Infinity, height: COMPOSER_CHIP_SIZE, alignment: "leading" }),
         ]}
       >
         <Text modifiers={[font({ size: 13, weight: "medium" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1), truncationMode("middle")]}>
@@ -178,6 +184,42 @@ export const ModelPicker = (props: {
         </Text>
         <Image systemName="chevron.down" size={11} color={textColors.secondaryLabel} />
       </HStack>
+    </Host>
+  );
+};
+
+/** The effort the next message runs at, beside the model: the model's own
+ * levels (opencode's variants), or Default (the model decides). A native
+ * menu, in a set box. */
+export const EffortPicker = (props: {
+  readonly efforts: ReadonlyArray<string>;
+  /** Undefined: the model's default. */
+  readonly selected: string | undefined;
+  readonly onSelect: (effort: string | undefined) => void;
+}): React.ReactElement => {
+  const textColors = useTextColors();
+  const choices: ReadonlyArray<string | undefined> = [undefined, ...props.efforts];
+  return (
+    <Host style={styles.effortHost} ignoreSafeArea="all">
+      <Menu
+        label={
+          <HStack spacing={4} modifiers={[frame({ width: EFFORT_WIDTH, height: COMPOSER_CHIP_SIZE, alignment: "leading" }), contentShape(shapes.rectangle())]}>
+            <Image systemName="gauge.with.dots.needle.50percent" size={12} color={textColors.secondaryLabel} />
+            <Text modifiers={[font({ size: 13, weight: "medium" }), foregroundStyle(textColors.secondaryLabel), lineLimit(1)]}>{effortLabel(props.selected)}</Text>
+            <Image systemName="chevron.down" size={11} color={textColors.secondaryLabel} />
+          </HStack>
+        }
+        modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
+      >
+        {choices.map((effort) => (
+          <Button
+            key={effort ?? "default"}
+            label={effortLabel(effort)}
+            {...(effort === props.selected ? { systemImage: "checkmark" } : {})}
+            onPress={() => props.onSelect(effort)}
+          />
+        ))}
+      </Menu>
     </Host>
   );
 };
@@ -489,8 +531,14 @@ const ModelRow = (props: {
 );
 
 const styles = StyleSheet.create({
+  // Up to the label's widest; less when the effort beside it needs the room.
   host: {
-    width: LABEL_MAX_WIDTH,
+    flex: 1,
+    maxWidth: LABEL_MAX_WIDTH,
+    height: COMPOSER_CHIP_SIZE,
+  },
+  effortHost: {
+    width: EFFORT_WIDTH,
     height: COMPOSER_CHIP_SIZE,
   },
 });

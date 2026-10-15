@@ -11,8 +11,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { Agent } from "./opencode/schema/agent";
-import { Model } from "./opencode/schema/model";
-import { Provider } from "./opencode/schema/provider";
+import type { Model } from "./opencode/schema/model";
 import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import { sendMessage } from "./outbox/useOutbox";
@@ -49,7 +48,6 @@ import {
 import { useBarCover } from "./dubz/useBarWindow";
 import type { DubzContext } from "./dubzSuggestions";
 import { prefetchTaskCounts } from "./taskCounts";
-import type { ModelOption } from "./models";
 import { displayWorktree, groupByRepo, matchSession, type RepoGroup } from "./repoGrouping";
 import type { RootStackParamList } from "./RootNavigator";
 import { prefetchWorkspaces } from "./extensionViewsStore";
@@ -182,7 +180,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     })();
   }, [loadSessions, loadScan, address, rootDir]);
 
-  const onSend = async (text: string, model: ModelOption | undefined, invocation: Invocation | undefined): Promise<void> => {
+  const onSend = async (text: string, model: Model.Ref | undefined, invocation: Invocation | undefined): Promise<void> => {
     if (target === undefined || sending) return;
     setSending(true);
     try {
@@ -197,7 +195,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         create: target.kind === "newFolder" ? { folder: { root: rootDir, name: target.name } } : {},
         text,
         files: [],
-        model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
+        model,
         agent: Agent.ID.make(AGENT),
         invocation,
       });

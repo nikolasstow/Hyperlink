@@ -17,6 +17,8 @@ export type ModelOption = {
   readonly providerName: string;
   readonly modelID: string;
   readonly name: string;
+  /** Its effort levels (opencode's variants), none when it has no choice. */
+  readonly variants: ReadonlyArray<string>;
 };
 
 export const modelKey = (model: Pick<ModelOption, "providerID" | "modelID">): string =>
@@ -36,6 +38,7 @@ const optionsOf = (catalog: Catalog | undefined): ReadonlyArray<ModelOption> => 
       providerName: provider.name,
       modelID: model.id,
       name: model.name,
+      variants: model.variants ?? [],
     })),
   );
   optionsByCatalog.set(catalog, options);
