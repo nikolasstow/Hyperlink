@@ -60,8 +60,18 @@ const partOf = (messageID: string, content: SessionMessage.AssistantContent, ind
 
 const viewOf = (message: SessionMessage.Info): ChatMessage | undefined => {
   switch (message.type) {
-    case "user":
-      return { id: message.id, role: "user", parts: [{ kind: "text", id: `${message.id}:text`, text: message.text }], time: { created: ms(message.time.created) } };
+    case "user": {
+      // A skill mentioned at the very start is its `/name` (the composer's chip).
+      const lead = message.skills?.find((skill) => skill.mention?.start === 0);
+      const end = lead?.mention?.end ?? 0;
+      return {
+        id: message.id,
+        role: "user",
+        parts: [{ kind: "text", id: `${message.id}:text`, text: lead === undefined ? message.text : message.text.slice(end).trim() }],
+        time: { created: ms(message.time.created) },
+        ...(lead === undefined ? {} : { slash: { name: lead.id, source: "skill" } }),
+      };
+    }
     case "assistant":
       return {
         id: message.id,

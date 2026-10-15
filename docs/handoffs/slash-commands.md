@@ -31,6 +31,19 @@ Related: `dubz-suggestions-decisions.md` (suggestions without `/`, through Laya)
 - **Rows use the tool record** of `dubz-suggestions-decisions.md` P5, so Laya can rank the same
   entries later and the `/` list can sort by context.
 
+## Asked (owner, 2026-10-15, after first build)
+
+- **Return accepts too**, like space.
+- **The accepted `/name` is glass**, not a plain background: a glass chip at the start of the input,
+  and the same chip at the start of the sent message (skill or command). Built: the chip is tinted
+  with `chat.slashCommandBackground`, its text `chat.slashCommandForeground`. In the input it is a
+  token (backspace on empty text removes it); in the bubble it sits above the text, outside the
+  text's arrival transform (glass dies under a transform).
+- **Commands in the sent message:** a command's message comes back from opencode as the command's
+  prompt (its template filled in), under a new id, with nothing marking it as a command. The queued
+  bubble shows the chip until the server takes it; the server's message then shows the prompt,
+  without a chip. Open: see below.
+
 ## Found in opencode (2026-10-14)
 
 - **Listing.** v1 `GET /command?directory=…` returns everything: `{ name, description, source:

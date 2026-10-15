@@ -36,6 +36,7 @@ import { colors } from "./colors";
 import { dateHeaderLabel } from "./chat/dateHeaders";
 import { type Receipt, receiptTimeLabel } from "./chat/receipt";
 import { type ChatMessage, textOf } from "./chat/model";
+import { SlashChip } from "./commands/SlashChip";
 
 const MENU: ReadonlyArray<MenuAction> = [
   { id: "copy", title: "Copy", systemImage: "doc.on.doc" },
@@ -69,7 +70,10 @@ const MessageBubbleImpl = (props: {
   readonly dateHeader?: number;
 }): React.ReactElement => {
   const isUser = props.message.role === "user";
-  const text = textOf(props.message).trim();
+  const slash = props.message.slash;
+  const said = textOf(props.message).trim();
+  // What Copy and Share take: the message as typed, its `/name` included.
+  const text = slash === undefined ? said : `/${slash.name} ${said}`.trim();
   const onAction = (id: string): void => {
     if (id === "copy") Clipboard.setString(text);
     if (id === "share") void Share.share({ message: text });
@@ -113,7 +117,14 @@ const MessageBubbleImpl = (props: {
                 colorScheme={scheme}
                 entering={entering?.glass}
               />
-              <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View>
+              {/* Beside the arriving text, not inside it: glass stops
+               * rendering under the text's arrival transform. */}
+              {slash !== undefined ? (
+                <View style={[styles.slash, said === "" && styles.slashAlone]}>
+                  <SlashChip name={slash.name} />
+                </View>
+              ) : null}
+              {said !== "" || slash === undefined ? <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View> : null}
             </>
           ) : (
             parts
@@ -207,5 +218,12 @@ const styles = StyleSheet.create({
   },
   bubbleGlass: {
     borderRadius: USER_RADIUS,
+  },
+  // A `/name` chip leads your message, its text under it.
+  slash: {
+    marginBottom: 6,
+  },
+  slashAlone: {
+    marginBottom: 0,
   },
 });

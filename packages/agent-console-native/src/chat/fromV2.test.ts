@@ -14,6 +14,19 @@ describe("chatMessagesOfV2", () => {
     expect(message?.parts).toEqual([{ kind: "error", id: "msg_idle:error", text: "Model unavailable: opencode/x" }]);
   });
 
+  it("shows a message's leading skill as its /name, the text after it", () => {
+    const user = decode({
+      id: "msg_user",
+      type: "user",
+      time: { created: 1_700_000_000_000 },
+      text: "/unslop this paragraph",
+      skills: [{ id: "unslop", name: "Unslop", mention: { start: 0, end: 7, text: "/unslop" } }],
+    });
+    const [message] = chatMessagesOfV2([user]);
+    expect(message?.slash).toEqual({ name: "unslop", source: "skill" });
+    expect(message?.parts).toEqual([{ kind: "text", id: "msg_user:text", text: "this paragraph" }]);
+  });
+
   it("shows nothing for a turn that ended well or was stopped", () => {
     expect(chatMessagesOfV2([idle("succeeded"), idle("interrupted")])).toEqual([]);
   });

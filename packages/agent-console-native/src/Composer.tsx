@@ -40,8 +40,8 @@ import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } fro
 import { useAgentButtonVisible } from "./agentButtonSettings";
 import { type BarGeometry, INPUT_LINE_HEIGHT, INPUT_PADDING_VERTICAL, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT, setBarOpen, setInputHeight, useBarGeometry } from "./barGeometry";
 import { type BarTopSection, BottomBar } from "./BottomBar";
-import { accepted, type Invocation, invocationOf, matches, slashQuery, spaceAccepts } from "./commands/slash";
-import { useSlashColors } from "./commands/slashColors";
+import { acceptedByKey, type Invocation, invocationOf, invocationWith, matches, slashQuery, withName } from "./commands/slash";
+import { SLASH_CHIP_HEIGHT, SlashChip } from "./commands/SlashChip";
 import { SlashList } from "./commands/SlashList";
 import { useCommands, useLoadCommands } from "./commands/useCommandCatalog";
 import { PlusChip, SendChip } from "./composerChips";
@@ -95,14 +95,16 @@ export const Composer = (props: {
   // What `/` offers here: loaded ahead (CommandCatalog), so typing only filters.
   const commands = useCommands(props.directory);
   useLoadCommands(props.directory);
-  const slashColors = useSlashColors();
+  // The accepted `/name`: a glass chip at the start of the input, sent ahead
+  // of the text.
+  const [token, setToken] = React.useState<Commands.Entry | undefined>(undefined);
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
   // Held expanded while it is a page sliding (away to Dubz, or back), when its
   // input is not the focused one.
   const [held, setHeld] = React.useState(false);
   // The model window open over the bar (the bar stays expanded under it).
   const [modelsOpen, setModelsOpen] = React.useState(false);
-  const expanded = focused || held || modelsOpen || text.length > 0;
+  const expanded = focused || held || modelsOpen || text.length > 0 || token !== undefined;
   const pageType = props.dubzContext.surface;
   const withDubz = useAgentButtonVisible(pageType);
   const lastPage = useBarPage(pageType);
@@ -113,7 +115,7 @@ export const Composer = (props: {
   const { width: screenW } = useWindowDimensions();
   // Where the pages stand: 0 this composer, 1 Dubz.
   const pageX = useSharedValue(withDubz && lastPage === "dubz" ? 1 : 0);
-  const hasContent = text.trim().length > 0 && !props.disabled;
+  const hasContent = (text.trim().length > 0 || token !== undefined) && !props.disabled;
   const ownGeometry = useBarGeometry();
   const geometry = props.geometry ?? ownGeometry;
   // The bar opens and closes with `expanded`, on the UI thread.
@@ -324,14 +326,23 @@ export const Composer = (props: {
     setFocused(false);
   };
 
-  // A `/` word being typed offers its matches above the bar; space or a tap
-  // accepts one (commands/slash.ts).
-  const slashTyped = slashQuery(text);
+  // A `/` word being typed offers its matches above the bar; space, Return or
+  // a tap accepts one (commands/slash.ts), and it becomes the chip.
+  const slashTyped = token === undefined ? slashQuery(text) : undefined;
   const offered = slashTyped === undefined || !focused ? [] : matches(commands, slashTyped);
-  const changeText = (next: string): void => setText(spaceAccepts(text, next, commands) ?? next);
-  const accept = (entry: Commands.Entry): void => setText(accepted(entry));
-  // An accepted `/name` at the start wears the theme's slash colours.
-  const invocation = invocationOf(text, commands);
+  const accept = (entry: Commands.Entry): void => {
+    setToken(entry);
+    setText("");
+  };
+  const changeText = (next: string): void => {
+    const entry = token === undefined ? acceptedByKey(text, next, commands) : undefined;
+    if (entry !== undefined) accept(entry);
+    else setText(next);
+  };
+  // Backspace with nothing typed after the chip takes the chip away.
+  const keyPress = (key: string): void => {
+    if (key === "Backspace" && text.length === 0) setToken(undefined);
+  };
 
   // Its page left (a send opened the chat, a tap opened another page): the
   // input lets go and the bar collapses, so coming back finds it closed
@@ -346,15 +357,17 @@ export const Composer = (props: {
   // One send at a time: the text stays until it is on its way.
   const sending = React.useRef(false);
   const send = async (): Promise<void> => {
-    const value = text.trim();
+    const rest = text.trim();
+    const value = token === undefined ? rest : withName(token, rest);
     if (value.length === 0 || props.disabled || sending.current) return;
     sending.current = true;
     setError(undefined);
     try {
       // Cleared once it is on its way: the chat's bubble starts where the
       // text is, so the two swap in place.
-      await props.onSend(value, selectedModel, invocationOf(value, commands));
+      await props.onSend(value, selectedModel, token === undefined ? invocationOf(value, commands) : invocationWith(token, rest));
       setText("");
+      setToken(undefined);
       if (selectedModel !== undefined) void recordModelUse(selectedModel);
     } catch {
       setError("Message failed to send — is the server running?");
@@ -376,28 +389,30 @@ export const Composer = (props: {
             topSection={props.topSection}
             onExpandRequest={expand}
             input={
-              <TextInput
-                ref={inputRef}
-                style={styles.input}
-                onChangeText={changeText}
-                onLayout={(e) => onInputLayout(e.nativeEvent.layout.height)}
-                // Always editable: disabled only holds the send (iOS drops the
-                // keyboard from an input that stops being editable).
-                placeholder={props.placeholder}
-                placeholderTextColor={textColors.placeholderText}
-                multiline
-                onFocus={onFocus}
-                onBlur={onBlur}
-              >
-                {invocation === undefined ? (
-                  text
-                ) : (
-                  <>
-                    <Text style={{ color: slashColors.foreground, backgroundColor: slashColors.background }}>{text.slice(0, invocation.end)}</Text>
-                    {text.slice(invocation.end)}
-                  </>
-                )}
-              </TextInput>
+              // One tree whether a chip is there or not, so the input never
+              // remounts (and keeps the keyboard) as one comes and goes.
+              <View style={styles.inputRow}>
+                {token !== undefined ? (
+                  <View style={styles.chipSlot}>
+                    <SlashChip name={token.name} />
+                  </View>
+                ) : null}
+                <TextInput
+                  ref={inputRef}
+                  style={styles.input}
+                  value={text}
+                  onChangeText={changeText}
+                  onKeyPress={(e) => keyPress(e.nativeEvent.key)}
+                  onLayout={(e) => onInputLayout(e.nativeEvent.layout.height)}
+                  // Always editable: disabled only holds the send (iOS drops the
+                  // keyboard from an input that stops being editable).
+                  placeholder={token === undefined ? props.placeholder : undefined}
+                  placeholderTextColor={textColors.placeholderText}
+                  multiline
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                />
+              </View>
             }
             leading={
               <PlusChip
@@ -409,8 +424,8 @@ export const Composer = (props: {
             }
             expandedCenter={<ModelPicker models={models} selected={selectedModel} onPress={openModels} />}
             collapsedCenter={
-              <Text style={[styles.mirrorText, text.length === 0 && styles.mirrorPlaceholder]} numberOfLines={1}>
-                {text.length > 0 ? text : props.placeholder}
+              <Text style={[styles.mirrorText, text.length === 0 && token === undefined && styles.mirrorPlaceholder]} numberOfLines={1}>
+                {token !== undefined ? withName(token, text) : text.length > 0 ? text : props.placeholder}
               </Text>
             }
             trailing={
@@ -449,8 +464,26 @@ export const Composer = (props: {
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
+  // Out of the flow, at the top of its section: an in-flow child of the
+  // section (a set height, clipping) is measured no taller than it, so the
+  // input could never grow past the section, nor the section past the
+  // input. Positioned, the row is measured on the input alone (the chip is
+  // shorter). The chip, when there is one, leads the first line.
+  inputRow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  chipSlot: {
+    marginTop: (MIN_INPUT_HEIGHT - SLASH_CHIP_HEIGHT) / 2,
+    marginLeft: 2,
+    marginRight: 2,
+  },
   input: {
-    // No explicit width — the shell's inputSection stretches it to full width.
+    flex: 1,
     color: text.label,
     fontSize: 16,
     // Explicit, computed against MIN_INPUT_HEIGHT so the two can't drift.
@@ -459,14 +492,6 @@ const makeStyles = (text: TextColors) =>
     paddingVertical: INPUT_PADDING_VERTICAL,
     minHeight: MIN_INPUT_HEIGHT,
     maxHeight: MAX_INPUT_HEIGHT,
-    // Out of the flow, at the top of its section: an in-flow child of the
-    // section (a set height, clipping) is measured no taller than it, so the
-    // input could never grow past the section, nor the section past the
-    // input. Positioned, it is measured on its text alone.
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
   },
   // The Dubz page lies over the composer's bar, bottom to bottom, beside it
   // (`left` from dubzSlide).

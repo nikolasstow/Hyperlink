@@ -1,6 +1,6 @@
 import type { Commands } from "agent-console-protocol";
 import { describe, expect, it } from "vitest";
-import { invocationOf, matches, slashQuery, spaceAccepts } from "./slash";
+import { acceptedByKey, invocationOf, invocationWith, matches, slashQuery, withName } from "./slash";
 
 const skill = (name: string): Commands.Entry => ({ id: `skill:${name}`, name, source: "skill" });
 const command = (name: string): Commands.Entry => ({ id: `command:${name}`, name, source: "command" });
@@ -24,18 +24,30 @@ describe("matches", () => {
   });
 });
 
-describe("spaceAccepts", () => {
-  it("accepts the top match", () => {
-    expect(spaceAccepts("/re", "/re ", entries)).toBe("/review ");
-    expect(spaceAccepts("/UNS", "/UNS ", entries)).toBe("/unslop ");
+describe("acceptedByKey", () => {
+  it("accepts the top match on space or Return", () => {
+    expect(acceptedByKey("/re", "/re ", entries)?.name).toBe("review");
+    expect(acceptedByKey("/re", "/re\n", entries)?.name).toBe("review");
+    expect(acceptedByKey("/UNS", "/UNS ", entries)?.name).toBe("unslop");
   });
 
-  it("leaves a plain space after an exact name, with no match, after a bare /, or anywhere else", () => {
-    expect(spaceAccepts("/report", "/report ", entries)).toBeUndefined();
-    expect(spaceAccepts("/zz", "/zz ", entries)).toBeUndefined();
-    expect(spaceAccepts("/", "/ ", entries)).toBeUndefined();
-    expect(spaceAccepts("/review fix", "/review fix ", entries)).toBeUndefined();
-    expect(spaceAccepts("/re", "/rev", entries)).toBeUndefined();
+  it("accepts a name typed in full as itself, though another sorts first", () => {
+    expect(acceptedByKey("/report", "/report ", [skill("reportage"), ...entries])?.name).toBe("report");
+  });
+
+  it("leaves the key alone with no match, after a bare /, or anywhere else", () => {
+    expect(acceptedByKey("/zz", "/zz ", entries)).toBeUndefined();
+    expect(acceptedByKey("/", "/\n", entries)).toBeUndefined();
+    expect(acceptedByKey("/review fix", "/review fix ", entries)).toBeUndefined();
+    expect(acceptedByKey("/re", "/rev", entries)).toBeUndefined();
+  });
+});
+
+describe("withName", () => {
+  it("puts the accepted name before what was typed after it", () => {
+    expect(withName(skill("unslop"), "this paragraph")).toBe("/unslop this paragraph");
+    expect(withName(skill("unslop"), "")).toBe("/unslop");
+    expect(invocationOf(withName(command("review"), "last"), entries)).toEqual(invocationWith(command("review"), "last"));
   });
 });
 

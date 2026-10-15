@@ -28,22 +28,21 @@ export const matches = (entries: ReadonlyArray<Commands.Entry>, query: string): 
   return [...starts, ...holds].slice(0, MAX_ROWS);
 };
 
-/** The text once `entry` is accepted: its name after the `/`, then a space. */
-export const accepted = (entry: Commands.Entry): string => `/${entry.name} `;
-
 /**
- * What a space typed straight after the `/` word becomes (owner's rule):
- * the top match accepted (`/re` + space → `/review `), unless the word is
- * already an exact name or nothing matches (or it is a bare `/`); then it is
- * a plain space. Undefined when `next` is not such a space.
+ * The entry a key accepts: space or Return typed straight after the `/` word
+ * (owner's rule). Its exact name if typed in full, else the top match
+ * (`/re` + space → `/review`). Undefined when `next` is not such a key, the
+ * word is a bare `/`, or nothing matches: the key is then typed as usual.
  */
-export const spaceAccepts = (previous: string, next: string, entries: ReadonlyArray<Commands.Entry>): string | undefined => {
+export const acceptedByKey = (previous: string, next: string, entries: ReadonlyArray<Commands.Entry>): Commands.Entry | undefined => {
   const query = slashQuery(previous);
-  if (query === undefined || query.length === 0 || next !== `${previous} `) return undefined;
-  if (entries.some((entry) => entry.name === query)) return undefined;
-  const top = matches(entries, query)[0];
-  return top === undefined ? undefined : accepted(top);
+  if (query === undefined || query.length === 0 || (next !== `${previous} ` && next !== `${previous}\n`)) return undefined;
+  return entries.find((entry) => entry.name === query) ?? matches(entries, query)[0];
 };
+
+/** The text a message is sent with when `entry` was accepted (its chip) and
+ * `rest` typed after it. */
+export const withName = (entry: Commands.Entry, rest: string): string => (rest.length === 0 ? `/${entry.name}` : `/${entry.name} ${rest}`);
 
 /** A message's leading `/name`, when it names an entry: the entry, where the
  * word ends, and the text after it (the arguments). */
@@ -53,6 +52,9 @@ export interface Invocation {
   readonly end: number;
   readonly args: string;
 }
+
+/** What sending `rest` after the accepted `entry` runs. */
+export const invocationWith = (entry: Commands.Entry, rest: string): Invocation => ({ entry, end: entry.name.length + 1, args: rest });
 
 /** The entry a message's leading `/name` runs, if any. */
 export const invocationOf = (text: string, entries: ReadonlyArray<Commands.Entry>): Invocation | undefined => {

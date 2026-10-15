@@ -14,12 +14,15 @@ const views = new WeakMap<QueuedMessage, ChatMessage>();
 export const chatMessageOfQueued = (message: QueuedMessage): ChatMessage => {
   const known = views.get(message);
   if (known !== undefined) return known;
+  const run = message.run;
+  const text = run === undefined ? message.text : run._tag === "Skill" ? message.text.slice(run.end).trim() : run.args;
   const view: ChatMessage = {
     id: message.id,
     role: "user",
-    parts: [{ kind: "text", id: `${message.id}:text`, text: message.text }],
+    parts: [{ kind: "text", id: `${message.id}:text`, text }],
     time: { created: message.queuedAt },
     queued: true,
+    ...(run === undefined ? {} : { slash: run._tag === "Skill" ? { name: run.id, source: "skill" } : { name: run.name, source: "command" } }),
   };
   views.set(message, view);
   return view;
@@ -51,8 +54,10 @@ export const pendingMessages = (
   conversation: ReadonlySet<string>,
 ): ReadonlyArray<ChatMessage> => {
   const queuedIDs = new Set(queued.map((message) => message.id));
+  // A command's message comes back from the server as its own (the command's
+  // prompt, under a new id), so its queued bubble does not wait for it.
   const sent = shown
-    .filter((message) => !queuedIDs.has(message.id) && !conversation.has(message.id))
+    .filter((message) => !queuedIDs.has(message.id) && !conversation.has(message.id) && message.slash?.source !== "command")
     .map((message) => (message.queued === true ? sentView(message) : message));
   return [...sent, ...queued.filter((message) => !conversation.has(message.id))];
 };

@@ -53,6 +53,8 @@ export interface ChatMessage {
   readonly time?: { readonly created: number; readonly completed?: number };
   /** Still in the outbox (not yet on the server). */
   readonly queued?: boolean;
+  /** The `/name` it leads with (yours): shown as a chip, its text after. */
+  readonly slash?: { readonly name: string; readonly source: "skill" | "command" };
 }
 
 /** Epoch ms: opencode has reported seconds in places, and a value small
