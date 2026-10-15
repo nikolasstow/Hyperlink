@@ -1,14 +1,14 @@
 /**
  * DEV probe for the height model. Toggle `DUBZ_PROBE` in Dubz.tsx to swap the
- * home suggestions for this. It stands in as an "active component" (a block of
- * exactly its claimed height — tap the block to cycle), shows the model's math
- * as the literal EQUATIONS substituted with live numbers, and lets you nudge the
- * top/bottom bar offsets with +/− steppers to tune them.
+ * home suggestions for this. It stands in as an "active component" with a CONTENT
+ * height you cycle (tap the block); it reports the ACTIVE CLAIM — the window
+ * height needed to show that content = content + bars, and in the compact zone
+ * the top bar is a side bar so it is NOT added. The equations show every step,
+ * and +/− steppers tune the bar offsets.
  *
  * Steppers (onPress), NOT text inputs: a TextInput inside Dubz's gesture-wrapped,
- * glass-hosted body cannot take tap-focus (the composer field is focused
- * programmatically), so typing never fired. onPress works — that is how the
- * block cycles.
+ * glass-hosted body cannot take tap-focus, so typing never fired. onPress works
+ * — that is how the block cycles.
  *
  * @internal
  */
@@ -16,16 +16,24 @@ import * as React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { runOnJS, useAnimatedReaction } from "react-native-reanimated";
 import { BarWindowHeightContext } from "../BarWindow";
-import { COMPACT_ZONE_MAX, contentViewport, isCompact } from "./dubzLayout";
-import { DUBZ_BOTTOM_BAR, DUBZ_TOP_BAR, SINGLE_SUGGESTION_HEIGHT } from "./DubzSessions";
+import { COMPACT_ZONE_MAX, isCompact } from "./dubzLayout";
+import { DUBZ_BOTTOM_BAR, DUBZ_TOP_BAR } from "./DubzSessions";
 import { requestedHeightOf, type DubzWindowState } from "./dubzWindowMachine";
 
-/** Heights to cycle: the min, up through the compact-zone edge, and above it. */
-const PROBE_HEIGHTS: ReadonlyArray<number> = [SINGLE_SUGGESTION_HEIGHT, 180, 240, 300, COMPACT_ZONE_MAX, 360, 440, 560];
+/** CONTENT heights to cycle (what the component actually wants to show). With a
+ * ~78 bottom bar, up to ~242 stays in the compact zone; above needs a top row. */
+const PROBE_CONTENT: ReadonlyArray<number> = [44, 100, 160, 220, 280, 360, 440];
 /** Points per +/− tap. */
 const STEP = 2;
 
-/** A label with − value + to nudge an offset (onPress, so it works in the body). */
+/** The active claim: the window height to show `content`. In the compact zone
+ * (content + bottom fits it) the top controls are a side bar, so only the bottom
+ * bar is added; otherwise the top bar takes a row too. */
+const activeClaim = (content: number, topBar: number, bottomBar: number): { readonly active: number; readonly compact: boolean } => {
+  const compact = content + bottomBar <= COMPACT_ZONE_MAX;
+  return { active: compact ? content + bottomBar : content + topBar + bottomBar, compact };
+};
+
 const Stepper = (props: { readonly label: string; readonly value: number; readonly onChange: (next: number) => void }): React.ReactElement => (
   <View style={styles.field}>
     <Text style={styles.fieldLabel}>{props.label}</Text>
@@ -44,21 +52,23 @@ export const DubzActiveProbe = (props: {
   readonly onActiveHeight?: (height: number | undefined) => void;
 }): React.ReactElement => {
   const [index, setIndex] = React.useState(0);
-  const height = PROBE_HEIGHTS[index] ?? SINGLE_SUGGESTION_HEIGHT;
-  // Report through a ref so the identity stays stable; deactivate on unmount.
-  const report = React.useRef(props.onActiveHeight);
-  report.current = props.onActiveHeight;
-  React.useEffect(() => {
-    report.current?.(height);
-  }, [height]);
-  React.useEffect(() => () => report.current?.(undefined), []);
+  const content = PROBE_CONTENT[index] ?? PROBE_CONTENT[0] ?? 100;
 
   // Editable bar offsets (seeded from the real constants); +/− tune them live.
   const [topBar, setTopBar] = React.useState(DUBZ_TOP_BAR);
   const [bottomBar, setBottomBar] = React.useState(DUBZ_BOTTOM_BAR);
 
-  // The live clamped height, mirrored off the shared value when the rounded
-  // value changes (dev tool — re-renders during a resize are fine).
+  const { active, compact: claimCompact } = activeClaim(content, topBar, bottomBar);
+
+  // Report the active CLAIM (the window height needed), not the content.
+  const report = React.useRef(props.onActiveHeight);
+  report.current = props.onActiveHeight;
+  React.useEffect(() => {
+    report.current?.(active);
+  }, [active]);
+  React.useEffect(() => () => report.current?.(undefined), []);
+
+  // The live clamped window height off the shared value.
   const visible = React.useContext(BarWindowHeightContext);
   const [liveVisible, setLiveVisible] = React.useState<number | undefined>(undefined);
   useAnimatedReaction(
@@ -71,53 +81,50 @@ export const DubzActiveProbe = (props: {
 
   const state = props.state;
   const def = Math.round(state.defaultHeight);
-  const act = state.activeHeight === undefined ? undefined : Math.round(state.activeHeight);
   const requested = Math.round(requestedHeightOf(state));
-  const v = liveVisible ?? requested;
-  const compactNow = isCompact(v);
-  const viewport = contentViewport(v, topBar, bottomBar);
+  const win = liveVisible ?? requested;
+  // Does the window actually show the content? window − the bars it reserves.
+  const windowCompact = isCompact(win);
+  const box = windowCompact ? win - bottomBar : win - topBar - bottomBar;
+  const fits = box >= content;
 
+  const claimEq = claimCompact
+    ? `active = content ${content} + bottom ${bottomBar} = ${active}   (compact: no top bar)`
+    : `active = content ${content} + top ${topBar} + bottom ${bottomBar} = ${active}`;
+  const compactEq = `compact = (content ${content} + bottom ${bottomBar} = ${content + bottomBar}) ≤ ${COMPACT_ZONE_MAX} = ${claimCompact}`;
   const requestedEq = state.pinned
     ? `requested = default ${def} = ${requested}   [pinned by drag]`
-    : act === undefined
-      ? `requested = default ${def} = ${requested}   (nothing active)`
-      : `requested = max(active ${act}, default ${def}) = ${requested}`;
-  const compactEq = `compact = (visible ${v} ≤ ${COMPACT_ZONE_MAX}) = ${compactNow}`;
-  const viewportEq = compactNow
-    ? `viewport = visible ${v} − bottom ${bottomBar} = ${viewport}   (top ${topBar} excluded)`
-    : `viewport = visible ${v} − top ${topBar} − bottom ${bottomBar} = ${viewport}`;
+    : `requested = max(active ${active}, default ${def}) = ${requested}`;
+  const fitEq = `content box = window ${win} − ${windowCompact ? `bottom ${bottomBar}` : `top ${topBar} + bottom ${bottomBar}`} = ${box}`;
 
   return (
-    // The component block (tap to cycle) sits at the bottom, exactly its claimed
-    // height. The readout overlay carries the equations and the +/− offsets.
     <View style={styles.root}>
-      <Pressable onPress={() => setIndex((n) => (n + 1) % PROBE_HEIGHTS.length)} style={[styles.component, { height }]} />
+      <Pressable onPress={() => setIndex((n) => (n + 1) % PROBE_CONTENT.length)} style={[styles.component, { height: content }]} />
       <View style={styles.readout}>
-        <Text style={styles.caption}>active component = {height}px · tap the block to cycle ({index + 1}/{PROBE_HEIGHTS.length})</Text>
+        <Text style={styles.caption}>content = {content}px · tap the block to cycle ({index + 1}/{PROBE_CONTENT.length})</Text>
         <View style={styles.fields}>
           <Stepper label="top" value={topBar} onChange={setTopBar} />
           <Stepper label="bottom" value={bottomBar} onChange={setBottomBar} />
         </View>
-        <Text style={styles.eq}>{requestedEq}</Text>
         <Text style={styles.eq}>{compactEq}</Text>
-        <Text style={[styles.eq, compactNow ? styles.eqHot : null]}>{viewportEq}</Text>
-        {compactNow ? <Text style={styles.note}>↑ compact: the top bar is a side bar — NOT subtracted</Text> : null}
+        <Text style={[styles.eq, claimCompact ? styles.eqHot : null]}>{claimEq}</Text>
+        <Text style={styles.eq}>{requestedEq}</Text>
+        <Text style={styles.eq}>{fitEq}</Text>
+        <Text style={[styles.eq, fits ? styles.ok : styles.bad]}>content {content} {fits ? "≤" : ">"} box {box} → {fits ? "FITS" : "WINDOW TOO SMALL"}</Text>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  // Content box: the component block sits at the bottom (like a real suggestion).
   root: { flex: 1, justifyContent: "flex-end" },
-  // The active component — exactly its claimed height; width fills; tap to cycle.
   component: { alignSelf: "stretch", backgroundColor: "rgba(74,222,128,0.14)", borderColor: "rgba(74,222,128,0.6)", borderWidth: 1, borderRadius: 14 },
-  // Equations + offset steppers, over the top of the block.
   readout: { position: "absolute", top: 8, left: 8, right: 8, backgroundColor: "rgba(0,0,0,0.72)", borderRadius: 10, padding: 10, gap: 5 },
   caption: { color: "#fff", fontSize: 13, fontWeight: "600", textAlign: "center", marginBottom: 2 },
   eq: { color: "#fff", fontSize: 12.5, fontFamily: "Menlo" },
   eqHot: { color: "#4ade80" },
-  note: { color: "#4ade80", fontSize: 11.5, fontStyle: "italic" },
+  ok: { color: "#4ade80" },
+  bad: { color: "#f87171" },
   fields: { flexDirection: "row", gap: 16, marginTop: 2, marginBottom: 2 },
   field: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
   fieldLabel: { color: "rgba(255,255,255,0.7)", fontSize: 13, minWidth: 48 },
