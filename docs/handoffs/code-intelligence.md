@@ -133,9 +133,9 @@ caret's offset (event), ghost text (inline suggestion, accept/dismiss).
 - [x] Architecture agreed (this doc).
 - [x] (1) Native sticky-scroll/folding overlay — structure as a ranges prop.
 - [x] (1) JS structure provider from the TS AST (TS/TSX/JS/JSON) + Markdown.
-- [ ] (2) Language servers on the API server, streamed over the live-file RPC.
-- [ ] (2a) Errors: squiggles + message.
-- [ ] (2b) Type preview in the breadcrumb glass.
+- [x] (2) Language servers on the API server (`server/language/`, `/language` RPC, `agent-console-protocol` Language); one `typescript-language-server` per repo, Effect plugin live.
+- [x] (2a) Errors: wavy lines + glass popover (native `Diagnostics.swift`, apiVersion 14), carried through unsaved edits. Awaiting the device build.
+- [x] (2b) Type preview in the breadcrumb glass: caret (apiVersion 14) else innermost scope; prefetched. Compact type + docs; the expanded member shape (TS 5.9 `verbosityLevel`) is next.
 - [ ] (3) AI inline suggestions: `/complete` + ghost text.
 - [ ] (4) Embedded TS language service (worklet runtime) + multiplexer.
 - [ ] (5) tree-sitter universal structure (if needed).
