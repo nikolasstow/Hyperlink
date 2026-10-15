@@ -401,6 +401,9 @@ export const RootNavigator = (): React.ReactElement => {
             headerStyle: { backgroundColor: "transparent" },
             headerShadowVisible: false,
             headerBackButtonDisplayMode: "minimal",
+            // What the back button on the pages opened from here says (the
+            // header itself shows the worktree picker).
+            title: "Files",
             headerTitle: () => <FilesHomeTitle repo={route.params.repo} dir={route.params.dir} />,
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           })}

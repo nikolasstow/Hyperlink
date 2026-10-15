@@ -45,6 +45,9 @@ final class InlineSuggestion {
     /// Where a space was typed with the suggestion showing: a second one
     /// right after it takes the suggestion.
     private var pendingSpace: Int?
+    /// That space was the suggestion's own first character (typed through):
+    /// taking the suggestion keeps it.
+    private var spaceTypedThrough = false
     /// Where iOS took the first space back to put in ". " (its period
     /// shortcut, done as a delete then an insert): that insert takes the
     /// suggestion.
@@ -64,6 +67,7 @@ final class InlineSuggestion {
     func set(_ suggestion: InlineSuggestionNative?) {
         current = suggestion?.text.isEmpty == false ? suggestion : nil
         pendingSpace = nil
+        spaceTypedThrough = false
         pendingPeriod = nil
         layout()
     }
@@ -96,9 +100,10 @@ final class InlineSuggestion {
             // iOS's period shortcut, first half: the space taken back. The
             // suggestion goes back to where it was, for the ". " to come.
             if text.isEmpty && range.location == space && range.length == 1 {
-                pendingSpace = nil
                 pendingPeriod = space
-                current = InlineSuggestionNative(id: suggestion.id, at: space, text: suggestion.text)
+                current = InlineSuggestionNative(id: suggestion.id, at: space, text: (spaceTypedThrough ? " " : "") + suggestion.text)
+                pendingSpace = nil
+                spaceTypedThrough = false
                 return true
             }
         }
@@ -106,7 +111,10 @@ final class InlineSuggestion {
         // typed through (no new one asked for, as the best editors do).
         if !text.isEmpty, range.length == 0, range.location == suggestion.at, suggestion.text.hasPrefix(text) {
             let rest = String(suggestion.text.dropFirst(text.count))
-            pendingSpace = nil
+            // A space typed through can be the first of two, as any other.
+            let firstSpace = text == " " && pendingSpace == nil
+            pendingSpace = firstSpace ? range.location : nil
+            spaceTypedThrough = firstSpace
             if rest.isEmpty {
                 current = nil
                 hide()
@@ -118,11 +126,13 @@ final class InlineSuggestion {
         // A first space at the caret: the suggestion waits for a second.
         if text == " " && range.length == 0 && range.location == suggestion.at && pendingSpace == nil {
             pendingSpace = range.location
+            spaceTypedThrough = false
             current = InlineSuggestionNative(id: suggestion.id, at: suggestion.at + 1, text: suggestion.text)
             return true
         }
         current = nil
         pendingSpace = nil
+        spaceTypedThrough = false
         hide()
         return true
     }
@@ -180,7 +190,8 @@ final class InlineSuggestion {
     }
 
     /// Insert the suggestion at its place (over `replacing`, when given: the
-    /// first of the two spaces), and report it taken.
+    /// first of the two spaces, kept when it was the suggestion's own), and
+    /// report it taken.
     private func accept(replacing: NSRange?) {
         guard let textView, let suggestion = current else {
             return
@@ -191,12 +202,14 @@ final class InlineSuggestion {
               let textRange = textView.textRange(from: from, to: to) else {
             return
         }
+        let kept = replacing != nil && spaceTypedThrough ? " " : ""
         current = nil
         pendingSpace = nil
+        spaceTypedThrough = false
         pendingPeriod = nil
         hide()
         isAccepting = true
-        textView.replace(textRange, withText: suggestion.text)
+        textView.replace(textRange, withText: kept + suggestion.text)
         isAccepting = false
         onAccept(suggestion.id)
     }
