@@ -173,14 +173,22 @@ export const DubzSessionArea = (props: {
   // the effect's identity stays stable, and deactivated on unmount.
   const onActiveHeightRef = React.useRef(props.onActiveHeight);
   onActiveHeightRef.current = props.onActiveHeight;
-  React.useEffect(() => {
-    if (expanded && sessions.length > 0) {
-      const extraCount = Math.min(sessions.length - 1, EXTRA);
-      onActiveHeightRef.current?.(suggestionAreaHeight(1 + extraCount + 1));
-    } else {
-      onActiveHeightRef.current?.(undefined);
-    }
-  }, [expanded, sessions.length]);
+  // The height for an expanded state. Called from BOTH the effect (a backstop,
+  // and for non-tap changes like a session arriving) AND the expand tap itself —
+  // the tap reports it SYNCHRONOUSLY so the window grows in the same commit as
+  // the content, instead of a round-trip behind it.
+  const reportActive = React.useCallback(
+    (isExpanded: boolean): void => {
+      if (isExpanded && sessions.length > 0) {
+        const extraCount = Math.min(sessions.length - 1, EXTRA);
+        onActiveHeightRef.current?.(suggestionAreaHeight(1 + extraCount + 1));
+      } else {
+        onActiveHeightRef.current?.(undefined);
+      }
+    },
+    [sessions.length],
+  );
+  React.useEffect(() => reportActive(expanded), [expanded, reportActive]);
   React.useEffect(() => () => onActiveHeightRef.current?.(undefined), []);
   const top = sessions[0];
   if (top === undefined) return null;
@@ -216,7 +224,13 @@ export const DubzSessionArea = (props: {
         frame({ width: NUMBER_WIDTH, height: PILL, alignment: "center" }),
         glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" }),
         contentShape(shapes.capsule()),
-        onTapGesture(() => setAreaExpanded(!areaExpanded)),
+        onTapGesture(() => {
+          const next = !areaExpanded;
+          // Report the height NOW, so the window stretches in the same commit as
+          // the content grows — not a round-trip later.
+          reportActive(next);
+          setAreaExpanded(next);
+        }),
       ]}
     >
       {expanded ? (
