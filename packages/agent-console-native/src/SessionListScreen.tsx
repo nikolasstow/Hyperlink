@@ -14,7 +14,6 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
@@ -74,9 +73,8 @@ export const SessionListScreen = (props: Props): React.ReactElement => {
       readWorkspace(),
     ]);
     if (list !== undefined) {
-      const visible = list.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
-      setSessions(visible);
-      void setCachedSessions(withoutArchived(visible));
+      setSessions(list);
+      void setCachedSessions(withoutArchived(list));
     }
     if (scan !== undefined) setScanned(scan);
   }, [address]);

@@ -59,10 +59,6 @@ const ACTION_MAX = 90;
  * coalesced to at most one push per this window, always carrying the latest. */
 const ACTIVITY_UPDATE_MS = 2000;
 
-/** Sessions the app made (under v1) for its own `git worktree` plumbing.
- * Notifying about them is noise; the client hides them from its lists. */
-const HIDDEN_TITLE_PREFIX = "[worktree-setup]";
-
 /** Reconnect backoff for the event stream, capped. */
 const MAX_RECONNECT_MS = 30_000;
 /** If the event stream delivers nothing for this long, treat it as a silent
@@ -352,10 +348,6 @@ export const notificationsPlugin = (): Plugin => {
     return true;
   };
 
-  /** Titles change rarely and this runs per notification, so results are kept
-   * rather than re-fetched on every event. */
-  const hiddenCache = new Map<string, boolean>();
-
   /** Whether the user muted this session (sessions/archive.ts keeps the list,
    * in the state folder both servers run in). Read fresh each time: a mute
    * applies to the very next notification. An unreadable list mutes nothing
@@ -375,15 +367,6 @@ export const notificationsPlugin = (): Plugin => {
       console.error(`[notifications] ${file} is not a list of muted sessions; nothing is muted`, error);
       return false;
     }
-  };
-
-  const isHidden = async (sessionID: string): Promise<boolean> => {
-    const cached = hiddenCache.get(sessionID);
-    if (cached !== undefined) return cached;
-    const title = await titleOf(sessionID);
-    const hidden = title.startsWith(HIDDEN_TITLE_PREFIX);
-    hiddenCache.set(sessionID, hidden);
-    return hidden;
   };
 
   const titleOf = async (sessionID: string): Promise<string> => {
@@ -523,7 +506,7 @@ export const notificationsPlugin = (): Plugin => {
 
             if (type === "permission.asked") {
               if (!shouldNotify(`ask:${sessionID}`)) continue;
-              if ((await isHidden(sessionID)) || (await isMuted(sessionID))) continue;
+              if (await isMuted(sessionID)) continue;
               const action = typeof data.action === "string" ? data.action : "an action";
               await send({
                 title: await titleOf(sessionID),
@@ -570,7 +553,7 @@ export const notificationsPlugin = (): Plugin => {
               // Already notified about this exact message: a replay, not a new answer.
               if (last?.id !== undefined && idleNotifiedFor.get(sessionID) === last.id) continue;
               if (!shouldNotify(`idle:${sessionID}`)) continue;
-              if ((await isHidden(sessionID)) || (await isMuted(sessionID))) continue;
+              if (await isMuted(sessionID)) continue;
               if (last?.id !== undefined) idleNotifiedFor.set(sessionID, last.id);
               await send({
                 title: await titleOf(sessionID),

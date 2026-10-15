@@ -33,7 +33,6 @@ import Animated, { cancelAnimation, Easing, Extrapolation, interpolate, runOnJS,
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./agentConstants";
 import { colors } from "./colors";
@@ -189,9 +188,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       readWorkspace(),
     ]);
     if (list !== undefined) {
-      const visible = list.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
-      setSessions(visible);
-      void setCachedSessions(withoutArchived(visible));
+      setSessions(list);
+      void setCachedSessions(withoutArchived(list));
     }
     if (scan !== undefined) setScanned(scan);
   }, [address]);

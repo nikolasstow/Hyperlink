@@ -23,7 +23,6 @@ import Animated, { LinearTransition } from "react-native-reanimated";
 import { HOME_CONTENT_TOP_GAP, HOME_HEADER_HEIGHT } from "./homeHeader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
-import { WORKTREE_SETUP_PREFIX } from "./agentConstants";
 import { useAppContext } from "./AppContext";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { abortSession, confirmDeleteSession, promptRenameSession } from "./sessionActions";
@@ -140,9 +139,8 @@ export const HomeScreen = (props: Props): React.ReactElement => {
       setError("Couldn't reach the server.");
       return;
     }
-    const visible = data.filter((s) => !s.title.startsWith(WORKTREE_SETUP_PREFIX));
-    setSessions(visible);
-    void setCachedSessions(withoutArchived(visible));
+    setSessions(data);
+    void setCachedSessions(withoutArchived(data));
   }, [address]);
 
   const loadScan = React.useCallback(
