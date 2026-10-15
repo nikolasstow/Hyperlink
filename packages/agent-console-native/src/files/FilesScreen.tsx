@@ -57,7 +57,8 @@ import { Button, ControlGroup, Host, HStack, Image, Label, Menu } from "@expo/ui
 import { buttonStyle, contentShape, frame, glassEffect, menuActionDismissBehavior, menuIndicator, menuStyle, shapes } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
-import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, type FileNavEntry, recentTabs, tabEntry } from "./FileNav";
+import { RECENT_TAB_COUNT, RecentTabsRow } from "./RecentTabsRow";
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
@@ -167,8 +168,18 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // request is spent. The browser reuses the tab already on that address, or
   // opens a new one — no duplicate tabs.
   const openRequest = props.route.params.open;
+  // From a repo's Files button: the page of recent tabs over the root's files,
+  // until something on it is opened (in a new tab) or a tab is chosen.
+  const landingRequest = props.route.params.landing;
+  const [landing, setLanding] = React.useState(landingRequest === true && openRequest === undefined);
+  React.useEffect(() => {
+    if (landingRequest === undefined) return;
+    setLanding(landingRequest);
+    navigation.setParams({ landing: undefined });
+  }, [landingRequest, navigation]);
   React.useEffect(() => {
     if (openRequest === undefined) return;
+    setLanding(false);
     openOrSelectFileTab(repo, { path: openRequest.path, name: openRequest.name, kind: openRequest.kind });
     navigation.setParams({ open: undefined });
   }, [openRequest, repo, navigation]);
@@ -223,7 +234,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // one.
   const shownIndex = overview.kind === "closing" && overview.tab.repo === repo ? overview.tab.index : (swipedTo ?? place?.active ?? 0);
   const tab = place === undefined ? undefined : (place.tabs[shownIndex] ?? active);
-  const current = (overview.kind === "closing" ? overview.entry : undefined) ?? (tab === undefined ? undefined : tabEntry(tab)) ?? root;
+  const current = (overview.kind === "closing" ? overview.entry : undefined) ?? (landing || tab === undefined ? undefined : tabEntry(tab)) ?? root;
   // The worktree the shown tab is in (the one whose root most closely holds
   // its path), and switching it (reroots that tab alone).
   const currentWt = React.useMemo((): ScannedWorktree | undefined => {
@@ -385,6 +396,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // takes Files to that repo, at that tab.
   const openTab = (ref: TabRef): void => {
     if (overview.kind !== "open") return;
+    setLanding(false);
     selectFileTab(ref.repo, ref.index);
     if (ref.repo !== repo) {
       const kept = Option.getOrUndefined(HashMap.get(places, ref.repo));
@@ -396,6 +408,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // place it takes in the grid.
   const startTab = (entry: FileNavEntry): void => {
     if (place === undefined || overview.kind !== "open") return;
+    setLanding(false);
     newFileTab(repo, entry);
     const added: TabRef = { repo, index: place.tabs.length };
     zoomInto({ kind: "closing", tab: added, scroll: scroll.current, frame: frameOf(layoutFor(filter, entry), added, scroll.current), entry });
@@ -435,6 +448,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const rise = useSharedValue(1);
   const openInNewTab = React.useCallback(
     (entry: FileNavEntry) => {
+      setLanding(false);
       newFileTab(repo, entry);
       rise.value = 0;
       rise.value = withTiming(1, RISE);
@@ -670,7 +684,38 @@ export const FilesScreen = (props: Props): React.ReactElement => {
     }),
     [repo, current.kind, current.path, current.name],
   );
-  const open = React.useCallback((entry: FileNavEntry) => openFileEntry(repo, entry), [repo]);
+  // On the landing page, what is opened goes in a new tab (the tabs stay as
+  // they were); else in the tab showing.
+  const open = React.useCallback(
+    (entry: FileNavEntry) => {
+      if (landing) {
+        setLanding(false);
+        newFileTab(repo, entry);
+        return;
+      }
+      openFileEntry(repo, entry);
+    },
+    [repo, landing],
+  );
+  // The landing page's recent tabs, newest first.
+  const recent = React.useMemo(
+    () =>
+      landing && place !== undefined
+        ? recentTabs(place, RECENT_TAB_COUNT).flatMap((index) => {
+            const shown = place.tabs[index];
+            const entry = shown === undefined ? undefined : tabEntry(shown);
+            return entry === undefined ? [] : [{ index, entry }];
+          })
+        : [],
+    [landing, place],
+  );
+  const chooseRecent = React.useCallback(
+    (index: number) => {
+      setLanding(false);
+      selectFileTab(repo, index);
+    },
+    [repo],
+  );
 
   return (
     <View style={styles.root}>
@@ -760,6 +805,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
                   onOpen={open}
                   onOpenInNewTab={openInNewTab}
                   onScroll={barHide.onScroll}
+                  {...(landing ? { header: <RecentTabsRow tabs={recent} pageTop={headerHeight} onSelect={chooseRecent} /> } : {})}
                 />
               ) : (
                 <FileView key={`${tab?.id ?? "root"}:${current.path}`} path={current.path} name={current.name} repo={repo} topInset={headerHeight} bottomInset={barCover + EDITOR_BOTTOM_ROOM} onOpenSession={(sessionID) => navigation.navigate("Chat", { sessionID })} onScopes={(next, onward) => {

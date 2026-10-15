@@ -693,7 +693,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               style={styles.menuRow}
               onPress={() => {
                 if (item.label === "Files") {
-                  props.navigation.navigate("Files", { repo: name, dir });
+                  props.navigation.navigate("Files", { repo: name, dir, landing: true });
                 } else if (item.view !== undefined) {
                   const { view } = item;
                   if (view.kind === "sections") props.navigation.navigate("PluginPage", { repo: name, dir, page: view.id, title: view.name });

@@ -53,6 +53,22 @@ const HISTORY_LIMIT = 200;
 export const tabEntry = (tab: FileTab): FileNavEntry | undefined => tab.entries[tab.index];
 export const activeTab = (place: FilePlace): FileTab | undefined => place.tabs[place.active];
 
+/** A place's tabs, most recently visited first (by their shown entry's
+ * latest visit; one never visited last), at most `count`: their indexes. */
+export const recentTabs = (place: FilePlace, count: number): ReadonlyArray<number> => {
+  const lastVisit = (tab: FileTab): number => {
+    const entry = tabEntry(tab);
+    if (entry === undefined) return Number.POSITIVE_INFINITY;
+    const at = place.history.findIndex((visit) => fromHome(visit.entry.path) === fromHome(entry.path));
+    return at === -1 ? Number.POSITIVE_INFINITY : at;
+  };
+  return place.tabs
+    .map((tab, index) => ({ index, rank: lastVisit(tab) }))
+    .sort((a, b) => a.rank - b.rank || b.index - a.index)
+    .slice(0, count)
+    .map((each) => each.index);
+};
+
 /** The index of the tab currently showing `path` (however it is written), or
  * -1 when no tab is on it. A browser reuses that tab rather than duplicating. */
 export const tabShowing = (place: FilePlace, path: string): number => {

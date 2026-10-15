@@ -1,7 +1,7 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, rerooted, tabEntry, tabRerooted } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabRerooted } from "./FileNav";
 
 const dir = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "directory" });
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
@@ -161,5 +161,26 @@ describe("tabRerooted", () => {
   it("leaves an entry outside the worktree alone", () => {
     const tab: FileTab = { id: "a", entries: [file("/tmp/notes.md")], index: 0 };
     expect(tabRerooted(tab, "/Users/me/app", dir("/Users/me/app/wt")).entries[0]?.path).toBe("/tmp/notes.md");
+  });
+});
+
+describe("recentTabs", () => {
+  const entry = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
+  const tab = (path: string): FileTab => ({ id: path, entries: [entry(path)], index: 0 });
+  const place: FilePlace = {
+    root: "/r",
+    tabs: [tab("/r/a.ts"), tab("/r/b.ts"), tab("/r/c.ts"), tab("/r/d.ts")],
+    active: 0,
+    history: [
+      { entry: entry("/r/c.ts"), at: 4 },
+      { entry: entry("/r/a.ts"), at: 3 },
+      { entry: entry("~/../r/x.ts"), at: 2 },
+      { entry: entry("/r/b.ts"), at: 1 },
+    ],
+  };
+
+  it("orders a place's tabs by their latest visit, newest first, at most so many", () => {
+    expect(recentTabs(place, 3)).toEqual([2, 0, 1]);
+    expect(recentTabs(place, 9)).toEqual([2, 0, 1, 3]);
   });
 });

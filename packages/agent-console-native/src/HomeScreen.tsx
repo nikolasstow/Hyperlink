@@ -554,7 +554,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
               onOpen={() => props.navigation.navigate("Repo", { name: item.group.repo, dir: repoDir, isRepo: item.group.isKnownRepo })}
               onSelect={(label) => {
                 if (label === "Files") {
-                  props.navigation.navigate("Files", { repo: item.group.repo, dir: repoDir });
+                  props.navigation.navigate("Files", { repo: item.group.repo, dir: repoDir, landing: true });
                 }
               }}
             />

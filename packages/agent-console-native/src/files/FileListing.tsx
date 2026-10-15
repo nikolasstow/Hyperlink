@@ -118,6 +118,8 @@ export const FileListing = (props: {
   readonly onOpenInNewTab: (entry: FileNavEntry) => void;
   /** Its scrolling (the bar hides as it scrolls down). */
   readonly onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  /** Above the files (Files' recent tabs, on the page it opens on). */
+  readonly header?: React.ReactNode;
 }): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
@@ -167,6 +169,7 @@ export const FileListing = (props: {
   }
   return (
     <ScrollView style={[styles.fill, { backgroundColor: pane.background }]} onScroll={props.onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
+      {props.header}
       {rows.map((row, index) => {
         const target = row.type === "directory" ? folderTarget(repo, row.path, row.name) : fileTarget(repo, row.path, row.name);
         const isFav = favBoard.some((each) => sameTarget(each, target));
