@@ -31,16 +31,20 @@ export const isCompact = (height: number): boolean => {
   return height <= COMPACT_ZONE_MAX;
 };
 
+/** In the compact zone the top controls are a side bar, not a top row — so the
+ * content keeps just a small top MARGIN of this many points, not a bar. */
+export const COMPACT_TOP_MARGIN = 8;
+
 /** The space left for content. Out of the compact zone the top controls take
- * their own row, so BOTH bars are subtracted. In the zone they are a side bar
- * (horizontal, not a row), so the top bar is NOT subtracted — only the bottom:
+ * their own row, so the full top bar is subtracted. In the zone they are a side
+ * bar, so only a small top margin (COMPACT_TOP_MARGIN) is:
  *
- *   compact:      height − bottomBar
+ *   compact:      height − COMPACT_TOP_MARGIN − bottomBar
  *   not compact:  height − topBar − bottomBar
  */
 export const contentViewport = (height: number, topBar: number, bottomBar: number): number => {
   "worklet";
-  return isCompact(height) ? height - bottomBar : height - topBar - bottomBar;
+  return isCompact(height) ? height - COMPACT_TOP_MARGIN - bottomBar : height - topBar - bottomBar;
 };
 
 /** Whether the content must compact — shift right for the top-left buttons:
