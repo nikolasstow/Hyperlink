@@ -107,6 +107,11 @@ const make = Effect.gen(function* () {
     Ref.get(generation).pipe(Effect.flatMap((current) => RcMap.get(connections, connectionKey(api, current))));
   const follows = yield* FiberMap.make<string>();
   const followed = yield* Ref.make<ReadonlySet<string>>(new Set());
+  // Paths the hub PERMANENTLY rejects (a directory → NotAFile, or TooLarge):
+  // skip re-following them, so one dead path (e.g. a folder in the follow set)
+  // does not stall the thread ~1.3s on every foreground/online re-follow. Not
+  // NotFound — an agent may create that file, so it keeps being followed.
+  const giveUp = yield* Ref.make<ReadonlySet<string>>(new Set());
   const device = yield* DeviceSignals;
 
   const fileOf = (path: string) => SubscriptionRef.get(files).pipe(Effect.map((map) => HashMap.get(map, path)));
@@ -243,6 +248,13 @@ const make = Effect.gen(function* () {
           Effect.andThen(Effect.logWarning(`live files: following ${path} stopped; following again`, error)),
         ),
       ),
+      // A PERMANENT reject (a directory → NotAFile, or TooLarge): give up on the
+      // path so it is not re-followed and re-stalled on every foreground/online.
+      Effect.tapError((error) =>
+        error._tag === "FileSyncError" && (error.reason === "NotAFile" || error.reason === "TooLarge")
+          ? Ref.update(giveUp, (set) => new Set(set).add(path))
+          : Effect.void,
+      ),
       // Retry only TRANSIENT failures (a dropped connection, an OutOfStep that
       // resyncs). A FileSyncError is the hub permanently rejecting the path
       // (e.g. following a directory or a too-large/absent file); retrying it
@@ -264,8 +276,10 @@ const make = Effect.gen(function* () {
         const api = yield* Ref.get(server);
         if (api === undefined) return;
         const paths = yield* Ref.get(followed);
+        const skip = yield* Ref.get(giveUp);
         yield* Ref.update(generation, (current) => current + 1);
         for (const path of paths) {
+          if (skip.has(path)) continue;
           yield* FiberMap.run(follows, path, followOn(api, path));
         }
       }),
@@ -284,10 +298,15 @@ const make = Effect.gen(function* () {
         const previous = yield* Ref.getAndSet(server, api);
         const running = yield* Ref.getAndSet(followed, paths);
         if (previous !== api) yield* FiberMap.clear(follows);
+        // Forget give-ups for paths no longer followed (a closed tab) — a new
+        // server starts over; otherwise a permanently-bad path stays skipped.
+        yield* Ref.update(giveUp, (set) => (previous !== api ? new Set() : new Set([...set].filter((p) => paths.has(p)))));
+        const skip = previous !== api ? new Set<string>() : yield* Ref.get(giveUp);
         for (const path of running) {
           if (!paths.has(path)) yield* FiberMap.remove(follows, path);
         }
         for (const path of paths) {
+          if (skip.has(path)) continue;
           yield* FiberMap.run(follows, path, followOn(api, path), { onlyIfMissing: true });
         }
       }),
