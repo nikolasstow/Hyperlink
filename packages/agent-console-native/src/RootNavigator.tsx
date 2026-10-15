@@ -42,6 +42,7 @@ import { ThemeImportSourceScreen } from "./ThemeImportSourceScreen";
 import { ThemeImportValuesScreen } from "./ThemeImportValuesScreen";
 import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
 import { ThemeTokensScreen } from "./ThemeTokensScreen";
+import { FilesHomeScreen } from "./files/FilesHomeScreen";
 import { FilesScreen } from "./files/FilesScreen";
 import { ArchivedScreen } from "./ArchivedScreen";
 import { CollectionScreen, type CollectionView } from "./CollectionScreen";
@@ -92,9 +93,9 @@ export type RootStackParamList = {
   /** A repo's files (where in them is Files' own: files/FileNav.ts). `dir`
    * is the folder Files was opened for, while the primary worktree is not
    * known; `open`, a file to open in a new tab (from a chat). */
-  /** `landing`: opened from a repo's Files button, it starts on the page of
-   * recent tabs over the root's files (not the last tab). */
-  Files: { repo: string; dir: string; open?: { path: string; name: string; kind: "file" | "directory" }; landing?: boolean };
+  Files: { repo: string; dir: string; open?: { path: string; name: string; kind: "file" | "directory" } };
+  /** A repo's Files page (its Files button): recent tabs over its root's files. */
+  FilesHome: { repo: string; dir: string; isRepo: boolean };
   // A minimal read-only view of the file at `path`; `name` is the nav-bar title.
   // `line` (1-based) scrolls to it, as an extension opening a file asks.
   FileViewer: { path: string; name: string; line?: number };
@@ -387,6 +388,19 @@ export const RootNavigator = (): React.ReactElement => {
             headerTitle: () => <HeaderTitlePill title={route.params.title} />,
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
           })}
+        />
+        <Stack.Screen
+          name="FilesHome"
+          component={FilesHomeScreen}
+          options={{
+            headerShown: true,
+            headerTransparent: true,
+            headerStyle: { backgroundColor: "transparent" },
+            headerShadowVisible: false,
+            headerBackButtonDisplayMode: "minimal",
+            headerTitle: () => <HeaderTitlePill title="Files" />,
+            scrollEdgeEffects: { top: "soft", bottom: "soft" },
+          }}
         />
         <Stack.Screen
           name="Files"

@@ -1,0 +1,86 @@
+/**
+ * A repo's Files page: the page its Files button opens, a normal page (not a
+ * tab of the file browser). Its three most recent tabs as previews
+ * (RecentTabsRow), then the files at its root (the primary worktree), with the
+ * repo page's bottom bar (RepoComposer).
+ *
+ * Opening something opens the file browser (FilesScreen) over this page: a
+ * preview, at that tab; a file or folder, in the tab already on it, else a new
+ * one. The browser's back button comes back here.
+ *
+ * @internal
+ */
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { HashMap, Option } from "effect";
+import * as React from "react";
+import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBarCover } from "../dubz/useBarWindow";
+import { HOME_HEADER_HEIGHT } from "../homeHeader";
+import { usePrimaryWorktree } from "../primaryWorktree";
+import { RepoComposer } from "../RepoComposer";
+import type { ScannedRepo } from "../repoScan";
+import { cachedReposNow } from "../repoScanCache";
+import type { RootStackParamList } from "../RootNavigator";
+import { useScreenBackground } from "../theme";
+import { type FileNavEntry, recentTabs, tabEntry } from "./FileNav";
+import { FileListing } from "./FileListing";
+import { RECENT_TAB_COUNT, RecentTabsRow } from "./RecentTabsRow";
+import { selectFileTab, useFilePlaces } from "./useFileNav";
+
+type Props = NativeStackScreenProps<RootStackParamList, "FilesHome">;
+
+const noScroll = (): void => undefined;
+
+export const FilesHomeScreen = (props: Props): React.ReactElement => {
+  const { repo, dir, isRepo } = props.route.params;
+  const { navigation } = props;
+  const insets = useSafeAreaInsets();
+  const background = useScreenBackground("plain");
+  const barCover = useBarCover();
+  const [scanned, setScanned] = React.useState<ReadonlyArray<ScannedRepo>>(cachedReposNow);
+  // The root is the repo's primary worktree, as in the browser.
+  const primary = usePrimaryWorktree(repo, dir);
+  const places = useFilePlaces();
+  const place = Option.getOrUndefined(HashMap.get(places, repo));
+  const recent = React.useMemo(
+    () =>
+      place === undefined
+        ? []
+        : recentTabs(place, RECENT_TAB_COUNT).flatMap((index) => {
+            const tab = place.tabs[index];
+            const entry = tab === undefined ? undefined : tabEntry(tab);
+            return entry === undefined ? [] : [{ index, entry }];
+          }),
+    [place],
+  );
+  const headerHeight = insets.top + HOME_HEADER_HEIGHT;
+
+  const openTab = (index: number): void => {
+    selectFileTab(repo, index);
+    navigation.push("Files", { repo, dir: primary.dir });
+  };
+  const openEntry = (entry: FileNavEntry): void => navigation.push("Files", { repo, dir: primary.dir, open: { path: entry.path, name: entry.name, kind: entry.kind } });
+
+  return (
+    <View style={[styles.root, { backgroundColor: background }]}>
+      <FileListing
+        repo={repo}
+        dir={primary.dir}
+        topInset={headerHeight}
+        bottomInset={barCover}
+        onOpen={openEntry}
+        onOpenInNewTab={openEntry}
+        onScroll={noScroll}
+        header={<RecentTabsRow tabs={recent} pageTop={headerHeight} onSelect={openTab} />}
+      />
+      <RepoComposer name={repo} dir={dir} isRepo={isRepo} scanned={scanned} onScanned={setScanned} />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});

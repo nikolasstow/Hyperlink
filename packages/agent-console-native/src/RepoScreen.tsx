@@ -16,11 +16,6 @@
  */
 import { canReload, reloadApp } from "./reload";
 import { serverAddressOf } from "./opencode/serverAddress";
-import { Agent } from "./opencode/schema/agent";
-import type { Model } from "./opencode/schema/model";
-import { AbsolutePath } from "./opencode/schema/schema";
-import { SessionID } from "./opencode/schema/session-id";
-import { sendMessage } from "./outbox/useOutbox";
 import { fetchSessions } from "./sessions/fetchSessions";
 import type { SessionSummary } from "./sessions/sessionList";
 import { Button, Host, Menu, RNHostView } from "@expo/ui/swift-ui";
@@ -33,16 +28,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
-import { AGENT } from "./agentConstants";
-import type { Invocation } from "./commands/slash";
 import { colors } from "./colors";
-import { Composer } from "./Composer";
-import { HomeTargetPickers, sessionDirectory, type SessionTarget, TARGET_PICKERS_HEIGHT } from "./HomeTargetPickers";
-import { KeyboardDismissOverlay } from "./KeyboardDismissOverlay";
-import { useKeyboardHeight } from "./useKeyboardHeight";
-import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
+import { RepoComposer } from "./RepoComposer";
 import { useBarCover } from "./dubz/useBarWindow";
-import type { DubzContext } from "./dubzSuggestions";
 import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 import { symbolForIcon } from "./codicons";
 import type { ViewInfo } from "./extensionViewsClient";
@@ -57,7 +45,7 @@ import { useSessionWatch } from "./sessions/useSessionWatch";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { displayWorktree, groupByRepo, MAIN_WORKTREE, matchSession } from "./repoGrouping";
 import type { ScannedRepo } from "./repoScan";
-import { cachedReposNow, readWorkspace, refreshWorkspace } from "./repoScanCache";
+import { cachedReposNow, readWorkspace } from "./repoScanCache";
 import { archiveWithUndo, toggleMute, unarchived, useArchivedSessions, useMutedSessions, withoutArchived } from "./sessionArchive";
 import type { RootStackParamList } from "./RootNavigator";
 import { cachedSessionsNow, getCachedSessions, setCachedSessions } from "./sessionCache";
@@ -144,13 +132,12 @@ const SQUIRCLE_FADE_BY_TRANSLATE = false;
 /** Stable empty map for the pickers' repo-sort input — unused while the repo is
  * locked (no repo menu), but the prop is required. Module-level so it doesn't
  * change identity each render. */
-const EMPTY_ACTIVITY: ReadonlyMap<string, number> = new Map();
 
 export const RepoScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
   const { name, dir, isRepo } = props.route.params;
-  const { backend, rootDir, address, server: apiBase } = useAppContext();
+  const { address, server: apiBase } = useAppContext();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const { colors: themeColors } = useTheme();
@@ -207,55 +194,8 @@ export const RepoScreen = (props: Props): React.ReactElement => {
     void load().finally(() => setRefreshing(false));
   }, [load]);
 
-  // New-session composer, same bottom bar as Home — but the repo is fixed to this
-  // page, so its dropdown shows as static text (see HomeTargetPickers lockedRepo).
-  const [target, setTarget] = React.useState<SessionTarget | undefined>(undefined);
-  const [sending, setSending] = React.useState(false);
-  const keyboardHeight = useKeyboardHeight();
+  // How much of the screen's bottom the bar covers (the list clears it).
   const barCover = useBarCover();
-  const composerSlide = useKeyboardSlide(composerRestingBottom(insets.bottom));
-  // Dubz here is about this repo; a workspace (not a repo) has no tasks.
-  const dubzContext = React.useMemo(
-    (): DubzContext => ({
-      surface: "repo",
-      scope: isRepo ? { _tag: "Repo", repo: name } : { _tag: "Folder" },
-    }),
-    [isRepo, name],
-  );
-
-  const onSend = React.useCallback(
-    async (text: string, model: Model.Ref | undefined, invocation: Invocation | undefined): Promise<void> => {
-      if (target === undefined || sending) return;
-      setSending(true);
-      try {
-        const sessionID = SessionID.create();
-        const directory = sessionDirectory(target);
-        // Into the outbox: it makes the folder (if new) and the session when the
-        // server can take them, then sends; the chat opens at once.
-        await sendMessage({
-          server: serverAddressOf(address),
-          sessionID,
-          directory: directory === undefined ? undefined : AbsolutePath.make(directory),
-          create: target.kind === "newFolder" ? { folder: { root: rootDir, name: target.name } } : {},
-          text,
-          files: [],
-          model,
-          agent: Agent.ID.make(AGENT),
-          invocation,
-        });
-        props.navigation.navigate("Chat", { sessionID });
-        void load();
-      } finally {
-        setSending(false);
-      }
-    },
-    [target, sending, address, rootDir, props.navigation, load],
-  );
-
-  // Rescan after a worktree/workspace is created from the pickers.
-  const onWorkspaceChanged = React.useCallback(async (): Promise<void> => {
-    setScanned(await refreshWorkspace(backend, rootDir));
-  }, [backend, rootDir]);
 
   // This repo/workspace's own sessions, via the shared grouping logic.
   const archivedSet = useArchivedSessions();
@@ -693,7 +633,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
               style={styles.menuRow}
               onPress={() => {
                 if (item.label === "Files") {
-                  props.navigation.navigate("Files", { repo: name, dir, landing: true });
+                  props.navigation.navigate("FilesHome", { repo: name, dir, isRepo });
                 } else if (item.view !== undefined) {
                   const { view } = item;
                   if (view.kind === "sections") props.navigation.navigate("PluginPage", { repo: name, dir, page: view.id, title: view.name });
@@ -801,41 +741,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
       </Animated.View>
 
       {/* New-session composer — the Home bottom bar, repo locked to this page. */}
-      <KeyboardDismissOverlay active={keyboardHeight > 0} dim />
-      {/* Only the BOTTOM feather here — the repo header draws its own top blur
-       * above, and a second top feather would sit over the header. */}
-      <EdgeBlurBars variant="bottom" />
-      <Animated.View
-        // From the screen's top down to the keyboard (or the bar's resting
-        // spot), letting touches through where empty: the bar sits at its
-        // bottom, and Dubz's window grows up inside it, so its grab bar stays
-        // within its parents' bounds, where iOS delivers touches.
-        style={[styles.composerFloat, composerSlide]}
-        pointerEvents="box-none"
-      >
-        <Composer
-          onSend={onSend}
-          disabled={sending || target === undefined}
-          directory={target !== undefined ? sessionDirectory(target) : undefined}
-          bottomInset={0}
-          placeholder="Plan, ask, build…"
-          dubzContext={dubzContext}
-          topSection={{
-            height: TARGET_PICKERS_HEIGHT,
-            node: (
-              <HomeTargetPickers
-                scanned={scanned}
-                otherFolders={[]}
-                activityByName={EMPTY_ACTIVITY}
-                target={target}
-                onChange={setTarget}
-                onWorkspaceChanged={onWorkspaceChanged}
-                lockedRepo={{ name, dir, isRepo }}
-              />
-            ),
-          }}
-        />
-      </Animated.View>
+      <RepoComposer name={name} dir={dir} isRepo={isRepo} scanned={scanned} onScanned={setScanned} onSent={() => void load()} />
     </View>
   );
 };
@@ -844,13 +750,6 @@ const makeStyles = (text: TextColors) =>
   StyleSheet.create({
   root: {
     flex: 1,
-  },
-  composerFloat: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    // `bottom` is animated inline via composerSlide (rides the keyboard).
   },
   header: {
     position: "absolute",
