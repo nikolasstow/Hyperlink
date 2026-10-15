@@ -99,9 +99,7 @@ public struct DubzHomeView: ExpoSwiftUI.View {
             .frame(width: rowWidth, alignment: .leading)
             .padding(.leading, leftGap)
         }
-        .defaultScrollAnchor(.bottom)
-        .contentMargins(.top, CGFloat(props.topInset), for: .scrollContent)
-        .contentMargins(.bottom, CGFloat(props.bottomInset), for: .scrollContent)
+        .modifier(BottomAnchoredScrollBehind(top: CGFloat(props.topInset), bottom: CGFloat(props.bottomInset)))
         .onAppear { reportHeight() }
         .onChange(of: expanded) { _ in reportHeight() }
         .onChange(of: props.sessions.count) { _ in reportHeight() }
@@ -185,6 +183,25 @@ public struct DubzHomeView: ExpoSwiftUI.View {
         let r = CGFloat(rows)
         let height = CGFloat(props.bottomInset) + GAP + (r * PILL + (r - 1) * GAP) + CGFloat(props.topInset)
         props.onActiveHeight(["height": Double(height)])
+    }
+}
+
+/// Bottom-anchor the scroll (newest/main at the bottom) and let content scroll
+/// BEHIND the top and bottom bars (contentMargins by the insets). These are
+/// iOS 17+ APIs and the module builds against a 15.0 floor, so guard them — the
+/// app runs iOS 26, so it always takes this path.
+private struct BottomAnchoredScrollBehind: ViewModifier {
+    let top: CGFloat
+    let bottom: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content
+                .defaultScrollAnchor(.bottom)
+                .contentMargins(.top, top, for: .scrollContent)
+                .contentMargins(.bottom, bottom, for: .scrollContent)
+        } else {
+            content
+        }
     }
 }
 
