@@ -26,17 +26,24 @@ const Generated = Schema.Struct({ data: Schema.Struct({ text: Schema.String }) }
 export const promptOf = (request: Complete.Request, context: PlaceContext = { names: [] }): string =>
   [
     "You complete code at the cursor, like an editor's inline suggestion.",
-    "Reply with ONLY the text to insert at <CURSOR/>: no explanation, no code fences, nothing already before or after the cursor.",
-    "Insert what most likely comes next: finish the line or the statement, or the block if it is plainly unfinished. Reply with nothing if nothing fits.",
+    "Reply in exactly this form and nothing else: <INSERT>the text to insert at the cursor</INSERT>",
+    "Inside the tags: only code, exactly as it goes in at <CURSOR/>. No explanation, no code fences, nothing already before or after the cursor.",
+    "Insert what most likely comes next: finish the line or the statement, or the block if it is plainly unfinished.",
+    "If the text after the cursor already completes the line, or nothing fits, reply <INSERT></INSERT>.",
     `File: ${request.path}`,
     ...(context.signature === undefined ? [] : [`The call at the cursor: ${context.signature}`]),
     ...(context.names.length === 0 ? [] : [`Names valid at the cursor (prefer these): ${context.names.join("; ")}`]),
     `<PREFIX>${request.prefix}</PREFIX><CURSOR/><SUFFIX>${request.suffix}</SUFFIX>`,
   ].join("\n");
 
-/** A model's answer as text to insert: fences a model added anyway taken off,
- * and the text the caret already has after it not repeated. */
-export const insertionOf = (answer: string, suffix: string): string => {
+/** A model's answer as text to insert: what it put between <INSERT> and
+ * </INSERT> (nothing without them: then it answered in words, not code),
+ * fences a model added anyway taken off, and the text the caret already has
+ * after it not repeated. */
+export const insertionOf = (reply: string, suffix: string): string => {
+  const tagged = /<INSERT>([\s\S]*?)<\/INSERT>/.exec(reply);
+  if (tagged === null) return "";
+  const answer = tagged[1] ?? "";
   const fenced = /^```[\w-]*\n([\s\S]*?)\n?```\s*$/.exec(answer.trim());
   // A model may copy the prompt's markers: the answer ends at the first.
   const marker = /<\/?(?:CURSOR|PREFIX|SUFFIX)\/?>/.exec(fenced?.[1] ?? answer);
@@ -55,9 +62,15 @@ export const insertionOf = (answer: string, suffix: string): string => {
   return trimmed.replace(/\s+$/, (space) => (space.includes("\n") ? "" : space));
 };
 
+/** Whether a suggestion fits at the caret: at a line's end, or before only
+ * closers (brackets, quotes, `;`, `,`), as VS Code's inline suggestions do.
+ * Mid-line, with code after the caret, the line is already written. */
+export const fitsAt = (suffix: string): boolean => !/[^\s)\]}"'`;,]/.test(suffix.split("\n", 1)[0] ?? "");
+
 export const completeRoute = HttpRouter.add("POST", Complete.path, (request) =>
   Effect.gen(function* () {
     const asked = yield* HttpServerRequest.schemaBodyJson(Complete.Request);
+    if (!fitsAt(asked.suffix)) return yield* HttpServerResponse.schemaJson(Complete.Response)({ text: "" });
     const language = yield* LanguageHost;
     // What the language server knows at the caret, if it answers in time.
     const context = yield* language.contextAt(asked.path, asked.prefix).pipe(Effect.timeoutOrElse({ duration: CONTEXT_WAIT, orElse: () => Effect.succeed<PlaceContext>({ names: [] }) }));

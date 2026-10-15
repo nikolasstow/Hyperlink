@@ -4,7 +4,7 @@ import { FetchHttpClient, HttpRouter } from "effect/http";
 import { Complete } from "agent-console-protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { LanguageHost, type PlaceContext } from "../language/host";
-import { completeRoute, insertionOf, promptOf } from "./complete";
+import { completeRoute, fitsAt, insertionOf, promptOf } from "./complete";
 
 const UPSTREAM_PORT = 6300 + Math.floor(Math.random() * 100);
 const asked: Array<{ readonly url: string; readonly body: unknown }> = [];
@@ -21,7 +21,7 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
     }
     asked.push({ url: request.url ?? "", body: JSON.parse(body) });
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ data: { text: "```ts\nvalues.reduce((a, b) => a + b, 0);\n```" } }));
+    response.end(JSON.stringify({ data: { text: "Sure:\n<INSERT>```ts\nvalues.reduce((a, b) => a + b, 0);\n```</INSERT>" } }));
   });
 });
 
@@ -78,14 +78,32 @@ describe("POST /complete without a model", () => {
 
 describe("insertionOf", () => {
   it("does not repeat what is already after the caret", () => {
-    expect(insertionOf("total + 1);", ");\nreturn")).toBe("total + 1");
+    expect(insertionOf("<INSERT>total + 1);</INSERT>", ");\nreturn")).toBe("total + 1");
+  });
+
+  it("is nothing when the model answers in words, or says nothing fits", () => {
+    expect(insertionOf("Wait, looking at the cursor position more carefully - the line already has `Math.max(0, c `", "- l);")).toBe("");
+    expect(insertionOf("<INSERT></INSERT>", "- l);")).toBe("");
   });
 
   it("stops at a prompt marker the model copied", () => {
-    expect(insertionOf("all([a, b]);\n  </CURSOR>", "\n")).toBe("all([a, b]);");
+    expect(insertionOf("<INSERT>all([a, b]);\n  </CURSOR></INSERT>", "\n")).toBe("all([a, b]);");
   });
 
   it("keeps a plain answer, without a trailing newline", () => {
-    expect(insertionOf("count += 1;\n", "\n}")).toBe("count += 1;");
+    expect(insertionOf("<INSERT>count += 1;\n</INSERT>", "\n}")).toBe("count += 1;");
+  });
+});
+
+describe("fitsAt", () => {
+  it("fits at a line's end, or before only closers", () => {
+    expect(fitsAt("\nnext line")).toBe(true);
+    expect(fitsAt(");\n")).toBe(true);
+    expect(fitsAt(" }\n")).toBe(true);
+  });
+
+  it("does not fit mid-line, before code", () => {
+    expect(fitsAt("- l);\n")).toBe(false);
+    expect(fitsAt("value)\n")).toBe(false);
   });
 });
