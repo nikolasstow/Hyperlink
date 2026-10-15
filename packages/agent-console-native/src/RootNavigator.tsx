@@ -42,7 +42,7 @@ import { ThemeImportSourceScreen } from "./ThemeImportSourceScreen";
 import { ThemeImportValuesScreen } from "./ThemeImportValuesScreen";
 import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
 import { ThemeTokensScreen } from "./ThemeTokensScreen";
-import { FilesHomeScreen } from "./files/FilesHomeScreen";
+import { FilesHomeScreen, FilesHomeTitle } from "./files/FilesHomeScreen";
 import { FilesScreen } from "./files/FilesScreen";
 import { ArchivedScreen } from "./ArchivedScreen";
 import { CollectionScreen, type CollectionView } from "./CollectionScreen";
@@ -392,15 +392,15 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen
           name="FilesHome"
           component={FilesHomeScreen}
-          options={{
+          options={({ route }) => ({
             headerShown: true,
             headerTransparent: true,
             headerStyle: { backgroundColor: "transparent" },
             headerShadowVisible: false,
             headerBackButtonDisplayMode: "minimal",
-            headerTitle: () => <HeaderTitlePill title="Files" />,
+            headerTitle: () => <FilesHomeTitle repo={route.params.repo} dir={route.params.dir} />,
             scrollEdgeEffects: { top: "soft", bottom: "soft" },
-          }}
+          })}
         />
         <Stack.Screen
           name="Files"

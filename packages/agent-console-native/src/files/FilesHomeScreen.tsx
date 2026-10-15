@@ -16,6 +16,7 @@ import * as React from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBarCover } from "../dubz/useBarWindow";
+import { HeaderTitlePill } from "../HeaderTitlePill";
 import { HOME_HEADER_HEIGHT } from "../homeHeader";
 import { usePrimaryWorktree } from "../primaryWorktree";
 import { RepoComposer } from "../RepoComposer";
@@ -23,12 +24,21 @@ import type { ScannedRepo } from "../repoScan";
 import { cachedReposNow } from "../repoScanCache";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScreenBackground } from "../theme";
+import { WorktreePicker } from "../WorktreePicker";
 import { type FileNavEntry, recentTabs, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
 import { RECENT_TAB_COUNT, RecentTabsRow } from "./RecentTabsRow";
 import { selectFileTab, useFilePlaces } from "./useFileNav";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FilesHome">;
+
+/** The page's header title: the worktree picker, titled Files (the list
+ * follows the worktree picked); the plain Files title for a folder that is
+ * not a scanned repo (it has no worktrees). */
+export const FilesHomeTitle = (props: { readonly repo: string; readonly dir: string }): React.ReactElement => {
+  const { primary } = usePrimaryWorktree(props.repo, props.dir);
+  return primary === undefined ? <HeaderTitlePill title="Files" /> : <WorktreePicker repo={props.repo} fallback={props.dir} title="Files" />;
+};
 
 const noScroll = (): void => undefined;
 
