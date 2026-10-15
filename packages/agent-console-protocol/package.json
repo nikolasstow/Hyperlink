@@ -17,6 +17,10 @@
       "types": "./src/Auth.ts",
       "default": "./src/Auth.ts"
     },
+    "./Commands": {
+      "types": "./src/Commands.ts",
+      "default": "./src/Commands.ts"
+    },
     "./Models": {
       "types": "./src/Models.ts",
       "default": "./src/Models.ts"
