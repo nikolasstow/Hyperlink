@@ -205,23 +205,27 @@ const DubzSessionAreaImpl = (props: {
       count: sessions.length,
     }));
     return (
-      <DubzHomeNativeView
-        style={{ flex: 1 }}
-        sessions={rows}
-        contentWidth={rowWidth}
-        topInset={DUBZ_TOP_BAR}
-        bottomInset={PILL_AREA}
-        leftInset={props.leftInset ?? 0}
-        compact={(props.leftInset ?? 0) > 0}
-        labelColor={textColors.label}
-        secondaryColor={textColors.secondaryLabel}
-        onOpenSession={(event) => {
-          const picked = sessions.find((candidate) => candidate.id === event.nativeEvent.id);
-          if (picked !== undefined) props.onOpen(toOpen(picked));
-        }}
-        onViewAll={() => props.onViewAll(props.file)}
-        onActiveHeight={(event) => props.onActiveHeight?.(event.nativeEvent.height > 0 ? event.nativeEvent.height : undefined)}
-      />
+      // The native view is an ExpoSwiftUI.View — it must sit alone in an @expo/ui
+      // Host (SwiftUI lays it out). ignoreSafeArea so it fills the window and
+      // handles its own bar insets (scroll-behind).
+      <Host style={{ flex: 1 }} ignoreSafeArea="all">
+        <DubzHomeNativeView
+          sessions={rows}
+          contentWidth={rowWidth}
+          topInset={DUBZ_TOP_BAR}
+          bottomInset={PILL_AREA}
+          leftInset={props.leftInset ?? 0}
+          compact={(props.leftInset ?? 0) > 0}
+          labelColor={textColors.label}
+          secondaryColor={textColors.secondaryLabel}
+          onOpenSession={(event) => {
+            const picked = sessions.find((candidate) => candidate.id === event.nativeEvent.id);
+            if (picked !== undefined) props.onOpen(toOpen(picked));
+          }}
+          onViewAll={() => props.onViewAll(props.file)}
+          onActiveHeight={(event) => props.onActiveHeight?.(event.nativeEvent.height > 0 ? event.nativeEvent.height : undefined)}
+        />
+      </Host>
     );
   }
 
