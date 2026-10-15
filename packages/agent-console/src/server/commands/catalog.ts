@@ -29,12 +29,19 @@ const OpencodeSkills = Schema.Struct({
     Schema.Struct({
       id: Schema.String,
       description: Schema.optional(Schema.String),
+      path: Schema.String,
     }),
   ),
 });
 
 /** The description, when there is one (the key is left out otherwise). */
 const described = (description: string | undefined): Pick<Commands.Entry, "description"> => (description === undefined ? {} : { description });
+
+/** opencode's own skills live in the binary, under this made-up folder. */
+const BUILT_IN = "/builtin/";
+
+/** A skill's file, when it has one. */
+const fileOf = (path: string): Pick<Commands.Entry, "path"> => (path.startsWith(BUILT_IN) ? {} : { path });
 
 /** Both lists as one, by name (a skill is named by its id, as opencode's own
  * clients show it). */
@@ -51,6 +58,7 @@ const entriesOf = (commands: typeof OpencodeCommands.Type, skills: typeof Openco
       name: skill.id,
       ...described(skill.description),
       source: "skill",
+      ...fileOf(skill.path),
     })),
   ].sort((a, b) => a.name.localeCompare(b.name));
 

@@ -19,6 +19,7 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
           data: [
             { id: "unslop", name: "Unslop", description: "Remove AI writing patterns", path: "/s/unslop/SKILL.md", content: "SECRET SKILL TEXT" },
             { id: "notify-phone", name: "notify-phone", path: "/s/notify/SKILL.md", content: "SECRET SKILL TEXT" },
+            { id: "opencode", name: "OpenCode", description: "About opencode", path: "/builtin/opencode.md", content: "SECRET SKILL TEXT" },
           ],
         };
   response.writeHead(200, { "content-type": "application/json" });
@@ -36,7 +37,7 @@ afterAll(() => {
 });
 
 describe("GET /commands", () => {
-  it("sends commands and skills as one list by name, without the skills' text", async () => {
+  it("sends commands and skills as one list by name, with each skill's file but not its text", async () => {
     const { handler, dispose } = HttpRouter.toWebHandler(commandsRoute, { disableLogger: true });
     const context = await Effect.runPromise(Layer.build(FetchHttpClient.layer).pipe(Effect.scoped));
     try {
@@ -44,9 +45,10 @@ describe("GET /commands", () => {
       const text = await response.text();
       expect(text).not.toContain("SECRET");
       expect(Schema.decodeUnknownSync(Schema.fromJsonString(Commands.List))(text)).toEqual([
-        { id: "skill:notify-phone", name: "notify-phone", source: "skill" },
+        { id: "skill:notify-phone", name: "notify-phone", source: "skill", path: "/s/notify/SKILL.md" },
+        { id: "skill:opencode", name: "opencode", description: "About opencode", source: "skill" },
         { id: "command:review", name: "review", description: "Review the changes", source: "command" },
-        { id: "skill:unslop", name: "unslop", description: "Remove AI writing patterns", source: "skill" },
+        { id: "skill:unslop", name: "unslop", description: "Remove AI writing patterns", source: "skill", path: "/s/unslop/SKILL.md" },
       ]);
       expect([...asked].sort()).toEqual(["/api/command", "/api/skill"].map((path) => `${path}?location%5Bdirectory%5D=%2Frepo+a`));
     } finally {

@@ -55,6 +55,8 @@ export interface ChatMessage {
   readonly queued?: boolean;
   /** The `/name` it leads with (yours): shown as a chip, its text after. */
   readonly slash?: { readonly name: string; readonly source: "skill" | "command" };
+  /** Skills sent with it besides a leading one (yours), by id. */
+  readonly skills?: ReadonlyArray<string>;
 }
 
 /** Epoch ms: opencode has reported seconds in places, and a value small

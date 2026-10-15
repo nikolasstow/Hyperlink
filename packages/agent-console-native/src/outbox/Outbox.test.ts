@@ -131,10 +131,13 @@ describe("Outbox", () => {
         yield* outbox.send({ ...base, create: {}, text: "/unslop this paragraph", invocation: { entry: skill, end: 7, args: "this paragraph" } });
         yield* outbox.send({ ...base, text: "/review the last commit", invocation: { entry: command, end: 7, args: "the last commit" } });
         yield* outbox.send({ ...base, text: "plain" });
+        yield* outbox.send({ ...base, text: "/unslop again", invocation: { entry: skill, end: 7, args: "again" }, skills: ["unslop", "docs"] });
         yield* settled(outbox);
       }),
     );
-    expect(fake.admitted).toEqual(["/unslop this paragraph", "command review", "plain"]);
+    expect(fake.admitted).toEqual(["/unslop this paragraph", "command review", "plain", "/unslop again"]);
+    // A skill chip rides along; the leading one is not sent twice.
+    expect(fake.bodies[3]).toMatchObject({ skills: [{ id: "unslop", mention: { start: 0, end: 7, text: "/unslop" } }, { id: "docs" }] });
     expect(fake.bodies[0]).toMatchObject({ text: "/unslop this paragraph", skills: [{ id: "unslop", mention: { start: 0, end: 7, text: "/unslop" } }] });
     expect(fake.bodies[1]).toEqual({ name: "review", text: "the last commit", files: [], delivery: "queue" });
     expect(fake.bodies[2]).not.toHaveProperty("skills");

@@ -98,6 +98,8 @@ export interface Send {
   readonly id?: SessionMessage.ID;
   /** What its leading `/name` runs, when it names a command or skill. */
   readonly invocation?: Invocation;
+  /** Skills sent with it besides a leading one, by id. */
+  readonly skills?: ReadonlyArray<string>;
 }
 
 /** How a message's `/name` is sent: a skill goes with it; a command runs. */
@@ -205,6 +207,10 @@ const make = Effect.gen(function* () {
       }
       const files = message.files.map((file) => ({ uri: `file://${file.path}`, mime: "text/plain", name: file.name }));
       const run = message.run;
+      // A leading skill is attached over its word; the others ride along.
+      const lead = run?._tag === "Skill" ? [{ id: Skill.ID.make(run.id), mention: { start: 0, end: run.end, text: message.text.slice(0, run.end) } }] : [];
+      const skills = [...lead, ...(message.skills ?? []).filter((id) => id !== lead[0]?.id).map((id) => ({ id: Skill.ID.make(id) }))];
+      const attached = skills.length === 0 ? {} : { skills };
       // A command takes no message id: a retry after a lost answer can run it
       // twice (docs/handoffs/slash-commands.md).
       if (run?._tag === "Command") {
@@ -212,7 +218,7 @@ const make = Effect.gen(function* () {
           lane.server,
           client["server.session"]["session.command"]({
             params: { sessionID: lane.sessionID },
-            payload: { name: run.name, text: run.args, files, delivery: "queue" },
+            payload: { name: run.name, text: run.args, files, ...attached, delivery: "queue" },
           }),
         );
       }
@@ -224,7 +230,7 @@ const make = Effect.gen(function* () {
             id: message.id,
             text: message.text,
             files,
-            ...(run === undefined ? {} : { skills: [{ id: Skill.ID.make(run.id), mention: { start: 0, end: run.end, text: message.text.slice(0, run.end) } }] }),
+            ...attached,
             delivery: "queue",
           },
         }),
@@ -300,6 +306,7 @@ const make = Effect.gen(function* () {
           model: input.model,
           agent: input.agent,
           run: input.invocation === undefined ? undefined : runOf(input.invocation),
+          skills: input.skills === undefined || input.skills.length === 0 ? undefined : [...input.skills],
           queuedAt: Date.now(),
         });
         const key = laneKey(input.server, input.sessionID);

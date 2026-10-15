@@ -20,10 +20,14 @@ describe("chatMessagesOfV2", () => {
       type: "user",
       time: { created: 1_700_000_000_000 },
       text: "/unslop this paragraph",
-      skills: [{ id: "unslop", name: "Unslop", mention: { start: 0, end: 7, text: "/unslop" } }],
+      skills: [
+        { id: "unslop", name: "Unslop", mention: { start: 0, end: 7, text: "/unslop" } },
+        { id: "docs", name: "Docs" },
+      ],
     });
     const [message] = chatMessagesOfV2([user]);
     expect(message?.slash).toEqual({ name: "unslop", source: "skill" });
+    expect(message?.skills).toEqual(["docs"]);
     expect(message?.parts).toEqual([{ kind: "text", id: "msg_user:text", text: "this paragraph" }]);
   });
 

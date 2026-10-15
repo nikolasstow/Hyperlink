@@ -44,6 +44,20 @@ Related: `dubz-suggestions-decisions.md` (suggestions without `/`, through Laya)
   bubble shows the chip until the server takes it; the server's message then shows the prompt,
   without a chip. Open: see below.
 
+## Skill chips (owner, 2026-10-15)
+
+The session's active skills sit in the chat's chip row beside its files, and behave like file chips:
+
+- **Typing (input open):** a tap selects the skill; it goes with the next message as a skill
+  attachment. A reminder: sending it again freshens it in the context.
+- **Not typing:** a tap opens the skill's file (`SKILL.md`) in Files, to read or edit it (live
+  sync; opencode reloads an edited skill, and the list follows its `skill.updated`). A skill built
+  into opencode (`opencode`, `report`) has no file: its description shows instead.
+- **Which are active:** the skills you sent (a leading `/skill`, or a chip) and the ones the agent
+  loaded (its `skill` tool). opencode keeps an active skill in the context (compaction too), so
+  there is no off switch.
+- **Sent message:** every skill it carried shows as a glass chip, the leading `/name` first.
+
 ## Found in opencode (2026-10-14)
 
 - **Listing.** v1 `GET /command?directory=…` returns everything: `{ name, description, source:

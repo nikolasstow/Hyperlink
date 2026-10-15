@@ -24,6 +24,9 @@ export const Entry = Schema.Struct({
   name: Schema.String,
   description: Schema.optionalKey(Schema.String),
   source: Source,
+  /** A skill's file on the server (absolute), to open and edit it. Absent
+   * for a command, and for a skill built into opencode (it has no file). */
+  path: Schema.optionalKey(Schema.String),
 });
 export type Entry = typeof Entry.Type;
 

@@ -71,6 +71,8 @@ const MessageBubbleImpl = (props: {
 }): React.ReactElement => {
   const isUser = props.message.role === "user";
   const slash = props.message.slash;
+  // Its chips: the leading `/name`, then the skills sent with it.
+  const chips = [...(slash === undefined ? [] : [slash.name]), ...(props.message.skills ?? [])];
   const said = textOf(props.message).trim();
   // What Copy and Share take: the message as typed, its `/name` included.
   const text = slash === undefined ? said : `/${slash.name} ${said}`.trim();
@@ -119,12 +121,14 @@ const MessageBubbleImpl = (props: {
               />
               {/* Beside the arriving text, not inside it: glass stops
                * rendering under the text's arrival transform. */}
-              {slash !== undefined ? (
+              {chips.length > 0 ? (
                 <View style={[styles.slash, said === "" && styles.slashAlone]}>
-                  <SlashChip name={slash.name} />
+                  {chips.map((name) => (
+                    <SlashChip key={name} name={name} />
+                  ))}
                 </View>
               ) : null}
-              {said !== "" || slash === undefined ? <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View> : null}
+              {said !== "" || chips.length === 0 ? <Reanimated.View entering={entering?.text}>{parts}</Reanimated.View> : null}
             </>
           ) : (
             parts
@@ -219,8 +223,11 @@ const styles = StyleSheet.create({
   bubbleGlass: {
     borderRadius: USER_RADIUS,
   },
-  // A `/name` chip leads your message, its text under it.
+  // The `/name` and skill chips lead your message, its text under them.
   slash: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
     marginBottom: 6,
   },
   slashAlone: {

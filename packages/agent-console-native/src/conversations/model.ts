@@ -60,6 +60,13 @@ const Message = Schema.Struct({
     }),
   ),
   queued: Schema.optional(Schema.Boolean),
+  slash: Schema.optional(
+    Schema.Struct({
+      name: Schema.String,
+      source: Schema.Literals(["skill", "command"]),
+    }),
+  ),
+  skills: Schema.optional(Schema.Array(Schema.String)),
 });
 
 export const Conversation = Schema.Struct({

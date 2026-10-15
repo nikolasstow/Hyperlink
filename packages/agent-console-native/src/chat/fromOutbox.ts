@@ -23,6 +23,7 @@ export const chatMessageOfQueued = (message: QueuedMessage): ChatMessage => {
     time: { created: message.queuedAt },
     queued: true,
     ...(run === undefined ? {} : { slash: run._tag === "Skill" ? { name: run.id, source: "skill" } : { name: run.name, source: "command" } }),
+    ...(message.skills === undefined || message.skills.length === 0 ? {} : { skills: message.skills }),
   };
   views.set(message, view);
   return view;

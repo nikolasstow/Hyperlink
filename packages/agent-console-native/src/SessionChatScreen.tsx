@@ -61,6 +61,8 @@ import { Composer } from "./Composer";
 import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { FILE_CHIPS_HEIGHT, FileChips } from "./FileChips";
 import { sessionFiles, type SessionFile } from "./sessionFiles";
+import { sessionSkills } from "./sessionSkills";
+import { useCommands } from "./commands/useCommandCatalog";
 import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
 import { SessionHeaderTitle } from "./SessionHeaderTitle";
@@ -220,6 +222,21 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     });
     return [...chosen, ...touched.filter((file) => !selectedSet.has(file.path))];
   }, [touched, selected, selectedSet]);
+  // The skills active in the session, beside its files: like the files, every
+  // one seen stays, and the ones selected lead and go with the next message.
+  const seenSkills = React.useRef<ReadonlyArray<string>>([]);
+  const activeSkills = React.useMemo(() => {
+    const current = sessionSkills(messages);
+    const known = new Set(current);
+    const merged = [...current, ...seenSkills.current.filter((id) => !known.has(id))];
+    seenSkills.current = merged;
+    return merged;
+  }, [messages]);
+  const [selectedSkills, setSelectedSkills] = React.useState<ReadonlyArray<string>>([]);
+  const selectedSkillSet = React.useMemo(() => new Set(selectedSkills), [selectedSkills]);
+  const skillChips = React.useMemo(() => [...selectedSkills, ...activeSkills.filter((id) => !selectedSkillSet.has(id))], [activeSkills, selectedSkills, selectedSkillSet]);
+  // What each skill is (its file), from the folder's list (CommandCatalog).
+  const commands = useCommands(directory);
   const { width: screenWidth } = useWindowDimensions();
   // The bar's heights, which the composer animates and the list's bottom
   // space follows in the same frame.
@@ -272,6 +289,23 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       return;
     }
     setSelected((current) => (current.includes(file.path) ? current.filter((path) => path !== file.path) : [file.path, ...current]));
+    setOrderVersion((version) => version + 1);
+  };
+  // A skill chip, typing: sent again with the next message (a reminder that
+  // freshens the context). Not typing: its file opens, to read or edit; a skill
+  // built into opencode has none, so what it is shows instead.
+  const onSkill = (id: string): void => {
+    if (keyboardHeight === 0) {
+      const entry = commands.find((each) => each.source === "skill" && each.name === id);
+      if (entry?.path === undefined) {
+        Alert.alert(`/${id}`, entry === undefined ? "This skill is not in the folder's list." : `${entry.description ?? ""}\n\nBuilt into opencode: it has no file to open.`.trim());
+        return;
+      }
+      const folder = entry.path.slice(0, entry.path.lastIndexOf("/"));
+      props.navigation.navigate("Files", { repo: folder.split("/").filter(Boolean).pop() ?? folder, dir: folder, open: { path: entry.path, name: entry.path.slice(entry.path.lastIndexOf("/") + 1), kind: "file" } });
+      return;
+    }
+    setSelectedSkills((current) => (current.includes(id) ? current.filter((each) => each !== id) : [id, ...current]));
     setOrderVersion((version) => version + 1);
   };
   // Its title from the first frame: renamed here, else as named live (v2
@@ -438,7 +472,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
     // The chips selected go with this message, as file references; the
     // selection clears.
     const attached = files.filter((file) => selectedSet.has(file.path));
+    const skills = selectedSkills;
     setSelected([]);
+    setSelectedSkills([]);
     setOrderVersion((version) => version + 1);
     // Start the Live Activity synchronously at the tap, while the app is
     // definitely foreground: ActivityKit refuses to START one from the
@@ -487,6 +523,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
       agent: Agent.ID.make(AGENT),
       invocation,
+      skills,
     });
     // The input clears as its bubble mounts behind it; not later than this
     // even if the row is slow to show.
@@ -652,7 +689,18 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
           seedModel={resolvedSeed}
           dubzContext={SESSION_DUBZ}
           geometry={barGeometry}
-          accessory={<FileChips files={files} selected={selectedSet} orderVersion={orderVersion} width={screenWidth} onPress={onFile} />}
+          accessory={
+            <FileChips
+              files={files}
+              selected={selectedSet}
+              skills={skillChips}
+              selectedSkills={selectedSkillSet}
+              onSkill={onSkill}
+              orderVersion={orderVersion}
+              width={screenWidth}
+              onPress={onFile}
+            />
+          }
         />
       </Animated.View>
     </View>

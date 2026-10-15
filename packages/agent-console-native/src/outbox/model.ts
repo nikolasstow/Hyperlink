@@ -65,6 +65,8 @@ export class QueuedMessage extends Schema.Class<QueuedMessage>("Outbox.QueuedMes
   agent: Agent.ID,
   /** What its leading `/name` runs, if it names one. */
   run: Schema.optional(Run),
+  /** Skills sent with it besides a leading one (the chat's skill chips), by id. */
+  skills: Schema.optional(Schema.Array(Schema.String)),
   /** When it was queued (epoch ms). */
   queuedAt: Schema.Number,
 }) {}
