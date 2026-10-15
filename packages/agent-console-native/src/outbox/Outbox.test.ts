@@ -10,6 +10,7 @@ import { Agent } from "../opencode/schema/agent";
 import { AbsolutePath } from "../opencode/schema/schema";
 import { SessionID } from "../opencode/schema/session-id";
 import { Folders } from "./Folders";
+import { CommandEchoes } from "../commands/CommandEchoes";
 import { Outbox } from "./Outbox";
 import { Reachability } from "./Reachability";
 
@@ -22,6 +23,8 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
   const admitted: Array<string> = [];
   /** Each admitted request's body, in order. */
   const bodies: Array<unknown> = [];
+  /** The inbox ids of the commands run, in order. */
+  const commandsRun: Array<string> = [];
   const attempts = new Map<string, number>();
   const json = (request: Parameters<typeof HttpClientResponse.fromWeb>[0], status: number, body: unknown) =>
     HttpClientResponse.fromWeb(request, new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
@@ -37,8 +40,17 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
           data: { id, projectID: "global", cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 }, title: "t", location: { directory } },
         });
       }
+      const inbox = /^\/api\/session\/([^/]+)\/inbox$/.exec(path);
+      if (request.method === "GET" && inbox !== null) {
+        // A command's prompt waits in the inbox under an id of its own.
+        return json(request, 200, {
+          data: commandsRun.map((id) => ({ id, sessionID: inbox[1], time: { created: 1 }, type: "user", delivery: "queue", payload: { text: "the review prompt…" } })),
+        });
+      }
+      if (request.method === "GET" && /^\/api\/session\/[^/]+\/message$/.test(path)) return json(request, 200, { data: [], cursor: {} });
       const command = /^\/api\/session\/([^/]+)\/command$/.exec(path);
       if (request.method === "POST" && command !== null) {
+        commandsRun.push(`msg_command${commandsRun.length + 1}`);
         bodies.push(body);
         const payload = typeof body === "object" && body !== null ? body : {};
         admitted.push(`command ${"name" in payload ? String(payload.name) : ""}`);
@@ -81,12 +93,13 @@ const deviceStorage = () => {
   );
 };
 
-const run = <A, E>(fake: ReturnType<typeof fakeServer>, program: Effect.Effect<A, E, Outbox>, storage = KeyValueStore.layerMemory) =>
+const run = <A, E>(fake: ReturnType<typeof fakeServer>, program: Effect.Effect<A, E, Outbox | CommandEchoes>, storage = KeyValueStore.layerMemory) =>
   Effect.runPromise(
     program.pipe(
       Effect.provide(
         Outbox.layer.pipe(
           Layer.provideMerge(Reachability.layer),
+          Layer.provideMerge(CommandEchoes.layer),
           Layer.provideMerge(Opencode.layer),
           Layer.provide(Layer.mergeAll(Layer.succeed(HttpClient.HttpClient)(fake.client), storage, DeviceSignals.layerNone, Folders.layerNone)),
         ),
@@ -122,7 +135,7 @@ describe("Outbox", () => {
     const fake = fakeServer(() => "admit");
     const skill: Commands.Entry = { id: "skill:unslop", name: "unslop", source: "skill" };
     const command: Commands.Entry = { id: "command:review", name: "review", source: "command" };
-    await run(
+    const echoes = await run(
       fake,
       Effect.gen(function* () {
         const outbox = yield* Outbox;
@@ -133,11 +146,14 @@ describe("Outbox", () => {
         yield* outbox.send({ ...base, text: "plain" });
         yield* outbox.send({ ...base, text: "/unslop again", invocation: { entry: skill, end: 7, args: "again" }, skills: ["unslop", "docs"] });
         yield* settled(outbox);
+        return (yield* (yield* CommandEchoes).changes.pipe(Stream.take(1), Stream.runCollect))[0];
       }),
     );
     expect(fake.admitted).toEqual(["/unslop this paragraph", "command review", "plain", "/unslop again"]);
     // A skill chip rides along; the leading one is not sent twice.
     expect(fake.bodies[3]).toMatchObject({ skills: [{ id: "unslop", mention: { start: 0, end: 7, text: "/unslop" } }, { id: "docs" }] });
+    // The command's own message is kept as typed.
+    expect(echoes).toEqual({ msg_command1: { name: "review", args: "the last commit" } });
     expect(fake.bodies[0]).toMatchObject({ text: "/unslop this paragraph", skills: [{ id: "unslop", mention: { start: 0, end: 7, text: "/unslop" } }] });
     expect(fake.bodies[1]).toEqual({ name: "review", text: "the last commit", files: [], delivery: "queue" });
     expect(fake.bodies[2]).not.toHaveProperty("skills");

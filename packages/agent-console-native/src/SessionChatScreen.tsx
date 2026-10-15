@@ -61,6 +61,8 @@ import { COMPOSER_BAR_HEIGHT } from "./composerBarSpec";
 import { FILE_CHIPS_HEIGHT, FileChips } from "./FileChips";
 import { sessionFiles, type SessionFile } from "./sessionFiles";
 import { sessionSkills } from "./sessionSkills";
+import { useCommandEchoes } from "./commands/useCommandEchoes";
+import { withEchoes } from "./chat/withEchoes";
 import { useCommands } from "./commands/useCommandCatalog";
 import type { ModelOption } from "./models";
 import { findModel, listModels } from "./models";
@@ -153,7 +155,9 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
   const refresh = React.useCallback(() => setLoads((count) => count + 1), []);
   // The whole conversation, once in: undefined until then.
   const live = useV2Transcript(server, session, streamEnabled, loads);
-  const delivered = live ?? kept?.messages ?? NO_MESSAGES;
+  // Command messages as typed (their chip and arguments), not their prompt.
+  const echoes = useCommandEchoes();
+  const delivered = React.useMemo(() => withEchoes(live ?? kept?.messages ?? NO_MESSAGES, echoes), [live, kept, echoes]);
   // The newest of it kept as it changes, so the next open starts from here.
   React.useEffect(() => {
     if (live === undefined) return;

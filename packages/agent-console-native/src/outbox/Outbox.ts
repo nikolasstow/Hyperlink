@@ -35,6 +35,7 @@ import type { Model } from "../opencode/schema/model";
 import { AbsolutePath } from "../opencode/schema/schema";
 import type { SessionID } from "../opencode/schema/session-id";
 import { SessionMessage } from "../opencode/schema/session-message";
+import { CommandEchoes } from "../commands/CommandEchoes";
 import type { Invocation } from "../commands/slash";
 import { Skill } from "../opencode/schema/skill";
 import { Attachment, CommandRun, Held, keyOfLane, Lane, laneKey, type LaneKey, Lanes, NewFolder, NewSession, QueuedMessage, type Run, SkillRun } from "./model";
@@ -119,6 +120,7 @@ const make = Effect.gen(function* () {
   const opencode = yield* Opencode;
   const reachability = yield* Reachability;
   const folders = yield* Folders;
+  const echoes = yield* CommandEchoes;
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, Lanes);
 
   // What was queued when the app last ran. A stored outbox that no longer
@@ -200,6 +202,18 @@ const make = Effect.gen(function* () {
     return found.pipe(Effect.tap((directory) => updateLane(key, (current) => Lane.make({ ...current, directory }))));
   };
 
+  /** The session's user messages, waiting (inbox) and newest delivered, by
+   * id; undefined when they cannot be read. */
+  const userMessageIds = (client: OpencodeClient, sessionID: SessionID): Effect.Effect<ReadonlySet<string> | undefined> =>
+    Effect.all([
+      client["server.session"]["session.inbox.list"]({ params: { sessionID } }),
+      client["server.message"]["session.messages"]({ params: { sessionID }, query: { limit: 20, order: "desc" } }),
+    ]).pipe(
+      Effect.map(([inbox, page]): ReadonlySet<string> | undefined => new Set([...inbox.data.filter((item) => item.type === "user").map((item) => item.id), ...page.data.filter((message) => message.type === "user").map((message) => message.id)])),
+      Effect.timeout(STEP_TIMEOUT),
+      Effect.catchCause((cause) => Effect.logWarning("[outbox] reading the session's messages failed", cause).pipe(Effect.as(undefined))),
+    );
+
   const prompt = (client: OpencodeClient, lane: Lane, message: QueuedMessage) =>
     Effect.gen(function* () {
       if (message.model !== undefined) {
@@ -214,13 +228,21 @@ const make = Effect.gen(function* () {
       // A command takes no message id: a retry after a lost answer can run it
       // twice (docs/handoffs/slash-commands.md).
       if (run?._tag === "Command") {
-        return yield* step(
+        // The command's message comes back as its prompt, under an id of its
+        // own: the one new message is it, kept as typed (CommandEchoes).
+        const before = yield* userMessageIds(client, lane.sessionID);
+        yield* step(
           lane.server,
           client["server.session"]["session.command"]({
             params: { sessionID: lane.sessionID },
             payload: { name: run.name, text: run.args, files, ...attached, delivery: "queue" },
           }),
         );
+        const after = yield* userMessageIds(client, lane.sessionID);
+        const made = before === undefined || after === undefined ? [] : [...after].filter((id) => !before.has(id));
+        if (made.length === 1 && made[0] !== undefined) yield* echoes.record(made[0], { name: run.name, args: run.args });
+        else yield* Effect.logWarning(`[outbox] /${run.name}: ${made.length} new messages; its message is not marked as the command`);
+        return;
       }
       yield* step(
         lane.server,

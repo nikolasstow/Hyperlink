@@ -50,6 +50,7 @@ import { layer as asyncStorageLayer } from "./asyncStorage";
 import { authedFetch } from "../auth/serverTokens";
 import { authedStreamingFetch } from "../auth/streamingFetch";
 import { CommandCatalog } from "../commands/CommandCatalog";
+import { CommandEchoes } from "../commands/CommandEchoes";
 import { LanguageClient } from "../language/LanguageClient";
 import { ModelCatalog } from "../models/ModelCatalog";
 import { ServerAuth } from "../auth/ServerAuth";
@@ -71,6 +72,7 @@ const BAR_WINDOW_STORAGE_PREFIX = "agent-console-native:barWindow:";
 const AUTH_STORAGE_PREFIX = "agent-console-native:auth:";
 const MODELS_STORAGE_PREFIX = "agent-console-native:models:";
 const COMMANDS_STORAGE_PREFIX = "agent-console-native:commands:";
+const ECHOES_STORAGE_PREFIX = "agent-console-native:echoes:";
 
 // The model catalog and opencode's event stream read their responses as they
 // come, so their client streams (expo/fetch; React Native's own fetch reads a
@@ -102,6 +104,7 @@ const AppLayer = Layer.mergeAll(
   CommandCatalog.layer.pipe(Layer.provide(asyncStorageLayer(COMMANDS_STORAGE_PREFIX))),
 ).pipe(
   Layer.provideMerge(Reachability.layer),
+  Layer.provideMerge(CommandEchoes.layer.pipe(Layer.provide(asyncStorageLayer(ECHOES_STORAGE_PREFIX)))),
   Layer.provideMerge(Opencode.layer.pipe(Layer.provide(streamingHttpClient))),
   Layer.provide(asyncStorageLayer(OUTBOX_STORAGE_PREFIX)),
   Layer.provideMerge(platform),

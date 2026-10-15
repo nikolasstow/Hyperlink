@@ -43,6 +43,12 @@ Related: `dubz-suggestions-decisions.md` (suggestions without `/`, through Laya)
   prompt (its template filled in), under a new id, with nothing marking it as a command. The queued
   bubble shows the chip until the server takes it; the server's message then shows the prompt,
   without a chip. Open: see below.
+  **Decided (owner left it to Claude, 2026-10-15): option 1.** When the outbox runs a command it
+  reads the session's user messages (inbox and newest) before and after; the one new message is the
+  command's, kept on the device as typed (`commands/CommandEchoes.ts`), and the chat shows it with
+  its chip and arguments (`chat/withEchoes.ts`). None or more than one new (another device sending
+  at the same moment): nothing is marked, and a warning is logged. The real fix is for opencode to
+  stamp a command's message with its name and arguments; to propose upstream on the owner's go.
 
 ## Skill chips (owner, 2026-10-15)
 
