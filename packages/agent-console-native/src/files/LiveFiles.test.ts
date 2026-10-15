@@ -9,7 +9,7 @@ import { NodeHttpServer, NodeServices } from "@effect/platform-node";
 import { Context, Duration, Effect, Fiber, FileSystem, HashMap, Layer, Logger, Option, Path, Queue, Schedule, Scope, Stream } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 import { describe, expect, it, vi } from "vitest";
-import { fileSyncLayer } from "../../../agent-console/src/server/files/rpc";
+import { fileHubLayer, fileSyncLayer } from "../../../agent-console/src/server/files/rpc";
 import { type DeviceSignal, DeviceSignals } from "../effect/DeviceSignals";
 import { LiveFiles } from "./LiveFiles";
 
@@ -69,7 +69,7 @@ const withHub = <A, E>(
     process.env.AGENT_CONSOLE_FS_ROOT = root;
     // No opencode here: its event stream just keeps failing to connect.
     process.env.AGENT_CONSOLE_OPENCODE_URL = "http://127.0.0.1:59999";
-    yield* Layer.launch(HttpRouter.serve(fileSyncLayer).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port: PORT })))).pipe(Effect.forkScoped);
+    yield* Layer.launch(HttpRouter.serve(fileSyncLayer.pipe(Layer.provide(Layer.fresh(fileHubLayer)))).pipe(Layer.provide(NodeHttpServer.layer(createServer, { port: PORT })))).pipe(Effect.forkScoped);
     // Built in this test's scope, so the service lives as long as the test.
     const signals = yield* Queue.unbounded<DeviceSignal>();
     const services = yield* Layer.build(LiveFiles.layer.pipe(Layer.provide(Layer.succeed(DeviceSignals)({ signals: Stream.fromQueue(signals) })), Layer.provide(FetchHttpClient.layer)));

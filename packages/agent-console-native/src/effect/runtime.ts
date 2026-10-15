@@ -50,6 +50,7 @@ import { layer as asyncStorageLayer } from "./asyncStorage";
 import { authedFetch } from "../auth/serverTokens";
 import { authedStreamingFetch } from "../auth/streamingFetch";
 import { CommandCatalog } from "../commands/CommandCatalog";
+import { LanguageClient } from "../language/LanguageClient";
 import { ModelCatalog } from "../models/ModelCatalog";
 import { ServerAuth } from "../auth/ServerAuth";
 import { layer as secretStoreLayer } from "../auth/secretStoreNative";
@@ -94,6 +95,7 @@ const AppLayer = Layer.mergeAll(
   Favorites.layer.pipe(Layer.provide(asyncStorageLayer(FAVORITES_STORAGE_PREFIX))),
   BarWindowStore.layer.pipe(Layer.provide(asyncStorageLayer(BAR_WINDOW_STORAGE_PREFIX))),
   LiveFiles.layer,
+  LanguageClient.layer,
   SessionWatch.layer,
   ServerAuth.layer.pipe(Layer.provide([asyncStorageLayer(AUTH_STORAGE_PREFIX), secretStoreLayer])),
   ModelCatalog.layer.pipe(Layer.provide([asyncStorageLayer(MODELS_STORAGE_PREFIX), streamingHttpClient])),

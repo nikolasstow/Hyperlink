@@ -145,14 +145,13 @@ const useOnScreenPaths = (): ReadonlySet<string> =>
     () => onScreenSnap,
   );
 
-/** Keeps the files someone might open next followed. Mounted once. */
-export const LiveFilesFollower = (): null => {
-  const { server } = useAppContext();
+/** The files someone might open next: open in a tab, kept on the device, or
+ * on screen. Live files follow them, and so do the language servers. */
+export const useFollowedPaths = (): ReadonlySet<string> => {
   const places = useFilePlaces();
   const kept = useKeptPaths();
   const shown = useOnScreenPaths();
-  React.useEffect(start, []);
-  const paths = React.useMemo(() => {
+  return React.useMemo(() => {
     const all = new Set<string>([...kept, ...shown]);
     for (const place of HashMap.values(places)) {
       for (const tab of place.tabs) {
@@ -162,6 +161,13 @@ export const LiveFilesFollower = (): null => {
     }
     return all;
   }, [places, kept, shown]);
+};
+
+/** Keeps the files someone might open next followed. Mounted once. */
+export const LiveFilesFollower = (): null => {
+  const { server } = useAppContext();
+  const paths = useFollowedPaths();
+  React.useEffect(start, []);
   React.useEffect(() => {
     run("following", (live) => live.follow(server, paths));
   }, [server, paths]);

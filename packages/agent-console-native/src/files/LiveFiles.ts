@@ -20,12 +20,11 @@
  * @internal
  */
 import { Clock, Context, Data, Duration, Effect, FiberMap, HashMap, Layer, Option, PubSub, Random, RcMap, Ref, Schedule, Semaphore, Stream, SubscriptionRef } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/http";
+import { HttpClient } from "effect/http";
 import { RpcClient, RpcSerialization } from "effect/rpc";
 import { Socket } from "effect/socket";
 import { FileSync } from "file-sync";
-import { Auth } from "agent-console-protocol";
-import { tokenFor } from "../auth/serverTokens";
+import { ticketedSocketUrl } from "../auth/socketUrl";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
 import { getFileEdit, setFileEdit, clearFileEdit } from "./fileEdits";
@@ -64,29 +63,12 @@ class OutOfStep extends Data.TaggedError("OutOfStep")<{
 const connectionKey = (api: string, generation: number): string => `${generation}#${api}`;
 const apiOfKey = (key: string): string => key.slice(key.indexOf("#") + 1);
 
-const socketUrl = (api: string): string => `${api.replace(/^http/, "ws")}${FileSync.path}`;
-
-/** The socket's address for each connection: with a fresh one-use ticket when
- * the server is paired (a WebSocket from React Native cannot carry the token
- * header), else as it is. A ticket that cannot be had is logged, and the
- * connection goes without one (the server then refuses it, and it is tried
- * again). */
-const socketAddress = (http: HttpClient.HttpClient, api: string): Effect.Effect<string> =>
-  tokenFor(api) === undefined
-    ? Effect.succeed(socketUrl(api))
-    : http.post(`${api}${Auth.ticketPath}`).pipe(
-        Effect.flatMap(HttpClientResponse.filterStatusOk),
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(Auth.WebSocketTicket)),
-        Effect.map(({ ticket }) => `${socketUrl(api)}?${Auth.ticketParam}=${encodeURIComponent(ticket)}`),
-        Effect.catch((error) => Effect.logWarning(`live files: no WebSocket ticket from ${api}`, error).pipe(Effect.as(socketUrl(api)))),
-      );
-
 const connect = (api: string) =>
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient;
     const protocol = yield* Layer.build(
       RpcClient.layerProtocolSocket({ retryTransientErrors: true }).pipe(
-        Layer.provide(Socket.layerWebSocket(socketAddress(http, api))),
+        Layer.provide(Socket.layerWebSocket(ticketedSocketUrl(http, api, FileSync.path))),
         Layer.provide(Socket.layerWebSocketConstructorGlobal),
         Layer.provide(RpcSerialization.layerJson),
       ),

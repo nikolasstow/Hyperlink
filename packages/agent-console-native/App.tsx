@@ -22,6 +22,7 @@ import { sessionsReadBack } from "./src/sessionCache";
 import { extensionViewsReadBack } from "./src/extensionViewsStore";
 import { ConversationPreloader } from "./src/conversations/ConversationPreloader";
 import { LiveFilesFollower } from "./src/files/useLiveFiles";
+import { LanguageFollower } from "./src/language/useLanguage";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 import { LaunchNavigator } from "./src/LaunchNavigator";
@@ -316,6 +317,8 @@ const AppInner = (): React.ReactElement => {
           <ConversationPreloader />
           {/* Keeps open and kept files in step with the file hub, before any is opened. */}
           <LiveFilesFollower />
+          {/* Their problems from the Mac's language servers, ahead of opening them. */}
+          <LanguageFollower />
           {/* Makes this the app notifications go to whenever it is opened. */}
           <PushOnForeground />
           {/* Installs the custom code fonts the server lists. */}
