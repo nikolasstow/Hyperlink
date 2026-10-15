@@ -53,8 +53,8 @@ import { SystemIcon } from "../SystemIcon";
 import { codeFontSizeOf, stepCodeFontSize } from "../settings";
 import { useScreenBackground, useTextColors, useTheme } from "../theme";
 import { GlassView } from "expo-glass-effect";
-import { Button, ControlGroup, Host, Image, Label, Menu, RNHostView } from "@expo/ui/swift-ui";
-import { buttonStyle, menuActionDismissBehavior, menuIndicator, menuStyle } from "@expo/ui/swift-ui/modifiers";
+import { Button, ControlGroup, Host, HStack, Image, Label, Menu } from "@expo/ui/swift-ui";
+import { buttonStyle, contentShape, frame, glassEffect, menuActionDismissBehavior, menuIndicator, menuStyle, shapes } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
 import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
@@ -81,6 +81,7 @@ import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
 import { preloadFile } from "./preloadFile";
 import { resolveAutosave, setAutosave, useAutosaveSettings } from "./autosaveSettings";
 import { TAB_TOP_ACTIONS_WIDTH, TabTopActions } from "./TabTopActions";
+import { isMarkdown, setMarkdownMode, useMarkdownMode } from "./markdownMode";
 import { useMissingPaths } from "./missingPaths";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Files">;
@@ -800,6 +801,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               onSelect={switchWorktree}
               repo={repo}
               file={current.kind === "file" ? { path: current.path, name: current.name } : undefined}
+              markdown={current.kind === "file" && isMarkdown(current.name)}
             />
             <View style={styles.title} pointerEvents="box-none">
               {current.kind === "file" ? null : primary.primary !== undefined ? (
@@ -876,6 +878,8 @@ const MoreMenu = (props: {
   readonly repo: string;
   /** The open file (undefined for a folder tab) — adds Save / Keep On Device. */
   readonly file: { readonly path: string; readonly name: string } | undefined;
+  /** A Markdown file: its read/write switch leads, in the same glass. */
+  readonly markdown?: boolean;
 }): React.ReactElement => {
   const textColors = useTextColors();
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -890,6 +894,109 @@ const MoreMenu = (props: {
   const fontSize = codeFontSizeOf(appTheme);
   const stepFontSize = (step: -1 | 1): void => setTheme({ ...appTheme, codeFontSize: stepCodeFontSize(fontSize, step) });
   const fontSizeIcons = useFontSizeIcons(appTheme.codeFont, scheme);
+  const markdownMode = useMarkdownMode(file?.path ?? "");
+  // The menu's items, the same in both looks.
+  const items = (
+    <>
+      {/* The code's size, side by side: a step smaller or larger. */}
+      {file === undefined ? null : (
+        // Stays open as the size steps, so it can be stepped again.
+        <ControlGroup key="font-size" modifiers={[menuActionDismissBehavior("disabled")]}>
+          {/* "Aa" in the code's own font; iOS's text size symbols until the
+            * images are drawn (or on a build that cannot draw them). */}
+          {fontSizeIcons === undefined ? (
+            <Button label="Smaller" systemImage="textformat.size.smaller" onPress={() => stepFontSize(-1)} />
+          ) : (
+            <Button onPress={() => stepFontSize(-1)}>
+              <Label title="Smaller" icon={<Image uiImage={fontSizeIcons.smaller} />} />
+            </Button>
+          )}
+          {fontSizeIcons === undefined ? (
+            <Button label="Larger" systemImage="textformat.size.larger" onPress={() => stepFontSize(1)} />
+          ) : (
+            <Button onPress={() => stepFontSize(1)}>
+              <Label title="Larger" icon={<Image uiImage={fontSizeIcons.larger} />} />
+            </Button>
+          )}
+        </ControlGroup>
+      )}
+      {file === undefined ? null : <Button key="save" label="Save" systemImage="square.and.arrow.down" onPress={() => saveFileNow(file.path)} />}
+      {file === undefined ? null : (
+        <Button
+          key="autosave"
+          label={autosaveOn ? "Autosave: On" : "Autosave: Off"}
+          systemImage={autosaveOn ? "checkmark.circle" : "circle"}
+          onPress={() => setAutosave({ kind: "file", path: file.path }, !autosaveOn)}
+        />
+      )}
+      {file === undefined ? null : (
+        <Button
+          key="keep"
+          label={isKept ? "Remove from Device" : "Keep On Device"}
+          systemImage={isKept ? "trash" : "arrow.down.circle"}
+          onPress={() => {
+            if (isKept) {
+              removeFromDevice(file.path);
+            } else {
+              keepOnDevice(file.path);
+              void preloadFile(backend, file.path, file.name, theme);
+            }
+          }}
+        />
+      )}
+      {props.worktrees.length > 1 ? (
+        <Menu label={worktreeName(props.worktrees.find((worktree) => worktree.path === props.selected) ?? props.worktrees[0])} systemImage="arrow.triangle.branch">
+          {props.worktrees.map((worktree) => (
+            <Button
+              key={worktree.path}
+              label={worktreeName(worktree)}
+              systemImage={worktree.path === props.selected ? "checkmark" : "arrow.triangle.branch"}
+              onPress={() => props.onSelect(worktree.path)}
+            />
+          ))}
+        </Menu>
+      ) : null}
+      {canReload ? (
+        <Button
+          label="Reload"
+          systemImage="arrow.clockwise"
+          onPress={reloadApp}
+        />
+      ) : null}
+    </>
+  );
+  const menuModifiers = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
+  if (props.markdown === true && file !== undefined) {
+    // One native glass capsule: the read/write switch (it shows where a tap
+    // goes: reading, a pencil to edit; editing, an eye to read), then the menu.
+    return (
+      <Host style={styles.moreWithSwitch} ignoreSafeArea="all">
+        <HStack spacing={0} modifiers={[glassEffect({ glass: { variant: "regular", interactive: true }, shape: "capsule" })]}>
+          <Button
+            modifiers={[buttonStyle("plain")]}
+            onPress={() => {
+              // Reading has no caret: the keyboard goes.
+              if (markdownMode === "write") Keyboard.dismiss();
+              setMarkdownMode(file.path, markdownMode === "read" ? "write" : "read");
+            }}
+          >
+            <Image
+              systemName={markdownMode === "read" ? "pencil" : "eye"}
+              size={17}
+              color={textColors.label}
+              modifiers={[frame({ width: HOME_HEADER_HEIGHT, height: HOME_HEADER_HEIGHT }), contentShape(shapes.rectangle())]}
+            />
+          </Button>
+          <Menu
+            label={<Image systemName="ellipsis" size={18} color={textColors.label} modifiers={[frame({ width: HOME_HEADER_HEIGHT, height: HOME_HEADER_HEIGHT }), contentShape(shapes.rectangle())]} />}
+            modifiers={menuModifiers}
+          >
+            {items}
+          </Menu>
+        </HStack>
+      </Host>
+    );
+  }
   return (
     <Host
       style={styles.more}
@@ -899,83 +1006,20 @@ const MoreMenu = (props: {
     >
       <Menu
         label={
-          <RNHostView matchContents>
-            <View style={styles.backShadow}>
-              <GlassView style={styles.back} glassEffectStyle="regular" colorScheme={scheme}>
-                <View style={styles.backHit}>
-                  <SystemIcon name="ellipsis" size={18} weight="semibold" color={textColors.label} />
-                </View>
-              </GlassView>
-            </View>
-          </RNHostView>
+          <Image
+            systemName="ellipsis"
+            size={18}
+            color={textColors.label}
+            modifiers={[
+              frame({ width: HOME_HEADER_HEIGHT, height: HOME_HEADER_HEIGHT }),
+              glassEffect({ glass: { variant: "regular", interactive: true }, shape: "circle" }),
+              contentShape(shapes.circle()),
+            ]}
+          />
         }
-        modifiers={[menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")]}
+        modifiers={menuModifiers}
       >
-        {/* The code's size, side by side: a step smaller or larger. */}
-        {file === undefined ? null : (
-          // Stays open as the size steps, so it can be stepped again.
-          <ControlGroup key="font-size" modifiers={[menuActionDismissBehavior("disabled")]}>
-            {/* "Aa" in the code's own font; iOS's text size symbols until the
-              * images are drawn (or on a build that cannot draw them). */}
-            {fontSizeIcons === undefined ? (
-              <Button label="Smaller" systemImage="textformat.size.smaller" onPress={() => stepFontSize(-1)} />
-            ) : (
-              <Button onPress={() => stepFontSize(-1)}>
-                <Label title="Smaller" icon={<Image uiImage={fontSizeIcons.smaller} />} />
-              </Button>
-            )}
-            {fontSizeIcons === undefined ? (
-              <Button label="Larger" systemImage="textformat.size.larger" onPress={() => stepFontSize(1)} />
-            ) : (
-              <Button onPress={() => stepFontSize(1)}>
-                <Label title="Larger" icon={<Image uiImage={fontSizeIcons.larger} />} />
-              </Button>
-            )}
-          </ControlGroup>
-        )}
-        {file === undefined ? null : <Button key="save" label="Save" systemImage="square.and.arrow.down" onPress={() => saveFileNow(file.path)} />}
-        {file === undefined ? null : (
-          <Button
-            key="autosave"
-            label={autosaveOn ? "Autosave: On" : "Autosave: Off"}
-            systemImage={autosaveOn ? "checkmark.circle" : "circle"}
-            onPress={() => setAutosave({ kind: "file", path: file.path }, !autosaveOn)}
-          />
-        )}
-        {file === undefined ? null : (
-          <Button
-            key="keep"
-            label={isKept ? "Remove from Device" : "Keep On Device"}
-            systemImage={isKept ? "trash" : "arrow.down.circle"}
-            onPress={() => {
-              if (isKept) {
-                removeFromDevice(file.path);
-              } else {
-                keepOnDevice(file.path);
-                void preloadFile(backend, file.path, file.name, theme);
-              }
-            }}
-          />
-        )}
-        {props.worktrees.length > 1 ? (
-          <Menu label={worktreeName(props.worktrees.find((worktree) => worktree.path === props.selected) ?? props.worktrees[0])} systemImage="arrow.triangle.branch">
-            {props.worktrees.map((worktree) => (
-              <Button
-                key={worktree.path}
-                label={worktreeName(worktree)}
-                systemImage={worktree.path === props.selected ? "checkmark" : "arrow.triangle.branch"}
-                onPress={() => props.onSelect(worktree.path)}
-              />
-            ))}
-          </Menu>
-        ) : null}
-        {canReload ? (
-          <Button
-            label="Reload"
-            systemImage="arrow.clockwise"
-            onPress={reloadApp}
-          />
-        ) : null}
+        {items}
       </Menu>
     </Host>
   );
@@ -1056,6 +1100,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     marginHorizontal: TOP_GAP,
+  },
+  // A Markdown file's switch and menu: one glass capsule, two targets.
+  moreWithSwitch: {
+    width: HOME_HEADER_HEIGHT * 2,
+    height: HOME_HEADER_HEIGHT,
+    zIndex: 1,
   },
   more: {
     width: HOME_HEADER_HEIGHT,

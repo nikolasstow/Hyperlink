@@ -16,13 +16,14 @@
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { isCodeEditorNative } from "../../modules/code-editor";
 import type { Rebase } from "file-sync";
 import type { ScopeSymbol } from "./stickyRanges";
 import { CodeSurface } from "../CodeSurface";
 import { langFromFilename } from "../shikiHighlighter";
-import { type TextColors, useTextColors, useThemedStyles } from "../theme";
+import { Markdown } from "../Markdown";
+import { type TextColors, useScreenBackground, useTextColors, useThemedStyles } from "../theme";
 import { CodeEditor, type CodeEditorApi } from "./CodeEditor";
 import { autosaveSettingsNow, resolveAutosave } from "./autosaveSettings";
 import { EDITOR_TOP_MARGIN, shownTextOf } from "./editorLayout";
@@ -30,6 +31,7 @@ import { keepScrollOffset, scrollOffsetOf } from "./useFileScrolls";
 import { clearFileEdit, setFileEdit } from "./fileEdits";
 import { registerSave, unregisterSave } from "./fileSave";
 import { getFileTextSync } from "./fileTextCache";
+import { isMarkdown, useMarkdownMode } from "./markdownMode";
 import { flashFile } from "./saveLight";
 import { editLiveFile, liveFileNow, resolveLiveConflict, saveLiveFile, useLiveFile, useLiveFileEvents, useLiveFileProblem, useOnScreen } from "./useLiveFiles";
 
@@ -175,6 +177,22 @@ export const FileView = (props: {
 
   const conflicts = live?.conflicts ?? noConflicts;
 
+  // A Markdown file can show rendered (read) or in the editor (write), from
+  // its top bar. Rendered, it lies over the editor, which stays mounted with
+  // your edits; it shows the text as it is now, edits included.
+  const reading = useMarkdownMode(path) === "read" && isMarkdown(name);
+  const readBackground = useScreenBackground("plain");
+  const { width: screenWidth } = useWindowDimensions();
+  const rendered =
+    reading && state.kind === "text" ? (
+      <ScrollView
+        style={[StyleSheet.absoluteFill, { backgroundColor: readBackground }]}
+        contentContainerStyle={[styles.read, { paddingTop: topInset + EDITOR_TOP_MARGIN, paddingBottom: bottomInset }]}
+      >
+        <Markdown text={live?.text ?? state.text} width={screenWidth - READ_SIDE * 2} />
+      </ScrollView>
+    ) : null;
+
   if (state.kind === "missing" || state.kind === "error") {
     return (
       <View style={[styles.center, { paddingTop: topInset + 40 }]}>
@@ -209,6 +227,7 @@ export const FileView = (props: {
         ) : (
           <View style={[styles.surface, { paddingTop: topInset }]} />
         )}
+        {rendered}
         {state.kind === "loading" ? (
           <View style={[styles.center, styles.overlay, { paddingTop: topInset + 40 }]} pointerEvents="none">
             <ActivityIndicator color={textColors.secondaryLabel} />
@@ -241,8 +260,14 @@ export const FileView = (props: {
   );
 };
 
+/** A rendered Markdown file's side margins. */
+const READ_SIDE = 16;
+
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
+    read: {
+      paddingHorizontal: READ_SIDE,
+    },
     surface: {
       flex: 1,
     },
