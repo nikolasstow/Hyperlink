@@ -36,6 +36,24 @@ export class Attachment extends Schema.Class<Attachment>("Outbox.Attachment")({
   name: Schema.String,
 }) {}
 
+/** A skill the message brings (its leading `/name`), attached over the word. */
+export class SkillRun extends Schema.TaggedClass<SkillRun>("Outbox.SkillRun")("Skill", {
+  id: Schema.String,
+  /** Where the `/name` word ends in the text (it starts at 0). */
+  end: Schema.Number,
+}) {}
+
+/** A command the message runs (its leading `/name`), with the rest as its
+ * arguments. */
+export class CommandRun extends Schema.TaggedClass<CommandRun>("Outbox.CommandRun")("Command", {
+  name: Schema.String,
+  args: Schema.String,
+}) {}
+
+/** What a message's leading `/name` runs (docs/handoffs/slash-commands.md). */
+export const Run = Schema.Union([SkillRun, CommandRun]);
+export type Run = typeof Run.Type;
+
 /** A message waiting to be sent. Its id is the one the server stores it
  * under: made when it is queued and the same on every attempt, so a retry is
  * recognised, never duplicated. */
@@ -45,6 +63,8 @@ export class QueuedMessage extends Schema.Class<QueuedMessage>("Outbox.QueuedMes
   files: Schema.Array(Attachment),
   model: Schema.optional(Model.Ref),
   agent: Agent.ID,
+  /** What its leading `/name` runs, if it names one. */
+  run: Schema.optional(Run),
   /** When it was queued (epoch ms). */
   queuedAt: Schema.Number,
 }) {}

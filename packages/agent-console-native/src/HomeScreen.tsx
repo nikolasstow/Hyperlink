@@ -34,6 +34,7 @@ import { LAYOUT_MS, SessionCard } from "./SessionCard";
 import { useSessionWatch } from "./sessions/useSessionWatch";
 import { HomeSkeleton } from "./HomeSkeleton";
 import { AGENT } from "./agentConstants";
+import type { Invocation } from "./commands/slash";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { EdgeBlurBars } from "./EdgeBlurBars";
@@ -181,7 +182,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
     })();
   }, [loadSessions, loadScan, address, rootDir]);
 
-  const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
+  const onSend = async (text: string, model: ModelOption | undefined, invocation: Invocation | undefined): Promise<void> => {
     if (target === undefined || sending) return;
     setSending(true);
     try {
@@ -198,6 +199,7 @@ export const HomeScreen = (props: Props): React.ReactElement => {
         files: [],
         model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
         agent: Agent.ID.make(AGENT),
+        invocation,
       });
       props.navigation.navigate("Chat", { sessionID });
       void loadSessions();

@@ -32,6 +32,7 @@
  * @internal
  */
 import { useIsFocused, useRoute } from "@react-navigation/native";
+import type { Commands } from "agent-console-protocol";
 import * as React from "react";
 import { Keyboard, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -39,6 +40,10 @@ import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } fro
 import { useAgentButtonVisible } from "./agentButtonSettings";
 import { type BarGeometry, INPUT_LINE_HEIGHT, INPUT_PADDING_VERTICAL, MAX_INPUT_HEIGHT, MIN_INPUT_HEIGHT, setBarOpen, setInputHeight, useBarGeometry } from "./barGeometry";
 import { type BarTopSection, BottomBar } from "./BottomBar";
+import { accepted, type Invocation, invocationOf, matches, slashQuery, spaceAccepts } from "./commands/slash";
+import { useSlashColors } from "./commands/slashColors";
+import { SlashList } from "./commands/SlashList";
+import { useCommands, useLoadCommands } from "./commands/useCommandCatalog";
 import { PlusChip, SendChip } from "./composerChips";
 import { DubzPage, PAGE_FLING, PAGE_MS, PAGE_SLOP_X, PAGE_SLOP_Y, PAGE_TURN, pageEasing, rememberPage, useBarPage, type PageBack } from "./Dubz";
 import type { DubzContext } from "./dubzSuggestions";
@@ -52,7 +57,8 @@ import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 const noop = (): void => undefined;
 
 export const Composer = (props: {
-  readonly onSend: (text: string, model: ModelOption | undefined) => Promise<void>;
+  /** `invocation`: what the text's leading `/name` runs, when it names one. */
+  readonly onSend: (text: string, model: ModelOption | undefined, invocation: Invocation | undefined) => Promise<void>;
   readonly disabled: boolean;
   /** Where the message will run: the models offered are this directory's
    * (undefined until it is known). */
@@ -86,6 +92,10 @@ export const Composer = (props: {
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [focused, setFocused] = React.useState(false);
   const models = useModels(props.directory);
+  // What `/` offers here: loaded ahead (CommandCatalog), so typing only filters.
+  const commands = useCommands(props.directory);
+  useLoadCommands(props.directory);
+  const slashColors = useSlashColors();
   const [selectedModel, setSelectedModel] = React.useState<ModelOption | undefined>(undefined);
   // Held expanded while it is a page sliding (away to Dubz, or back), when its
   // input is not the focused one.
@@ -314,6 +324,15 @@ export const Composer = (props: {
     setFocused(false);
   };
 
+  // A `/` word being typed offers its matches above the bar; space or a tap
+  // accepts one (commands/slash.ts).
+  const slashTyped = slashQuery(text);
+  const offered = slashTyped === undefined || !focused ? [] : matches(commands, slashTyped);
+  const changeText = (next: string): void => setText(spaceAccepts(text, next, commands) ?? next);
+  const accept = (entry: Commands.Entry): void => setText(accepted(entry));
+  // An accepted `/name` at the start wears the theme's slash colours.
+  const invocation = invocationOf(text, commands);
+
   // Its page left (a send opened the chat, a tap opened another page): the
   // input lets go and the bar collapses, so coming back finds it closed
   // unless it holds unsent text.
@@ -334,7 +353,7 @@ export const Composer = (props: {
     try {
       // Cleared once it is on its way: the chat's bubble starts where the
       // text is, so the two swap in place.
-      await props.onSend(value, selectedModel);
+      await props.onSend(value, selectedModel, invocationOf(value, commands));
       setText("");
       if (selectedModel !== undefined) void recordModelUse(selectedModel);
     } catch {
@@ -348,7 +367,7 @@ export const Composer = (props: {
     <View style={styles.pages} pointerEvents="box-none">
       <GestureDetector gesture={toDubz}>
         <Reanimated.View style={composeSlide}>
-          {props.accessory}
+          {offered.length > 0 ? <SlashList entries={offered} width={screenW} onAccept={accept} /> : props.accessory}
           <BottomBar
             expanded={expanded}
             geometry={geometry}
@@ -360,8 +379,7 @@ export const Composer = (props: {
               <TextInput
                 ref={inputRef}
                 style={styles.input}
-                value={text}
-                onChangeText={setText}
+                onChangeText={changeText}
                 onLayout={(e) => onInputLayout(e.nativeEvent.layout.height)}
                 // Always editable: disabled only holds the send (iOS drops the
                 // keyboard from an input that stops being editable).
@@ -370,7 +388,16 @@ export const Composer = (props: {
                 multiline
                 onFocus={onFocus}
                 onBlur={onBlur}
-              />
+              >
+                {invocation === undefined ? (
+                  text
+                ) : (
+                  <>
+                    <Text style={{ color: slashColors.foreground, backgroundColor: slashColors.background }}>{text.slice(0, invocation.end)}</Text>
+                    {text.slice(invocation.end)}
+                  </>
+                )}
+              </TextInput>
             }
             leading={
               <PlusChip

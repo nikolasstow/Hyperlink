@@ -35,7 +35,9 @@ import type { Model } from "../opencode/schema/model";
 import { AbsolutePath } from "../opencode/schema/schema";
 import type { SessionID } from "../opencode/schema/session-id";
 import { SessionMessage } from "../opencode/schema/session-message";
-import { Attachment, Held, keyOfLane, Lane, laneKey, type LaneKey, Lanes, NewFolder, NewSession, QueuedMessage } from "./model";
+import type { Invocation } from "../commands/slash";
+import { Skill } from "../opencode/schema/skill";
+import { Attachment, CommandRun, Held, keyOfLane, Lane, laneKey, type LaneKey, Lanes, NewFolder, NewSession, QueuedMessage, type Run, SkillRun } from "./model";
 import { Folders } from "./Folders";
 import { Reachability } from "./Reachability";
 
@@ -94,7 +96,15 @@ export interface Send {
   /** The message's id, when the sender made it (to know its bubble before
    * it shows); otherwise made here. */
   readonly id?: SessionMessage.ID;
+  /** What its leading `/name` runs, when it names a command or skill. */
+  readonly invocation?: Invocation;
 }
+
+/** How a message's `/name` is sent: a skill goes with it; a command runs. */
+const runOf = (invocation: Invocation): Run =>
+  invocation.entry.source === "skill"
+    ? SkillRun.make({ id: invocation.entry.name, end: invocation.end })
+    : CommandRun.make({ name: invocation.entry.name, args: invocation.args });
 
 type State = HashMap.HashMap<LaneKey, Lane>;
 
@@ -193,6 +203,19 @@ const make = Effect.gen(function* () {
       if (message.model !== undefined) {
         yield* step(lane.server, client["server.session"]["session.switchModel"]({ params: { sessionID: lane.sessionID }, payload: { model: message.model } }));
       }
+      const files = message.files.map((file) => ({ uri: `file://${file.path}`, mime: "text/plain", name: file.name }));
+      const run = message.run;
+      // A command takes no message id: a retry after a lost answer can run it
+      // twice (docs/handoffs/slash-commands.md).
+      if (run?._tag === "Command") {
+        return yield* step(
+          lane.server,
+          client["server.session"]["session.command"]({
+            params: { sessionID: lane.sessionID },
+            payload: { name: run.name, text: run.args, files, delivery: "queue" },
+          }),
+        );
+      }
       yield* step(
         lane.server,
         client["server.session"]["session.prompt"]({
@@ -200,7 +223,8 @@ const make = Effect.gen(function* () {
           payload: {
             id: message.id,
             text: message.text,
-            files: message.files.map((file) => ({ uri: `file://${file.path}`, mime: "text/plain", name: file.name })),
+            files,
+            ...(run === undefined ? {} : { skills: [{ id: Skill.ID.make(run.id), mention: { start: 0, end: run.end, text: message.text.slice(0, run.end) } }] }),
             delivery: "queue",
           },
         }),
@@ -275,6 +299,7 @@ const make = Effect.gen(function* () {
           files: input.files.map((file) => Attachment.make(file)),
           model: input.model,
           agent: input.agent,
+          run: input.invocation === undefined ? undefined : runOf(input.invocation),
           queuedAt: Date.now(),
         });
         const key = laneKey(input.server, input.sessionID);

@@ -35,6 +35,7 @@ import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppContext } from "./AppContext";
 import { AGENT } from "./agentConstants";
+import type { Invocation } from "./commands/slash";
 import { colors } from "./colors";
 import { Composer } from "./Composer";
 import { HomeTargetPickers, sessionDirectory, type SessionTarget, TARGET_PICKERS_HEIGHT } from "./HomeTargetPickers";
@@ -225,7 +226,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
   );
 
   const onSend = React.useCallback(
-    async (text: string, model: ModelOption | undefined): Promise<void> => {
+    async (text: string, model: ModelOption | undefined, invocation: Invocation | undefined): Promise<void> => {
       if (target === undefined || sending) return;
       setSending(true);
       try {
@@ -242,6 +243,7 @@ export const RepoScreen = (props: Props): React.ReactElement => {
           files: [],
           model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
           agent: Agent.ID.make(AGENT),
+          invocation,
         });
         props.navigation.navigate("Chat", { sessionID });
         void load();

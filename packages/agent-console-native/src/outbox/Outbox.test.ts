@@ -1,6 +1,7 @@
 import { Effect, Layer, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
+import type { Commands } from "agent-console-protocol";
 import { describe, expect, it } from "vitest";
 import { DeviceSignals } from "../effect/DeviceSignals";
 import { Opencode } from "../opencode/Opencode";
@@ -19,6 +20,8 @@ const directory = AbsolutePath.make("/work/repo");
  * order), and how it answers a given message text. */
 const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse" | "fail", sessions = new Set<string>()) => {
   const admitted: Array<string> = [];
+  /** Each admitted request's body, in order. */
+  const bodies: Array<unknown> = [];
   const attempts = new Map<string, number>();
   const json = (request: Parameters<typeof HttpClientResponse.fromWeb>[0], status: number, body: unknown) =>
     HttpClientResponse.fromWeb(request, new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
@@ -34,6 +37,13 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
           data: { id, projectID: "global", cost: 0, tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }, time: { created: 1, updated: 1 }, title: "t", location: { directory } },
         });
       }
+      const command = /^\/api\/session\/([^/]+)\/command$/.exec(path);
+      if (request.method === "POST" && command !== null) {
+        bodies.push(body);
+        const payload = typeof body === "object" && body !== null ? body : {};
+        admitted.push(`command ${"name" in payload ? String(payload.name) : ""}`);
+        return HttpClientResponse.fromWeb(request, new Response(null, { status: 204 }));
+      }
       const prompt = /^\/api\/session\/([^/]+)\/prompt$/.exec(path);
       if (request.method === "POST" && prompt !== null) {
         const sessionID = prompt[1] ?? "";
@@ -46,13 +56,14 @@ const fakeServer = (answer: (text: string, attempt: number) => "admit" | "refuse
         if (outcome === "refuse") return json(request, 409, { _tag: "ConflictError", message: `refused ${text}` });
         if (outcome === "fail") return json(request, 500, { error: "boom" });
         admitted.push(text);
+        bodies.push(body);
         const id = "id" in payload && typeof payload.id === "string" ? payload.id : "msg_unknown";
         return json(request, 200, { data: { id, sessionID, time: { created: 1 }, type: "user", payload: { text }, delivery: "queue" } });
       }
       return json(request, 404, { error: `no route ${request.method} ${path}` });
     }),
   );
-  return { client, admitted, attempts, sessions };
+  return { client, admitted, bodies, attempts, sessions };
 };
 
 /** A device's storage that outlives one outbox (the app being killed and
@@ -105,6 +116,28 @@ describe("Outbox", () => {
       }),
     );
     expect(fake.admitted).toEqual(["one", "two", "three"]);
+  });
+
+  it("sends a /skill with the skill attached over its word, and runs a /command, in lane order", async () => {
+    const fake = fakeServer(() => "admit");
+    const skill: Commands.Entry = { id: "skill:unslop", name: "unslop", source: "skill" };
+    const command: Commands.Entry = { id: "command:review", name: "review", source: "command" };
+    await run(
+      fake,
+      Effect.gen(function* () {
+        const outbox = yield* Outbox;
+        const sessionID = SessionID.create();
+        const base = { server, sessionID, directory, files: [], agent: Agent.ID.make("build") };
+        yield* outbox.send({ ...base, create: {}, text: "/unslop this paragraph", invocation: { entry: skill, end: 7, args: "this paragraph" } });
+        yield* outbox.send({ ...base, text: "/review the last commit", invocation: { entry: command, end: 7, args: "the last commit" } });
+        yield* outbox.send({ ...base, text: "plain" });
+        yield* settled(outbox);
+      }),
+    );
+    expect(fake.admitted).toEqual(["/unslop this paragraph", "command review", "plain"]);
+    expect(fake.bodies[0]).toMatchObject({ text: "/unslop this paragraph", skills: [{ id: "unslop", mention: { start: 0, end: 7, text: "/unslop" } }] });
+    expect(fake.bodies[1]).toEqual({ name: "review", text: "the last commit", files: [], delivery: "queue" });
+    expect(fake.bodies[2]).not.toHaveProperty("skills");
   });
 
   it("holds a lane at a refused message: nothing overtakes it until it is removed", async () => {

@@ -41,6 +41,7 @@ import { NEW_SESSION_TITLE } from "./sessions/sessionTitle";
 import type { Permission } from "./opencode/schema/permission";
 import { getPermissionMode } from "./sessionPermissions";
 import { AGENT } from "./agentConstants";
+import type { Invocation } from "./commands/slash";
 import { promptRenameSession } from "./sessionActions";
 import { BUSY_ROW_GAP, BUSY_ROW_HEIGHT, BusyRow } from "./BusyRow";
 import { startLiveActivity } from "../modules/live-activity";
@@ -433,7 +434,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
 
   // Into the outbox: sent from there, in order, when the server can take it
   // (sessions/../outbox). The bubble shows at once; its receipt says how far it got.
-  const onSend = async (text: string, model: ModelOption | undefined): Promise<void> => {
+  const onSend = async (text: string, model: ModelOption | undefined, invocation: Invocation | undefined): Promise<void> => {
     // The chips selected go with this message, as file references; the
     // selection clears.
     const attached = files.filter((file) => selectedSet.has(file.path));
@@ -485,6 +486,7 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
       files: attached.map((file) => ({ path: file.path, name: file.name })),
       model: model === undefined ? undefined : Model.Ref.make({ providerID: Provider.ID.make(model.providerID), id: Model.ID.make(model.modelID) }),
       agent: Agent.ID.make(AGENT),
+      invocation,
     });
     // The input clears as its bubble mounts behind it; not later than this
     // even if the row is slow to show.
