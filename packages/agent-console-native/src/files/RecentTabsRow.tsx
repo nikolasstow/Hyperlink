@@ -56,10 +56,12 @@ export const RecentTabsRow = (props: {
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
+    // Room above (under the header) and below (before the files).
     row: {
       flexDirection: "row",
       gap: GAP,
-      marginBottom: 16,
+      marginTop: 12,
+      marginBottom: 20,
     },
     preview: {
       borderRadius: PREVIEW_RADIUS,
