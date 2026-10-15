@@ -219,3 +219,19 @@ Two faults made the storm:
   re-followed every file at once (81 times in that log). `deviceSignalsNative.ts`
   now reports a change of state only: online after offline, foreground after
   background.
+
+**Completed on epsilon (2026-10-15).** The folder (`…/effect/packages/effect/src`)
+was in the KEPT list — "Kept On Device" persists any path to AsyncStorage, and a
+folder had been pinned. `settled` stopped the 2 s retry, but a kept settled path
+is still re-read on every foreground (by design), so the ~1 s JS stall recurred
+and made the whole app (Dubz included) feel laggy — a blocked JS thread, not the
+UI. `[perf]` showed repeated 0.8–1.2 s `js stall` lines next to the `[files]
+reading …/effect/src` warn.
+
+Fix (`useLiveFiles.ts`): when the hub reports a KEPT path as `NotAFile`, unpin it
+(`removeFromDevice`). It leaves the follow set and the persisted keep list, so it
+self-heals after one detection — zero stalls on the next launch. This is the
+"never follow a non-file" item: directories now only ever enter the follow set
+via `kept`, and an invalid kept directory prunes itself. (Tabs already filter to
+`kind==='file'`; on-screen is `FileView` files only.) Follow-up for eta if you
+want belt-and-braces: reject a folder at `keepOnDevice` time too.
