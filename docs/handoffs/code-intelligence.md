@@ -119,6 +119,22 @@ two spaces into ". " (its period shortcut): that counts as a double space too.
 (`{ prompt, model? }`, no session, no agent; ~1.3 s with Haiku 4.5). The API
 server's `/complete` builds the fill-in-the-middle prompt and calls it.
 
+### Suggestions as the best editors make them (Claude, 2026-10-15)
+
+Researched (Copilot, Zed's Zeta, Cursor Tab): a **fill-in-the-middle** model, not a chat
+model; 200-500 ms; context = current file > other open files' similar chunks > language server;
+cancel in flight; type-through; one line mid-line, a block on a line of its own; next-edit
+prediction is the newest step. Owner: support several backends; personally Qwen.
+
+- **Local:** llama.cpp (`brew install llama.cpp`) serving the base **Qwen2.5-Coder 7B, Q4_K_M**
+  (`QuantFactory/Qwen2.5-Coder-7B-GGUF`) with the 0.5B as a draft model, tmux `eta-qwen`:
+  `llama-server -hf QuantFactory/Qwen2.5-Coder-7B-GGUF:Q4_K_M -hfd ggml-org/Qwen2.5-Coder-0.5B-Q8_0-GGUF --host 127.0.0.1 --port 8012 -ub 1024 -b 1024 --cache-reuse 256`
+  (the API server's `AGENT_CONSOLE_COMPLETE_URL`, default `http://127.0.0.1:8012`).
+- **Measured on the M4 (24 GB):** 7B Q8 13 tok/s (1.6 s a line), right; 7B Q4 21 tok/s (1.0 s),
+  right; 3B 0.1 s but wrong (`raceAll` for `all`). First call in a file ~4.7 s (reads it); after
+  that a keystroke costs only the new text (prompt cache), as long as the extra context is stable.
+- **Next:** stream the answer (the first words show at once), then next-edit prediction.
+
 ## Build order (each step ships value; hybrid is the capstone)
 
 1. **Sticky scroll + folding + breadcrumbs.** Native overlay + structure from
