@@ -797,7 +797,9 @@ export const FilesScreen = (props: Props): React.ReactElement => {
             <Reanimated.View style={[styles.page, { height: screen.height, backgroundColor: background }, pageStyle]}>
               {current.kind === "directory" ? (
                 <FileListing
-                  key={`${tab?.id ?? "root"}:${current.path}`}
+                  // The landing page is a list of its own, from its top (not
+                  // the root tab's, wherever that was scrolled).
+                  key={landing ? `landing:${current.path}` : `${tab?.id ?? "root"}:${current.path}`}
                   repo={repo}
                   dir={current.path}
                   topInset={headerHeight}
