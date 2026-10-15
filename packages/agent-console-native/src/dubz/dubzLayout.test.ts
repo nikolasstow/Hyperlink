@@ -12,13 +12,17 @@ describe("dubzLayout", () => {
     expect(isCompact(COMPACT_ZONE_MAX + 1)).toBe(false);
   });
 
-  it("the content viewport removes both bars", () => {
-    expect(contentViewport(300, TOP, BOTTOM)).toBe(300 - TOP - BOTTOM);
+  it("the viewport removes both bars out of the zone, only the bottom in it", () => {
+    // Out of the compact zone: the top controls take a row, so both bars go.
+    expect(contentViewport(400, TOP, BOTTOM)).toBe(400 - TOP - BOTTOM);
+    // In the zone: the top controls are a SIDE bar, so the top bar is NOT
+    // subtracted — only the bottom composer pill.
+    expect(contentViewport(300, TOP, BOTTOM)).toBe(300 - BOTTOM);
   });
 
   it("content compacts only when compact AND taller than the viewport", () => {
     const height = 300; // in the zone
-    const viewport = contentViewport(height, TOP, BOTTOM); // 158
+    const viewport = contentViewport(height, TOP, BOTTOM); // 300 - 78 = 222
     // Taller than the viewport, in the zone → compact.
     expect(needsCompactContent(height, viewport + 10, TOP, BOTTOM)).toBe(true);
     // Fits the viewport → no need, even in the zone.

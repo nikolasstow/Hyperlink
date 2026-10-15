@@ -31,10 +31,16 @@ export const isCompact = (height: number): boolean => {
   return height <= COMPACT_ZONE_MAX;
 };
 
-/** The space left for content once the top and bottom bars are taken out. */
+/** The space left for content. Out of the compact zone the top controls take
+ * their own row, so BOTH bars are subtracted. In the zone they are a side bar
+ * (horizontal, not a row), so the top bar is NOT subtracted — only the bottom:
+ *
+ *   compact:      height − bottomBar
+ *   not compact:  height − topBar − bottomBar
+ */
 export const contentViewport = (height: number, topBar: number, bottomBar: number): number => {
   "worklet";
-  return height - topBar - bottomBar;
+  return isCompact(height) ? height - bottomBar : height - topBar - bottomBar;
 };
 
 /** Whether the content must compact — shift right for the top-left buttons:
