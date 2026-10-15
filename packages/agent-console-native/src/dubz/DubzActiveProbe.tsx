@@ -75,7 +75,7 @@ export const DubzActiveProbe = (props: {
       : `requested = max(active ${act}, default ${def}) = ${requested}`;
   const compactEq = `compact = (visible ${v} ≤ ${COMPACT_ZONE_MAX}) = ${compactNow}`;
   const viewportEq = compactNow
-    ? `viewport = visible ${v} − bottom ${bottomBar} = ${viewport}`
+    ? `viewport = visible ${v} − bottom ${bottomBar} = ${viewport}   (top ${topBar} excluded)`
     : `viewport = visible ${v} − top ${topBar} − bottom ${bottomBar} = ${viewport}`;
 
   return (
@@ -85,14 +85,15 @@ export const DubzActiveProbe = (props: {
       <Pressable onPress={() => setIndex((n) => (n + 1) % PROBE_HEIGHTS.length)} style={[styles.component, { height }]} />
       <View style={styles.readout}>
         <Text style={styles.caption}>active component = {height}px · tap the block to cycle ({index + 1}/{PROBE_HEIGHTS.length})</Text>
+        {/* Inputs first, so they stay reachable even when the window is short. */}
+        <View style={styles.fields}>
+          <Field label="top" value={topStr} onChange={setTopStr} />
+          <Field label="bottom" value={bottomStr} onChange={setBottomStr} />
+        </View>
         <Text style={styles.eq}>{requestedEq}</Text>
         <Text style={styles.eq}>{compactEq}</Text>
         <Text style={[styles.eq, compactNow ? styles.eqHot : null]}>{viewportEq}</Text>
         {compactNow ? <Text style={styles.note}>↑ compact: the top bar is a side bar — NOT subtracted</Text> : null}
-        <View style={styles.fields}>
-          <Field label="top offset" value={topStr} onChange={setTopStr} />
-          <Field label="bottom offset" value={bottomStr} onChange={setBottomStr} />
-        </View>
       </View>
     </View>
   );
