@@ -12,7 +12,7 @@ import { colors } from "../colors";
 import { iconForFile } from "../fileIcon";
 import { SetiIcon } from "../SetiIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
-import { type TextColors, useThemedStyles } from "../theme";
+import { type TextColors, useScreenBackground, useThemedStyles } from "../theme";
 import type { FileNavEntry } from "./FileNav";
 import { TabPreview } from "./TabPreview";
 import { PREVIEW_ASPECT, PREVIEW_RADIUS } from "./tabShape";
@@ -32,15 +32,19 @@ export const RecentTabsRow = (props: {
 }): React.ReactElement | null => {
   const styles = useThemedStyles(makeStyles);
   const { width: screenWidth } = useWindowDimensions();
+  const background = useScreenBackground("plain");
   const cellWidth = (screenWidth - SIDE * 2 - GAP * (RECENT_TAB_COUNT - 1)) / RECENT_TAB_COUNT;
   if (props.tabs.length === 0) return null;
   return (
     <View style={styles.row}>
       {props.tabs.map(({ index, entry }) => (
         <Pressable key={`${index}:${entry.path}`} style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`Open tab ${entry.name}`} onPress={() => props.onSelect(index)}>
-          <View style={[styles.preview, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
-            <TabPreview entry={entry} width={cellWidth} topInset={props.pageTop} />
-            <View style={styles.outline} pointerEvents="none" />
+          {/* The shadow outside the preview's clip (which would cut it off). */}
+          <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
+            <View style={[styles.preview, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
+              <TabPreview entry={entry} width={cellWidth} topInset={props.pageTop} />
+              <View style={styles.outline} pointerEvents="none" />
+            </View>
           </View>
           <View style={styles.label}>
             <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={16} />
@@ -62,6 +66,14 @@ const makeStyles = (text: TextColors) =>
       gap: GAP,
       marginTop: 12,
       marginBottom: 20,
+    },
+    shadow: {
+      borderRadius: PREVIEW_RADIUS,
+      borderCurve: "continuous",
+      shadowColor: "#000000",
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.14,
+      shadowRadius: 8,
     },
     preview: {
       borderRadius: PREVIEW_RADIUS,
