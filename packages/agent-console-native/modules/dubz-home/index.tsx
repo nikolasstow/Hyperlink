@@ -89,3 +89,8 @@ export const DubzHomeNativeView: React.ComponentType<DubzHomeNativeProps> | unde
 
 /** Whether this build carries native Dubz home (else fall back to @expo/ui). */
 export const isDubzHomeNative = available;
+
+// Probe: tells us from Metro whether the RUNNING BINARY has the native module.
+// apiVersion 0 = this binary did not bundle it (a reload can't add native code —
+// only installing the build that has it); >=1 = present and the native view is used.
+console.log(`[dubz-home] native=${available} apiVersion=${apiVersion} viewDefined=${DubzHomeNativeView !== undefined}`);
