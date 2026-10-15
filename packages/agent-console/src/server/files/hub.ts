@@ -204,6 +204,9 @@ const make = Effect.gen(function* () {
       Effect.retry(Schedule.spaced(Duration.seconds(2))),
     );
 
+  /** The files kept now, by path: what other features read of them (the
+   * suggestions' context from open files). */
+  const kept = new Map<string, Ref.Ref<FileState>>();
   const entries = yield* RcMap.make({
     lookup: (file: string) =>
       Effect.gen(function* () {
@@ -220,6 +223,8 @@ const make = Effect.gen(function* () {
           events: yield* PubSub.unbounded<FileSync.FileEvent>(),
         };
         yield* Effect.forkScoped(watch(entry));
+        kept.set(file, entry.state);
+        yield* Effect.addFinalizer(() => Effect.sync(() => kept.delete(file)));
         return entry;
       }),
     idleTimeToLive: KEEP_IDLE,
@@ -331,6 +336,10 @@ const make = Effect.gen(function* () {
   return {
     follow,
     write,
+    /** The text of every file followed now (or just let go), by path. */
+    openFiles: Effect.suspend(() =>
+      Effect.forEach([...kept.entries()], ([file, state]) => Ref.get(state).pipe(Effect.map((now) => ({ path: file, text: now.text, exists: now.exists })))),
+    ).pipe(Effect.map((files) => files.filter((file) => file.exists).map(({ path: file, text }) => ({ path: file, text })))),
   };
 });
 

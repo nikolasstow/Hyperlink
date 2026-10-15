@@ -3,17 +3,33 @@ import { Effect, Layer, Option, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpRouter } from "effect/http";
 import { Complete } from "agent-console-protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { FileHub } from "../files/hub";
 import { LanguageHost, type PlaceContext } from "../language/host";
 import { completeRoute, fitsAt, insertionOf, promptOf } from "./complete";
+import { snippetsFor } from "./snippets";
 
 const UPSTREAM_PORT = 6300 + Math.floor(Math.random() * 100);
 const asked: Array<{ readonly url: string; readonly body: unknown }> = [];
+/** Whether the local model's server says it is up. */
+let localUp = false;
 
 /** A stand-in for opencode v2's one-shot generate: answers in a fence, as models sometimes do. */
 const upstream = createServer((request: IncomingMessage, response: ServerResponse) => {
   let body = "";
   request.on("data", (chunk: Buffer) => (body += chunk.toString()));
   request.on("end", () => {
+    if (request.url === "/health") {
+      response.writeHead(localUp ? 200 : 503, { "content-type": "application/json" });
+      response.end("{}");
+      return;
+    }
+    if (request.url === "/infill") {
+      asked.push({ url: request.url, body: JSON.parse(body) });
+      response.writeHead(200, { "content-type": "application/json" });
+      // A fill-in-the-middle model writes on past the line: shaping keeps one.
+      response.end(JSON.stringify({ content: "values.reduce((a, b) => a + b, 0);\nconst more = 1;" }));
+      return;
+    }
     if (request.url === "/api/model") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ data: [{ id: "big-pickle", providerID: "opencode", enabled: true }, { id: "claude-haiku-4-5", providerID: "opencode", enabled: true }] }));
@@ -28,20 +44,30 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
 beforeAll(async () => {
   await new Promise<void>((resolve) => upstream.listen(UPSTREAM_PORT, "127.0.0.1", resolve));
   process.env.AGENT_CONSOLE_OPENCODE_URL = `http://127.0.0.1:${UPSTREAM_PORT}`;
+  process.env.AGENT_CONSOLE_COMPLETE_URL = `http://127.0.0.1:${UPSTREAM_PORT}`;
 });
 
 afterAll(() => {
   if (upstream.listening) upstream.close();
   delete process.env.AGENT_CONSOLE_OPENCODE_URL;
+  delete process.env.AGENT_CONSOLE_COMPLETE_URL;
 });
 
 /** What the language server knows at the caret, in these tests. */
 const PLACE: PlaceContext = { signature: "reduce(callback: (a: number, b: number) => number, initial: number): number", names: ["reduce: (callback) => number", "length: number"] };
-const knowing = Layer.succeed(LanguageHost, {
-  diagnostics: () => Stream.empty,
-  hover: () => Effect.succeed(Option.none()),
-  contextAt: () => Effect.succeed(PLACE),
-});
+const knowing = Layer.mergeAll(
+  Layer.succeed(LanguageHost, {
+    diagnostics: () => Stream.empty,
+    hover: () => Effect.succeed(Option.none()),
+    contextAt: () => Effect.succeed(PLACE),
+  }),
+  // One other file open: its sum helper is like the code at the caret.
+  Layer.succeed(FileHub, {
+    follow: () => Stream.empty,
+    write: () => Effect.die("not written in these tests"),
+    openFiles: Effect.succeed([{ path: "/r/helpers.ts", text: "export const sumValues = (values: number[]) => values.reduce((a, b) => a + b, 0);" }]),
+  }),
+);
 
 const request: Complete.Request = { path: "src/math.ts", prefix: "export const sum = (values: number[]) =>\n  ", suffix: "\n", model: { providerID: "opencode", id: "claude-haiku-4-5" } };
 
@@ -53,9 +79,32 @@ describe("POST /complete", () => {
       const response = await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify(request), headers: { "content-type": "application/json" } }), context);
       expect(Schema.decodeUnknownSync(Schema.fromJsonString(Complete.Response))(await response.text())).toEqual({ text: "values.reduce((a, b) => a + b, 0);" });
       expect(asked[0]?.url).toBe("/api/experimental/generate");
-      expect(asked[0]?.body).toEqual({ prompt: promptOf(request, PLACE), model: { providerID: "opencode", id: "claude-haiku-4-5" } });
+      const near = snippetsFor(request.path, request.prefix, [{ path: "/r/helpers.ts", text: "export const sumValues = (values: number[]) => values.reduce((a, b) => a + b, 0);" }]);
+      expect(near.length).toBe(1);
+      expect(asked[0]?.body).toEqual({ prompt: promptOf(request, PLACE, near), model: { providerID: "opencode", id: "claude-haiku-4-5" } });
       expect(promptOf(request, PLACE)).toContain("Names valid at the cursor (prefer these): reduce: (callback) => number; length: number");
     } finally {
+      await dispose();
+    }
+  });
+});
+
+describe("POST /complete with the local model up", () => {
+  it("asks it to fill in the middle, with the open files' chunks and the language server's note, and keeps one line mid-line", async () => {
+    const { handler, dispose } = HttpRouter.toWebHandler(completeRoute, { disableLogger: true });
+    const context = await Effect.runPromise(Layer.build(Layer.mergeAll(FetchHttpClient.layer, knowing)).pipe(Effect.scoped));
+    localUp = true;
+    try {
+      asked.length = 0;
+      const { model: _model, ...noModel } = request;
+      const response = await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify({ ...noModel, prefix: "const total = sumValues(values) + ", suffix: "\n" }), headers: { "content-type": "application/json" } }), context);
+      expect(await response.json()).toEqual({ text: "values.reduce((a, b) => a + b, 0);" });
+      expect(asked[0]?.url).toBe("/infill");
+      expect(asked[0]?.body).toMatchObject({ input_prefix: "const total = sumValues(values) + ", input_suffix: "\n", stop: ["\n"], cache_prompt: true });
+      expect(JSON.stringify(asked[0]?.body)).toContain("/r/helpers.ts");
+      expect(JSON.stringify(asked[0]?.body)).toContain("Names valid at the cursor");
+    } finally {
+      localUp = false;
       await dispose();
     }
   });

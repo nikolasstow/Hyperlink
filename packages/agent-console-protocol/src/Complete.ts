@@ -33,3 +33,7 @@ export type Response = typeof Response.Type;
  * own default: that is its free tier, which answers only opencode's apps. */
 export const defaultModel = <M extends { readonly providerID: string; readonly id: string }>(models: ReadonlyArray<M>): M | undefined =>
   models.find((model) => model.providerID === "opencode" && model.id === "claude-haiku-4-5") ?? models.find((model) => model.id.includes("haiku"));
+
+/** The local fill-in-the-middle model on the Mac (llama.cpp's server with
+ * Qwen2.5-Coder), as a model to choose. */
+export const local: { readonly providerID: string; readonly id: string } = { providerID: "local", id: "qwen2.5-coder" };
