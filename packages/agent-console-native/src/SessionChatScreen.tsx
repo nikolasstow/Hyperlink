@@ -604,6 +604,13 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         data={listData}
         keyExtractor={(id) => id}
         renderItem={renderItem}
+        // Each row parses its markdown as it mounts, so the first frame costs
+        // one parse per rendered row. Render only the newest few at once (the
+        // list is inverted, so these are what shows), then fill in smaller
+        // batches with a tighter window — the tap opens fast, the rest stream.
+        initialNumToRender={5}
+        maxToRenderPerBatch={5}
+        windowSize={9}
         ListEmptyComponent={<Text style={styles.empty}>Ask a question, or ask it to make a change.</Text>}
         // Below the newest message, not above the oldest — the header, not
         // the footer, is what renders nearest the (inverted) start of the
