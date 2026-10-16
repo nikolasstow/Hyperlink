@@ -539,9 +539,7 @@ const makeStyles = (text: TextColors) =>
   // header). Over both sliding layers so it never moves.
   topBack: {
     position: "absolute",
-    // Top margin, kept in step with TOP_INSET (the header pill) so the back
-    // button aligns with it.
-    top: 20,
+    top: 16,
     left: 16,
   },
   // The main suggestions area: fills the body (which now spans the whole window
