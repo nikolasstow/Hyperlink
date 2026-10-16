@@ -15,6 +15,7 @@
  *
  * @internal
  */
+import { Language } from "agent-console-protocol";
 import { Schema } from "effect";
 import type { AgentSurface } from "./agentButtonSettings";
 
@@ -46,6 +47,15 @@ export const DubzContextEntry = Schema.Union([
     id: Schema.String,
     file: FileRef,
     label: Schema.optional(Schema.String),
+  }),
+  /** The problems the editor shows in a file (type errors, lint), exactly as
+   * it has them: from the API server's language servers, as offsets into the
+   * file's live text at `diagnostics.version`. An agent that needs lines and
+   * columns asks the server (`POST /problems`), the same source. */
+  Schema.TaggedStruct("Diagnostics", {
+    id: Schema.String,
+    file: FileRef,
+    diagnostics: Language.FileDiagnostics,
   }),
 ]);
 export type DubzContextEntry = typeof DubzContextEntry.Type;

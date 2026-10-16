@@ -7,6 +7,9 @@
  * - After `edit`, `write` and `patch`, the problems of each file changed are
  *   added to the tool's result, once the file's check has settled.
  * - The `diagnostics` tool gives one file's problems, or every open file's.
+ * - A user's message carries the problems of the files open in the editor,
+ *   as an attached text file, when they changed since the session last got
+ *   them.
  *
  * Configured in opencode's config (`plugins`: this folder, whose `server.ts` is
  * the entry), with the API server's address
@@ -86,6 +89,17 @@ export default Plugin.define({
         Effect.catch((error) => Effect.succeed(`Couldn't get the editor's problems for ${file}: ${why(error)}`)),
       );
 
+    /** The editor's open files that have problems (none when it can't be
+     * had: logged, and the message goes without). */
+    const openWithProblems = client.pipe(
+      Effect.flatMap((problems) => problems.problems.open()),
+      Effect.map((files) => files.filter((file) => file.problems.length > 0)),
+      Effect.tapError((error) => Effect.logWarning(`agent-console.problems: couldn't get the editor's problems: ${why(error)}`)),
+      Effect.option,
+    );
+    /** What each session last got, so it is sent again only when changed. */
+    const lastSent = new Map<string, string>();
+
     const openProblems = client.pipe(
       Effect.flatMap((problems) => problems.problems.open()),
       Effect.map((files) => (files.length === 0 ? "No files are open in the editor." : files.map(Language.problemsText).join("\n\n"))),
@@ -110,6 +124,28 @@ export default Plugin.define({
         const content = event.result.content;
         const before = content === undefined ? [] : typeof content === "string" ? [textContent(content)] : content;
         event.result = { ...event.result, content: [...before, ...texts.map(textContent)] };
+      }),
+    );
+
+    yield* ctx.session.hook("prompt", (event) =>
+      Effect.gen(function* () {
+        const found = yield* openWithProblems;
+        if (Option.isNone(found)) return;
+        const before = lastSent.get(event.sessionID);
+        // A session never told of problems needs no "none".
+        if (found.value.length === 0 && before === undefined) return;
+        const report =
+          found.value.length === 0
+            ? "No problems in the files open in the user's editor now."
+            : `The user's editor shows these problems now.\n\n${found.value.map(Language.problemsText).join("\n\n")}`;
+        if (report === before) return;
+        lastSent.set(event.sessionID, report);
+        const attachment = {
+          uri: `data:text/plain;base64,${Buffer.from(report).toString("base64")}`,
+          name: "editor-problems.txt",
+          description: "The problems the user's editor shows now (type errors, lint), from the same language servers.",
+        };
+        event.prompt.files = [...(event.prompt.files ?? []), attachment];
       }),
     );
 

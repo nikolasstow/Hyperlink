@@ -40,7 +40,8 @@ import { hideEditorKeyboard, showEditorKeyboard } from "../../modules/code-edito
 import { warmCodeSurfaces } from "../../modules/code-surface";
 import { codeSurfaceUri } from "../codeSurfaceAsset";
 import { useBarCover } from "../dubz/useBarWindow";
-import type { DubzContext } from "../dubzSuggestions";
+import type { DubzContext, DubzContextEntry, FileRef } from "../dubzSuggestions";
+import { useDiagnostics } from "../language/useLanguage";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { HeaderTitlePill, headerTitlePillWidth } from "../HeaderTitlePill";
 import { primaryWorktreeOf, setPrimaryWorktree, usePrimaryWorktree, worktreesOf } from "../primaryWorktree";
@@ -658,18 +659,21 @@ export const FilesScreen = (props: Props): React.ReactElement => {
 
   // Dubz here is about the repo these files are in; when a file is showing, it
   // publishes that file as an editable document so Dubz can surface the sessions
-  // that touched it (and, later, offer to edit it).
-  const dubzContext = React.useMemo(
-    (): DubzContext => ({
+  // that touched it (and, later, offer to edit it), and the problems the editor
+  // shows in it, so what Dubz knows is what you see.
+  const shownProblems = useDiagnostics(current.kind === "file" ? current.path : "");
+  const dubzContext = React.useMemo((): DubzContext => {
+    if (current.kind !== "file") return { surface: "repo", scope: { _tag: "Repo", repo }, entries: [] };
+    const file = { repo, path: current.path, name: current.name, kind: "file" } satisfies FileRef;
+    return {
       surface: "repo",
       scope: { _tag: "Repo", repo },
-      entries:
-        current.kind === "file"
-          ? [{ _tag: "EditableDocument", id: current.path, file: { repo, path: current.path, name: current.name, kind: "file" }, label: current.name }]
-          : [],
-    }),
-    [repo, current.kind, current.path, current.name],
-  );
+      entries: [
+        { _tag: "EditableDocument", id: current.path, file, label: current.name },
+        ...(shownProblems === undefined ? [] : [{ _tag: "Diagnostics", id: `${current.path}#problems`, file, diagnostics: shownProblems } satisfies DubzContextEntry]),
+      ],
+    };
+  }, [repo, current.kind, current.path, current.name, shownProblems]);
   const open = React.useCallback((entry: FileNavEntry) => openFileEntry(repo, entry), [repo]);
 
   return (

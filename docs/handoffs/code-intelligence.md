@@ -173,8 +173,14 @@ prediction is the newest step. Owner: support several backends; personally Qwen.
   it lints with the repo's own ESLint and config (same results as the `eslint` command). Its
   problems are pulled (`textDocument/diagnostic`) after each change and joined to
   TypeScript's, for the editor and for agents. A repo without ESLint gets TypeScript's only.
-- **Next:** a `Diagnostics { file, problems }` entry in DubzContext (data only; the Dubz UI
-  is someone else's); the problems of files in a session's context sent with its messages.
+- **With each message** (the plugin's `prompt` hook): the problems of the editor's open files
+  go with the user's message as an attached text file (`editor-problems.txt`), when they
+  changed since that session last got them (and "no problems" once they clear). The user's
+  text is not touched.
+- **Dubz:** `DubzContext` has a `Diagnostics { id, file, diagnostics }` entry: the editor's
+  own problems for the file a page shows (offsets at the live version; lines and columns
+  from `POST /problems`). The Files page publishes it beside its `EditableDocument`. Data
+  only: what Dubz and its applets do with it is the Dubz owner's.
 
 ## Build order (each step ships value; hybrid is the capstone)
 
@@ -206,6 +212,7 @@ caret's offset (event), ghost text (inline suggestion, accept/dismiss).
 - [x] (3) AI inline suggestions: `/complete` (opencode generate) + ghost text (native `InlineSuggestion.swift`, apiVersion 15); tap or double space accepts; Settings → Files (on/off, model; default Claude Haiku 4.5). The prompt carries the language server's context at the caret (the call being typed in, the names valid there; `contextAt`, 600 ms at most).
 - [x] Agents get the editor's problems: settled `problems` endpoints + opencode plugin (edit results, `diagnostics` tool).
 - [x] ESLint's language server in the host (editor and agents).
-- [ ] DubzContext `Diagnostics` entry; problems sent with messages.
+- [x] DubzContext `Diagnostics` entry; problems sent with messages (plugin `prompt` hook).
+- [ ] The shared opencode (:4096) gets the plugin once the problems endpoints are on the API server it uses (:5199).
 - [ ] (4) Embedded TS language service (worklet runtime) + multiplexer.
 - [ ] (5) tree-sitter universal structure (if needed).
