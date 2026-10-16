@@ -6,16 +6,19 @@ import { describe, expect, it } from "vitest";
 import { FileHub } from "../files/hub";
 import { LanguageHost } from "./host";
 
-/** opencode's event stream, quiet (no agent marks in these tests). */
+/** opencode's event stream, quiet (no agent marks in these tests); nothing
+ * else is found (so no ESLint server: TypeScript's problems only). */
 const quietOpencode = Layer.succeed(
   HttpClient.HttpClient,
-  HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, new Response(new ReadableStream<Uint8Array>())))),
+  HttpClient.make((request) =>
+    Effect.succeed(HttpClientResponse.fromWeb(request, request.url.endsWith("/api/event") ? new Response(new ReadableStream<Uint8Array>()) : new Response(null, { status: 404 }))),
+  ),
 );
 
 const SOURCE = 'export const bad: number = "x";\nexport const ok = 1;\n';
 
 /** Run `body` against a real language server over a temp repo holding `file.ts`. */
-const withHost = <A, E>(body: (context: { readonly host: LanguageHost["Service"]; readonly hub: FileHub["Service"]; readonly file: string }) => Effect.Effect<A, E, LanguageHost | FileHub>) =>
+const withHost = <A, E>(body: (context: { readonly host: LanguageHost["Service"]; readonly hub: FileHub["Service"]; readonly file: string }) => Effect.Effect<A, E, LanguageHost | FileHub | FileSystem.FileSystem>) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -25,12 +28,19 @@ const withHost = <A, E>(body: (context: { readonly host: LanguageHost["Service"]
     const file = path.join(root, "file.ts");
     yield* fs.writeFileString(file, SOURCE);
     process.env.AGENT_CONSOLE_FS_ROOT = root;
+    // Its own state folder: no ESLint server fetched before.
+    process.env.AGENT_CONSOLE_STATE_DIR = path.join(root, ".state");
     const hubLive = Layer.fresh(FileHub.layer).pipe(Layer.provide(quietOpencode));
     return yield* Effect.gen(function* () {
       return yield* body({ host: yield* LanguageHost, hub: yield* FileHub, file });
-    }).pipe(Effect.provide(Layer.mergeAll(LanguageHost.layer, hubLive).pipe(Layer.provide(hubLive))));
+    }).pipe(Effect.provide(Layer.mergeAll(LanguageHost.layer, hubLive).pipe(Layer.provide([hubLive, quietOpencode]))));
   }).pipe(
-    Effect.ensuring(Effect.sync(() => delete process.env.AGENT_CONSOLE_FS_ROOT)),
+    Effect.ensuring(
+      Effect.sync(() => {
+        delete process.env.AGENT_CONSOLE_FS_ROOT;
+        delete process.env.AGENT_CONSOLE_STATE_DIR;
+      }),
+    ),
     Effect.scoped,
     Effect.provide(NodeServices.layer),
   );

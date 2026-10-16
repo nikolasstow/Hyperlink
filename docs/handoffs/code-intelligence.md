@@ -167,10 +167,14 @@ prediction is the newest step. Owner: support several backends; personally Qwen.
   agent is told so (never "no problems"). Configured in opencode's `plugins` with `apiUrl`
   and `tokenFile` (the API server's admin token). Types: `@opencode/plugin` 2.0.29, its
   effect pinned to ours (pnpm overrides).
-- **Next:** ESLint's language server in the host (lint shows in the editor and reaches agents
-  from the same place); a `Diagnostics { file, problems }` entry in DubzContext (data only;
-  the Dubz UI is someone else's); the problems of files in a session's context sent with its
-  messages.
+- **ESLint** (`server/language/eslintServer.ts`): the server VS Code runs (Microsoft's
+  `vscode-eslint` 3.0.34, MIT), taken from its Open VSX package, pinned and hash-checked,
+  fetched once into the state folder (`language-servers/`). One per repo beside TypeScript's;
+  it lints with the repo's own ESLint and config (same results as the `eslint` command). Its
+  problems are pulled (`textDocument/diagnostic`) after each change and joined to
+  TypeScript's, for the editor and for agents. A repo without ESLint gets TypeScript's only.
+- **Next:** a `Diagnostics { file, problems }` entry in DubzContext (data only; the Dubz UI
+  is someone else's); the problems of files in a session's context sent with its messages.
 
 ## Build order (each step ships value; hybrid is the capstone)
 
@@ -201,6 +205,7 @@ caret's offset (event), ghost text (inline suggestion, accept/dismiss).
 - [x] (2b) Type preview in the breadcrumb glass: caret (apiVersion 14) else innermost scope; prefetched. Compact type + docs; the expanded member shape (TS 5.9 `verbosityLevel`) is next.
 - [x] (3) AI inline suggestions: `/complete` (opencode generate) + ghost text (native `InlineSuggestion.swift`, apiVersion 15); tap or double space accepts; Settings → Files (on/off, model; default Claude Haiku 4.5). The prompt carries the language server's context at the caret (the call being typed in, the names valid there; `contextAt`, 600 ms at most).
 - [x] Agents get the editor's problems: settled `problems` endpoints + opencode plugin (edit results, `diagnostics` tool).
-- [ ] ESLint language server in the host; DubzContext `Diagnostics` entry; problems sent with messages.
+- [x] ESLint's language server in the host (editor and agents).
+- [ ] DubzContext `Diagnostics` entry; problems sent with messages.
 - [ ] (4) Embedded TS language service (worklet runtime) + multiplexer.
 - [ ] (5) tree-sitter universal structure (if needed).

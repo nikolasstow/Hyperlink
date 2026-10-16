@@ -4,6 +4,9 @@
  * per repo (the folder holding `.git`), using the repo's own TypeScript, so its
  * `tsconfig.json` plugins load (`@effect/language-service`).
  *
+ * Beside it, ESLint's language server (eslintServer.ts), linting with the
+ * repo's own ESLint and config; its problems join the TypeScript server's.
+ *
  * A file's text comes from the file hub (files/hub.ts): the host follows the
  * file there, as the app does, and keeps the server's copy in step with every
  * version. The server's problems for it come back as offsets into that text
@@ -17,12 +20,14 @@
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { Language } from "agent-console-protocol";
-import { Deferred, Duration, Effect, FileSystem, Layer, Context, Option, Path, RcMap, Schema, Stream, SubscriptionRef } from "effect";
+import { Crypto, Deferred, Duration, Effect, FiberHandle, FileSystem, Layer, Context, Option, Path, RcMap, Schema, Stream, SubscriptionRef } from "effect";
+import type { HttpClient } from "effect/http";
 import type { ChildProcessSpawner } from "effect/process";
 import { FileSync, TextChange } from "file-sync";
 import { resolveWithin } from "../fs";
 import { FileHub } from "../files/hub";
 import { connect, type Connection } from "./connection";
+import { eslintServer } from "./eslintServer";
 import { lineStarts, offsetOf, positionOf } from "./positions";
 
 /** How long a repo's server runs after its last file closes. */
@@ -58,6 +63,11 @@ const LspDiagnostic = Schema.Struct({
 });
 type LspDiagnostic = typeof LspDiagnostic.Type;
 const decodePublished = Schema.decodeUnknownOption(Schema.Struct({ uri: Schema.String, diagnostics: Schema.Array(LspDiagnostic) }));
+/** A pulled report (`textDocument/diagnostic`, ESLint's way): always full here. */
+const decodePulled = Schema.decodeUnknownOption(Schema.Struct({ items: Schema.Array(LspDiagnostic) }));
+
+/** Problems by file URI, as one server last gave them. */
+type ProblemMap = ReadonlyMap<string, ReadonlyArray<LspDiagnostic>>;
 
 const MarkedString = Schema.Union([Schema.String, Schema.Struct({ language: Schema.String, value: Schema.String })]);
 const HoverResult = Schema.NullOr(
@@ -136,7 +146,7 @@ const make = Effect.gen(function* () {
   const hub = yield* FileHub;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const services = yield* Effect.context<FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner>();
+  const services = yield* Effect.context<FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner | HttpClient.HttpClient | Crypto.Crypto>();
 
   /** The repo `file` is in: the nearest folder up holding `.git`. */
   const repoOf = (file: string): Effect.Effect<string, Language.LanguageError> =>
@@ -154,7 +164,30 @@ const make = Effect.gen(function* () {
    * and files agents just checked. */
   const opened = new Set<string>();
 
-  /** A repo's server: started, initialized, and its files and problems. */
+  /** ESLint's server for a repo, started and initialized; none (and why,
+   * in the log) when it can't be had. */
+  const startEslint = (root: string, rootUri: string) =>
+    Effect.gen(function* () {
+      const script = yield* eslintServer;
+      const connection = yield* connect(script, root, {
+        validate: "on",
+        workspaceFolder: { name: path.basename(root), uri: rootUri },
+        workingDirectory: { mode: "auto" },
+      });
+      yield* connection.request("initialize", {
+        processId: process.pid,
+        rootUri,
+        workspaceFolders: [{ uri: rootUri, name: path.basename(root) }],
+        capabilities: {
+          textDocument: { synchronization: { didSave: false }, diagnostic: {} },
+          workspace: { configuration: true, workspaceFolders: true },
+        },
+      });
+      yield* connection.notify("initialized", {});
+      return Option.some(connection);
+    }).pipe(Effect.catch((error) => Effect.logWarning(`[language] no ESLint for ${root}`, error).pipe(Effect.as(Option.none<Connection>()))));
+
+  /** A repo's servers: started, initialized, and their files and problems. */
   const startServer = (root: string) =>
     Effect.gen(function* () {
       const connection: Connection = yield* connect(SCRIPT, root);
@@ -174,7 +207,31 @@ const make = Effect.gen(function* () {
       });
       yield* connection.notify("initialized", {});
       const docs = yield* SubscriptionRef.make<ReadonlyMap<string, Doc>>(new Map());
-      const problems = yield* SubscriptionRef.make<ReadonlyMap<string, ReadonlyArray<LspDiagnostic>>>(new Map());
+      const problems = yield* SubscriptionRef.make<ProblemMap>(new Map());
+      // ESLint's: pulled after each change (it publishes none itself).
+      const eslint = yield* startEslint(root, rootUri);
+      const lint = yield* SubscriptionRef.make<ProblemMap>(new Map());
+      const pull = (connection: Connection, uri: string) =>
+        connection.request("textDocument/diagnostic", { textDocument: { uri } }).pipe(
+          Effect.map(decodePulled),
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.logWarning("[language] unreadable ESLint problems"),
+              onSome: ({ items }) => SubscriptionRef.update(lint, (all) => new Map(all).set(uri, items)),
+            }),
+          ),
+          Effect.catch((error) => Effect.logWarning(`[language] ESLint failed on ${uri}`, error)),
+        );
+      // When ESLint asks (its config changed), every open file again.
+      yield* Option.match(eslint, {
+        onNone: () => Effect.void,
+        onSome: (connection) =>
+          connection.notifications.pipe(
+            Stream.filter((notification) => notification.method === "workspace/diagnostic/refresh"),
+            Stream.runForEach(() => SubscriptionRef.get(docs).pipe(Effect.flatMap((all) => Effect.forEach([...all.values()], (doc) => pull(connection, doc.uri), { discard: true })))),
+            Effect.forkScoped,
+          ),
+      });
       yield* connection.notifications.pipe(
         Stream.runForEach((notification) =>
           notification.method !== "textDocument/publishDiagnostics"
@@ -196,15 +253,21 @@ const make = Effect.gen(function* () {
             if (languageId === undefined) return yield* unsupported(`No language server for ${path.basename(file)}.`);
             const uri = pathToFileURL(file).href;
             const ready = yield* Deferred.make<void, Language.LanguageError>();
+            const servers = [connection, ...Option.toArray(eslint)];
+            // One ESLint pull at a time: a newer text's replaces an older's.
+            const pulling = yield* FiberHandle.make();
             const show = (text: string, version: number) =>
               Effect.gen(function* () {
                 const known = (yield* SubscriptionRef.get(docs)).get(file);
-                yield* known === undefined
-                  ? connection.notify("textDocument/didOpen", { textDocument: { uri, languageId, version, text } })
-                  : connection.notify("textDocument/didChange", { textDocument: { uri, version }, contentChanges: [{ text }] });
-                // After the server has it: a check waiting for this version
-                // asks the server only once it is there.
+                yield* Effect.forEach(servers, (server) =>
+                  known === undefined
+                    ? server.notify("textDocument/didOpen", { textDocument: { uri, languageId, version, text } })
+                    : server.notify("textDocument/didChange", { textDocument: { uri, version }, contentChanges: [{ text }] }),
+                );
+                // After the servers have it: a check waiting for this version
+                // asks them only once it is there.
                 yield* SubscriptionRef.update(docs, (all) => new Map(all).set(file, { uri, text, starts: lineStarts(text), version }));
+                if (Option.isSome(eslint)) yield* FiberHandle.run(pulling, pull(eslint.value, uri));
               }).pipe(Effect.andThen(Deferred.succeed(ready, undefined)));
             yield* hub.follow(file).pipe(
               Stream.runForEach((event) => {
@@ -230,7 +293,14 @@ const make = Effect.gen(function* () {
                 return next;
               }).pipe(
                 Effect.andThen(Effect.sync(() => opened.delete(file))),
-                Effect.andThen(connection.notify("textDocument/didClose", { textDocument: { uri } })),
+                Effect.andThen(
+                  SubscriptionRef.update(lint, (all) => {
+                    const next = new Map(all);
+                    next.delete(uri);
+                    return next;
+                  }),
+                ),
+                Effect.andThen(Effect.forEach(servers, (server) => server.notify("textDocument/didClose", { textDocument: { uri } }))),
               ),
             );
             yield* Deferred.await(ready);
@@ -238,7 +308,7 @@ const make = Effect.gen(function* () {
           }),
         idleTimeToLive: KEEP_FILE,
       });
-      return { connection, docs, problems, files };
+      return { connection, eslint, pull, docs, problems, lint, files };
     }).pipe(Effect.mapError((error) => serverFailed(error.message)));
 
   const servers = yield* RcMap.make({
@@ -262,8 +332,9 @@ const make = Effect.gen(function* () {
   /**
    * A file's problems once its check has settled: the editor's problems
    * for the text on disk now (an agent's edit included). Waits until the
-   * server has that version, has checked it (a request the server answers
-   * only after the check), and then publishes nothing new for `QUIET`.
+   * servers have that version, TypeScript has checked it (a request it
+   * answers only after the check) and then publishes nothing new for
+   * `QUIET`, and ESLint has answered a pull for it.
    */
   const problems = (requested: string): Effect.Effect<Language.FileProblems, Language.LanguageError> =>
     Effect.gen(function* () {
@@ -284,8 +355,10 @@ const make = Effect.gen(function* () {
         Stream.runHead,
         Effect.timeoutOrElse({ duration: SETTLE_MAX, orElse: () => Effect.logWarning(`[language] ${file} check did not settle`) }),
       );
+      // ESLint answers a pull for the text it has: that version.
+      if (Option.isSome(server.eslint)) yield* server.pull(server.eslint.value, uri);
       const doc = (yield* SubscriptionRef.get(server.docs)).get(file);
-      const found = (yield* SubscriptionRef.get(server.problems)).get(uri) ?? [];
+      const found = [...((yield* SubscriptionRef.get(server.problems)).get(uri) ?? []), ...((yield* SubscriptionRef.get(server.lint)).get(uri) ?? [])];
       return { path: file, version: doc?.version ?? target, problems: found.map(problemOf) };
     }).pipe(Effect.scoped);
 
@@ -296,13 +369,15 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           const { file, uri, server } = yield* open(requested);
           return SubscriptionRef.changes(server.problems).pipe(
-            Stream.map((all) => all.get(uri)),
-            Stream.changes,
-            Stream.mapEffect((found) =>
+            Stream.zipLatest(SubscriptionRef.changes(server.lint)),
+            Stream.map(([typescript, eslint]) => [typescript.get(uri), eslint.get(uri)] as const),
+            Stream.changesWith(([a, b], [c, d]) => a === c && b === d),
+            Stream.mapEffect(([typescript, eslint]) =>
               SubscriptionRef.get(server.docs).pipe(
                 Effect.map((docs): Language.FileDiagnostics | undefined => {
                   const doc = docs.get(file);
-                  return found === undefined || doc === undefined ? undefined : { version: doc.version, diagnostics: found.map((diagnostic) => diagnosticOf(doc, diagnostic)) };
+                  if (doc === undefined || (typescript === undefined && eslint === undefined)) return undefined;
+                  return { version: doc.version, diagnostics: [...(typescript ?? []), ...(eslint ?? [])].map((diagnostic) => diagnosticOf(doc, diagnostic)) };
                 }),
               ),
             ),
@@ -313,7 +388,6 @@ const make = Effect.gen(function* () {
     problems,
     /** The problems of every file open in a language server now, settled. */
     openProblems: Effect.suspend(() => Effect.forEach([...opened], problems, { concurrency: "unbounded" })),
-    /** What is at `offset` in a file, if anything. */
     /**
      * What the server knows where `prefix` ends (the text before an app's
      * caret, maybe unsaved): found in its copy by the end of `prefix`, then
@@ -345,6 +419,7 @@ const make = Effect.gen(function* () {
         Effect.scoped,
         Effect.catch((error) => Effect.logDebug(`[language] no context in ${requested}`, error).pipe(Effect.as({ names: [] }))),
       ),
+    /** What is at `offset` in a file, if anything. */
     hover: (requested: string, offset: number): Effect.Effect<Option.Option<Language.HoverInfo>, Language.LanguageError> =>
       Effect.gen(function* () {
         const { file, uri, server } = yield* open(requested);
@@ -366,8 +441,8 @@ const make = Effect.gen(function* () {
   };
 });
 
-/** The language servers. Needs the file hub, and Node's file system, paths and
- * processes. */
+/** The language servers. Needs the file hub, Node's file system, paths,
+ * processes and crypto, and an HTTP client (to fetch ESLint's server once). */
 export class LanguageHost extends Context.Service<LanguageHost, Effect.Success<typeof make>>()("agent-console/server/language/host/LanguageHost") {
   static readonly layer = Layer.effect(LanguageHost, make);
 }

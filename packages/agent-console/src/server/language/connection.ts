@@ -36,17 +36,20 @@ export interface Notification {
   readonly params: unknown;
 }
 
-/** What we answer a request the server sends us: settings it asks for are
- * unset; anything else (progress tokens, capability registration) is fine. */
-const answerTo = (method: string, params: unknown): unknown => {
+/** What we answer a request the server sends us: `settings` for each it asks
+ * for (unset when none); anything else (progress tokens, capability
+ * registration, a refresh) is fine. */
+const answerTo = (method: string, params: unknown, settings: unknown): unknown => {
   if (method === "workspace/configuration" && typeof params === "object" && params !== null && "items" in params && Array.isArray(params.items)) {
-    return params.items.map(() => null);
+    return params.items.map(() => settings);
   }
   return null;
 };
 
-/** Starts `script` (a Node CLI) with `--stdio` in `cwd`, and speaks to it. */
-export const connect = (script: string, cwd: string) =>
+/** Starts `script` (a Node CLI) with `--stdio` in `cwd`, and speaks to it.
+ * Requests the server sends come with its notifications too (a refresh is
+ * acted on after it is answered). */
+export const connect = (script: string, cwd: string, settings: unknown = null) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const handle = yield* spawner.spawn(ChildProcess.make(process.execPath, [script, "--stdio"], { cwd }));
@@ -72,7 +75,8 @@ export const connect = (script: string, cwd: string) =>
               ? Deferred.succeed(waiting, message.result)
               : Deferred.fail(waiting, new LspError({ method: "response", message: message.error.message }));
           }
-          return id === undefined ? PubSub.publish(notifications, { method, params: message.params }) : send({ id, result: answerTo(method, message.params) });
+          const told = PubSub.publish(notifications, { method, params: message.params });
+          return id === undefined ? told : send({ id, result: answerTo(method, message.params, settings) }).pipe(Effect.andThen(told));
         },
       });
 

@@ -189,7 +189,7 @@ const viewsLive = ExtensionViews.layer.pipe(Layer.provide([workspacesLive, regis
 const statesLive = CollectionStates.layer.pipe(Layer.provide(registryLive));
 const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
 // One file hub for the live files and the language servers that follow them.
-const languageHostLive = LanguageHost.layer.pipe(Layer.provide([fileHubLayer, NodeServices.layer]));
+const languageHostLive = LanguageHost.layer.pipe(Layer.provide([fileHubLayer, NodeServices.layer, FetchHttpClient.layer]));
 // One local model for its page (the API) and the suggestions (/complete):
 // started with the server, stopped with it.
 const localModelLive = LocalModel.layer.pipe(Layer.provide([NodeServices.layer, FetchHttpClient.layer]));
