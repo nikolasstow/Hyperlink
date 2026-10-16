@@ -1,0 +1,24 @@
+{
+  "name": "agent-console-opencode",
+  "version": "0.0.1",
+  "private": true,
+  "description": "The opencode (v2) plugin that gives agents what the app knows: the problems the editor shows, from the API server's language servers.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nikolas Stow",
+  "main": "./src/server.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "agent-console-protocol": "workspace:*"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0"
+  },
+  "devDependencies": {
+    "@opencode/plugin": "2.0.29",
+    "effect": "4.0.4",
+    "typescript": "~6.0.3"
+  }
+}

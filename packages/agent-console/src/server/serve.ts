@@ -139,6 +139,11 @@ const localModelHandlers = HttpApiBuilder.group(api, "localModel", (handlers) =>
   ),
 );
 
+// The problems the editor shows, for agents (the opencode plugin, Dubz).
+const problemsHandlers = HttpApiBuilder.group(api, "problems", (handlers) =>
+  LanguageHost.pipe(Effect.map((host) => handlers.handle("file", ({ payload }) => host.problems(payload.path)).handle("open", () => host.openProblems))),
+);
+
 // A process's output as server-sent events: `?id=<process id>`. Raw, since
 // it streams. 404 for an unknown process.
 const processStreamRoute = HttpRouter.add("GET", "/processes/stream", (request) =>
@@ -203,6 +208,7 @@ const apiLive = HttpApiBuilder.layer(api).pipe(
     sessionsHandlers.pipe(Layer.provide(SessionArchive.layer)),
     authHandlers.pipe(Layer.provide(authLive)),
     localModelHandlers.pipe(Layer.provide(localModelLive)),
+    problemsHandlers.pipe(Layer.provide(languageHostLive)),
   ]),
 );
 

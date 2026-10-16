@@ -65,6 +65,29 @@ describe("LanguageHost", () => {
     expect(Option.isSome(seen.cleared)).toBe(true);
   });
 
+  it("gives an agent the problems of what it just wrote to disk, as lines and columns", { timeout: 60_000 }, async () => {
+    const seen = await Effect.runPromise(
+      withHost(({ host, file }) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const before = yield* host.problems(file);
+          // Written as an agent writes: to disk, not through the hub.
+          yield* fs.writeFileString(file, SOURCE.replace('"x"', "2"));
+          const fixed = yield* host.problems(file);
+          yield* fs.writeFileString(file, `${SOURCE}export const worse: string = 3;\n`);
+          const broken = yield* host.problems(file);
+          const open = yield* host.openProblems;
+          return { before, fixed, broken, open };
+        }),
+      ),
+    );
+    expect(seen.before.problems).toMatchObject([{ line: 1, column: 14, endLine: 1, endColumn: 17, severity: "error", source: "typescript" }]);
+    expect(seen.fixed.problems).toEqual([]);
+    expect(seen.fixed.version).toBeGreaterThan(seen.before.version);
+    expect(seen.broken.problems.map((problem) => problem.line)).toEqual([1, 3]);
+    expect(seen.open.map((file) => file.path)).toEqual([seen.broken.path]);
+  });
+
   it("answers what is at a place", { timeout: 60_000 }, async () => {
     const hover = await Effect.runPromise(withHost(({ host, file }) => host.hover(file, SOURCE.indexOf("ok") + 1)));
     const info = Option.getOrUndefined(hover);

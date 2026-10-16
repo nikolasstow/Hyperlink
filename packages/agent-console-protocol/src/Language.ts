@@ -10,6 +10,7 @@
  * @since 0.0.1
  */
 import { Schema } from "effect";
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { Rpc, RpcGroup } from "effect/rpc";
 
 /** Where the RPC is served. */
@@ -84,3 +85,51 @@ export class Hover extends Rpc.make("Hover", {
 }) {}
 
 export class LanguageRpcs extends RpcGroup.make(Diagnostics, Hover) {}
+
+/**
+ * A problem as an agent reads it: lines and columns from 1 (columns in
+ * UTF-16 code units, as the editor counts).
+ */
+export const Problem = Schema.Struct({
+  line: Schema.Number,
+  column: Schema.Number,
+  endLine: Schema.Number,
+  endColumn: Schema.Number,
+  severity: Severity,
+  message: Schema.String,
+  source: Schema.optionalKey(Schema.String),
+  code: Schema.optionalKey(Schema.String),
+});
+export type Problem = typeof Problem.Type;
+
+/** A file's problems once its check has settled: the ones the editor shows
+ * for the hub's `version` of it. */
+export const FileProblems = Schema.Struct({
+  path: Schema.String,
+  version: Schema.Number,
+  problems: Schema.Array(Problem),
+});
+export type FileProblems = typeof FileProblems.Type;
+
+/**
+ * The `problems` endpoints, for agents (the opencode plugin, Dubz): the same
+ * problems the editor shows, from the same language servers, never a check
+ * of their own. `file` waits for the file's check to settle; `open` gives
+ * every file open in a language server now.
+ */
+export const problemsGroup = HttpApiGroup.make("problems").add(
+  HttpApiEndpoint.post("file", "/problems", { payload: Schema.Struct({ path: Schema.String }), success: FileProblems, error: LanguageError }),
+  HttpApiEndpoint.get("open", "/problems/open", { success: Schema.Array(FileProblems), error: LanguageError }),
+);
+
+/** A file's problems as text for an agent: one line each, worst first. */
+export const problemsText = (file: FileProblems): string => {
+  if (file.problems.length === 0) return `No problems in ${file.path}.`;
+  const order: ReadonlyArray<Severity> = ["error", "warning", "info", "hint"];
+  const sorted = [...file.problems].sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity) || a.line - b.line || a.column - b.column);
+  const lines = sorted.map((problem) => {
+    const from = [problem.source, problem.code].filter((part) => part !== undefined).join(" ");
+    return `${problem.line}:${problem.column} ${problem.severity}${from === "" ? "" : ` (${from})`}: ${problem.message}`;
+  });
+  return [`Problems in ${file.path} (as the editor shows them):`, ...lines].join("\n");
+};

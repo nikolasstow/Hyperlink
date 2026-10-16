@@ -9,3 +9,13 @@ packages:
 # root node_modules so default Metro resolution finds it.
 publicHoistPattern:
   - "*react-native-svg*"
+
+# The opencode plugin (agent-console-opencode) type-checks against our one
+# effect: opencode's packages pin an older 4.0.x, whose types differ. At run
+# time opencode gives a plugin its own effect anyway.
+overrides:
+  "@opencode/ai>effect": 4.0.4
+  "@opencode/plugin>effect": 4.0.4
+  "@opencode/protocol>effect": 4.0.4
+  "@opencode/schema>effect": 4.0.4
+  "@opencode/util>effect": 4.0.4

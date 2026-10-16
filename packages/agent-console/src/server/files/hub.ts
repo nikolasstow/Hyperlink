@@ -333,9 +333,24 @@ const make = Effect.gen(function* () {
       }).pipe(Semaphore.withPermits(entry.lock, 1));
     }).pipe(Effect.scoped);
 
+  /** The file's version once the hub has what is on disk now (an agent's
+   * write may not have reached the watcher yet). */
+  const version = (requested: string): Effect.Effect<number, FileSync.FileSyncError> =>
+    Effect.gen(function* () {
+      const file = yield* resolve(requested);
+      const entry = yield* RcMap.get(entries, file);
+      return yield* ingest(entry).pipe(
+        Effect.mapError(syncError),
+        Effect.andThen(Ref.get(entry.state)),
+        Effect.map((state) => state.version),
+        Semaphore.withPermits(entry.lock, 1),
+      );
+    }).pipe(Effect.scoped);
+
   return {
     follow,
     write,
+    version,
     /** The text of every file followed now (or just let go), by path. */
     openFiles: Effect.suspend(() =>
       Effect.forEach([...kept.entries()], ([file, state]) => Ref.get(state).pipe(Effect.map((now) => ({ path: file, text: now.text, exists: now.exists })))),

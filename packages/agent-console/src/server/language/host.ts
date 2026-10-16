@@ -29,6 +29,10 @@ import { lineStarts, offsetOf, positionOf } from "./positions";
 const KEEP_SERVER = Duration.minutes(5);
 /** How long a file stays open in its server after its last asker goes. */
 const KEEP_FILE = Duration.seconds(30);
+/** A check has settled when the server publishes nothing new for this long. */
+const QUIET = Duration.millis(600);
+/** How long a check is waited for at most; then the problems shown now. */
+const SETTLE_MAX = Duration.seconds(10);
 
 const SCRIPT = (() => {
   const require = createRequire(import.meta.url);
@@ -92,11 +96,25 @@ const NAMES = 40;
 /** How much of the text before the caret finds the caret in the server's copy. */
 const ANCHOR = 160;
 
+const severityOf = (diagnostic: LspDiagnostic): Language.Severity => SEVERITIES[(diagnostic.severity ?? 1) - 1] ?? "error";
+
 /** A server's diagnostic over `doc`'s text. */
 const diagnosticOf = (doc: Doc, diagnostic: LspDiagnostic): Language.Diagnostic => ({
   start: offsetOf(doc.text, doc.starts, diagnostic.range.start),
   end: offsetOf(doc.text, doc.starts, diagnostic.range.end),
-  severity: SEVERITIES[(diagnostic.severity ?? 1) - 1] ?? "error",
+  severity: severityOf(diagnostic),
+  message: diagnostic.message,
+  ...(diagnostic.source === undefined ? {} : { source: diagnostic.source }),
+  ...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
+});
+
+/** A server's diagnostic as an agent reads it (lines and columns from 1). */
+const problemOf = (diagnostic: LspDiagnostic): Language.Problem => ({
+  line: diagnostic.range.start.line + 1,
+  column: diagnostic.range.start.character + 1,
+  endLine: diagnostic.range.end.line + 1,
+  endColumn: diagnostic.range.end.character + 1,
+  severity: severityOf(diagnostic),
   message: diagnostic.message,
   ...(diagnostic.source === undefined ? {} : { source: diagnostic.source }),
   ...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
@@ -132,6 +150,10 @@ const make = Effect.gen(function* () {
       }
     });
 
+  /** The files open in a server now: what the editor shows problems for,
+   * and files agents just checked. */
+  const opened = new Set<string>();
+
   /** A repo's server: started, initialized, and its files and problems. */
   const startServer = (root: string) =>
     Effect.gen(function* () {
@@ -151,7 +173,7 @@ const make = Effect.gen(function* () {
         },
       });
       yield* connection.notify("initialized", {});
-      const docs = new Map<string, Doc>();
+      const docs = yield* SubscriptionRef.make<ReadonlyMap<string, Doc>>(new Map());
       const problems = yield* SubscriptionRef.make<ReadonlyMap<string, ReadonlyArray<LspDiagnostic>>>(new Map());
       yield* connection.notifications.pipe(
         Stream.runForEach((notification) =>
@@ -175,30 +197,41 @@ const make = Effect.gen(function* () {
             const uri = pathToFileURL(file).href;
             const ready = yield* Deferred.make<void, Language.LanguageError>();
             const show = (text: string, version: number) =>
-              Effect.suspend(() => {
-                const known = docs.get(file);
-                docs.set(file, { uri, text, starts: lineStarts(text), version });
-                return known === undefined
+              Effect.gen(function* () {
+                const known = (yield* SubscriptionRef.get(docs)).get(file);
+                yield* known === undefined
                   ? connection.notify("textDocument/didOpen", { textDocument: { uri, languageId, version, text } })
                   : connection.notify("textDocument/didChange", { textDocument: { uri, version }, contentChanges: [{ text }] });
+                // After the server has it: a check waiting for this version
+                // asks the server only once it is there.
+                yield* SubscriptionRef.update(docs, (all) => new Map(all).set(file, { uri, text, starts: lineStarts(text), version }));
               }).pipe(Effect.andThen(Deferred.succeed(ready, undefined)));
             yield* hub.follow(file).pipe(
               Stream.runForEach((event) => {
                 if (event instanceof FileSync.Synced) return show(event.text, event.version);
                 if (event instanceof FileSync.Changed) {
-                  const known = docs.get(file);
-                  return known === undefined ? Effect.void : show(TextChange.apply(known.text, event.changes), event.version);
+                  return SubscriptionRef.get(docs).pipe(
+                    Effect.flatMap((all) => {
+                      const known = all.get(file);
+                      return known === undefined ? Effect.void : show(TextChange.apply(known.text, event.changes), event.version);
+                    }),
+                  );
                 }
                 return Effect.void;
               }),
               Effect.catch((error) => Deferred.fail(ready, new Language.LanguageError({ reason: "NotFound", message: error.message }))),
               Effect.forkScoped,
             );
+            opened.add(file);
             yield* Effect.addFinalizer(() =>
-              Effect.suspend(() => {
-                docs.delete(file);
-                return connection.notify("textDocument/didClose", { textDocument: { uri } });
-              }),
+              SubscriptionRef.update(docs, (all) => {
+                const next = new Map(all);
+                next.delete(file);
+                return next;
+              }).pipe(
+                Effect.andThen(Effect.sync(() => opened.delete(file))),
+                Effect.andThen(connection.notify("textDocument/didClose", { textDocument: { uri } })),
+              ),
             );
             yield* Deferred.await(ready);
             return uri;
@@ -226,6 +259,36 @@ const make = Effect.gen(function* () {
       return { file, uri, server };
     });
 
+  /**
+   * A file's problems once its check has settled: the editor's problems
+   * for the text on disk now (an agent's edit included). Waits until the
+   * server has that version, has checked it (a request the server answers
+   * only after the check), and then publishes nothing new for `QUIET`.
+   */
+  const problems = (requested: string): Effect.Effect<Language.FileProblems, Language.LanguageError> =>
+    Effect.gen(function* () {
+      const { file, uri, server } = yield* open(requested);
+      const target = yield* hub.version(file).pipe(Effect.mapError((error) => new Language.LanguageError({ reason: "NotFound", message: `${error.reason}: ${error.path}` })));
+      yield* SubscriptionRef.changes(server.docs).pipe(
+        Stream.filter((docs) => (docs.get(file)?.version ?? -1) >= target),
+        Stream.runHead,
+        Effect.timeoutOrElse({ duration: SETTLE_MAX, orElse: () => Effect.logWarning(`[language] ${file} version ${target} not in its server yet`) }),
+      );
+      yield* server.connection
+        .request("workspace/executeCommand", { command: "typescript.tsserverRequest", arguments: ["semanticDiagnosticsSync", { file }] })
+        .pipe(Effect.catch((error) => Effect.logDebug(`[language] checking ${file} first failed`, error)));
+      yield* SubscriptionRef.changes(server.problems).pipe(
+        Stream.map((all) => all.get(uri)),
+        Stream.changes,
+        Stream.debounce(QUIET),
+        Stream.runHead,
+        Effect.timeoutOrElse({ duration: SETTLE_MAX, orElse: () => Effect.logWarning(`[language] ${file} check did not settle`) }),
+      );
+      const doc = (yield* SubscriptionRef.get(server.docs)).get(file);
+      const found = (yield* SubscriptionRef.get(server.problems)).get(uri) ?? [];
+      return { path: file, version: doc?.version ?? target, problems: found.map(problemOf) };
+    }).pipe(Effect.scoped);
+
   return {
     /** A file's problems, now and as they change, while the stream runs. */
     diagnostics: (requested: string): Stream.Stream<Language.FileDiagnostics, Language.LanguageError> =>
@@ -235,14 +298,21 @@ const make = Effect.gen(function* () {
           return SubscriptionRef.changes(server.problems).pipe(
             Stream.map((all) => all.get(uri)),
             Stream.changes,
-            Stream.map((found): Language.FileDiagnostics | undefined => {
-              const doc = server.docs.get(file);
-              return found === undefined || doc === undefined ? undefined : { version: doc.version, diagnostics: found.map((diagnostic) => diagnosticOf(doc, diagnostic)) };
-            }),
+            Stream.mapEffect((found) =>
+              SubscriptionRef.get(server.docs).pipe(
+                Effect.map((docs): Language.FileDiagnostics | undefined => {
+                  const doc = docs.get(file);
+                  return found === undefined || doc === undefined ? undefined : { version: doc.version, diagnostics: found.map((diagnostic) => diagnosticOf(doc, diagnostic)) };
+                }),
+              ),
+            ),
             Stream.filter((next): next is Language.FileDiagnostics => next !== undefined),
           );
         }),
       ),
+    problems,
+    /** The problems of every file open in a language server now, settled. */
+    openProblems: Effect.suspend(() => Effect.forEach([...opened], problems, { concurrency: "unbounded" })),
     /** What is at `offset` in a file, if anything. */
     /**
      * What the server knows where `prefix` ends (the text before an app's
@@ -253,7 +323,7 @@ const make = Effect.gen(function* () {
     contextAt: (requested: string, prefix: string): Effect.Effect<PlaceContext> =>
       Effect.gen(function* () {
         const { file, uri, server } = yield* open(requested);
-        const doc = server.docs.get(file);
+        const doc = (yield* SubscriptionRef.get(server.docs)).get(file);
         const anchor = prefix.slice(-ANCHOR);
         const at = doc === undefined || anchor === "" ? -1 : doc.text.lastIndexOf(anchor);
         if (doc === undefined || at === -1) return { names: [] };
@@ -278,7 +348,7 @@ const make = Effect.gen(function* () {
     hover: (requested: string, offset: number): Effect.Effect<Option.Option<Language.HoverInfo>, Language.LanguageError> =>
       Effect.gen(function* () {
         const { file, uri, server } = yield* open(requested);
-        const doc = server.docs.get(file);
+        const doc = (yield* SubscriptionRef.get(server.docs)).get(file);
         if (doc === undefined) return Option.none();
         const answer = yield* server.connection.request("textDocument/hover", { textDocument: { uri }, position: positionOf(doc.starts, offset) }).pipe(
           Effect.flatMap(decodeHover),

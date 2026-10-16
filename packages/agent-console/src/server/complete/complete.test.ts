@@ -52,6 +52,8 @@ const PLACE: PlaceContext = { signature: "reduce(callback: (a: number, b: number
 const knowing = Layer.mergeAll(
   Layer.succeed(LanguageHost, {
     diagnostics: () => Stream.empty,
+    problems: () => Effect.die("no problems asked in these tests"),
+    openProblems: Effect.die("no problems asked in these tests"),
     hover: () => Effect.succeed(Option.none()),
     contextAt: () => Effect.succeed(PLACE),
   }),
@@ -59,6 +61,7 @@ const knowing = Layer.mergeAll(
   Layer.succeed(FileHub, {
     follow: () => Stream.empty,
     write: () => Effect.die("not written in these tests"),
+    version: () => Effect.die("no version asked in these tests"),
     openFiles: Effect.succeed([{ path: "/r/helpers.ts", text: "export const sumValues = (values: number[]) => values.reduce((a, b) => a + b, 0);" }]),
   }),
   // The local model: the stand-in server, ready when `localUp`.
