@@ -284,3 +284,21 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
 - NEXT: wire FileNavBar (page machine) and the pill gesture (tabSwipe) onto `useMachine`,
   deriving all animation/pointerEvents from the views; BarWindow `open = view.dubzOpen`,
   its self-close dispatches `DubzClosed`.
+
+## Files page: tab grid (owner, 2026-10-16) — TODO, not started
+
+The repo's Files page (`FilesHomeScreen` → `RecentTabsRow`) shows up to **two rows of three**
+instead of one row of three. When not every tab fits, the **last cell is an "All tabs" cell**:
+the tabs icon and the number of tabs; it opens the tab overview (all tabs).
+
+| Tabs | Grid | Cells |
+| --- | --- | --- |
+| 1–3 | 1×3 | every tab (as now) |
+| 4–5 | 1×3 | 2 previews + All tabs |
+| 6 | 2×3 | 6 previews |
+| 7+ | 2×3 | 5 previews + All tabs |
+
+Rule: show every tab when they fill the grid exactly (≤3, or 6); else the last cell is All tabs.
+
+**Considering (not decided):** redesign the Files page to look like the repo page, with this
+tab grid in place of the repo page's menu. Ask the owner before building it.
