@@ -22,7 +22,7 @@ describe("dubzLayout", () => {
 
   it("content compacts only when compact AND taller than the viewport", () => {
     const height = 300; // in the zone
-    const viewport = contentViewport(height, TOP, BOTTOM); // 300 - 12 - 78 = 210
+    const viewport = contentViewport(height, TOP, BOTTOM); // 300 - 16 - 78 = 206
     // Taller than the viewport, in the zone → compact.
     expect(needsCompactContent(height, viewport + 10, TOP, BOTTOM)).toBe(true);
     // Fits the viewport → no need, even in the zone.
