@@ -68,14 +68,17 @@ describe("dubzWindowMachine", () => {
     expect(requestedHeightOf(grown)).toBe(600);
   });
 
-  it("layoutChanged sets compact, dedups, and resets on close", () => {
+  it("layoutChanged sets compact, dedups, and PERSISTS across close (derived from the kept height)", () => {
     const open = run(start, { _tag: "openRequested" }, { _tag: "layoutChanged", compact: true });
     expect(open.compact).toBe(true);
     // Dedup: the same flag returns the same state object.
     expect(run(open, { _tag: "layoutChanged", compact: true })).toBe(open);
-    // Close resets the display mode.
+    // Close KEEPS compact: the height persists, so reopening at a compact height
+    // must stay compact (the height reaction only re-fires on a change).
     const closed = run(open, { _tag: "closeRequested", reason: "dismiss" });
-    expect(closed.compact).toBe(false);
+    expect(closed.compact).toBe(true);
+    const reopened = run(closed, { _tag: "openRequested" });
+    expect(reopened.compact).toBe(true);
   });
 
   it("a component height change reruns the calculation, and deactivation returns to the default", () => {

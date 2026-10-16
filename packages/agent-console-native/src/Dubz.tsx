@@ -31,13 +31,19 @@ import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzCompactSync } from "./dubz/DubzCompactSync";
+import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
+import { isDubzHomeNative } from "../modules/dubz-home";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
 import { getBarPages, setBarPages, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
 import { type TextColors, useTextColors, useThemedStyles } from "./theme";
+
+/** DEV: swap the home suggestions for DubzActiveProbe — cycle active heights and
+ * see the height-model math live. Kept wired; flip to true to troubleshoot. */
+const DUBZ_PROBE: boolean = false;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
@@ -404,13 +410,17 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <DubzCompactSync onChange={onLayoutChanged} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
-          <View style={[styles.mainArea, leftInset > 0 ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
-            {suggestions.map((suggestion) =>
-              suggestion._tag === "Sessions" ? (
-                <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={openViewAll} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
-              ) : (
-                <Suggestion key={suggestion._tag} suggestion={suggestion} />
-              ),
+          <View style={[styles.mainArea, isDubzHomeNative && !DUBZ_PROBE ? styles.mainAreaFill : null, leftInset > 0 && !isDubzHomeNative ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>
+            {DUBZ_PROBE ? (
+              <DubzActiveProbe state={winState} onActiveHeight={onSuggestionActiveHeight} />
+            ) : (
+              suggestions.map((suggestion) =>
+                suggestion._tag === "Sessions" ? (
+                  <DubzSessionArea key={suggestion._tag} file={suggestion.file} onOpen={openSession} onViewAll={openViewAll} shifted={shifted} onActiveHeight={onSuggestionActiveHeight} leftInset={leftInset} />
+                ) : (
+                  <Suggestion key={suggestion._tag} suggestion={suggestion} />
+                ),
+              )
             )}
           </View>
           {/* The page, slid in from the right natively; kept mounted through the
@@ -529,7 +539,9 @@ const makeStyles = (text: TextColors) =>
   // header). Over both sliding layers so it never moves.
   topBack: {
     position: "absolute",
-    top: 12,
+    // y margin matches x (16): pushes the top bar down a touch. Kept in step
+    // with TOP_INSET (the header pill) so the back button aligns with it.
+    top: 16,
     left: 16,
   },
   // The main suggestions area: fills the body (which now spans the whole window
@@ -543,6 +555,12 @@ const makeStyles = (text: TextColors) =>
     bottom: 0,
     paddingHorizontal: 16,
     paddingBottom: PILL_AREA,
+  },
+  // Native home owns scroll-behind itself (contentMargins by the bar insets), so
+  // the surface must fill the whole window — no top gap, no bottom pill padding.
+  mainAreaFill: {
+    top: 0,
+    paddingBottom: 0,
   },
   // `+` is smaller than send; bottom-aligned, lift it to send's centre.
   plusSlot: {

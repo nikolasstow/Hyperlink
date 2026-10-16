@@ -24,7 +24,7 @@ import * as React from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useAppContext } from "../AppContext";
-import { BarWindowResizeContext, HANDLE_CLEARANCE } from "../BarWindow";
+import { BarWindowResizeContext } from "../BarWindow";
 import { colors } from "../colors";
 import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
 import { chatMessageOfQueued, pendingMessages, sameMessages } from "../chat/fromOutbox";
@@ -54,6 +54,8 @@ import { useSessionTitle, useSessionWatch } from "../sessions/useSessionWatch";
 import { EdgeBlurBars } from "../EdgeBlurBars";
 import { groupSessions } from "./groupSessions";
 import { sessionsForFile } from "./sessionsForFile";
+import { DubzHomeNativeView, type DubzSessionRow, isDubzHomeNative } from "../../modules/dubz-home";
+import { activeClaim } from "./dubzLayout";
 
 /** The session a row/list opens. */
 export interface DubzOpenSession {
@@ -80,8 +82,9 @@ const SLIDE = Animation.easeInOut({ duration: 0.28 });
 export const SLIDE_MS = 280;
 /** Stands in for SwiftUI `.infinity` so a frame fills. */
 const FILL = 100000;
-/** The header pill's top, matching the window's persistent back button. */
-const TOP_INSET = 12;
+/** The header pill's top, matching the window's persistent back button
+ * (styles.topBack). 16 so the top margin matches the side margin. */
+const TOP_INSET = 16;
 /** The title pill's smallest width (matches HeaderTitlePill's MIN_WIDTH). */
 const TITLE_PILL_MIN = 56;
 /** The floating composer pill's space at the window's bottom: the pill, its
@@ -96,9 +99,10 @@ export const DUBZ_BOTTOM_BAR = PILL_AREA;
  * controls on their own row above and the composer pill below. */
 export const suggestionAreaHeight = (rows: number): number =>
   DUBZ_BOTTOM_BAR + GAP + (rows * PILL + Math.max(rows - 1, 0) * GAP) + DUBZ_TOP_BAR;
-/** The free-drag min / default: one row with only the grab handle's clearance at
- * the top (compact sizing — the top controls overlay, they do not get a row). */
-export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL + HANDLE_CLEARANCE;
+/** The free-drag min / default: just the composer pill area, a gap, and ONE
+ * suggestion row — nothing more. The grabber overlays the top (the native
+ * home's scroll-behind clearance), so it needs no reserved height here. */
+export const SINGLE_SUGGESTION_HEIGHT = PILL_AREA + GAP + PILL;
 /** Scroll content clears the overlaid header at the top, and the floating
  * composer pill at the bottom, so it passes BEHIND both bars as it scrolls. */
 const HEADER_CLEARANCE = DUBZ_TOP_BAR;
@@ -174,6 +178,9 @@ const DubzSessionAreaImpl = (props: {
   // the content, instead of a round-trip behind it.
   const reportActive = React.useCallback(
     (isExpanded: boolean): void => {
+      // The native home view owns its own expand and reports its own height;
+      // the JS reporter would fight it, so stand down when native is in play.
+      if (isDubzHomeNative) return;
       if (isExpanded && sessions.length > 0) {
         const extraCount = Math.min(sessions.length - 1, EXTRA);
         onActiveHeightRef.current?.(suggestionAreaHeight(1 + extraCount + 1));
@@ -188,6 +195,50 @@ const DubzSessionAreaImpl = (props: {
   const top = sessions[0];
   if (top === undefined) return null;
   const rowWidth = width - WINDOW_SIDE * 2 - (props.leftInset ?? 0);
+
+  // Native home (this build has it): the SwiftUI surface owns scroll,
+  // bottom-anchor, scroll-behind, expand and row animation — no JS in the loop.
+  // Falls back to the @expo/ui List below where the binary has no native module.
+  if (isDubzHomeNative && DubzHomeNativeView !== undefined) {
+    const rows: ReadonlyArray<DubzSessionRow> = sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      updated: session.time.updated,
+      directory: session.directory,
+      count: sessions.length,
+    }));
+    return (
+      // The native view is an ExpoSwiftUI.View — it must sit alone in an @expo/ui
+      // Host (SwiftUI lays it out). ignoreSafeArea so it fills the window and
+      // handles its own bar insets (scroll-behind).
+      <Host style={{ flex: 1 }} ignoreSafeArea="all">
+        <DubzHomeNativeView
+          sessions={rows}
+          // Full content width; the native view subtracts the left gap once.
+          contentWidth={width - WINDOW_SIDE * 2}
+          topInset={DUBZ_TOP_BAR}
+          bottomInset={PILL_AREA}
+          leftInset={props.leftInset ?? 0}
+          compact={(props.leftInset ?? 0) > 0}
+          labelColor={textColors.label}
+          secondaryColor={textColors.secondaryLabel}
+          onOpenSession={(event) => {
+            const picked = sessions.find((candidate) => candidate.id === event.nativeEvent.id);
+            if (picked !== undefined) props.onOpen(toOpen(picked));
+          }}
+          onViewAll={() => props.onViewAll(props.file)}
+          onActiveHeight={(event) => {
+            // The native view reports its CONTENT height; turn it into the window
+            // claim (content + bars, compact margin in the zone). Suggestions as a
+            // whole are the active component that sizes the window.
+            const content = event.nativeEvent.height;
+            props.onActiveHeight?.(content > 0 ? activeClaim(content, DUBZ_TOP_BAR, DUBZ_BOTTOM_BAR).active : undefined);
+          }}
+        />
+      </Host>
+    );
+  }
+
   const bigWidth = Math.max(100, rowWidth - NUMBER_WIDTH - GAP);
   const extras = sessions.slice(1, 1 + EXTRA);
 

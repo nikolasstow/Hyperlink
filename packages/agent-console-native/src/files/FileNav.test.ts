@@ -1,7 +1,7 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabRerooted } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, dedupedTabs, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabRerooted } from "./FileNav";
 
 const dir = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "directory" });
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
@@ -109,6 +109,22 @@ describe("FileNav", () => {
     expect(place[1]?.active).toBe(0);
   });
 
+  it("newTab never duplicates: reopening an open address shows its tab, adds none", async () => {
+    const place = await run(
+      Effect.gen(function* () {
+        const nav = yield* FileNav;
+        yield* nav.ensureRoot("app", dir("/r"));
+        yield* nav.open("app", dir("/r/src")); // tab 0 shows /r/src
+        yield* nav.newTab("app", file("/r/README.md")); // tab 1
+        yield* nav.newTab("app", dir("/r/src")); // already in tab 0 → no new tab
+        return yield* placeOf(nav, "app");
+      }),
+      deviceStorage(),
+    );
+    expect(place?.tabs.map((tab) => tabEntry(tab)?.path)).toEqual(["/r/src", "/r/README.md"]);
+    expect(place?.active).toBe(0);
+  });
+
   it("keeps tabs apart: a new one shows, each has its own history, closing moves to a neighbour", async () => {
     const place = await run(
       Effect.gen(function* () {
@@ -128,6 +144,37 @@ describe("FileNav", () => {
     expect(showing(place[0])).toBe("/r/README.md");
     expect(place[1]?.tabs.length).toBe(1);
     expect(showing(place[1])).toBe("/r");
+  });
+});
+
+describe("dedupedTabs", () => {
+  it("collapses tabs on the same address to the first, moving active onto the survivor", () => {
+    const place: FilePlace = {
+      root: "/r",
+      tabs: [
+        { id: "a", entries: [file("/r/src/Effect.ts")], index: 0 },
+        { id: "c", entries: [file("/r/README.md")], index: 0 },
+        { id: "d", entries: [file("/r/src/Effect.ts")], index: 0 },
+      ],
+      active: 2, // the last duplicate is active
+      history: [],
+    };
+    const deduped = dedupedTabs(place);
+    expect(deduped.tabs.map((tab) => tabEntry(tab)?.path)).toEqual(["/r/src/Effect.ts", "/r/README.md"]);
+    expect(deduped.active).toBe(0); // folded onto the first Effect.ts tab
+  });
+
+  it("leaves a place with no duplicates untouched (same reference)", () => {
+    const place: FilePlace = {
+      root: "/r",
+      tabs: [
+        { id: "a", entries: [file("/r/a.ts")], index: 0 },
+        { id: "b", entries: [file("/r/b.ts")], index: 0 },
+      ],
+      active: 1,
+      history: [],
+    };
+    expect(dedupedTabs(place)).toBe(place);
   });
 });
 

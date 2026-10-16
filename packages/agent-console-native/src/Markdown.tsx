@@ -209,11 +209,14 @@ export const Markdown = (props: {
     [contentWidth, textColors.label],
   );
 
-  const elements = useMarkdown(props.text, {
-    colorScheme: colorScheme ?? "light",
-    styles: markdownStyles,
-    renderer,
-  });
+  // A stable options object: a fresh literal each render makes useMarkdown
+  // re-parse every render (the parse is the chat's render cost), so memoize it
+  // on the parts that actually change (theme/width via styles + renderer).
+  const options = React.useMemo(
+    () => ({ colorScheme: colorScheme ?? ("light" as const), styles: markdownStyles, renderer }),
+    [colorScheme, markdownStyles, renderer],
+  );
+  const elements = useMarkdown(props.text, options);
 
   if (!props.text.trim()) return null;
 

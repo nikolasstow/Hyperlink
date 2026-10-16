@@ -90,9 +90,11 @@ export const reduceDubzWindow = (state: DubzWindowState, event: DubzWindowEvent)
       return state.phase === "open" ? state : { ...state, phase: "open" };
     case "closeRequested":
       // Terminal: closed stays closed until an explicit open. The keyboard is
-      // left as tracked; it animates down on its own. The display mode resets —
-      // the height reaction sets it again on the next open.
-      return state.phase === "closed" ? state : { ...state, phase: "closed", compact: false };
+      // left as tracked; it animates down on its own. `compact` is NOT reset:
+      // it is derived from the height, which persists across close/reopen, and
+      // the height reaction only re-fires on a height CHANGE — so resetting it
+      // here left a compact-height reopen showing the non-compact layout.
+      return state.phase === "closed" ? state : { ...state, phase: "closed" };
     case "keyboardShown":
       // Tracked whether open or closed; it never opens the window and never
       // changes the requested height.
