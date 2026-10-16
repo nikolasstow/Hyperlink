@@ -83,8 +83,8 @@ export const SLIDE_MS = 280;
 /** Stands in for SwiftUI `.infinity` so a frame fills. */
 const FILL = 100000;
 /** The header pill's top, matching the window's persistent back button
- * (styles.topBack). Top margin, kept in step with styles.topBack. */
-const TOP_INSET = 20;
+ * (styles.topBack). 16 so the top margin matches the side margin. */
+const TOP_INSET = 16;
 /** The title pill's smallest width (matches HeaderTitlePill's MIN_WIDTH). */
 const TITLE_PILL_MIN = 56;
 /** The floating composer pill's space at the window's bottom: the pill, its
