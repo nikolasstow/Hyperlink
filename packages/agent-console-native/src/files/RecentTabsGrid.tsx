@@ -1,8 +1,11 @@
 /**
- * A repo's three most recent tabs (FileNav `recentTabs`), as small previews
- * in a row above its root's files: the page Files opens on from the repo's
- * Files button, so a recent tab is one tap away. Each looks as it does in the
- * tab overview, at a third of the width. Fixed sizes (nothing measured).
+ * A repo's most recent tabs (FileNav `recentTabs`), as small previews in a
+ * grid of up to two rows of three above its root's files: the page Files
+ * opens on from the repo's Files button, so a recent tab is one tap away.
+ * Each looks as it does in the tab overview, at a third of the width. When
+ * not every tab fits, the last cell is All tabs (the tab count), which opens
+ * the tab overview (docs/handoffs/files-redesign-notes.md). Fixed sizes
+ * (nothing measured).
  *
  * @internal
  */
@@ -11,33 +14,39 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-na
 import { colors } from "../colors";
 import { iconForFile } from "../fileIcon";
 import { SetiIcon } from "../SetiIcon";
+import { SystemIcon } from "../SystemIcon";
 import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
-import { type TextColors, useScreenBackground, useThemedStyles } from "../theme";
-import type { FileNavEntry } from "./FileNav";
+import { type TextColors, useScreenBackground, useTextColors, useThemedStyles } from "../theme";
+import { type FileNavEntry, TAB_GRID_COLUMNS, tabGridOf } from "./FileNav";
 import { TabPreview } from "./TabPreview";
 import { PREVIEW_ASPECT, PREVIEW_RADIUS } from "./tabShape";
 
-/** How many tabs the row shows. */
-export const RECENT_TAB_COUNT = 3;
 const GAP = 10;
-/** The listing's side padding (FileListing), which the row sits inside. */
+/** The listing's side padding (FileListing), which the grid sits inside. */
 const SIDE = 14;
 
-export const RecentTabsRow = (props: {
-  /** The tabs shown, newest first: each tab's index and the entry it shows. */
+export const RecentTabsGrid = (props: {
+  /** The most recent tabs, newest first: each tab's index and the entry it
+   * shows (`RECENT_TAB_COUNT` at most). */
   readonly tabs: ReadonlyArray<{ readonly index: number; readonly entry: FileNavEntry }>;
+  /** How many tabs the repo has. */
+  readonly total: number;
   /** Room at a page's top, as the previews draw it. */
   readonly pageTop: number;
   readonly onSelect: (index: number) => void;
+  /** Opens the tab overview (All tabs). */
+  readonly onAllTabs: () => void;
 }): React.ReactElement | null => {
   const styles = useThemedStyles(makeStyles);
+  const textColors = useTextColors();
   const { width: screenWidth } = useWindowDimensions();
   const background = useScreenBackground("plain");
-  const cellWidth = (screenWidth - SIDE * 2 - GAP * (RECENT_TAB_COUNT - 1)) / RECENT_TAB_COUNT;
+  const cellWidth = (screenWidth - SIDE * 2 - GAP * (TAB_GRID_COLUMNS - 1)) / TAB_GRID_COLUMNS;
   if (props.tabs.length === 0) return null;
+  const grid = tabGridOf(props.total);
   return (
-    <View style={styles.row}>
-      {props.tabs.map(({ index, entry }) => (
+    <View style={styles.grid}>
+      {props.tabs.slice(0, grid.previews).map(({ index, entry }) => (
         <Pressable key={`${index}:${entry.path}`} style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`Open tab ${entry.name}`} onPress={() => props.onSelect(index)}>
           {/* The shadow outside the preview's clip (which would cut it off). */}
           <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
@@ -54,6 +63,22 @@ export const RecentTabsRow = (props: {
           </View>
         </Pressable>
       ))}
+      {grid.allTabs ? (
+        <Pressable style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`All ${props.total} tabs`} onPress={props.onAllTabs}>
+          <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
+            <View style={[styles.preview, styles.allTabs, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
+              <SystemIcon name="square.on.square" size={28} weight="medium" color={textColors.label} />
+              <Text style={styles.count}>{props.total}</Text>
+              <View style={styles.outline} pointerEvents="none" />
+            </View>
+          </View>
+          <View style={styles.label}>
+            <Text style={styles.name} numberOfLines={1}>
+              All tabs
+            </Text>
+          </View>
+        </Pressable>
+      ) : null}
     </View>
   );
 };
@@ -61,8 +86,9 @@ export const RecentTabsRow = (props: {
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({
     // Room above (under the header) and below (before the files).
-    row: {
+    grid: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: GAP,
       marginTop: 12,
       marginBottom: 20,
@@ -86,6 +112,17 @@ const makeStyles = (text: TextColors) =>
       borderCurve: "continuous",
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.separator,
+    },
+    allTabs: {
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: colors.fillBackground,
+    },
+    count: {
+      color: text.label,
+      fontSize: 20,
+      fontWeight: "600",
     },
     label: {
       flexDirection: "row",

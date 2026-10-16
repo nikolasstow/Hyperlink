@@ -1,7 +1,7 @@
 /**
  * A repo's Files page: the page its Files button opens, a normal page (not a
- * tab of the file browser). Its three most recent tabs as previews
- * (RecentTabsRow), then the files at its root (the primary worktree), with the
+ * tab of the file browser). Its most recent tabs as previews, up to two rows
+ * of three, with All tabs when not all fit (RecentTabsGrid), then the files at its root (the primary worktree), with the
  * repo page's bottom bar (RepoComposer).
  *
  * Opening something opens the file browser (FilesScreen) over this page: a
@@ -25,9 +25,9 @@ import { cachedReposNow } from "../repoScanCache";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScreenBackground } from "../theme";
 import { WorktreePicker } from "../WorktreePicker";
-import { type FileNavEntry, recentTabs, tabEntry } from "./FileNav";
+import { type FileNavEntry, RECENT_TAB_COUNT, recentTabs, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
-import { RECENT_TAB_COUNT, RecentTabsRow } from "./RecentTabsRow";
+import { RecentTabsGrid } from "./RecentTabsGrid";
 import { selectFileTab, useFilePlaces } from "./useFileNav";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FilesHome">;
@@ -70,6 +70,8 @@ export const FilesHomeScreen = (props: Props): React.ReactElement => {
     selectFileTab(repo, index);
     navigation.push("Files", { repo, dir: primary.dir });
   };
+  // The browser, opened onto its tab overview.
+  const openAllTabs = (): void => navigation.push("Files", { repo, dir: primary.dir, tabs: true });
   const openEntry = (entry: FileNavEntry): void => navigation.push("Files", { repo, dir: primary.dir, open: { path: entry.path, name: entry.name, kind: entry.kind } });
 
   return (
@@ -82,7 +84,7 @@ export const FilesHomeScreen = (props: Props): React.ReactElement => {
         onOpen={openEntry}
         onOpenInNewTab={openEntry}
         onScroll={noScroll}
-        header={<RecentTabsRow tabs={recent} pageTop={headerHeight} onSelect={openTab} />}
+        header={<RecentTabsGrid tabs={recent} total={place?.tabs.length ?? 0} pageTop={headerHeight} onSelect={openTab} onAllTabs={openAllTabs} />}
       />
       <RepoComposer name={repo} dir={dir} isRepo={isRepo} scanned={scanned} onScanned={setScanned} />
     </View>

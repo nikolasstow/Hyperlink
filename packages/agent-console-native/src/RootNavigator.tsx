@@ -93,8 +93,9 @@ export type RootStackParamList = {
   // worktree and carries the worktree picker; a folder drilled into is fixed.
   /** A repo's files (where in them is Files' own: files/FileNav.ts). `dir`
    * is the folder Files was opened for, while the primary worktree is not
-   * known; `open`, a file to open in a new tab (from a chat). */
-  Files: { repo: string; dir: string; open?: { path: string; name: string; kind: "file" | "directory" } };
+   * known; `open`, a file to open in a new tab (from a chat); `tabs`, open
+   * onto the tab overview (All tabs on the Files page). */
+  Files: { repo: string; dir: string; open?: { path: string; name: string; kind: "file" | "directory" }; tabs?: true };
   /** A repo's Files page (its Files button): recent tabs over its root's files. */
   FilesHome: { repo: string; dir: string; isRepo: boolean };
   // A minimal read-only view of the file at `path`; `name` is the nav-bar title.

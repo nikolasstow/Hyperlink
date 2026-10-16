@@ -69,6 +69,23 @@ export const recentTabs = (place: FilePlace, count: number): ReadonlyArray<numbe
     .map((each) => each.index);
 };
 
+/** The Files page's tab grid (RecentTabsGrid): cells in a row, and rows at
+ * most. */
+export const TAB_GRID_COLUMNS = 3;
+const TAB_GRID_ROWS = 2;
+/** The most previews the grid shows: the tabs to fetch. */
+export const RECENT_TAB_COUNT = TAB_GRID_COLUMNS * TAB_GRID_ROWS;
+
+/** What the grid shows for `total` tabs: how many previews, and whether
+ * the last cell is All tabs. Every tab when they fill its rows exactly (3 or
+ * fewer, or 6); else All tabs takes the last cell (2 previews for 4–5, 5 for
+ * 7 or more). */
+export const tabGridOf = (total: number): { readonly previews: number; readonly allTabs: boolean } => {
+  if (total <= TAB_GRID_COLUMNS) return { previews: total, allTabs: false };
+  if (total < RECENT_TAB_COUNT) return { previews: TAB_GRID_COLUMNS - 1, allTabs: true };
+  if (total === RECENT_TAB_COUNT) return { previews: total, allTabs: false };
+  return { previews: RECENT_TAB_COUNT - 1, allTabs: true };
+};
 /** The index of the tab currently showing `path` (however it is written), or
  * -1 when no tab is on it. A browser reuses that tab rather than duplicating. */
 export const tabShowing = (place: FilePlace, path: string): number => {

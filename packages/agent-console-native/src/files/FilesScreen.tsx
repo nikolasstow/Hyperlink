@@ -365,6 +365,22 @@ export const FilesScreen = (props: Props): React.ReactElement => {
       if (finished === true) runOnJS(opened)();
     });
   };
+  // Arrived for All tabs (the Files page): onto the overview once the push
+  // settles and the tabs are known; then the request is spent.
+  const tabsRequest = props.route.params.tabs === true;
+  const placeKnown = place !== undefined;
+  const openTabsNow = React.useRef(openTabs);
+  React.useEffect(() => {
+    openTabsNow.current = openTabs;
+  });
+  React.useEffect(() => {
+    if (!tabsRequest || !placeKnown) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      openTabsNow.current();
+      navigation.setParams({ tabs: undefined });
+    });
+    return () => task.cancel();
+  }, [tabsRequest, placeKnown, navigation]);
   // Closed, it is ready to open again: every tab, scrolled to the one showing
   // (below), so it opens already where it goes.
   const closed = React.useCallback(() => {

@@ -285,7 +285,7 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
   deriving all animation/pointerEvents from the views; BarWindow `open = view.dubzOpen`,
   its self-close dispatches `DubzClosed`.
 
-## Files page: tab grid (owner, 2026-10-16) — TODO, not started
+## Files page: tab grid (owner, 2026-10-16) — built (RecentTabsGrid, `tabGridOf` in FileNav.ts)
 
 The repo's Files page (`FilesHomeScreen` → `RecentTabsRow`) shows up to **two rows of three**
 instead of one row of three. When not every tab fits, the **last cell is an "All tabs" cell**:

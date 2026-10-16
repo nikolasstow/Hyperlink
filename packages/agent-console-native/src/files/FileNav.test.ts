@@ -1,7 +1,7 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabRerooted } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabGridOf, tabRerooted } from "./FileNav";
 
 const dir = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "directory" });
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
@@ -182,5 +182,20 @@ describe("recentTabs", () => {
   it("orders a place's tabs by their latest visit, newest first, at most so many", () => {
     expect(recentTabs(place, 3)).toEqual([2, 0, 1]);
     expect(recentTabs(place, 9)).toEqual([2, 0, 1, 3]);
+  });
+});
+
+describe("tabGridOf", () => {
+  it("shows every tab when they fill the rows, else All tabs in the last cell", () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 12].map(tabGridOf)).toEqual([
+      { previews: 1, allTabs: false },
+      { previews: 2, allTabs: false },
+      { previews: 3, allTabs: false },
+      { previews: 2, allTabs: true },
+      { previews: 2, allTabs: true },
+      { previews: 6, allTabs: false },
+      { previews: 5, allTabs: true },
+      { previews: 5, allTabs: true },
+    ]);
   });
 });
