@@ -93,8 +93,10 @@ export const PILL_AREA = COMPOSER_PILL_HEIGHT + 12 + GAP;
 /** Dubz's own top controls (back / title / trailing) and bottom composer pill —
  * what the compact math removes from the content viewport, and what the active
  * claim reserves so the buttons sit above the content when not compact. */
-export const DUBZ_TOP_BAR = TOP_INSET + PILL + GAP;
-export const DUBZ_BOTTOM_BAR = PILL_AREA;
+// Top bar: the back button (TOP_INSET + PILL) with a 4pt gap below (tuned −4
+// from GAP). Bottom bar: the composer pill area plus 4pt breathing room (tuned).
+export const DUBZ_TOP_BAR = TOP_INSET + PILL + 4;
+export const DUBZ_BOTTOM_BAR = PILL_AREA + 4;
 /** The active claim: a window tall enough to show `rows` rows with the top
  * controls on their own row above and the composer pill below. */
 export const suggestionAreaHeight = (rows: number): number =>
@@ -217,7 +219,7 @@ const DubzSessionAreaImpl = (props: {
           // Full content width; the native view subtracts the left gap once.
           contentWidth={width - WINDOW_SIDE * 2}
           topInset={DUBZ_TOP_BAR}
-          bottomInset={PILL_AREA}
+          bottomInset={DUBZ_BOTTOM_BAR}
           leftInset={props.leftInset ?? 0}
           compact={(props.leftInset ?? 0) > 0}
           labelColor={textColors.label}

@@ -33,7 +33,7 @@ export const isCompact = (height: number): boolean => {
 
 /** In the compact zone the top controls are a side bar, not a top row — so the
  * content keeps just a small top MARGIN of this many points, not a bar. */
-export const COMPACT_TOP_MARGIN = 16;
+export const COMPACT_TOP_MARGIN = 12;
 
 /** The space left for content. Out of the compact zone the top controls take
  * their own row, so the full top bar is subtracted. In the zone they are a side
