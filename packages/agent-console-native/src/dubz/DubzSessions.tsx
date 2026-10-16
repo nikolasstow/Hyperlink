@@ -55,6 +55,7 @@ import { EdgeBlurBars } from "../EdgeBlurBars";
 import { groupSessions } from "./groupSessions";
 import { sessionsForFile } from "./sessionsForFile";
 import { DubzHomeNativeView, type DubzSessionRow, isDubzHomeNative } from "../../modules/dubz-home";
+import { activeClaim } from "./dubzLayout";
 
 /** The session a row/list opens. */
 export interface DubzOpenSession {
@@ -226,7 +227,13 @@ const DubzSessionAreaImpl = (props: {
             if (picked !== undefined) props.onOpen(toOpen(picked));
           }}
           onViewAll={() => props.onViewAll(props.file)}
-          onActiveHeight={(event) => props.onActiveHeight?.(event.nativeEvent.height > 0 ? event.nativeEvent.height : undefined)}
+          onActiveHeight={(event) => {
+            // The native view reports its CONTENT height; turn it into the window
+            // claim (content + bars, compact margin in the zone). Suggestions as a
+            // whole are the active component that sizes the window.
+            const content = event.nativeEvent.height;
+            props.onActiveHeight?.(content > 0 ? activeClaim(content, DUBZ_TOP_BAR, DUBZ_BOTTOM_BAR).active : undefined);
+          }}
         />
       </Host>
     );

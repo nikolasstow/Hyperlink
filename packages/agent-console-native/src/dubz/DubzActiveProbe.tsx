@@ -16,7 +16,7 @@ import * as React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { runOnJS, useAnimatedReaction } from "react-native-reanimated";
 import { BarWindowHeightContext } from "../BarWindow";
-import { COMPACT_TOP_MARGIN, COMPACT_ZONE_MAX, isCompact } from "./dubzLayout";
+import { activeClaim, COMPACT_TOP_MARGIN, COMPACT_ZONE_MAX, isCompact } from "./dubzLayout";
 import { DUBZ_BOTTOM_BAR, DUBZ_TOP_BAR } from "./DubzSessions";
 import { requestedHeightOf, type DubzWindowState } from "./dubzWindowMachine";
 
@@ -25,14 +25,6 @@ import { requestedHeightOf, type DubzWindowState } from "./dubzWindowMachine";
 const PROBE_CONTENT: ReadonlyArray<number> = [44, 100, 160, 220, 280, 360, 440];
 /** Points per +/− tap. */
 const STEP = 2;
-
-/** The active claim: the window height to show `content`. In the compact zone
- * (content + bottom fits it) the top controls are a side bar, so only the bottom
- * bar is added; otherwise the top bar takes a row too. */
-const activeClaim = (content: number, topBar: number, compactMargin: number, bottomBar: number): { readonly active: number; readonly compact: boolean } => {
-  const compact = content + compactMargin + bottomBar <= COMPACT_ZONE_MAX;
-  return { active: compact ? content + compactMargin + bottomBar : content + topBar + bottomBar, compact };
-};
 
 const Stepper = (props: { readonly label: string; readonly value: number; readonly onChange: (next: number) => void }): React.ReactElement => (
   <View style={styles.field}>
@@ -59,7 +51,7 @@ export const DubzActiveProbe = (props: {
   const [compactMargin, setCompactMargin] = React.useState(COMPACT_TOP_MARGIN);
   const [bottomBar, setBottomBar] = React.useState(DUBZ_BOTTOM_BAR);
 
-  const { active, compact: claimCompact } = activeClaim(content, topBar, compactMargin, bottomBar);
+  const { active, compact: claimCompact } = activeClaim(content, topBar, bottomBar, compactMargin);
 
   // Report the active CLAIM (the window height needed), not the content.
   const report = React.useRef(props.onActiveHeight);

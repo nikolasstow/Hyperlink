@@ -171,18 +171,18 @@ public struct DubzHomeView: ExpoSwiftUI.View {
 
     // MARK: - Height
 
-    /// While expanded, tell JS the height Dubz should grow to (so the window
-    /// fits the rows); collapsed claims none (0) and the window keeps its
-    /// default. Matches suggestionAreaHeight in DubzSessions.tsx.
+    /// Report the CONTENT height — the suggestions as a whole — whether collapsed
+    /// (one row) or expanded (main + extras + actions). JS turns this into the
+    /// window claim (activeClaim: + bars, with the compact margin). Empty claims
+    /// none (0) and the window keeps its default.
     private func reportHeight() {
-        guard expanded, !props.sessions.isEmpty else {
+        if props.sessions.isEmpty {
             props.onActiveHeight(["height": 0])
             return
         }
-        let rows = 1 + min(props.sessions.count - 1, EXTRA) + 1 // main + extras + actions
-        let r = CGFloat(rows)
-        let height = CGFloat(props.bottomInset) + GAP + (r * PILL + (r - 1) * GAP) + CGFloat(props.topInset)
-        props.onActiveHeight(["height": Double(height)])
+        let rows = expanded ? CGFloat(1 + min(props.sessions.count - 1, EXTRA) + 1) : 1
+        let content = rows * PILL + (rows - 1) * GAP
+        props.onActiveHeight(["height": Double(content)])
     }
 }
 

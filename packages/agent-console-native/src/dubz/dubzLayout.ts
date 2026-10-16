@@ -47,6 +47,15 @@ export const contentViewport = (height: number, topBar: number, bottomBar: numbe
   return isCompact(height) ? height - COMPACT_TOP_MARGIN - bottomBar : height - topBar - bottomBar;
 };
 
+/** The active claim: the window height needed to show `content`. In the compact
+ * zone (content + margin + bottom fits it) the top controls are a side bar, so
+ * only the compact margin is added above the content; otherwise the full top bar
+ * takes a row. The inverse of contentViewport. */
+export const activeClaim = (content: number, topBar: number, bottomBar: number, compactMargin: number = COMPACT_TOP_MARGIN): { readonly active: number; readonly compact: boolean } => {
+  const compact = content + compactMargin + bottomBar <= COMPACT_ZONE_MAX;
+  return { active: compact ? content + compactMargin + bottomBar : content + topBar + bottomBar, compact };
+};
+
 /** Whether the content must compact — shift right for the top-left buttons:
  * Dubz is compact, and the content is taller than the content viewport. */
 export const needsCompactContent = (height: number, contentHeight: number, topBar: number, bottomBar: number): boolean => {
