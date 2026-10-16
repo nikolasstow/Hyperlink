@@ -26,7 +26,7 @@ import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { sendMessage } from "./outbox/useOutbox";
-import { COMPOSER_CHIP_SIZE, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { COMPOSER_CHIP_SIZE, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
 import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
@@ -229,6 +229,15 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   // phantom resizes.
   const onResize = React.useCallback((height: number) => dispatch({ _tag: "heightSettled", height }), [dispatch]);
   const onKeyboardSettle = React.useCallback((up: boolean) => dispatch(up ? { _tag: "keyboardShown" } : { _tag: "keyboardHidden" }), [dispatch]);
+  // The composer input's live height (one-line pill up to INPUT_MAX_LINES),
+  // driving the window floor so a grown input is never clipped over the glass.
+  // A shared value — read on the UI thread by the geometry, no JS re-render.
+  // Updated per line-change (onContentSizeChange on the input); reset to the
+  // one-line pill when closed.
+  const composerHeight = useSharedValue(COMPOSER_PILL_HEIGHT);
+  React.useEffect(() => {
+    if (!open) composerHeight.value = COMPOSER_PILL_HEIGHT;
+  }, [open, composerHeight]);
   // In the compact zone the top controls are a side bar, so the content always
   // shifts right for it — the gap (and the sub-page's hidden right button) key on
   // `compact`, not on whether the content overflows.
@@ -385,6 +394,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       // anchor (one suggestion), free rest anywhere above it.
       requestedHeight={requestedHeight}
       minOpenHeight={SINGLE_SUGGESTION_HEIGHT}
+      composerFloor={composerHeight}
       freeAbove
       onResize={onResize}
       onKeyboardSettle={onKeyboardSettle}
@@ -452,9 +462,17 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           </View>
           <TextInput
             ref={inputRef}
-            style={[styles.input, { maxHeight: open ? LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V : COMPOSER_SEND_CHIP_SIZE }]}
+            style={[styles.input, { maxHeight: open ? MAX_INPUT_HEIGHT : COMPOSER_SEND_CHIP_SIZE }]}
             value={text}
             onChangeText={setDraft}
+            onContentSizeChange={(event) => {
+              // Feed the input's live height to the window floor (open only;
+              // closed stays the one-line pill via the effect). Clamped to the
+              // one-line pill .. the max grow. A shared-value write, no re-render.
+              if (!open) return;
+              const h = event.nativeEvent.contentSize.height + INPUT_PAD_V;
+              composerHeight.value = h < COMPOSER_PILL_HEIGHT ? COMPOSER_PILL_HEIGHT : h > MAX_INPUT_HEIGHT ? MAX_INPUT_HEIGHT : h;
+            }}
             placeholder={`Ask ${AGENT_NAME}…`}
             placeholderTextColor={textColors.placeholderText}
             editable={open}
@@ -515,6 +533,9 @@ export const DubzBar = (props: { readonly context: DubzContext; readonly onOpenS
 const INPUT_PAD_TOP = Math.ceil((COMPOSER_SEND_CHIP_SIZE - LINE_HEIGHT) / 2);
 const INPUT_PAD_BOTTOM = COMPOSER_SEND_CHIP_SIZE - LINE_HEIGHT - INPUT_PAD_TOP;
 const INPUT_PAD_V = INPUT_PAD_TOP + INPUT_PAD_BOTTOM;
+/** The tallest the input grows to (its maxHeight when open): the composer floor
+ * is capped here. */
+const MAX_INPUT_HEIGHT = LINE_HEIGHT * INPUT_MAX_LINES + INPUT_PAD_V;
 
 const makeStyles = (text: TextColors) =>
   StyleSheet.create({

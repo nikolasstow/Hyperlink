@@ -31,6 +31,18 @@ describe("barWindowGeometry", () => {
     expect(clampRequested(10, FRAME, 0)).toBe(MIN_HEIGHT);
   });
 
+  it("the composer floor raises the minimum (a grown input), capped by MIN_HEIGHT and max", () => {
+    const floor = 140; // a multi-line input, taller than the one-line pill
+    // A request below the floor is lifted to it (the window fits the input).
+    expect(clampRequested(100, FRAME, 0, floor)).toBe(floor);
+    // At or above the floor is unchanged.
+    expect(clampRequested(300, FRAME, 0, floor)).toBe(300);
+    // A floor below the pill still can't go under MIN_HEIGHT.
+    expect(clampRequested(10, FRAME, 0, 20)).toBe(MIN_HEIGHT);
+    // A floor above the keyboard-up max is capped at the max (never overflows).
+    expect(clampRequested(1000, FRAME, KB, 1000)).toBe(441);
+  });
+
   it("snapOpenHeight has two low anchors then rests free above minOpen (Dubz)", () => {
     const minOpen = 134;
     const max = 759;

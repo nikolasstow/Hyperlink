@@ -153,6 +153,10 @@ export interface BarWindowProps {
    * this much (pt; 0 in place) — the model window slides it away as its list
    * scrolls. */
   readonly pillLowered?: SharedValue<number>;
+  /** The composer input's live height (pt), ≥ MIN_HEIGHT — the collapsed bar
+   * grows with it so a multi-line input is never clipped over the glass. Dubz
+   * passes it; others omit it (the floor stays the one-line pill). */
+  readonly composerFloor?: SharedValue<number>;
   /** Hidden collapsed: the collapse has finished and it is out of sight. */
   readonly onHidden?: () => void;
   /** Whether opening raises the keyboard (focuses the field). Default true;
@@ -196,8 +200,11 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   // below. The renderer clamps it per frame, so the keyboard never touches it.
   const requested = useSharedValue(requestedHeight);
   // The visible height: the request clamped to the space above the keyboard,
-  // computed once per frame and read by every style.
-  const visible = useDerivedValue(() => clampRequested(requested.value, frame, kbHeight.value));
+  // computed once per frame and read by every style. The floor is the collapsed
+  // bar — the composer's live height when given (so a grown input is not
+  // clipped), else the one-line pill.
+  const composerFloor = props.composerFloor;
+  const visible = useDerivedValue(() => clampRequested(requested.value, frame, kbHeight.value, composerFloor?.value ?? MIN_HEIGHT));
   // True while a resize drag is down, so the owner's prop changes don't fight
   // the finger, and the pill's swipe-down never doubles as a resize.
   const resizing = useSharedValue(false);
@@ -367,9 +374,10 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   // The window's height: the bar's collapsed, growing to the visible height
   // open. Computed right here, from shared values only (a helper made fresh each
   // render made Reanimated rebuild the style every render and hitched the drag).
-  const windowStyle = useAnimatedStyle(() => ({
-    height: MIN_HEIGHT + (visible.value - MIN_HEIGHT) * grow.value,
-  }));
+  const windowStyle = useAnimatedStyle(() => {
+    const floor = composerFloor?.value ?? MIN_HEIGHT;
+    return { height: floor + (visible.value - floor) * grow.value };
+  });
 
   // The pill's inset and padding follow how open the window reads: the bar at 0
   // (the pill fills it), the window's input at 1.

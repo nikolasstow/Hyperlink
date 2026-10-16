@@ -79,10 +79,14 @@ export const maxHeightFor = (frame: ScreenFrame, keyboard: number): number => {
 
 /** The requested height made visible: at least the pill, at most the space above
  * the keyboard. The keyboard only tightens the clamp; the request is unchanged. */
-export const clampRequested = (requested: number, frame: ScreenFrame, keyboard: number): number => {
+export const clampRequested = (requested: number, frame: ScreenFrame, keyboard: number, floor: number = MIN_HEIGHT): number => {
   "worklet";
   const max = maxHeightFor(frame, keyboard);
-  return requested < MIN_HEIGHT ? MIN_HEIGHT : requested > max ? max : requested;
+  // The floor is the collapsed bar — normally the one-line pill (MIN_HEIGHT),
+  // but a grown composer input raises it so the window never clips the input.
+  // Never below MIN_HEIGHT, never above the max.
+  const lo = floor < MIN_HEIGHT ? MIN_HEIGHT : floor > max ? max : floor;
+  return requested < lo ? lo : requested > max ? max : requested;
 };
 
 /** Where a drag release settles, in visible-height points — assuming it is not
