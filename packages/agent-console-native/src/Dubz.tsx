@@ -422,7 +422,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           {/* Watches the live height and reports the compact display mode to the
            * coordinator (renders nothing). The claim it compares against is the
            * requested height. */}
-          <DubzCompactSync onChange={onLayoutChanged} />
+          <DubzCompactSync onChange={onLayoutChanged} composerFloor={composerHeight} />
           {/* Main suggestions — always mounted so it slides out (left) natively
            * when a page opens, instead of popping. Padded for margins. */}
           <View style={[styles.mainArea, isDubzHomeNative && !DUBZ_PROBE ? styles.mainAreaFill : null, leftInset > 0 && !isDubzHomeNative ? { paddingLeft: 16 + leftInset } : null]} pointerEvents={sub === undefined ? "box-none" : "none"}>

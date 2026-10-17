@@ -31,6 +31,16 @@ export const isCompact = (height: number): boolean => {
   return height <= COMPACT_ZONE_MAX;
 };
 
+/** Compact, factoring the live composer input: a grown input eats the content
+ * room, so its growth beyond the one-line pill (`basePill`) is subtracted from
+ * the current visible height before the zone test — a window full of input goes
+ * compact sooner. Uses the REAL current height + input, not design constants. */
+export const isCompactWithInput = (visible: number, composer: number, basePill: number): boolean => {
+  "worklet";
+  const grown = composer > basePill ? composer - basePill : 0;
+  return isCompact(visible - grown);
+};
+
 /** In the compact zone the top controls are a side bar, not a top row — so the
  * content keeps just a small top MARGIN of this many points, not a bar. */
 export const COMPACT_TOP_MARGIN = 16;

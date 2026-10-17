@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COMPACT_TOP_MARGIN, COMPACT_ZONE_MAX, contentViewport, isCompact, needsCompactContent } from "./dubzLayout";
+import { COMPACT_TOP_MARGIN, COMPACT_ZONE_MAX, contentViewport, isCompact, isCompactWithInput, needsCompactContent } from "./dubzLayout";
 
 // Dubz's own bars, for the tests: a top controls row and the composer pill.
 const TOP = 64;
@@ -10,6 +10,17 @@ describe("dubzLayout", () => {
     expect(isCompact(COMPACT_ZONE_MAX)).toBe(true);
     expect(isCompact(COMPACT_ZONE_MAX - 1)).toBe(true);
     expect(isCompact(COMPACT_ZONE_MAX + 1)).toBe(false);
+  });
+
+  it("a grown input subtracts its growth from the height before the zone test", () => {
+    const BASE = 58;
+    // One-line input: same as the plain zone test.
+    expect(isCompactWithInput(COMPACT_ZONE_MAX, BASE, BASE)).toBe(true);
+    expect(isCompactWithInput(COMPACT_ZONE_MAX + 1, BASE, BASE)).toBe(false);
+    // A 40pt-taller input subtracts 40, so a window 30 above the ceiling is now
+    // compact (it was not for a one-line input).
+    expect(isCompactWithInput(COMPACT_ZONE_MAX + 30, BASE + 40, BASE)).toBe(true);
+    expect(isCompactWithInput(COMPACT_ZONE_MAX + 30, BASE, BASE)).toBe(false);
   });
 
   it("the viewport removes both bars out of the zone, only the bottom in it", () => {

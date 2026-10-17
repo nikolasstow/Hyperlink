@@ -34,9 +34,11 @@ export const DubzDebug = (props: { readonly composerFloor: SharedValue<number>; 
   const regionColor = props.compact ? "#f59e0b" : "#22c55e"; // orange compact, green normal
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* The content region (the window body), coloured by compact state. */}
-      <View style={[StyleSheet.absoluteFill, { borderWidth: 1, borderColor: regionColor }]} />
-      {/* The top bar the content reserves above it. */}
+      {/* The actual content area: below the top bar, down to the body's bottom
+       * (which is the composer pill's top — so it shrinks as the input grows).
+       * Coloured by compact state. */}
+      <View style={{ position: "absolute", top: DUBZ_TOP_BAR, left: 0, right: 0, bottom: 0, borderWidth: 1, borderColor: regionColor }} />
+      {/* The top bar the content reserves above it (the back button + gap). */}
       <View style={[styles.topBar, { height: DUBZ_TOP_BAR }]} />
       {/* Live sizes. */}
       <View style={styles.readout}>

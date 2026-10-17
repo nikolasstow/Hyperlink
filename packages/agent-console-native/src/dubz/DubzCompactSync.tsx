@@ -11,19 +11,22 @@
  * @internal
  */
 import * as React from "react";
-import { runOnJS, useAnimatedReaction } from "react-native-reanimated";
+import { runOnJS, type SharedValue, useAnimatedReaction } from "react-native-reanimated";
 import { BarWindowHeightContext } from "../BarWindow";
-import { isCompact } from "./dubzLayout";
+import { COMPOSER_PILL_HEIGHT } from "../composerBarSpec";
+import { isCompactWithInput } from "./dubzLayout";
 
-export const DubzCompactSync = (props: { readonly onChange: (compact: boolean) => void }): null => {
+export const DubzCompactSync = (props: { readonly onChange: (compact: boolean) => void; readonly composerFloor: SharedValue<number> }): null => {
   const height = React.useContext(BarWindowHeightContext);
-  const { onChange } = props;
+  const { onChange, composerFloor } = props;
+  // Compact from the REAL current height and input: a grown composer eats the
+  // content room, so it goes compact sooner than the window height alone.
   useAnimatedReaction(
-    () => (height !== undefined && isCompact(height.value) ? 1 : 0),
+    () => (height !== undefined && isCompactWithInput(height.value, composerFloor.value, COMPOSER_PILL_HEIGHT) ? 1 : 0),
     (next, prev) => {
       if (next !== prev) runOnJS(onChange)(next === 1);
     },
-    [height],
+    [height, composerFloor],
   );
   return null;
 };
