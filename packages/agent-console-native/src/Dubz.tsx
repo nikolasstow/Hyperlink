@@ -32,6 +32,7 @@ import { PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzCompactSync } from "./dubz/DubzCompactSync";
 import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
+import { DubzDebug } from "./dubz/DubzDebug";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { isDubzHomeNative } from "../modules/dubz-home";
@@ -44,6 +45,10 @@ import { type TextColors, useTextColors, useThemedStyles } from "./theme";
 /** DEV: swap the home suggestions for DubzActiveProbe — cycle active heights and
  * see the height-model math live. Kept wired; flip to true to troubleshoot. */
 const DUBZ_PROBE: boolean = false;
+
+/** DEV: overlay region borders, live sizes, and a compact colour on the Dubz
+ * window so the height behaviour can be followed on device. Temporary. */
+const DUBZ_DEBUG: boolean = true;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
@@ -453,6 +458,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <View style={styles.topBack}>
             <DubzTopBack onPress={sub !== undefined ? toMain : backToComposer} />
           </View>
+          {DUBZ_DEBUG ? <DubzDebug composerFloor={composerHeight} compact={compact} /> : null}
         </>
       }
       pill={
