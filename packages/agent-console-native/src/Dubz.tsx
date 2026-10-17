@@ -472,12 +472,15 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
             value={text}
             onChangeText={setDraft}
             onContentSizeChange={(event) => {
-              // Feed the input's live height to the window floor (open only;
-              // closed stays the one-line pill via the effect). Clamped to the
-              // one-line pill .. the max grow. A shared-value write, no re-render.
+              // The window floor is the composer PILL, which is the input's
+              // content plus the pill's chrome (the field padding around it =
+              // COMPOSER_PILL_HEIGHT − the one-line chip). The chrome was the
+              // missing bit — the glass grew to the content, short of the pill.
+              // open only; closed stays the one-line pill via the effect.
               if (!open) return;
-              const h = event.nativeEvent.contentSize.height + INPUT_PAD_V;
-              composerHeight.value = h < COMPOSER_PILL_HEIGHT ? COMPOSER_PILL_HEIGHT : h > MAX_INPUT_HEIGHT ? MAX_INPUT_HEIGHT : h;
+              const content = event.nativeEvent.contentSize.height;
+              const el = content < COMPOSER_SEND_CHIP_SIZE ? COMPOSER_SEND_CHIP_SIZE : content > MAX_INPUT_HEIGHT ? MAX_INPUT_HEIGHT : content;
+              composerHeight.value = el + (COMPOSER_PILL_HEIGHT - COMPOSER_SEND_CHIP_SIZE);
             }}
             placeholder={`Ask ${AGENT_NAME}…`}
             placeholderTextColor={textColors.placeholderText}
