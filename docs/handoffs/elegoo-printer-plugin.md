@@ -89,10 +89,10 @@ Routes on port 5197 (the relay's README has the full table):
 | `src/printer/goo.ts` | The `.goo` decoder and a PNG writer (fflate), run on the phone. A port of the relay's `Goo.ts`, with `pixelAspect` and `stretchY` for square pixels. |
 | `src/printer/directLayers.ts` | The fallback layer source (section 2, item 5): reads the print file from the printer in byte ranges, walks and saves the layer offset table (AsyncStorage, once per print), and decodes the whole LCD with square pixels. One request at a time. |
 | `src/printer/ui.tsx` | The page's parts: colours, `Card` (glass), `Dot`, `Chip`, `Button`, `Row`, `Cells`. |
-| `src/printer/PrinterStage.tsx` | The LCD at its real size in mm (10 mm grid, ruler, the layer tinted UV and glowing while exposing), the progress bar, and the controls (each behind an `Alert`). |
+| `src/printer/PrinterStage.tsx` | The LCD at its real size in mm (the layer tinted UV and glowing while exposing; a 10 mm grid, ruler, and layer number only with the Measurements switch), the progress bar with the Z height, and the controls (each behind an `Alert`). |
 | `src/printer/PrinterCamera.tsx` | The camera: a WebView of the relay's `/?view=camera&bare=1`, mounted only while the owner watches, with a full-screen mode. It stops when the app goes to the background. |
 | `src/printer/PrinterFiles.tsx` | The file browser: Printer and USB tabs, folders, thumbnails, a details sheet, Upload (DocumentPicker), and the upload queue. Upload rows live outside the page, so an upload goes on when the owner leaves and shows again on return; unfinished relay jobs from other devices show too. |
-| `src/PrinterScreen.tsx` | The page: backdrop, title and chips, stage, camera, files, printer vitals, self-check, print settings. |
+| `src/PrinterScreen.tsx` | The page: backdrop, title and chips, and four pages (Print, Camera, Files, Printer). A phone shows one page at a time from a glass tab bar at the bottom; an iPad (700 pt and wider) shows all of them in two columns. The Measurements switch is kept in AsyncStorage. |
 | `src/ServerScreen.tsx` | The Services row "Resin Printer" ("Live print, camera, and files"). |
 | `src/RootNavigator.tsx` | Route `ServerPrinter: { serverName; serverAddress }`. |
 
@@ -181,6 +181,8 @@ CocoaPods.
 9. Uploads always land in `/local/`. The relay refuses the file being printed and asks before it replaces an existing name. Uploads run one at a time and wait between packets during a print (owner: an upload "shouldn't bother" a print).
 10. The camera in the app is the relay's camera page in a WebView, not a native player.
 11. No AI upscaling or deblur of the camera. The owner tried both and rejected them: "the artifacts make it worse than the real thing".
+12. Small screens get pages, not one long scroll (owner: "when it's small you need to have pages otherwise you scroll forever"). The web portal does the same below 1121 px.
+13. The LCD's measurement overlay is off by default, behind a Measurements switch (owner: "annoying"). The Z height is in the progress stats.
 
 ### Do not resurrect
 

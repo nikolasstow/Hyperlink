@@ -75,6 +75,9 @@ const uploadStore = (() => {
   };
 })();
 
+/** How many uploads are still on their way to the printer, for the page's Files tab. */
+export const useRunningUploads = (): number => React.useSyncExternalStore(uploadStore.subscribe, uploadStore.rows).filter((u) => !finished(u.stage)).length;
+
 const rootOf = (storage: "local" | "usb"): string => (storage === "usb" ? "/usb/" : "/local/");
 
 const parentOf = (folder: string, root: string): string => (folder === root ? root : folder.slice(0, folder.slice(0, -1).lastIndexOf("/") + 1));

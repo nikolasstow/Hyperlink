@@ -2,10 +2,11 @@
  * The printer page's stage: the LCD with the layer it shows now, the print's
  * progress, and pause, resume, and stop.
  *
- * The LCD is drawn at the printer's real size in millimetres, with a 10 mm
- * grid and a ruler. Layer images cover the whole LCD with square pixels (16K
- * pixels are not square; the relay and the phone's decoder correct for it),
- * so every layer shows at one scale. The lit area glows while the printer
+ * The LCD is drawn at the printer's real size in millimetres. Layer images
+ * cover the whole LCD with square pixels (16K pixels are not square; the
+ * relay and the phone's decoder correct for it), so every layer shows at one
+ * scale. The Measurements switch adds a 10 mm grid, a ruler, and the layer
+ * number; it is off by default. The lit area glows while the printer
  * exposes the layer and dims while it lifts and drops.
  *
  * @internal
@@ -46,7 +47,7 @@ export const useLoadedUri = (uri: string | undefined): string | undefined => {
 
 const Hud = (props: { readonly children: React.ReactNode; readonly style: object }): React.ReactElement => <View style={[styles.hud, props.style]}>{props.children}</View>;
 
-/** The printer's LCD: dark glass, a 10 mm grid, the lit layer, and its labels. */
+/** The printer's LCD: dark glass, the lit layer, the phase, and (with `measure`) a 10 mm grid, a ruler, and the layer number. */
 export const Lcd = (props: {
   readonly width: number;
   readonly lcdMm: { readonly width: number; readonly height: number };
@@ -55,7 +56,7 @@ export const Lcd = (props: {
   readonly active: boolean;
   readonly layer: number | undefined;
   readonly phase: string | undefined;
-  readonly zMm: number | undefined;
+  readonly measure: boolean;
   readonly note: string | undefined;
 }): React.ReactElement => {
   const height = props.width * (props.lcdMm.height / props.lcdMm.width);
@@ -68,6 +69,7 @@ export const Lcd = (props: {
   const rows = Math.floor(props.lcdMm.height / 10);
   return (
     <View style={[styles.lcd, { width: props.width, height }]}>
+      {props.measure ? (
       <Svg width={props.width} height={height} style={StyleSheet.absoluteFill}>
         {Array.from({ length: columns }, (_, i) => (
           <Line key={`x${i}`} x1={(i + 1) * 10 * perMm} y1={0} x2={(i + 1) * 10 * perMm} y2={height} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />
@@ -90,6 +92,7 @@ export const Lcd = (props: {
           );
         })}
       </Svg>
+      ) : null}
       {props.uri !== undefined ? (
         <Animated.View
           style={[
@@ -110,7 +113,7 @@ export const Lcd = (props: {
           <Text style={styles.lcdNote}>{props.note ?? "No print running"}</Text>
         </View>
       )}
-      {props.layer !== undefined ? (
+      {props.measure && props.layer !== undefined ? (
         <Hud style={styles.tl}>
           <Text style={styles.hudText}>Layer {props.layer.toLocaleString()}</Text>
         </Hud>
@@ -121,16 +124,11 @@ export const Lcd = (props: {
           <Text style={[styles.hudText, props.exposing ? styles.hudLit : null]}>{props.phase}</Text>
         </Hud>
       ) : null}
-      {props.zMm !== undefined ? (
-        <Hud style={styles.bl}>
-          <Text style={styles.hudText}>Z {props.zMm.toFixed(2)} mm</Text>
-        </Hud>
-      ) : null}
     </View>
   );
 };
 
-/** Percent, a bar, and elapsed, remaining, and finish time. */
+/** Percent, a bar, and elapsed, remaining, and finish time, and the Z height. `columns` is 2 on a phone, 4 when there is room. */
 export const Progress = (props: {
   readonly percent: number;
   readonly elapsedMs: number | undefined;
@@ -140,8 +138,12 @@ export const Progress = (props: {
   readonly paused: boolean;
   readonly complete: boolean;
   readonly finishAt: Date | undefined;
+  readonly zMm: number | undefined;
+  readonly heightMm: number | undefined;
+  readonly columns: 2 | 4;
 }): React.ReactElement => {
   const text = useTextColors();
+  const cell = props.columns === 2 ? styles.statHalf : styles.statQuarter;
   const whole = Math.floor(props.percent);
   const fraction = Math.floor((props.percent % 1) * 10);
   const fill = props.complete ? [GREEN, GREEN] : props.paused ? [AMBER, AMBER] : ["#5b7bff", UV];
@@ -157,21 +159,23 @@ export const Progress = (props: {
         <LinearGradient colors={fill as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.fill, { width: `${Math.min(100, props.percent)}%` }]} />
       </View>
       <View style={styles.stats}>
-        <Stat label="Elapsed" value={fmtDuration(props.elapsedMs)} />
-        <Stat label="Remaining" value={props.active ? fmtDuration(props.remainingMs) : "—"} />
-        <Stat label={props.active ? "Finishes" : "Total"} value={props.active ? (props.finishAt === undefined ? "—" : props.finishAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })) : fmtDuration(props.totalMs)} />
+        <Stat style={cell} label="Elapsed" value={fmtDuration(props.elapsedMs)} />
+        <Stat style={cell} label="Remaining" value={props.active ? fmtDuration(props.remainingMs) : "—"} />
+        <Stat style={cell} label={props.active ? "Finishes" : "Total"} value={props.active ? (props.finishAt === undefined ? "—" : props.finishAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })) : fmtDuration(props.totalMs)} />
+        <Stat style={cell} label="Height" value={props.zMm === undefined ? "—" : `${props.zMm.toFixed(2)} mm`} extra={props.heightMm === undefined ? undefined : `of ${props.heightMm.toFixed(2)}`} />
       </View>
     </View>
   );
 };
 
-const Stat = (props: { readonly label: string; readonly value: string }): React.ReactElement => {
+const Stat = (props: { readonly label: string; readonly value: string; readonly extra?: string; readonly style: object }): React.ReactElement => {
   const text = useTextColors();
   return (
-    <View style={styles.stat}>
+    <View style={props.style}>
       <Text style={[styles.statLabel, { color: text.tertiaryLabel }]}>{props.label.toUpperCase()}</Text>
       <Text style={[styles.statValue, { color: text.label }]} numberOfLines={1}>
         {props.value}
+        {props.extra !== undefined ? <Text style={[styles.statExtra, { color: text.tertiaryLabel }]}> {props.extra}</Text> : null}
       </Text>
     </View>
   );
@@ -238,17 +242,18 @@ const styles = StyleSheet.create({
   hudLit: { color: "#dcd2ff" },
   tl: { top: 8, left: 8 },
   tr: { top: 8, right: 8 },
-  bl: { bottom: 16, left: 8 },
   progress: { marginTop: 16 },
   progressTop: { flexDirection: "row", alignItems: "flex-end", marginBottom: 10 },
   pct: { fontSize: 46, fontWeight: "700", letterSpacing: -1.5, fontVariant: ["tabular-nums"] },
   pctSmall: { fontSize: 20, fontWeight: "600", letterSpacing: -0.3 },
   track: { height: 8, borderRadius: 4, backgroundColor: "rgba(127,127,127,0.2)", overflow: "hidden" },
   fill: { height: 8, borderRadius: 4 },
-  stats: { flexDirection: "row", marginTop: 14, gap: 8 },
-  stat: { flex: 1 },
+  stats: { flexDirection: "row", flexWrap: "wrap", marginTop: 14, columnGap: 8, rowGap: 12 },
+  statHalf: { width: "48%" },
+  statQuarter: { flex: 1 },
   statLabel: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.6 },
   statValue: { fontSize: 17, fontWeight: "600", marginTop: 2, fontVariant: ["tabular-nums"] },
+  statExtra: { fontSize: 12, fontWeight: "600" },
   controls: { flexDirection: "row", gap: 10, marginTop: 16 },
   controlButton: { flex: 1 },
 });
