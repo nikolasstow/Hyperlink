@@ -65,6 +65,23 @@ final class InlineSuggestion {
 
     /// The suggestion to show (none: whatever showed goes).
     func set(_ suggestion: InlineSuggestionNative?) {
+        // The one showing, grown (it streams in), after typing into it: kept
+        // where the typing took it, the first of two spaces still waiting.
+        // Taken from the top, it would go back before the typing, off the
+        // caret, and a double space would get iOS's period.
+        if let next = suggestion, let shown = current, next.id == shown.id, !next.text.isEmpty {
+            // Between the halves of iOS's period shortcut: the growth waits.
+            if pendingPeriod != nil {
+                return
+            }
+            current = grown(next, at: shown.at)
+            if current == nil {
+                hide()
+            } else {
+                layout()
+            }
+            return
+        }
         current = suggestion?.text.isEmpty == false ? suggestion : nil
         // A new one made for the caret after a first space (it was asked for
         // as that space went in): the space still counts as the first of
@@ -76,6 +93,26 @@ final class InlineSuggestion {
         }
         pendingPeriod = nil
         layout()
+    }
+
+    /// `next` (made at its own `at`) moved on to `at`, past what was typed
+    /// into it since: the text typed through taken off its start (a first
+    /// space not its own is not in it). Nil when the typing left it.
+    private func grown(_ next: InlineSuggestionNative, at: Int) -> InlineSuggestionNative? {
+        let typed = at - next.at
+        if typed <= 0 {
+            return next
+        }
+        let through = pendingSpace != nil && !spaceTypedThrough ? typed - 1 : typed
+        guard let textView, through >= 0, next.at + through <= (textView.text as NSString).length else {
+            return nil
+        }
+        let typedText = (textView.text as NSString).substring(with: NSRange(location: next.at, length: through))
+        guard next.text.hasPrefix(typedText) else {
+            return nil
+        }
+        let rest = (next.text as NSString).substring(from: (typedText as NSString).length)
+        return rest.isEmpty ? nil : InlineSuggestionNative(id: next.id, at: at, text: rest)
     }
 
     /// The text is about to change at `range` to `text`, while editing.
