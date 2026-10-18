@@ -58,6 +58,8 @@ export interface DubzHomeNativeProps extends ViewProps {
    * button has room. */
   readonly leftInset?: number;
   readonly compact?: boolean;
+  /** DEV: draw a border around the real content so the outline matches it. */
+  readonly debug?: boolean;
   /** Text colours from the active theme (hex strings at runtime). */
   readonly labelColor?: ColorValue;
   readonly secondaryColor?: ColorValue;

@@ -23,6 +23,8 @@ public final class DubzHomeProps: ExpoSwiftUI.ViewProps {
     @Field var labelColor: Color?
     @Field var secondaryColor: Color?
     @Field var light: Bool?
+    /** DEV: draw a border around the real content, so the outline matches it. */
+    @Field var debug: Bool = false
     var onOpenSession = EventDispatcher()
     var onViewAll = EventDispatcher()
     var onActiveHeight = EventDispatcher()
@@ -98,11 +100,17 @@ public struct DubzHomeView: ExpoSwiftUI.View {
             }
             .frame(width: rowWidth, alignment: .leading)
             .padding(.leading, leftGap)
+            // Measure the REAL content height (not a row estimate) and report it.
+            .background(GeometryReader { proxy in
+                Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+            })
+            // DEBUG: a border drawn ON the content, so the outline matches it.
+            .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
         }
         .modifier(BottomAnchoredScrollBehind(top: CGFloat(props.topInset), bottom: CGFloat(props.bottomInset)))
-        .onAppear { reportHeight() }
-        .onChange(of: expanded) { _ in reportHeight() }
-        .onChange(of: props.sessions.count) { _ in reportHeight() }
+        .onPreferenceChange(ContentHeightKey.self) { height in
+            props.onActiveHeight(["height": Double(props.sessions.isEmpty ? 0 : height)])
+        }
     }
 
     // MARK: - Rows
@@ -168,22 +176,13 @@ public struct DubzHomeView: ExpoSwiftUI.View {
             .onTapGesture { props.onViewAll([:]) }
         }
     }
+}
 
-    // MARK: - Height
-
-    /// Report the CONTENT height — the suggestions as a whole — whether collapsed
-    /// (one row) or expanded (main + extras + actions). JS turns this into the
-    /// window claim (activeClaim: + bars, with the compact margin). Empty claims
-    /// none (0) and the window keeps its default.
-    private func reportHeight() {
-        if props.sessions.isEmpty {
-            props.onActiveHeight(["height": 0])
-            return
-        }
-        let rows = expanded ? CGFloat(1 + min(props.sessions.count - 1, EXTRA) + 1) : 1
-        let content = rows * PILL + (rows - 1) * GAP
-        props.onActiveHeight(["height": Double(content)])
-    }
+/// Carries the measured content height out of the layout so the view can report
+/// its REAL height (not a row estimate) to JS.
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat { 0 }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 /// Bottom-anchor the scroll (newest/main at the bottom) and let content scroll

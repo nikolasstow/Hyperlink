@@ -160,6 +160,8 @@ const DubzSessionAreaImpl = (props: {
   /** Compact mode's left gap (pt): the rows shrink by it so they fit the
    * right-shifted content area (which leaves room for the top-left button). */
   readonly leftInset?: number;
+  /** DEV: draw a border around the real content (passed to the native view). */
+  readonly debug?: boolean;
 }): React.ReactElement | null => {
   const textColors = useTextColors();
   const { width } = useWindowDimensions();
@@ -220,6 +222,7 @@ const DubzSessionAreaImpl = (props: {
           bottomInset={PILL_AREA}
           leftInset={props.leftInset ?? 0}
           compact={(props.leftInset ?? 0) > 0}
+          debug={props.debug}
           labelColor={textColors.label}
           secondaryColor={textColors.secondaryLabel}
           onOpenSession={(event) => {
