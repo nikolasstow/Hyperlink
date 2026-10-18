@@ -80,6 +80,8 @@ shadow on the wrapper follows the lit shape, which makes the glow.
 - The printer never answered the text `ping`. An idle printer can stay silent for longer than a heartbeat timeout, so clients ask for status every 15 s.
 - While printing, the printer pushes on every sub-step: Dropping (here `CurrentLayer` goes up by one), Exposing about 0.5 s later, Lifting about 3 s later. One layer takes about 6 s.
 - Port 3030 also runs an open HTTP file server (Mongoose 7.12). It serves the print file with `Range` support at `/media/mmcblk0p3/<name>` (onboard) or `/media/sda1/<name>` (USB). The relay reads the header once, then 70 bytes per layer to find offsets (about 8 ms each over WiFi), then about 150 KB per layer image.
+- That file server is slow for bulk data: about 100 KB/s. One layer image takes about 1.5 s to read, and the 480 KB task thumbnail about 5 s. So the relay reads each layer once (all render variants share the bytes), renders one at a time, prefetches the current and next layer, and caches the thumbnail. Measured on the Mac mini: a warm layer request takes 0.02 to 0.3 s.
+- The relay saves each file's offset table under `~/.cache/saturn-uploader`, so a restart does not walk the file again.
 - Task thumbnails are at `/media/mmcblk0p1/history_image/<TaskId>.bmp`, named by the `TaskId` in every status push.
 - The printer has a camera (RTSP on port 554, Cmd 386). The prototype does not use it.
 
@@ -111,7 +113,15 @@ Tailscale.
 
 ## 6. Sharp edges
 
-1. CAUTION: macOS Local Network privacy blocks the relay when it runs detached from a terminal (tmux, `nohup`, or a LaunchAgent). Connections then fail with `EHOSTUNREACH`. The fix is to install it as a LaunchDaemon (root), which needs `sudo` once. The repo's `service/macos` folder has the pattern for the uploader. Until then, the relay runs only while an SSH session holds it.
+1. CAUTION: macOS Local Network privacy blocks the relay when it runs detached from a terminal (tmux, `nohup`, or a LaunchAgent). Connections then fail with `EHOSTUNREACH`. The fix is a LaunchDaemon, which the installer sets up. It asks for the password once:
+
+   ```sh
+   cd ~/Coding/saturn-uploader
+   echo '{"printerIp":"192.168.1.31"}' > ~/.config/saturn-uploader.json
+   service/macos/install.sh ~/.config/saturn-uploader.json relay
+   ```
+
+   Until then, the relay runs only while an SSH session holds it.
 2. WARNING: the printer's file server on port 3030 has no login and exposes the whole filesystem to the LAN, including `/config/wpa_supplicant.conf` (the WiFi password). This is the firmware's behaviour, not ours. Keep the printer on a trusted network.
 3. The layer numbering is an assumption: `CurrentLayer` counts from 1, so the LCD shows index `CurrentLayer - 1`. Check it at the end of a print. If the print finishes with `CurrentLayer == TotalLayer`, the assumption holds.
 4. Only the current print can be read through the relay. A request for another `TaskId` returns 404.
@@ -134,7 +144,7 @@ Tailscale.
 
 ## 8. Open questions
 
-1. Install the relay as a LaunchDaemon on the Mac mini? It needs `sudo` once.
+1. Install the relay as a LaunchDaemon on the Mac mini (section 6, item 1)? It needs the password once.
 2. Should the relay also run the uploader's watch folder, so one service does both?
 3. A Home widget for the printer (Phase 3 of server-pages-and-widgets)?
 4. A Live Activity with layer progress? It needs the relay to send ActivityKit pushes through `activityPush.ts`, and the base build.
