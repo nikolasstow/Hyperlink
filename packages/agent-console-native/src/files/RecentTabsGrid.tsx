@@ -44,41 +44,53 @@ export const RecentTabsGrid = (props: {
   const cellWidth = (screenWidth - SIDE * 2 - GAP * (TAB_GRID_COLUMNS - 1)) / TAB_GRID_COLUMNS;
   if (props.tabs.length === 0) return null;
   const grid = tabGridOf(props.total);
+  const cells: ReadonlyArray<React.ReactElement> = [
+    ...props.tabs.slice(0, grid.previews).map(({ index, entry }) => (
+      <Pressable key={`${index}:${entry.path}`} style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`Open tab ${entry.name}`} onPress={() => props.onSelect(index)}>
+        {/* The shadow outside the preview's clip (which would cut it off). */}
+        <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
+          <View style={[styles.preview, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
+            <TabPreview entry={entry} width={cellWidth} topInset={props.pageTop} />
+            <View style={styles.outline} pointerEvents="none" />
+          </View>
+        </View>
+        <View style={styles.label}>
+          <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={16} />
+          <Text style={styles.name} numberOfLines={1}>
+            {entry.name}
+          </Text>
+        </View>
+      </Pressable>
+    )),
+    ...(grid.allTabs
+      ? [
+          <Pressable key="all-tabs" style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`All ${props.total} tabs`} onPress={props.onAllTabs}>
+            <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
+              <View style={[styles.preview, styles.allTabs, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
+                <SystemIcon name="square.on.square" size={28} weight="medium" color={textColors.label} />
+                <Text style={styles.count}>{props.total}</Text>
+                <View style={styles.outline} pointerEvents="none" />
+              </View>
+            </View>
+            <View style={styles.label}>
+              <Text style={styles.name} numberOfLines={1}>
+                All tabs
+              </Text>
+            </View>
+          </Pressable>,
+        ]
+      : []),
+  ];
+  // Rows of three made here, not by wrapping: cells of a third's width
+  // (fractional) can overflow a row when rounded to pixels, and wrap early.
+  const rows = Array.from({ length: Math.ceil(cells.length / TAB_GRID_COLUMNS) }, (_, row) => cells.slice(row * TAB_GRID_COLUMNS, (row + 1) * TAB_GRID_COLUMNS));
   return (
     <View style={styles.grid}>
-      {props.tabs.slice(0, grid.previews).map(({ index, entry }) => (
-        <Pressable key={`${index}:${entry.path}`} style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`Open tab ${entry.name}`} onPress={() => props.onSelect(index)}>
-          {/* The shadow outside the preview's clip (which would cut it off). */}
-          <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
-            <View style={[styles.preview, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
-              <TabPreview entry={entry} width={cellWidth} topInset={props.pageTop} />
-              <View style={styles.outline} pointerEvents="none" />
-            </View>
-          </View>
-          <View style={styles.label}>
-            <SetiIcon glyph={entry.kind === "directory" ? setiFolderGlyph ?? setiDefaultGlyph : iconForFile(entry.name).glyph} size={16} />
-            <Text style={styles.name} numberOfLines={1}>
-              {entry.name}
-            </Text>
-          </View>
-        </Pressable>
+      {rows.map((row, at) => (
+        <View key={at} style={styles.row}>
+          {row}
+        </View>
       ))}
-      {grid.allTabs ? (
-        <Pressable style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`All ${props.total} tabs`} onPress={props.onAllTabs}>
-          <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
-            <View style={[styles.preview, styles.allTabs, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
-              <SystemIcon name="square.on.square" size={28} weight="medium" color={textColors.label} />
-              <Text style={styles.count}>{props.total}</Text>
-              <View style={styles.outline} pointerEvents="none" />
-            </View>
-          </View>
-          <View style={styles.label}>
-            <Text style={styles.name} numberOfLines={1}>
-              All tabs
-            </Text>
-          </View>
-        </Pressable>
-      ) : null}
     </View>
   );
 };
@@ -87,11 +99,13 @@ const makeStyles = (text: TextColors) =>
   StyleSheet.create({
     // Room above (under the header) and below (before the files).
     grid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
       gap: GAP,
       marginTop: 12,
       marginBottom: 20,
+    },
+    row: {
+      flexDirection: "row",
+      gap: GAP,
     },
     shadow: {
       borderRadius: PREVIEW_RADIUS,
