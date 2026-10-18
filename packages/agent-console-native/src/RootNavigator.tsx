@@ -50,6 +50,7 @@ import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
+import { PrinterScreen } from "./PrinterScreen";
 import { serverById } from "./servers";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
 import { RepoScreen } from "./RepoScreen";
@@ -115,6 +116,9 @@ export type RootStackParamList = {
   // A server's UPS page, rendered from that server's UPS dashboard API. The
   // server's address is threaded in (no hardcoded host) so it's multi-server.
   ServerUps: { serverName: string; serverAddress: string };
+  // A server's resin printer page: live status and the layer on the LCD, direct
+  // on the LAN or through the relay on that server.
+  ServerPrinter: { serverName: string; serverAddress: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -342,6 +346,7 @@ export const RootNavigator = (): React.ReactElement => {
           options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={serverById(route.params.serverId)?.name ?? "Server"} /> })}
         />
         <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
+        <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
