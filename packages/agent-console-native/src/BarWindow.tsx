@@ -203,8 +203,13 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   // computed once per frame and read by every style. The floor is the collapsed
   // bar — the composer's live height when given (so a grown input is not
   // clipped), else the one-line pill.
-  const composerFloor = props.composerFloor;
-  const visible = useDerivedValue(() => clampRequested(requested.value, frame, kbHeight.value, composerFloor?.value ?? MIN_HEIGHT));
+  // Always a shared value (a MIN_HEIGHT fallback when the consumer passes none),
+  // so the worklets read `.value` DIRECTLY — the optional chaining `?.value`
+  // hid the read from Reanimated's tracking, so the window ignored input-height
+  // changes until another recompute (the lag between input and window).
+  const fallbackFloor = useSharedValue(MIN_HEIGHT);
+  const composerFloor = props.composerFloor ?? fallbackFloor;
+  const visible = useDerivedValue(() => clampRequested(requested.value, frame, kbHeight.value, composerFloor.value));
   // True while a resize drag is down, so the owner's prop changes don't fight
   // the finger, and the pill's swipe-down never doubles as a resize.
   const resizing = useSharedValue(false);
@@ -375,7 +380,7 @@ export const BarWindow = (props: BarWindowProps): React.ReactElement => {
   // open. Computed right here, from shared values only (a helper made fresh each
   // render made Reanimated rebuild the style every render and hitched the drag).
   const windowStyle = useAnimatedStyle(() => {
-    const floor = composerFloor?.value ?? MIN_HEIGHT;
+    const floor = composerFloor.value;
     return { height: floor + (visible.value - floor) * grow.value };
   });
 
