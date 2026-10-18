@@ -25,9 +25,32 @@ public final class DubzHomeProps: ExpoSwiftUI.ViewProps {
     @Field var light: Bool?
     /** DEV: draw a border around the real content, so the outline matches it. */
     @Field var debug: Bool = false
+    // --- Part B: the composer bottom bar (apiVersion 2) ---
+    /** Render the composer as the bottom bar inside this view (Part B). Off by
+     * default so an apiVersion-1 consumer (suggestions only) is unchanged. */
+    @Field var showComposer: Bool = false
+    /** Seed text to restore a saved draft; typing is owned natively after. */
+    @Field var draft: String = ""
+    @Field var placeholder: String = ""
+    /** Focus the field (the window is open). */
+    @Field var open: Bool = false
+    /** Chip tints (hex at runtime), from composerChips' SSOT so the bars match. */
+    @Field var plusFill: Color?
+    @Field var plusIcon: Color?
+    @Field var sendActiveFill: Color?
+    @Field var sendMutedFill: Color?
     var onOpenSession = EventDispatcher()
     var onViewAll = EventDispatcher()
     var onActiveHeight = EventDispatcher()
+    /** Send the composed text (carried in the event, so JS need not mirror every
+     * keystroke). JS clears its draft and sends through the outbox. */
+    var onSend = EventDispatcher()
+    /** Draft changed — JS mirrors it to persist across close (not per-send). */
+    var onDraftChange = EventDispatcher()
+    /** The + (attach) chip tapped. */
+    var onPlus = EventDispatcher()
+    /** The collapsed bar tapped — JS opens the window. */
+    var onOpenComposer = EventDispatcher()
 }
 
 public class DubzHomeModule: Module {
@@ -38,8 +61,11 @@ public class DubzHomeModule: Module {
         // @expo/ui suggestions. Bump it when the contract/events change.
         // 1: the suggestions surface — native scroll, bottom-anchor,
         //    scroll-behind, expand, row animation (session area as content).
+        // 2: + the composer bottom bar (Part B) can live in this view, so the
+        //    window content (scroll + composer) is one native layout. Gated on
+        //    `showComposer`; dormant until JS wires it.
         Constants([
-            "apiVersion": 1,
+            "apiVersion": 2,
         ])
 
         View(DubzHomeView.self)
@@ -52,6 +78,11 @@ private let GAP: CGFloat = 8
 private let NUMBER_WIDTH: CGFloat = 60
 /// How many extra sessions the expand reveals.
 private let EXTRA = 4
+// Composer (Part B), matching composerBarSpec.ts / composerChips.tsx.
+private let COMPOSER_CHIP: CGFloat = 32
+private let COMPOSER_SEND: CGFloat = 38
+private let COMPOSER_FIELD_PADDING: CGFloat = 10
+private let INPUT_MAX_LINES = 8
 
 /// Dubz home's suggestions surface. A bottom-anchored ScrollView that fills the
 /// window and scrolls BEHIND the top and bottom bars (contentMargins by the
@@ -62,6 +93,10 @@ private let EXTRA = 4
 public struct DubzHomeView: ExpoSwiftUI.View {
     @ObservedObject public var props: DubzHomeProps
     @State private var expanded = false
+    // Part B owns the input text natively, so typing never round-trips to JS
+    // (seeded from props.draft to restore a saved draft).
+    @State private var text = ""
+    @FocusState private var composerFocused: Bool
 
     public init(props: DubzHomeProps) {
         self.props = props
@@ -78,6 +113,21 @@ public struct DubzHomeView: ExpoSwiftUI.View {
     }
 
     public var body: some View {
+        // Part A (scroll content + top bar) over Part B (the composer), one
+        // native layout so they size together. Part B is gated (dormant) until
+        // JS wires it; today showComposer is false and only Part A renders.
+        VStack(spacing: GAP) {
+            scrollContent
+            if props.showComposer {
+                composerBar
+                    // DEBUG: Part B's border, drawn on the real bar.
+                    .border(props.debug ? Color.blue : Color.clear, width: props.debug ? 1 : 0)
+            }
+        }
+    }
+
+    // Part A: the suggestions scroll.
+    private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             // Top → bottom: the + / View All row, the extra sessions, then the
             // main row — so the main pill rests at the bottom (on the composer
@@ -111,6 +161,72 @@ public struct DubzHomeView: ExpoSwiftUI.View {
         .onPreferenceChange(ContentHeightKey.self) { height in
             props.onActiveHeight(["height": Double(props.sessions.isEmpty ? 0 : height)])
         }
+    }
+
+    // MARK: - Part B: the composer
+
+    private var sendReady: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func send() {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        props.onSend(["text": body])
+        text = ""
+    }
+
+    // The composer uses TextField(axis:)/lineLimit(range) (iOS 16) and the
+    // two-param onChange (iOS 17); the module builds against a 15.0 floor, so
+    // gate the whole bar. The app runs iOS 26 — it always takes the real path.
+    @ViewBuilder
+    private var composerBar: some View {
+        if #available(iOS 17.0, *) {
+            composerBarImpl
+        } else {
+            EmptyView()
+        }
+    }
+
+    @available(iOS 17.0, *)
+    private var composerBarImpl: some View {
+        HStack(alignment: .bottom, spacing: GAP) {
+            Button { props.onPlus([:]) } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(props.plusIcon ?? .primary)
+                    .frame(width: COMPOSER_CHIP, height: COMPOSER_CHIP)
+            }
+            .buttonStyle(.plain)
+            .modifier(GlassCircle(tint: props.plusFill))
+            // + is smaller than send; bottom-aligned, lift it to send's centre.
+            .padding(.bottom, (COMPOSER_SEND - COMPOSER_CHIP) / 2)
+
+            TextField(props.placeholder, text: $text, axis: .vertical)
+                .lineLimit(1...INPUT_MAX_LINES)
+                .font(.system(size: 16))
+                .foregroundStyle(label)
+                .tint(secondary)
+                .focused($composerFocused)
+                .disabled(!props.open)
+                .frame(minHeight: COMPOSER_SEND, alignment: .center)
+                .onChange(of: text) { _, next in props.onDraftChange(["text": next]) }
+
+            Button { send() } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: COMPOSER_SEND, height: COMPOSER_SEND)
+            }
+            .buttonStyle(.plain)
+            .disabled(!sendReady)
+            .modifier(GlassCircle(tint: sendReady ? props.sendActiveFill : props.sendMutedFill))
+        }
+        .padding(.horizontal, COMPOSER_FIELD_PADDING)
+        .padding(.vertical, COMPOSER_FIELD_PADDING)
+        .modifier(GlassCapsule())
+        .onAppear { if text.isEmpty { text = props.draft } }
+        .onChange(of: props.open) { _, isOpen in composerFocused = isOpen }
     }
 
     // MARK: - Rows
@@ -216,6 +332,24 @@ private struct GlassCapsule: ViewModifier {
 #endif
         } else {
             content.background(Capsule().fill(.thinMaterial))
+        }
+    }
+}
+
+/// A tinted glass circle for the +/send chips, matching composerChips' glass
+/// buttons — same guards as GlassCapsule, with a solid-tint fallback.
+private struct GlassCircle: ViewModifier {
+    let tint: Color?
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+#if compiler(>=6.2)
+            let glass = tint.map { Glass.regular.tint($0).interactive() } ?? Glass.regular.interactive()
+            content.glassEffect(glass, in: Circle())
+#else
+            content.background(Circle().fill(tint ?? Color.gray))
+#endif
+        } else {
+            content.background(Circle().fill(tint ?? Color.gray))
         }
     }
 }

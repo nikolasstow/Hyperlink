@@ -73,6 +73,30 @@ export interface DubzHomeNativeProps extends ViewProps {
    * collapsed or empty), so the Dubz window grows to fit. NOT named `onChange`
    * (that collides with RN's reserved `topChange` and crashes on render). */
   readonly onActiveHeight?: (event: NativeSyntheticEvent<{ readonly height: number }>) => void;
+
+  // --- Part B: the composer bottom bar (apiVersion >= 2) ---
+  /** Render the composer as the bottom bar inside this view, so the window
+   * content (scroll + composer) is one native layout. Off → suggestions only. */
+  readonly showComposer?: boolean;
+  /** Seed text to restore a saved draft; typing is owned natively after. */
+  readonly draft?: string;
+  readonly placeholder?: string;
+  /** Focus the field (the window is open). */
+  readonly open?: boolean;
+  /** Chip tints (hex strings at runtime), from composerChips' SSOT. */
+  readonly plusFill?: ColorValue;
+  readonly plusIcon?: ColorValue;
+  readonly sendActiveFill?: ColorValue;
+  readonly sendMutedFill?: ColorValue;
+  /** Send the composed text (carried in the event, so JS need not mirror every
+   * keystroke); JS clears its draft and sends through the outbox. */
+  readonly onSend?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
+  /** Draft changed — JS mirrors it to persist across close (not per-send). */
+  readonly onDraftChange?: (event: NativeSyntheticEvent<{ readonly text: string }>) => void;
+  /** The + (attach) chip tapped. */
+  readonly onPlus?: (event: NativeSyntheticEvent<Record<string, never>>) => void;
+  /** The collapsed bar tapped — JS opens the window. */
+  readonly onOpenComposer?: (event: NativeSyntheticEvent<Record<string, never>>) => void;
 }
 
 const nativeModule =
@@ -82,7 +106,11 @@ const nativeModule =
 const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.apiVersion : 0;
 // 1: the suggestions surface — scroll, bottom-anchor, scroll-behind, expand,
 //    row animation, all native (session area as the content).
+// 2: + the composer bottom bar (Part B) can live in this view.
 const available = apiVersion >= 1;
+/** Whether this build's native view carries the composer (Part B), so JS may
+ * move the bottom bar into it. A build behind → keep the RN composer. */
+export const isDubzComposerNative = apiVersion >= 2;
 
 /** The native Dubz home surface, or undefined where this build has none (or too old). */
 export const DubzHomeNativeView: React.ComponentType<DubzHomeNativeProps> | undefined = available
