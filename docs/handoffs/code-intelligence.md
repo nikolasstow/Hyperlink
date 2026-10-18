@@ -143,7 +143,13 @@ prediction is the newest step. Owner: support several backends; personally Qwen.
 - **Measured on the M4 (24 GB):** 7B Q8 13 tok/s (1.6 s a line), right; 7B Q4 21 tok/s (1.0 s),
   right; 3B 0.1 s but wrong (`raceAll` for `all`). First call in a file ~4.7 s (reads it); after
   that a keystroke costs only the new text (prompt cache), as long as the extra context is stable.
-- **Next:** stream the answer (the first words show at once), then next-edit prediction.
+- **Streamed (built 2026-10-17):** `/complete` answers as server-sent events, each the
+  suggestion so far (shaped, without what follows the caret); an `error` event says why there is
+  none. The local model streams a piece at a time (about 50 ms a token; its draft model sometimes
+  gives a whole line in one step); opencode's generate does not stream, so a chat model's answer
+  comes as one event. The app reads it through expo/fetch (`InlineSuggestions`) and shows it as it
+  grows, under one id (the editor redraws it in place; no native change).
+- **Next:** next-edit prediction.
 
 ## Agents see what the editor shows (owner, 2026-10-16)
 
@@ -213,6 +219,8 @@ caret's offset (event), ghost text (inline suggestion, accept/dismiss).
 - [x] Agents get the editor's problems: settled `problems` endpoints + opencode plugin (edit results, `diagnostics` tool).
 - [x] ESLint's language server in the host (editor and agents).
 - [x] DubzContext `Diagnostics` entry; problems sent with messages (plugin `prompt` hook).
+- [x] (3) Suggestions stream: the first words show at once (local model).
+- [ ] Next-edit prediction.
 - [ ] The shared opencode (:4096) gets the plugin once the problems endpoints are on the API server it uses (:5199).
 - [ ] (4) Embedded TS language service (worklet runtime) + multiplexer.
 - [ ] (5) tree-sitter universal structure (if needed).

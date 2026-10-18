@@ -53,6 +53,7 @@ import { CommandCatalog } from "../commands/CommandCatalog";
 import { CommandEchoes } from "../commands/CommandEchoes";
 import { LanguageClient } from "../language/LanguageClient";
 import { LocalModelClient } from "../localModel/LocalModelClient";
+import { InlineSuggestions } from "../language/complete";
 import { ModelCatalog } from "../models/ModelCatalog";
 import { ServerAuth } from "../auth/ServerAuth";
 import { layer as secretStoreLayer } from "../auth/secretStoreNative";
@@ -75,8 +76,8 @@ const MODELS_STORAGE_PREFIX = "agent-console-native:models:";
 const COMMANDS_STORAGE_PREFIX = "agent-console-native:commands:";
 const ECHOES_STORAGE_PREFIX = "agent-console-native:echoes:";
 
-// The model catalog and opencode's event stream read their responses as they
-// come, so their client streams (expo/fetch; React Native's own fetch reads a
+// The model catalog, opencode's event stream and inline suggestions read
+// their responses as they come, so their client streams (expo/fetch; React Native's own fetch reads a
 // body whole).
 const streamingHttpClient = FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch)(authedStreamingFetch)));
 
@@ -103,6 +104,7 @@ const AppLayer = Layer.mergeAll(
   SessionWatch.layer,
   ServerAuth.layer.pipe(Layer.provide([asyncStorageLayer(AUTH_STORAGE_PREFIX), secretStoreLayer])),
   ModelCatalog.layer.pipe(Layer.provide([asyncStorageLayer(MODELS_STORAGE_PREFIX), streamingHttpClient])),
+  InlineSuggestions.layer.pipe(Layer.provide(streamingHttpClient)),
   CommandCatalog.layer.pipe(Layer.provide(asyncStorageLayer(COMMANDS_STORAGE_PREFIX))),
 ).pipe(
   Layer.provideMerge(Reachability.layer),

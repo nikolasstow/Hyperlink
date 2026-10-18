@@ -13,11 +13,14 @@
  *   reply only `<INSERT>…</INSERT>`.
  * - **Only where one fits** (`fitsAt`), and **shaped** (shape.ts): one line
  *   in the middle of a line, a block on a line of its own.
+ * - **Streamed** (server-sent events, `suggestionsFor`): the suggestion so far
+ *   as the local model writes it, so the first words show at once.
  *
  * @internal
  */
 import { Complete } from "agent-console-protocol";
-import { Duration, Effect, Schema } from "effect";
+import { Duration, Effect, Schema, Stream } from "effect";
+import { Sse } from "effect/encoding";
 import { Headers, HttpClient, HttpClientRequest, HttpClientResponse, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { FileHub } from "../files/hub";
 import { LanguageHost, type PlaceContext } from "../language/host";
@@ -29,8 +32,6 @@ import { type Snippet, snippetsFor } from "./snippets";
 /** The most the local model writes: a line, or a block. */
 const LINE_TOKENS = 64;
 const BLOCK_TOKENS = 192;
-
-const Infilled = Schema.Struct({ content: Schema.String });
 
 /** How long the language server is given for its part of the prompt. */
 const CONTEXT_WAIT = Duration.millis(600);
@@ -92,80 +93,126 @@ export const withoutOverlap = (text: string, suffix: string): string => {
  * Mid-line, with code after the caret, the line is already written. */
 export const fitsAt = (suffix: string): boolean => !/[^\s)\]}"'`;,]/.test(suffix.split("\n", 1)[0] ?? "");
 
+/** What llama.cpp's `/infill` streams: each piece of the answer. */
+const InfillPiece = Schema.Struct({ content: Schema.String });
+
+/** The suggestion at the caret as it grows: the text so far, each time it
+ * changes (the last is the whole of it). The local model's streams, a piece
+ * at a time; a chat model's comes whole. */
+export const suggestionsFor = (asked: Complete.Request) =>
+  Stream.unwrap(
+    Effect.gen(function* () {
+      if (!fitsAt(asked.suffix)) return Stream.make("");
+      const language = yield* LanguageHost;
+      const hub = yield* FileHub;
+      const http = yield* HttpClient.HttpClient;
+      const ownLine = isOwnLine(asked.prefix, asked.suffix);
+      // A model's answer as the suggestion: shaped, without what follows.
+      const made = (answer: string): string => withoutOverlap(shape(answer, asked.prefix, ownLine), asked.suffix);
+      // What the language server knows at the caret, if it answers in time;
+      // and the other open files' chunks most like the code at the caret.
+      const context = yield* language.contextAt(asked.path, asked.prefix).pipe(Effect.timeoutOrElse({ duration: CONTEXT_WAIT, orElse: () => Effect.succeed<PlaceContext>({ names: [] }) }));
+      const snippets = snippetsFor(asked.path, asked.prefix, yield* hub.openFiles);
+
+      // The local model (the server runs it, localModel/): chosen, or (none
+      // chosen) when it is ready.
+      const localModel = yield* LocalModel;
+      const useLocal = asked.model === undefined ? yield* localModel.ready : asked.model.providerID === Complete.local.providerID;
+      if (useLocal) {
+        const response = yield* HttpClientRequest.post(`${localModel.url}/infill`).pipe(
+          HttpClientRequest.bodyJsonUnsafe({
+            input_prefix: asked.prefix,
+            input_suffix: asked.suffix,
+            // Only what changes rarely: Qwen reads the extra context before
+            // the file, so a change there makes it read the whole prompt
+            // again (the language server's names change at every caret: the
+            // chat path only).
+            input_extra: snippets.map((snippet) => ({ filename: snippet.path, text: snippet.text })),
+            n_predict: ownLine ? BLOCK_TOKENS : LINE_TOKENS,
+            ...(ownLine ? {} : { stop: ["\n"] }),
+            // Greedy: the same place gives the same suggestion.
+            temperature: 0,
+            top_k: 1,
+            cache_prompt: true,
+            stream: true,
+          }),
+          http.execute,
+        );
+        if (response.status < 200 || response.status >= 300) {
+          const why = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
+          return yield* Effect.fail(new Error(`the local model answered ${response.status}: ${why.slice(0, 300)}`));
+        }
+        return response.stream.pipe(
+          Stream.decodeText,
+          Stream.pipeThroughChannel(Sse.decodeDataSchema(InfillPiece)),
+          Stream.scan(() => "", (sofar: string, piece) => sofar + piece.data.content),
+          Stream.drop(1),
+          Stream.map(made),
+          Stream.changes,
+        );
+      }
+
+      const base = yield* opencodeUrl;
+      const password = yield* opencodePassword;
+      // No model asked for: the server's pick (Complete.defaultModel), never
+      // opencode's own default (its free tier refuses us).
+      const model =
+        asked.model ??
+        (yield* http.get(`${base.replace(/\/+$/, "")}/api/model`, { headers: withOpencodeAuth(Headers.empty, password) }).pipe(
+          Effect.flatMap(HttpClientResponse.filterStatusOk),
+          Effect.flatMap(HttpClientResponse.schemaBodyJson(OpencodeModels)),
+          Effect.map((models) => {
+            const picked = Complete.defaultModel(models.data.filter((each) => each.enabled));
+            return picked === undefined ? undefined : { providerID: picked.providerID, id: picked.id };
+          }),
+        ));
+      // opencode's generate answers whole (it does not stream).
+      const response = yield* HttpClientRequest.post(`${base.replace(/\/+$/, "")}/api/experimental/generate`).pipe(
+        HttpClientRequest.setHeaders(withOpencodeAuth(Headers.empty, password)),
+        HttpClientRequest.bodyJsonUnsafe({ prompt: promptOf(asked, context, snippets), ...(model === undefined ? {} : { model }) }),
+        http.execute,
+      );
+      // opencode's refusal says why (no model, a model it will not run): kept.
+      if (response.status < 200 || response.status >= 300) {
+        const why = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
+        const asking = model === undefined ? "opencode's default model" : `${model.providerID}/${model.id}`;
+        return yield* Effect.fail(new Error(`generate answered ${response.status} for ${asking}: ${why.slice(0, 300)}`));
+      }
+      const generated = yield* HttpClientResponse.schemaBodyJson(Generated)(response);
+      return Stream.make(made(codeOf(generated.data.text)));
+    }),
+  );
+
+const encodeResponse = Schema.encodeEffect(Schema.fromJsonString(Complete.Response));
+
+/** An event of the answer, as server-sent events text. */
+const eventText = (event: string, data: string): string => Sse.encoder.write({ _tag: "Event", event, id: undefined, data });
+
 export const completeRoute = HttpRouter.add("POST", Complete.path, (request) =>
   Effect.gen(function* () {
     const asked = yield* HttpServerRequest.schemaBodyJson(Complete.Request);
-    if (!fitsAt(asked.suffix)) return yield* HttpServerResponse.schemaJson(Complete.Response)({ text: "" });
-    const language = yield* LanguageHost;
-    const hub = yield* FileHub;
-    const http = yield* HttpClient.HttpClient;
-    const ownLine = isOwnLine(asked.prefix, asked.suffix);
-    // What the language server knows at the caret, if it answers in time; and
-    // the other open files' chunks most like the code at the caret.
-    const context = yield* language.contextAt(asked.path, asked.prefix).pipe(Effect.timeoutOrElse({ duration: CONTEXT_WAIT, orElse: () => Effect.succeed<PlaceContext>({ names: [] }) }));
-    const snippets = snippetsFor(asked.path, asked.prefix, yield* hub.openFiles);
-
-    // The local model (the server runs it, localModel/): chosen, or (none
-    // chosen) when it is ready.
-    const localModel = yield* LocalModel;
-    const useLocal = asked.model === undefined ? yield* localModel.ready : asked.model.providerID === Complete.local.providerID;
-    if (useLocal) {
-      const response = yield* HttpClientRequest.post(`${localModel.url}/infill`).pipe(
-        HttpClientRequest.bodyJsonUnsafe({
-          input_prefix: asked.prefix,
-          input_suffix: asked.suffix,
-          // Only what changes rarely: Qwen reads the extra context before the
-          // file, so a change there makes it read the whole prompt again (the
-          // language server's names change at every caret: the chat path only).
-          input_extra: snippets.map((snippet) => ({ filename: snippet.path, text: snippet.text })),
-          n_predict: ownLine ? BLOCK_TOKENS : LINE_TOKENS,
-          ...(ownLine ? {} : { stop: ["\n"] }),
-          // Greedy: the same place gives the same suggestion.
-          temperature: 0,
-          top_k: 1,
-          cache_prompt: true,
-        }),
-        http.execute,
-      );
-      if (response.status < 200 || response.status >= 300) {
-        const why = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
-        return yield* Effect.fail(new Error(`the local model answered ${response.status}: ${why.slice(0, 300)}`));
-      }
-      const infilled = yield* HttpClientResponse.schemaBodyJson(Infilled)(response);
-      return yield* HttpServerResponse.schemaJson(Complete.Response)({ text: withoutOverlap(shape(infilled.content, asked.prefix, ownLine), asked.suffix) });
-    }
-
-    const base = yield* opencodeUrl;
-    const password = yield* opencodePassword;
-    // No model asked for: the server's pick (Complete.defaultModel), never
-    // opencode's own default (its free tier refuses us).
-    const model =
-      asked.model ??
-      (yield* http.get(`${base.replace(/\/+$/, "")}/api/model`, { headers: withOpencodeAuth(Headers.empty, password) }).pipe(
-        Effect.flatMap(HttpClientResponse.filterStatusOk),
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(OpencodeModels)),
-        Effect.map((models) => {
-          const picked = Complete.defaultModel(models.data.filter((each) => each.enabled));
-          return picked === undefined ? undefined : { providerID: picked.providerID, id: picked.id };
-        }),
-      ));
-    const response = yield* HttpClientRequest.post(`${base.replace(/\/+$/, "")}/api/experimental/generate`).pipe(
-      HttpClientRequest.setHeaders(withOpencodeAuth(Headers.empty, password)),
-      HttpClientRequest.bodyJsonUnsafe({ prompt: promptOf(asked, context, snippets), ...(model === undefined ? {} : { model }) }),
-      http.execute,
+    const services = yield* Effect.context<LanguageHost | FileHub | HttpClient.HttpClient | LocalModel>();
+    const events = suggestionsFor(asked).pipe(
+      Stream.mapEffect((text) => encodeResponse({ text })),
+      Stream.map((data) => eventText("message", data)),
+      // Why there is none goes to the app (and the log); then the stream ends.
+      Stream.catch((error) =>
+        Stream.fromEffect(Effect.logWarning("complete: no suggestion", error).pipe(Effect.as(eventText(Complete.errorEvent, error instanceof Error ? error.message : String(error))))),
+      ),
+      Stream.encodeText,
+      Stream.provideContext(services),
     );
-    // opencode's refusal says why (no model, a model it will not run): kept.
-    if (response.status < 200 || response.status >= 300) {
-      const why = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
-      const asking = model === undefined ? "opencode's default model" : `${model.providerID}/${model.id}`;
-      return yield* Effect.fail(new Error(`generate answered ${response.status} for ${asking}: ${why.slice(0, 300)}`));
-    }
-    const generated = yield* HttpClientResponse.schemaBodyJson(Generated)(response);
-    return yield* HttpServerResponse.schemaJson(Complete.Response)({ text: withoutOverlap(shape(codeOf(generated.data.text), asked.prefix, ownLine), asked.suffix) });
+    return HttpServerResponse.stream(events, {
+      contentType: "text/event-stream",
+      headers: {
+        "cache-control": "no-cache, no-transform",
+        "x-accel-buffering": "no",
+      },
+    });
   }).pipe(
     Effect.provideService(HttpServerRequest.HttpServerRequest, request),
     Effect.catch((error) =>
-      Effect.logWarning("complete: no suggestion", error).pipe(Effect.as(HttpServerResponse.jsonUnsafe({ error: "no suggestion" }, { status: 502 }))),
+      Effect.logWarning("complete: a request it could not read", error).pipe(Effect.as(HttpServerResponse.jsonUnsafe({ error: "a request it could not read" }, { status: 400 }))),
     ),
   ),
 );

@@ -1,7 +1,8 @@
 /**
  * The inline suggestion for the open file (docs/handoffs/code-intelligence.md):
- * asked for once typing pauses with the caret in place; an answer that comes
- * after the text or caret moved is dropped. What shows, and when it goes, is
+ * asked for once typing pauses with the caret in place, and shown as it
+ * streams in (it grows as the model writes); an answer that comes after the
+ * text or caret moved is dropped. What shows, and when it goes, is
  * the editor's (InlineSuggestion.swift: only while the caret is where it was
  * made for; a first space keeps it for the double space). So a suggestion is
  * not cleared here as typing goes on: that would take it away between the
@@ -9,11 +10,11 @@
  *
  * @internal
  */
-import { Effect, Fiber } from "effect";
+import { Effect, Fiber, Stream } from "effect";
 import * as React from "react";
 import { useAppContext } from "../AppContext";
 import { forkApp } from "../effect/runtime";
-import { completeAt } from "../language/complete";
+import { InlineSuggestions } from "../language/complete";
 import { useSuggestionSettings } from "./suggestionSettings";
 
 /** How long typing must pause before a suggestion is asked for. */
@@ -48,12 +49,17 @@ export const useInlineSuggestion = (path: string, text: string | undefined, care
     let request: Fiber.Fiber<unknown> | undefined;
     const timer = setTimeout(() => {
       request = forkApp(
-        completeAt(server, path, text, caret, model).pipe(
-          Effect.tap((found) =>
-            Effect.sync(() => {
-              // Only for the text and caret it was asked about.
-              if (asked.current === id && found !== "") setSuggestion({ id: String(id), at: caret, text: found });
-            }),
+        InlineSuggestions.pipe(
+          Effect.flatMap((suggestions) =>
+            suggestions.at(server, path, text, caret, model).pipe(
+              // Shown as it grows (one id: the editor redraws it in place).
+              Stream.runForEach((found) =>
+                Effect.sync(() => {
+                  // Only for the text and caret it was asked about.
+                  if (asked.current === id && found !== "") setSuggestion({ id: String(id), at: caret, text: found });
+                }),
+              ),
+            ),
           ),
           Effect.catch((error) => Effect.logWarning(`[suggestions] none for ${path}`, error)),
         ),

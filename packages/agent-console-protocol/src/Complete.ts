@@ -3,6 +3,11 @@
  * the caret, from a model, as `POST /complete` answers it. The app sends the
  * text around the caret as you see it (unsaved edits included).
  *
+ * The answer streams, as server-sent events: each `message` event is a
+ * `Response`, the suggestion so far (it grows as the model writes; the last
+ * is the whole of it). An `error` event says why there is none (its data,
+ * text); the stream ends after it.
+ *
  * @since 0.0.1
  */
 import { Schema } from "effect";
@@ -22,11 +27,15 @@ export const Request = Schema.Struct({
 });
 export type Request = typeof Request.Type;
 
-/** What to insert at the caret; empty when there is nothing to suggest. */
+/** What to insert at the caret, so far; empty when there is nothing to
+ * suggest. */
 export const Response = Schema.Struct({
   text: Schema.String,
 });
 export type Response = typeof Response.Type;
+
+/** The event that says why there is no suggestion. */
+export const errorEvent = "error";
 
 /** The model a suggestion is written by when none is chosen: Claude Haiku 4.5
  * when offered (quick, and good at this), else another Haiku. Not opencode's

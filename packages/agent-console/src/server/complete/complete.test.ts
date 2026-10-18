@@ -11,8 +11,26 @@ import { snippetsFor } from "./snippets";
 
 const UPSTREAM_PORT = 6300 + Math.floor(Math.random() * 100);
 const asked: Array<{ readonly url: string; readonly body: unknown }> = [];
-/** Whether the local model is ready. */
+/** Whether the local model is ready, and whether it fails. */
 let localUp = false;
+let infillFails = false;
+
+/** The events of an answer: each one's name and data. */
+const eventsOf = (text: string): ReadonlyArray<{ readonly event: string; readonly data: string }> =>
+  text
+    .split("\n\n")
+    .filter((block) => block.trim() !== "")
+    .map((block) => {
+      const lines = block.split("\n");
+      const event = lines.find((line) => line.startsWith("event: "))?.slice("event: ".length) ?? "message";
+      return { event, data: lines.filter((line) => line.startsWith("data: ")).map((line) => line.slice("data: ".length)).join("\n") };
+    });
+
+/** The suggestions an answer streams, in order. */
+const suggestionsOf = (text: string): ReadonlyArray<string> =>
+  eventsOf(text)
+    .filter((each) => each.event === "message")
+    .map((each) => Schema.decodeUnknownSync(Schema.fromJsonString(Complete.Response))(each.data).text);
 
 /** A stand-in for opencode v2's one-shot generate: answers in a fence, as models sometimes do. */
 const upstream = createServer((request: IncomingMessage, response: ServerResponse) => {
@@ -21,9 +39,16 @@ const upstream = createServer((request: IncomingMessage, response: ServerRespons
   request.on("end", () => {
     if (request.url === "/infill") {
       asked.push({ url: request.url, body: JSON.parse(body) });
-      response.writeHead(200, { "content-type": "application/json" });
-      // A fill-in-the-middle model writes on past the line: shaping keeps one.
-      response.end(JSON.stringify({ content: "values.reduce((a, b) => a + b, 0);\nconst more = 1;" }));
+      if (infillFails) {
+        response.writeHead(500, { "content-type": "text/plain" });
+        response.end("out of memory");
+        return;
+      }
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      // Streamed a piece at a time; a fill-in-the-middle model writes on past
+      // the line: shaping keeps one.
+      for (const content of ["values", ".reduce((a, b)", " => a + b, 0);", "\nconst more = 1;"]) response.write(`data: ${JSON.stringify({ content, stop: false })}\n\n`);
+      response.end(`data: ${JSON.stringify({ content: "", stop: true })}\n\n`);
       return;
     }
     if (request.url === "/api/model") {
@@ -83,7 +108,9 @@ describe("POST /complete", () => {
     const context = await Effect.runPromise(Layer.build(Layer.mergeAll(FetchHttpClient.layer, knowing)).pipe(Effect.scoped));
     try {
       const response = await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify(request), headers: { "content-type": "application/json" } }), context);
-      expect(Schema.decodeUnknownSync(Schema.fromJsonString(Complete.Response))(await response.text())).toEqual({ text: "values.reduce((a, b) => a + b, 0);" });
+      expect(response.headers.get("content-type")).toBe("text/event-stream");
+      // A chat model's answer comes whole: one event.
+      expect(suggestionsOf(await response.text())).toEqual(["values.reduce((a, b) => a + b, 0);"]);
       expect(asked[0]?.url).toBe("/api/experimental/generate");
       const near = snippetsFor(request.path, request.prefix, [{ path: "/r/helpers.ts", text: "export const sumValues = (values: number[]) => values.reduce((a, b) => a + b, 0);" }]);
       expect(near.length).toBe(1);
@@ -96,7 +123,7 @@ describe("POST /complete", () => {
 });
 
 describe("POST /complete with the local model up", () => {
-  it("asks it to fill in the middle, with the open files' chunks, greedy, and keeps one line mid-line", async () => {
+  it("asks it to fill in the middle, with the open files' chunks, greedy, streamed, and keeps one line mid-line", async () => {
     const { handler, dispose } = HttpRouter.toWebHandler(completeRoute, { disableLogger: true });
     const context = await Effect.runPromise(Layer.build(Layer.mergeAll(FetchHttpClient.layer, knowing)).pipe(Effect.scoped));
     localUp = true;
@@ -104,15 +131,36 @@ describe("POST /complete with the local model up", () => {
       asked.length = 0;
       const { model: _model, ...noModel } = request;
       const response = await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify({ ...noModel, prefix: "const total = sumValues(values) + ", suffix: "\n" }), headers: { "content-type": "application/json" } }), context);
-      expect(await response.json()).toEqual({ text: "values.reduce((a, b) => a + b, 0);" });
+      // The suggestion as it grows, piece by piece; the line's end ends it.
+      expect(suggestionsOf(await response.text())).toEqual(["values", "values.reduce((a, b)", "values.reduce((a, b) => a + b, 0);"]);
       expect(asked[0]?.url).toBe("/infill");
-      expect(asked[0]?.body).toMatchObject({ input_prefix: "const total = sumValues(values) + ", input_suffix: "\n", stop: ["\n"], temperature: 0, top_k: 1, cache_prompt: true });
+      expect(asked[0]?.body).toMatchObject({ input_prefix: "const total = sumValues(values) + ", input_suffix: "\n", stop: ["\n"], temperature: 0, top_k: 1, cache_prompt: true, stream: true });
       expect(JSON.stringify(asked[0]?.body)).toContain("/r/helpers.ts");
       // Not the language server's names (they change at every caret, and would
       // make it read the whole prompt again).
       expect(JSON.stringify(asked[0]?.body)).not.toContain("Names valid at the cursor");
     } finally {
       localUp = false;
+      await dispose();
+    }
+  });
+});
+
+describe("POST /complete when the model fails", () => {
+  it("says why in an error event, and suggests nothing", async () => {
+    const { handler, dispose } = HttpRouter.toWebHandler(completeRoute, { disableLogger: true });
+    const context = await Effect.runPromise(Layer.build(Layer.mergeAll(FetchHttpClient.layer, knowing)).pipe(Effect.scoped));
+    localUp = true;
+    infillFails = true;
+    try {
+      const { model: _model, ...noModel } = request;
+      const response = await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify({ ...noModel, suffix: "\n" }), headers: { "content-type": "application/json" } }), context);
+      const events = eventsOf(await response.text());
+      expect(events.map((each) => each.event)).toEqual([Complete.errorEvent]);
+      expect(events[0]?.data).toContain("the local model answered 500: out of memory");
+    } finally {
+      localUp = false;
+      infillFails = false;
       await dispose();
     }
   });
@@ -125,7 +173,8 @@ describe("POST /complete without a model", () => {
     try {
       asked.length = 0;
       const { model: _model, ...noModel } = request;
-      await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify(noModel), headers: { "content-type": "application/json" } }), context);
+      // The answer is made as it streams: read to its end.
+      await (await handler(new Request(`http://localhost${Complete.path}`, { method: "POST", body: JSON.stringify(noModel), headers: { "content-type": "application/json" } }), context)).text();
       expect(asked[0]?.body).toMatchObject({ model: { providerID: "opencode", id: "claude-haiku-4-5" } });
     } finally {
       await dispose();
