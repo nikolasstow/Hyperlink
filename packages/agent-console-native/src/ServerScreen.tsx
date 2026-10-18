@@ -45,7 +45,7 @@ const ENTRIES: ReadonlyArray<Entry> = [
   {
     id: "printer",
     title: "Resin Printer",
-    subtitle: "Live layer & progress",
+    subtitle: "Live print, camera, and files",
     icon: "printer.fill",
     open: (navigation, server) => navigation.navigate("ServerPrinter", { serverName: server.name, serverAddress: server.address }),
   },

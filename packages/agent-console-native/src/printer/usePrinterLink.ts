@@ -7,9 +7,9 @@
  * printer's LAN address and ids; the last answer is kept in AsyncStorage so
  * the direct path works even when the relay is down.
  *
- * Layer images always come from the relay: it is the only side that can
- * read and decode the print file. When it is unreachable the page falls back
- * to the printer's own task thumbnail.
+ * Layer images, the camera, and files come from the relay, so the hook keeps
+ * checking `GET /api/state` and reports `relayReachable`. When the relay is
+ * down on the LAN, the page decodes layers itself (`directLayers.ts`).
  *
  * @internal
  */
@@ -40,6 +40,8 @@ export interface PrinterLink {
   readonly relayBase: string;
   /** Whether the last `/api/state` call answered. */
   readonly relayReachable: boolean;
+  /** The relay's HTTPS address, when it has one: its camera page plays full frame rate there. */
+  readonly secureUrl: string | undefined;
   readonly printerIp: string | undefined;
   /** The last notice the printer or relay sent. */
   readonly notice: string | undefined;
@@ -107,14 +109,13 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
   const [status, setStatus] = React.useState<PrinterStatus | undefined>(undefined);
   const [attributes, setAttributes] = React.useState<PrinterAttributes | undefined>(undefined);
   const [relayReachable, setRelayReachable] = React.useState(false);
+  const [secureUrl, setSecureUrl] = React.useState<string | undefined>(undefined);
   const [notice, setNotice] = React.useState<string | undefined>(undefined);
   const [updatedAt, setUpdatedAt] = React.useState<number | undefined>(undefined);
   const [identity, setIdentity] = React.useState<PrinterIdentity | undefined>(undefined);
   const [generation, setGeneration] = React.useState(0);
   const identityRef = React.useRef<PrinterIdentity | undefined>(undefined);
   identityRef.current = identity;
-  const linkRef = React.useRef<LinkState>(link);
-  linkRef.current = link;
 
   // The relay's view: printer identity, and a first status to draw before any frame arrives.
   React.useEffect(() => {
@@ -123,15 +124,16 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
     void loadIdentity(serverAddress).then((cached) => {
       if (alive && cached !== undefined && identityRef.current === undefined) setIdentity(cached);
     });
+    // Keep checking while connected directly too: layer images, the camera, and files come
+    // from the relay, and the page must notice when it goes away. This asks the relay only;
+    // it does not make the relay open a printer connection.
     const tick = (): void => {
-      // The relay is only for when the printer cannot be reached: once the page knows the
-      // printer's address and is connected to it directly, leave the relay alone.
-      if (identityRef.current !== undefined && linkRef.current.kind === "Open" && linkRef.current.via === "Direct") return;
       void authedFetch(`${relayBase}/api/state`, { cache: "no-store" })
         .then((response) => response.json())
         .then((state: RelayState) => {
           if (!alive) return;
           setRelayReachable(true);
+          setSecureUrl(state.relay?.secureUrl?.replace(/\/$/, "") ?? undefined);
           const next: PrinterIdentity = { ip: state.printer.ip, port: state.printer.port, mainboardId: state.printer.mainboardId, brandId: state.printer.brandId };
           setIdentity((current) => (current !== undefined && current.ip === next.ip && current.mainboardId === next.mainboardId && current.brandId === next.brandId ? current : next));
           saveIdentity(serverAddress, next);
@@ -153,7 +155,17 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
   const printerIp = identity?.ip;
   const printerPort = identity?.port ?? PRINTER_PORT;
   const socketRef = React.useRef<WebSocket | undefined>(undefined);
-  const pendingRef = React.useRef(new Map<string, (ack: number) => void>());
+  const pendingRef = React.useRef(new Map<string, { readonly resolve: (ack: number) => void; readonly timer: ReturnType<typeof setTimeout> }>());
+
+  // Leaving the page drops pending controls without an answer: a late "did not answer"
+  // would show on another screen, about a command that most likely worked.
+  React.useEffect(() => {
+    const pending = pendingRef.current;
+    return () => {
+      pending.forEach((entry) => clearTimeout(entry.timer));
+      pending.clear();
+    };
+  }, []);
 
   // The socket: direct first when the printer's address is known, then the relay.
   React.useEffect(() => {
@@ -161,6 +173,8 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
     let alive = true;
     let socket: WebSocket | undefined;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    // One dial at a time: a second one could open a second socket that nothing closes.
+    let dialing = false;
 
     const send = (cmd: typeof CMD_STATUS | typeof CMD_ATTRIBUTES): void => {
       const ids = identityRef.current;
@@ -183,10 +197,11 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
         } else if (frame.kind === "notice") {
           setNotice(frame.message);
         } else if (frame.kind === "response" && frame.ack !== undefined) {
-          const resolve = pendingRef.current.get(frame.requestId);
-          if (resolve !== undefined) {
+          const entry = pendingRef.current.get(frame.requestId);
+          if (entry !== undefined) {
             pendingRef.current.delete(frame.requestId);
-            resolve(frame.ack);
+            clearTimeout(entry.timer);
+            entry.resolve(frame.ack);
           }
         }
       };
@@ -202,6 +217,16 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
     };
 
     const connect = async (): Promise<void> => {
+      if (dialing) return;
+      dialing = true;
+      try {
+        await dial();
+      } finally {
+        dialing = false;
+      }
+    };
+
+    const dial = async (): Promise<void> => {
       setLink({ kind: "Connecting" });
       const plan: ReadonlyArray<readonly [Via, string, number]> = [
         ...(printerIp === undefined ? [] : [["Direct", `ws://${printerIp}:${printerPort}${PRINTER_WEBSOCKET_PATH}`, DIRECT_TIMEOUT_MS] as const]),
@@ -263,17 +288,19 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
           pendingRef.current.delete(id);
           reject(new Error("The printer did not answer"));
         }, CONTROL_TIMEOUT_MS);
-        pendingRef.current.set(id, (ack) => {
-          clearTimeout(timer);
-          resolve(ack);
-          // Ask for status at once so the page shows the new state.
-          const current = socketRef.current;
-          if (current !== undefined && current.readyState === WebSocket.OPEN) current.send(refreshRequest(CMD_STATUS, ids, requestId(), Date.now()));
+        pendingRef.current.set(id, {
+          timer,
+          resolve: (ack) => {
+            resolve(ack);
+            // Ask for status at once so the page shows the new state.
+            const current = socketRef.current;
+            if (current !== undefined && current.readyState === WebSocket.OPEN) current.send(refreshRequest(CMD_STATUS, ids, requestId(), Date.now()));
+          },
         });
         socket.send(controlRequest(cmd, ids, id, Date.now()));
       }),
     [],
   );
 
-  return { link, status, attributes, relayBase, relayReachable, printerIp, notice, updatedAt, reconnect, sendControl };
+  return { link, status, attributes, relayBase, relayReachable, secureUrl, printerIp, notice, updatedAt, reconnect, sendControl };
 };

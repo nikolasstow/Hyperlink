@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CMD_PAUSE, controlAckLabel, controlRequest, isPrinting, layerIndexOf, parseFrame, phaseLabel, refreshRequest } from "./sdcp";
+import { CMD_PAUSE, controlAckLabel, controlRequest, isPrinting, layerIndexOf, parseFrame, phaseLabel, printErrorLabel, refreshRequest } from "./sdcp";
 
 // A status push as the Saturn 4 Ultra 16K (firmware V1.5.6) sends it, trimmed.
 const statusPush =
@@ -58,5 +58,12 @@ describe("refreshRequest", () => {
       Data: { Cmd: 0, Data: {}, RequestID: "req1", MainboardID: "mb", TimeStamp: 1000, From: 3 },
       Topic: "sdcp/request/mb",
     });
+  });
+});
+
+describe("printErrorLabel", () => {
+  it("names the print errors", () => {
+    expect(printErrorLabel(2)).toBe("File read failed");
+    expect(printErrorLabel(42)).toBe("Error 42");
   });
 });

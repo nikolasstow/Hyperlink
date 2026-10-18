@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alphaMask, cropToLit, decodeLayerImage, encodePng, layerDataLength, nextLayerOffset } from "./goo";
+import { alphaMask, cropToLit, decodeLayerImage, encodePng, layerDataLength, nextLayerOffset, pixelAspect, stretchY } from "./goo";
 
 /** A minimal encoder for tests: black, white, and grey runs (the relay's tests use the same one). */
 const encode = (runs: ReadonlyArray<readonly [value: number, count: number]>): Uint8Array => {
@@ -61,5 +61,18 @@ describe("helpers", () => {
   it("writes a PNG signature", () => {
     const png = encodePng({ width: 1, height: 1, channels: 2, pixels: Uint8Array.from([255, 128]) });
     expect(Array.from(png.subarray(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  });
+});
+
+describe("square pixels", () => {
+  it("knows the Saturn 4 Ultra 16K's pixels are about 1.36 times taller than wide", () => {
+    expect(pixelAspect({ displayWidthMm: 211.68, displayHeightMm: 118.37, resolutionX: 15120, resolutionY: 6230 })).toBeCloseTo(1.357, 2);
+  });
+
+  it("stretches rows so the image keeps its real shape", () => {
+    const tall = stretchY({ width: 2, height: 2, channels: 1, pixels: Uint8Array.of(0, 0, 255, 255) }, 2);
+    expect(tall.height).toBe(4);
+    expect(Array.from(tall.pixels.subarray(0, 2))).toEqual([0, 0]);
+    expect(Array.from(tall.pixels.subarray(6, 8))).toEqual([255, 255]);
   });
 });

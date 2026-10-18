@@ -43,6 +43,7 @@ export interface PrinterStatus {
 
 export interface PrinterAttributes {
   readonly Name?: string;
+  readonly BrandName?: string;
   readonly MachineName?: string;
   readonly FirmwareVersion?: string;
   readonly MainboardIP?: string;
@@ -53,10 +54,18 @@ export interface PrinterAttributes {
   readonly RemainingMemory?: number;
   readonly NumberOfVideoStreamConnected?: number;
   readonly MaximumVideoStreamAllowed?: number;
+  /** "wlan" or "eth". */
+  readonly NetworkStatus?: string;
+  /** 1 while a USB drive is in. */
+  readonly UsbDiskStatus?: number;
+  /** The printer's self-check: 1 is normal for every field. */
+  readonly DevicesStatus?: Readonly<Record<string, number>>;
 }
 
 /** What the relay's `GET /api/state` returns (only the fields the page reads). */
 export interface RelayState {
+  /** `secureUrl` is the relay's HTTPS address, when it has one (the camera needs it for full frame rate). */
+  readonly relay?: { readonly secureUrl: string | null };
   readonly connection: "Connected" | "Connecting";
   readonly printer: {
     readonly name: string;
@@ -135,6 +144,7 @@ export const controlAckLabel = (ack: number): string =>
 export const PHASE_PAUSING = 5;
 export const PHASE_PAUSED = 6;
 export const PHASE_STOPPING = 7;
+export const PHASE_STOPPED = 8;
 
 /** A status or attributes refresh request. */
 export const refreshRequest = (cmd: typeof CMD_STATUS | typeof CMD_ATTRIBUTES, ids: { readonly brandId: string; readonly mainboardId: string }, requestId: string, nowMs: number): string =>
@@ -148,6 +158,17 @@ const MACHINE = ["Idle", "Printing", "Transferring", "Exposure test", "Device te
 const PHASE = ["Idle", "Homing", "Dropping", "Exposing", "Lifting", "Pausing", "Paused", "Stopping", "Stopped", "Complete", "Checking file"];
 
 export const machineLabel = (code: number): string => MACHINE[code] ?? `Code ${code}`;
+
+const PRINT_ERRORS: Readonly<Record<number, string>> = {
+  1: "File MD5 check failed",
+  2: "File read failed",
+  3: "Resolution mismatch",
+  4: "Format mismatch",
+  5: "Machine model mismatch",
+};
+
+/** What a print's `ErrorNumber` means (`sdcp_print_error_t`). */
+export const printErrorLabel = (code: number): string => PRINT_ERRORS[code] ?? `Error ${code}`;
 export const phaseLabel = (code: number | undefined): string => (code === undefined ? "Idle" : PHASE[code] ?? `Status ${code}`);
 
 export const PHASE_EXPOSING = 3;

@@ -26,6 +26,9 @@ export interface GooHeader {
   readonly resolutionX: number;
   readonly resolutionY: number;
   readonly mirrorX: boolean;
+  /** The LCD's size. 16K pixels are not square, so this, not the resolution, gives its shape. */
+  readonly displayWidthMm: number;
+  readonly displayHeightMm: number;
   readonly layerHeightMm: number;
   readonly exposureSeconds: number;
   readonly bottomExposureSeconds: number;
@@ -52,6 +55,8 @@ export const parseHeader = (bytes: Uint8Array): GooHeader => {
     resolutionX: v.getUint16(195314),
     resolutionY: v.getUint16(195316),
     mirrorX: v.getUint8(195318) !== 0,
+    displayWidthMm: Math.round(v.getFloat32(195320) * 10000) / 10000,
+    displayHeightMm: Math.round(v.getFloat32(195324) * 10000) / 10000,
     layerHeightMm: Math.round(v.getFloat32(195332) * 10000) / 10000,
     exposureSeconds: Math.round(v.getFloat32(195336) * 10000) / 10000,
     bottomExposureSeconds: Math.round(v.getFloat32(195369) * 10000) / 10000,
@@ -182,6 +187,30 @@ export const cropToLit = (raster: Raster): Raster => {
   const pixels = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) pixels.set(raster.pixels.subarray((y0 + y) * raster.width + x0, (y0 + y) * raster.width + x1), y * width);
   return { width, height, channels: 1, pixels };
+};
+
+/** How much taller each LCD pixel is than wide (about 1.36 on a Saturn 4 Ultra 16K: 14 x 19 micrometres). */
+export const pixelAspect = (header: Pick<GooHeader, "displayWidthMm" | "displayHeightMm" | "resolutionX" | "resolutionY">): number =>
+  header.displayWidthMm > 0 && header.displayHeightMm > 0 && header.resolutionX > 0 && header.resolutionY > 0
+    ? header.displayHeightMm / header.resolutionY / (header.displayWidthMm / header.resolutionX)
+    : 1;
+
+/** Stretches a one-channel raster vertically by `factor` (blending neighbouring rows), so its pixels come out square. */
+export const stretchY = (raster: Raster, factor: number): Raster => {
+  if (Math.abs(factor - 1) < 0.001) return raster;
+  const height = Math.max(1, Math.round(raster.height * factor));
+  const pixels = new Uint8Array(raster.width * height);
+  for (let y = 0; y < height; y++) {
+    const source = Math.max(0, Math.min(raster.height - 1, (y + 0.5) / factor - 0.5));
+    const a = Math.floor(source);
+    const b = Math.min(raster.height - 1, a + 1);
+    const t = source - a;
+    for (let x = 0; x < raster.width; x++) {
+      const top = raster.pixels[a * raster.width + x];
+      pixels[y * raster.width + x] = Math.round(top + (raster.pixels[b * raster.width + x] - top) * t);
+    }
+  }
+  return { width: raster.width, height, channels: 1, pixels };
 };
 
 /** White with the grey value as alpha, optionally flipped left to right (as on the LCD for `mirrorX` files). */
