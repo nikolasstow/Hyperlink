@@ -27,6 +27,11 @@ describe("hoverParts", () => {
     expect(parts.docs).toBe("Runs a **generator**.\n\n*@since* 2.0.0");
   });
 
+  it("keeps the type spelled out beside the compact one", () => {
+    const parts = hoverParts("```typescript\nconst job: Job\n```\nA job.", "const job: {\n    readonly id: string;\n}");
+    expect(parts).toEqual({ code: [{ lang: "typescript", text: "const job: Job" }], expanded: "const job: {\n    readonly id: string;\n}", docs: "A job." });
+  });
+
   it("keeps docs alone, and code alone", () => {
     expect(hoverParts("Just words.")).toEqual({ code: [], docs: "Just words." });
     expect(hoverParts("```ts\nlet a: 1\n```")).toEqual({ code: [{ lang: "ts", text: "let a: 1" }], docs: "" });

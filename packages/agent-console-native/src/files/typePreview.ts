@@ -31,15 +31,17 @@ const WORD = /[\w$]/;
 export const caretAnchor = (text: string, caret: number): number =>
   WORD.test(text.charAt(caret)) || !WORD.test(text.charAt(caret - 1)) ? caret : caret - 1;
 
-/** A hover, as the preview shows it: its code (the type, compact), then its
- * docs (Markdown). */
+/** A hover, as the preview shows it: its code (the type, compact), the type
+ * spelled out (its members; when that says more), then its docs (Markdown). */
 export interface HoverParts {
   readonly code: ReadonlyArray<{ readonly lang: string; readonly text: string }>;
+  readonly expanded?: string;
   readonly docs: string;
 }
 
-/** The fenced code at the top of a hover's Markdown, and the rest. */
-export const hoverParts = (markdown: string): HoverParts => {
+/** The fenced code at the top of a hover's Markdown, the type spelled out
+ * (`expanded`, as the server gave it), and the rest. */
+export const hoverParts = (markdown: string, expanded?: string): HoverParts => {
   const code: Array<{ readonly lang: string; readonly text: string }> = [];
   let rest = markdown.trimStart();
   for (;;) {
@@ -48,5 +50,5 @@ export const hoverParts = (markdown: string): HoverParts => {
     code.push({ lang: fence[1] === "" ? "typescript" : (fence[1] ?? "typescript"), text: fence[2] ?? "" });
     rest = rest.slice(fence[0].length);
   }
-  return { code, docs: rest.trim() };
+  return { code, ...(expanded === undefined ? {} : { expanded }), docs: rest.trim() };
 };

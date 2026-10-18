@@ -32,20 +32,28 @@ export const CodeBlock = (props: {
 
   // Re-tokenize only when the inputs actually change; a stable themeName keeps
   // this from firing on unrelated re-renders.
+  // The theme itself is read when it runs (a raw theme object is often made
+  // anew each render).
   const themeName = typeof props.theme === "string" ? props.theme : (props.theme.name ?? "custom");
+  const themeNow = React.useRef(props.theme);
+  React.useEffect(() => {
+    themeNow.current = props.theme;
+  });
   React.useEffect(() => {
     let cancelled = false;
-    void tokenizeCode({ code: props.code, lang: props.lang, theme: props.theme })
+    void tokenizeCode({ code: props.code, lang: props.lang, theme: themeNow.current })
       .then((r) => {
         if (!cancelled) setResult(r);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        // Shown plain, and said why.
+        console.warn(`[code] could not colour ${props.lang} in ${themeName}`, error);
         if (!cancelled) setResult(undefined);
       });
     return () => {
       cancelled = true;
     };
-  }, [props.code, props.lang, themeName]); // eslint-disable-line react-hooks/exhaustive-deps -- theme keyed by name
+  }, [props.code, props.lang, themeName]);
 
   const background = result?.background ?? colors.fillBackground;
   const foreground = result?.foreground ?? textColors.label;

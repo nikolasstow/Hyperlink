@@ -74,6 +74,8 @@ const HoverResult = Schema.NullOr(
   Schema.Struct({
     contents: Schema.Union([Schema.Struct({ kind: Schema.String, value: Schema.String }), MarkedString, Schema.Array(MarkedString)]),
     range: Schema.optional(LspRange),
+    /** TypeScript's (5.9 on): the type can be spelled out further. */
+    canIncreaseVerbosityLevel: Schema.optional(Schema.Boolean),
   }),
 );
 const decodeHover = Schema.decodeUnknownEffect(HoverResult);
@@ -130,6 +132,9 @@ const problemOf = (diagnostic: LspDiagnostic): Language.Problem => ({
   ...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
 });
 
+/** The first fenced code in Markdown (the type, in a hover), if any. */
+const firstCode = (markdown: string): string | undefined => /```[\w-]*\n([\s\S]*?)\n```/.exec(markdown)?.[1];
+
 /** Hover contents, in any of the protocol's forms, as Markdown. */
 const markdownOf = (contents: typeof MarkedString.Type | ReadonlyArray<typeof MarkedString.Type> | { readonly kind: string; readonly value: string }): string => {
   const one = (part: typeof MarkedString.Type): string => (typeof part === "string" ? part : `\`\`\`${part.language}\n${part.value}\n\`\`\``);
@@ -182,6 +187,8 @@ const make = Effect.gen(function* () {
           textDocument: { synchronization: { didSave: false }, diagnostic: {} },
           workspace: { configuration: true, workspaceFolders: true },
         },
+        // A hover can spell its type out (TypeScript 5.9 on): the dual form.
+        initializationOptions: { supportsHoverVerbosity: true },
       });
       yield* connection.notify("initialized", {});
       return Option.some(connection);
@@ -204,6 +211,8 @@ const make = Effect.gen(function* () {
           },
           workspace: { configuration: true, workspaceFolders: true },
         },
+        // A hover can spell its type out (TypeScript 5.9 on): the dual form.
+        initializationOptions: { supportsHoverVerbosity: true },
       });
       yield* connection.notify("initialized", {});
       const docs = yield* SubscriptionRef.make<ReadonlyMap<string, Doc>>(new Map());
@@ -425,18 +434,29 @@ const make = Effect.gen(function* () {
         const { file, uri, server } = yield* open(requested);
         const doc = (yield* SubscriptionRef.get(server.docs)).get(file);
         if (doc === undefined) return Option.none();
-        const answer = yield* server.connection.request("textDocument/hover", { textDocument: { uri }, position: positionOf(doc.starts, offset) }).pipe(
-          Effect.flatMap(decodeHover),
-          Effect.mapError((error) => serverFailed(error.message)),
-        );
+        const position = positionOf(doc.starts, offset);
+        const hoverAt = (verbosityLevel: number) =>
+          server.connection.request("textDocument/hover", { textDocument: { uri }, position, verbosityLevel }).pipe(
+            Effect.flatMap(decodeHover),
+            Effect.mapError((error) => serverFailed(error.message)),
+          );
+        const answer = yield* hoverAt(0);
         if (answer === null) return Option.none();
         const markdown = markdownOf(answer.contents).trim();
         if (markdown === "") return Option.none();
-        return Option.some(
-          answer.range === undefined
-            ? { markdown }
-            : { markdown, start: offsetOf(doc.text, doc.starts, answer.range.start), end: offsetOf(doc.text, doc.starts, answer.range.end) },
-        );
+        // The type spelled out one level (its members), when that says more.
+        const expanded =
+          answer.canIncreaseVerbosityLevel === true
+            ? yield* hoverAt(1).pipe(
+                Effect.map((more) => (more === null ? undefined : firstCode(markdownOf(more.contents)))),
+                Effect.catch((error) => Effect.logDebug(`[language] no expanded type in ${requested}`, error).pipe(Effect.as(undefined))),
+              )
+            : undefined;
+        return Option.some({
+          markdown,
+          ...(expanded === undefined || expanded === firstCode(markdown) ? {} : { expanded }),
+          ...(answer.range === undefined ? {} : { start: offsetOf(doc.text, doc.starts, answer.range.start), end: offsetOf(doc.text, doc.starts, answer.range.end) }),
+        });
       }).pipe(Effect.scoped),
   };
 });

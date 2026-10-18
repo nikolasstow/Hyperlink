@@ -1,7 +1,8 @@
 /**
  * The type preview, as it shows under the breadcrumbs when their glass is open
  * (BreadcrumbPill): the type's code, coloured by the code theme in the code
- * font, then its docs. A set height; longer content scrolls.
+ * font; the type spelled out (its members), when that says more; then its
+ * docs. A set height; longer content scrolls.
  *
  * @internal
  */
@@ -34,6 +35,11 @@ export const TypePreviewView = (props: { readonly preview: TypePreview; readonly
               <CodeBlock code={block.text} lang={block.lang} theme={theme} fontFamily={appTheme.codeFont} />
             </View>
           ))}
+          {preview.parts.expanded === undefined ? null : (
+            <View style={styles.code}>
+              <CodeBlock code={preview.parts.expanded} lang="typescript" theme={theme} fontFamily={appTheme.codeFont} />
+            </View>
+          )}
           {preview.parts.docs === "" ? null : <Markdown text={preview.parts.docs} width={props.width - SIDE * 2} />}
         </>
       )}

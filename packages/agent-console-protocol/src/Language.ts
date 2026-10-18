@@ -54,9 +54,12 @@ export const FileDiagnostics = Schema.Struct({
 });
 export type FileDiagnostics = typeof FileDiagnostics.Type;
 
-/** What is at a place: Markdown (code in fenced blocks), over a range. */
+/** What is at a place: Markdown (code in fenced blocks), over a range; and,
+ * when it is named by a type that says less, that type spelled out one level
+ * (its members: the dual form). */
 export const HoverInfo = Schema.Struct({
   markdown: Schema.String,
+  expanded: Schema.optionalKey(Schema.String),
   start: Schema.optionalKey(Schema.Number),
   end: Schema.optionalKey(Schema.Number),
 });

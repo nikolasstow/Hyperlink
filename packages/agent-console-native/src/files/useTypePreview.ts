@@ -40,7 +40,7 @@ export const useTypePreview = (path: string | undefined, scopes: ReadonlyArray<S
     const timer = setTimeout(() => {
       void hoverAt(path, anchor).then((info) => {
         if (cancelled) return;
-        setPreview(Option.match(info, { onNone: () => ({ kind: "none" }), onSome: (found) => ({ kind: "ready", parts: hoverParts(found.markdown) }) }));
+        setPreview(Option.match(info, { onNone: () => ({ kind: "none" }), onSome: (found) => ({ kind: "ready", parts: hoverParts(found.markdown, found.expanded) }) }));
       });
     }, SETTLE_MS);
     return () => {

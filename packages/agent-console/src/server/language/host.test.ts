@@ -102,7 +102,26 @@ describe("LanguageHost", () => {
     const hover = await Effect.runPromise(withHost(({ host, file }) => host.hover(file, SOURCE.indexOf("ok") + 1)));
     const info = Option.getOrUndefined(hover);
     expect(info?.markdown).toContain("const ok: 1");
+    // Nothing more to spell out.
+    expect(info?.expanded).toBeUndefined();
     expect(SOURCE.slice(info?.start ?? 0, info?.end ?? 0)).toBe("ok");
+  });
+
+  it("spells a named type out one level (its members): the dual form", { timeout: 60_000 }, async () => {
+    const named = "interface Job { readonly id: string; readonly attempts: number }\nexport const job: Job = { id: \"a\", attempts: 0 };\n";
+    const hover = await Effect.runPromise(
+      withHost(({ host, file }) =>
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const other = file.replace(/file\.ts$/, "named.ts");
+          yield* fs.writeFileString(other, named);
+          return yield* host.hover(other, named.indexOf("job:"));
+        }),
+      ),
+    );
+    const info = Option.getOrUndefined(hover);
+    expect(info?.markdown).toContain("const job: Job");
+    expect(info?.expanded).toBe("const job: {\n    readonly id: string;\n    readonly attempts: number;\n}");
   });
 
   it("knows the names valid where a suggestion's prefix ends", { timeout: 60_000 }, async () => {

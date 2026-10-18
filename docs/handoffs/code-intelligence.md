@@ -214,7 +214,7 @@ caret's offset (event), ghost text (inline suggestion, accept/dismiss).
 - [x] (1) JS structure provider from the TS AST (TS/TSX/JS/JSON) + Markdown.
 - [x] (2) Language servers on the API server (`server/language/`, `/language` RPC, `agent-console-protocol` Language); one `typescript-language-server` per repo, Effect plugin live.
 - [x] (2a) Errors: wavy lines + glass popover (native `Diagnostics.swift`, apiVersion 14; built on EAS), carried through unsaved edits.
-- [x] (2b) Type preview in the breadcrumb glass: caret (apiVersion 14) else innermost scope; prefetched. Compact type + docs; the expanded member shape (TS 5.9 `verbosityLevel`) is next.
+- [x] (2b) Type preview in the breadcrumb glass: caret (apiVersion 14) else innermost scope; prefetched. Compact type, the expanded member shape (TS 5.9 hover `verbosityLevel` 1, when the server says it can say more: `HoverInfo.expanded`), then docs.
 - [x] (3) AI inline suggestions: `/complete` (opencode generate) + ghost text (native `InlineSuggestion.swift`, apiVersion 15); tap or double space accepts; Settings → Files (on/off, model; default Claude Haiku 4.5). The prompt carries the language server's context at the caret (the call being typed in, the names valid there; `contextAt`, 600 ms at most).
 - [x] Agents get the editor's problems: settled `problems` endpoints + opencode plugin (edit results, `diagnostics` tool).
 - [x] ESLint's language server in the host (editor and agents).
