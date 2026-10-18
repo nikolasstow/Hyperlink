@@ -78,6 +78,9 @@ export interface DubzHomeNativeProps extends ViewProps {
   /** Render the composer as the bottom bar inside this view, so the window
    * content (scroll + composer) is one native layout. Off → suggestions only. */
   readonly showComposer?: boolean;
+  /** Render ONLY the composer row (no scroll, no glass) for the RN pill to
+   * wrap — the native composer used in the existing window. */
+  readonly composerOnly?: boolean;
   /** Seed text to restore a saved draft; typing is owned natively after. */
   readonly draft?: string;
   readonly placeholder?: string;
@@ -107,10 +110,11 @@ const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.a
 // 1: the suggestions surface — scroll, bottom-anchor, scroll-behind, expand,
 //    row animation, all native (session area as the content).
 // 2: + the composer bottom bar (Part B) can live in this view.
+// 3: + composerOnly — the composer row usable in the existing RN pill.
 const available = apiVersion >= 1;
-/** Whether this build's native view carries the composer (Part B), so JS may
- * move the bottom bar into it. A build behind → keep the RN composer. */
-export const isDubzComposerNative = apiVersion >= 2;
+/** Whether this build's native view carries the usable composer (composerOnly),
+ * so JS may put the native composer in the pill. A build behind → RN composer. */
+export const isDubzComposerNative = apiVersion >= 3;
 
 /** The native Dubz home surface, or undefined where this build has none (or too old). */
 export const DubzHomeNativeView: React.ComponentType<DubzHomeNativeProps> | undefined = available

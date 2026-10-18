@@ -29,6 +29,9 @@ public final class DubzHomeProps: ExpoSwiftUI.ViewProps {
     /** Render the composer as the bottom bar inside this view (Part B). Off by
      * default so an apiVersion-1 consumer (suggestions only) is unchanged. */
     @Field var showComposer: Bool = false
+    /** Render ONLY the composer row (no scroll, no glass), for the RN pill to
+     * wrap — validates the native composer in the existing window. */
+    @Field var composerOnly: Bool = false
     /** Seed text to restore a saved draft; typing is owned natively after. */
     @Field var draft: String = ""
     @Field var placeholder: String = ""
@@ -64,8 +67,10 @@ public class DubzHomeModule: Module {
         // 2: + the composer bottom bar (Part B) can live in this view, so the
         //    window content (scroll + composer) is one native layout. Gated on
         //    `showComposer`; dormant until JS wires it.
+        // 3: + composerOnly — the composer row alone, for the RN pill to wrap,
+        //    so the native composer is usable in the existing window.
         Constants([
-            "apiVersion": 2,
+            "apiVersion": 3,
         ])
 
         View(DubzHomeView.self)
@@ -113,16 +118,43 @@ public struct DubzHomeView: ExpoSwiftUI.View {
     }
 
     public var body: some View {
-        // Part A (scroll content + top bar) over Part B (the composer), one
-        // native layout so they size together. Part B is gated (dormant) until
-        // JS wires it; today showComposer is false and only Part A renders.
-        VStack(spacing: GAP) {
-            scrollContent
-            if props.showComposer {
-                composerBar
-                    // DEBUG: Part B's border, drawn on the real bar.
-                    .border(props.debug ? Color.blue : Color.clear, width: props.debug ? 1 : 0)
+        if props.composerOnly {
+            // Part B alone, to validate the native composer in the existing RN
+            // pill (the pill supplies the glass). It reports its natural height
+            // so the window floor grows with the input — the same contract the
+            // RN TextInput had via onContentSizeChange.
+            composerOnlyBody
+        } else {
+            // Part A (scroll content + top bar) over Part B (the composer), one
+            // native layout so they size together. Part B is gated (dormant)
+            // until JS wires it; showComposer false → only Part A renders.
+            VStack(spacing: GAP) {
+                scrollContent
+                if props.showComposer {
+                    composerBar
+                        // DEBUG: Part B's border, drawn on the real bar.
+                        .border(props.debug ? Color.blue : Color.clear, width: props.debug ? 1 : 0)
+                }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var composerOnlyBody: some View {
+        if #available(iOS 17.0, *) {
+            composerRow
+                .frame(maxWidth: .infinity)
+                // Measure the natural row height (unconstrained) and report it
+                // + the pill's chrome, so JS sets the window floor to it.
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                })
+                .border(props.debug ? Color.blue : Color.clear, width: props.debug ? 1 : 0)
+                .onPreferenceChange(ContentHeightKey.self) { height in
+                    props.onActiveHeight(["height": Double(height + COMPOSER_FIELD_PADDING * 2)])
+                }
+        } else {
+            EmptyView()
         }
     }
 
@@ -188,8 +220,10 @@ public struct DubzHomeView: ExpoSwiftUI.View {
         }
     }
 
+    // The chips + field row. No glass/padding — the caller supplies them (the
+    // RN pill when composerOnly; GlassCapsule in composerBar for the body).
     @available(iOS 17.0, *)
-    private var composerBarImpl: some View {
+    private var composerRow: some View {
         HStack(alignment: .bottom, spacing: GAP) {
             Button { props.onPlus([:]) } label: {
                 Image(systemName: "plus")
@@ -222,11 +256,20 @@ public struct DubzHomeView: ExpoSwiftUI.View {
             .disabled(!sendReady)
             .modifier(GlassCircle(tint: sendReady ? props.sendActiveFill : props.sendMutedFill))
         }
-        .padding(.horizontal, COMPOSER_FIELD_PADDING)
-        .padding(.vertical, COMPOSER_FIELD_PADDING)
-        .modifier(GlassCapsule())
         .onAppear { if text.isEmpty { text = props.draft } }
-        .onChange(of: props.open) { _, isOpen in composerFocused = isOpen }
+        .onChange(of: props.open) { _, isOpen in
+            // Blur on close. Do NOT auto-focus on open — Dubz opens to its
+            // suggestions and the keyboard raises on a tap on the field.
+            if !isOpen { composerFocused = false }
+        }
+    }
+
+    @available(iOS 17.0, *)
+    private var composerBarImpl: some View {
+        composerRow
+            .padding(.horizontal, COMPOSER_FIELD_PADDING)
+            .padding(.vertical, COMPOSER_FIELD_PADDING)
+            .modifier(GlassCapsule())
     }
 
     // MARK: - Rows

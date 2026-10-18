@@ -30,8 +30,10 @@ const BLACK: Rgb = [0, 0, 0];
 const GRAY_LIGHTEN_FACTOR = 0.6;
 const GRAY_DARKEN_FACTOR = 0.25;
 const FILL_ALPHA = 0.85;
-const CHIP_FILL = mixRgb(SYSTEM_GRAY, WHITE, GRAY_LIGHTEN_FACTOR, FILL_ALPHA);
-const CHIP_ICON = mixRgb(SYSTEM_GRAY, BLACK, GRAY_DARKEN_FACTOR);
+/** The + chip's fill and glyph, exported so the native composer (dubz-home)
+ * uses the one source and the two bars match. */
+export const CHIP_FILL = mixRgb(SYSTEM_GRAY, WHITE, GRAY_LIGHTEN_FACTOR, FILL_ALPHA);
+export const CHIP_ICON = mixRgb(SYSTEM_GRAY, BLACK, GRAY_DARKEN_FACTOR);
 
 // +/send's background, glass effect and icon as one native element.
 // `foregroundStyle` LAST, after `glassEffect` — order is significant; before it

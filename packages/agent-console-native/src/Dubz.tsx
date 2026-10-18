@@ -26,20 +26,21 @@ import { AbsolutePath } from "./opencode/schema/schema";
 import { SessionID } from "./opencode/schema/session-id";
 import { serverAddressOf } from "./opencode/serverAddress";
 import { sendMessage } from "./outbox/useOutbox";
-import { COMPOSER_CHIP_SIZE, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
+import { Host } from "@expo/ui/swift-ui";
+import { COMPOSER_CHIP_SIZE, COMPOSER_FIELD_PADDING, COMPOSER_PILL_HEIGHT, COMPOSER_SEND_CHIP_SIZE } from "./composerBarSpec";
 import { EdgeBlurBars } from "./EdgeBlurBars";
-import { PlusChip, SendChip } from "./composerChips";
+import { CHIP_FILL, CHIP_ICON, PlusChip, SendChip } from "./composerChips";
 import { suggestionsFor, type DubzContext, type DubzSuggestion, type FileRef } from "./dubzSuggestions";
 import { DubzCompactSync } from "./dubz/DubzCompactSync";
 import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
-import { isDubzHomeNative } from "../modules/dubz-home";
+import { DubzHomeNativeView, type DubzSessionRow, isDubzComposerNative, isDubzHomeNative } from "../modules/dubz-home";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
 import { getBarPages, setBarPages, type BarPage } from "./settings";
 import { composerRestingBottom, useKeyboardSlide } from "./useKeyboardSlide";
-import { type TextColors, useTextColors, useThemedStyles } from "./theme";
+import { type TextColors, useTextColors, useTheme, useThemedStyles } from "./theme";
 
 /** DEV: swap the home suggestions for DubzActiveProbe — cycle active heights and
  * see the height-model math live. Kept wired; flip to true to troubleshoot. */
@@ -48,6 +49,11 @@ const DUBZ_PROBE: boolean = false;
 /** DEV: overlay region borders, live sizes, and a compact colour on the Dubz
  * window so the height behaviour can be followed on device. Temporary. */
 const DUBZ_DEBUG: boolean = true;
+
+/** Use the native SwiftUI composer in the pill where the build carries it
+ * (apiVersion >= 3). Flip false to fall back to the RN composer on a reload,
+ * without a rebuild, if the native one regresses. */
+const DUBZ_NATIVE_COMPOSER: boolean = true;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
@@ -158,6 +164,10 @@ readDubzDefaultHeight().then(
 
 const noop = (): void => undefined;
 
+/** The composer-only native view ignores sessions; a stable empty array keeps it
+ * from reconciling each render. */
+const NO_SESSIONS: ReadonlyArray<DubzSessionRow> = [];
+
 /** Sliding back to the composer, where it is beside this page. */
 export interface PageBack {
   /** Where the pages stand: 1 this page, 0 the composer. */
@@ -202,6 +212,10 @@ const unit = (value: number): number => {
 export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
   const textColors = useTextColors();
+  const { colors: themeColors } = useTheme();
+  // The native SwiftUI composer component (undefined in a build without it);
+  // narrowed where the pill chooses it over the RN composer.
+  const NativeComposerView = DubzHomeNativeView;
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
   const { width: screenW } = useWindowDimensions();
@@ -308,9 +322,10 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   // same outbox path the full session composer uses. The draft clears at the
   // tap; the message appears when the session's chat next loads.
   const session = sub?.kind === "session" ? sub.session : undefined;
-  const sendToSession = React.useCallback(() => {
+  const sendBody = React.useCallback(
+    (raw: string) => {
     if (session === undefined) return;
-    const body = draft.trim();
+    const body = raw.trim();
     if (body.length === 0) return;
     setDraft("");
     void (async () => {
@@ -329,7 +344,12 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         console.error("[dubz] sending into the session failed", error);
       }
     })();
-  }, [session, address]);
+    },
+    [session, address],
+  );
+  // The RN composer sends the module draft; the native composer carries its own
+  // text in the event (it owns the input), so it calls sendBody with that.
+  const sendToSession = React.useCallback(() => sendBody(draft), [sendBody]);
 
   // The pill floats over the body (which then fills the window), held in place
   // (0), so a page's scroll passes behind it at the window's bottom — the same
@@ -460,37 +480,85 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         </>
       }
       pill={
-        <>
-          <View style={styles.plusSlot}>
-            <PlusChip onPress={open ? noop : onOpen} />
-          </View>
-          <TextInput
-            ref={inputRef}
-            style={[styles.input, { maxHeight: open ? MAX_INPUT_HEIGHT : COMPOSER_SEND_CHIP_SIZE }]}
-            value={text}
-            onChangeText={setDraft}
-            onContentSizeChange={(event) => {
-              // The window floor is the composer PILL, which is the input's
-              // content plus the pill's chrome (the field padding around it =
-              // COMPOSER_PILL_HEIGHT − the one-line chip). The chrome was the
-              // missing bit — the glass grew to the content, short of the pill.
-              // open only; closed stays the one-line pill via the effect.
-              if (!open) return;
-              const content = event.nativeEvent.contentSize.height;
-              const el = content < COMPOSER_SEND_CHIP_SIZE ? COMPOSER_SEND_CHIP_SIZE : content > MAX_INPUT_HEIGHT ? MAX_INPUT_HEIGHT : content;
-              composerHeight.value = el + (COMPOSER_PILL_HEIGHT - COMPOSER_SEND_CHIP_SIZE);
-            }}
-            placeholder={`Ask ${AGENT_NAME}…`}
-            placeholderTextColor={textColors.placeholderText}
-            editable={open}
-            multiline
-          />
-          <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? (session !== undefined ? sendToSession : () => setDraft("")) : onOpen} />
-          {/* Collapsed: any tap on the bar opens it. */}
-          {open ? null : (
-            <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
-          )}
-        </>
+        DUBZ_NATIVE_COMPOSER && isDubzComposerNative && NativeComposerView !== undefined ? (
+          <>
+            {/* The native SwiftUI composer row, wrapped by the pill's glass.
+             * matchContents vertical → the Host sizes to the row (the pill grows
+             * with the input); onLayoutContent feeds the window floor. */}
+            <Host
+              matchContents={{ vertical: true }}
+              style={styles.composerHost}
+              onLayoutContent={(event) => {
+                // Grow the window floor with the input (open only; closed stays
+                // the one-line pill via the effect). The row height + the pill's
+                // chrome (field padding, top and bottom).
+                if (!open) return;
+                const h = event.nativeEvent.height + COMPOSER_FIELD_PADDING * 2;
+                const max = MAX_INPUT_HEIGHT + COMPOSER_FIELD_PADDING * 2;
+                composerHeight.value = h < COMPOSER_PILL_HEIGHT ? COMPOSER_PILL_HEIGHT : h > max ? max : h;
+              }}
+            >
+              <NativeComposerView
+                composerOnly
+                sessions={NO_SESSIONS}
+                contentWidth={0}
+                topInset={0}
+                bottomInset={0}
+                open={open}
+                draft={text}
+                placeholder={`Ask ${AGENT_NAME}…`}
+                labelColor={textColors.label}
+                secondaryColor={textColors.secondaryLabel}
+                plusFill={CHIP_FILL}
+                plusIcon={CHIP_ICON}
+                sendActiveFill={themeColors.secondaryFill}
+                sendMutedFill={themeColors.secondaryMutedFill}
+                debug={DUBZ_DEBUG}
+                onDraftChange={(event) => setDraft(event.nativeEvent.text)}
+                onPlus={open ? noop : onOpen}
+                onSend={(event) => {
+                  if (session !== undefined) sendBody(event.nativeEvent.text);
+                  else setDraft("");
+                }}
+              />
+            </Host>
+            {open ? null : (
+              <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
+            )}
+          </>
+        ) : (
+          <>
+            <View style={styles.plusSlot}>
+              <PlusChip onPress={open ? noop : onOpen} />
+            </View>
+            <TextInput
+              ref={inputRef}
+              style={[styles.input, { maxHeight: open ? MAX_INPUT_HEIGHT : COMPOSER_SEND_CHIP_SIZE }]}
+              value={text}
+              onChangeText={setDraft}
+              onContentSizeChange={(event) => {
+                // The window floor is the composer PILL, which is the input's
+                // content plus the pill's chrome (the field padding around it =
+                // COMPOSER_PILL_HEIGHT − the one-line chip). The chrome was the
+                // missing bit — the glass grew to the content, short of the pill.
+                // open only; closed stays the one-line pill via the effect.
+                if (!open) return;
+                const content = event.nativeEvent.contentSize.height;
+                const el = content < COMPOSER_SEND_CHIP_SIZE ? COMPOSER_SEND_CHIP_SIZE : content > MAX_INPUT_HEIGHT ? MAX_INPUT_HEIGHT : content;
+                composerHeight.value = el + (COMPOSER_PILL_HEIGHT - COMPOSER_SEND_CHIP_SIZE);
+              }}
+              placeholder={`Ask ${AGENT_NAME}…`}
+              placeholderTextColor={textColors.placeholderText}
+              editable={open}
+              multiline
+            />
+            <SendChip active={text.trim().length > 0} accent="secondary" onPress={open ? (session !== undefined ? sendToSession : () => setDraft("")) : onOpen} />
+            {/* Collapsed: any tap on the bar opens it. */}
+            {open ? null : (
+              <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`Ask ${AGENT_NAME}`} />
+            )}
+          </>
+        )
       }
     />
   );
@@ -600,5 +668,10 @@ const makeStyles = (text: TextColors) =>
     paddingTop: INPUT_PAD_TOP,
     paddingBottom: INPUT_PAD_BOTTOM,
     paddingHorizontal: 0,
+  },
+  // The native composer row fills the pill's width; its height matches content
+  // (Host matchContents vertical), so the pill grows with the input.
+  composerHost: {
+    flex: 1,
   },
 });
