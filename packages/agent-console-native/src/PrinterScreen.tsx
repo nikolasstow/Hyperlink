@@ -5,9 +5,10 @@
  * whichever server it was opened for.
  *
  * - Print: the layer on the LCD now, at the LCD's real size in millimetres,
- *   the print's progress, and pause, resume, and stop.
- * - Camera, Files (with uploads from the phone), and Printer (vitals,
- *   self-check, and the current file's print settings).
+ *   the print's progress, pause, resume, and stop, and the file's print
+ *   settings.
+ * - Camera (it starts when its page opens), Files (with uploads from the
+ *   phone), and Health (the printer's vitals and self-check).
  *
  * A phone shows one of these pages at a time, picked from a tab bar at the
  * bottom, so the page never becomes one long scroll. An iPad shows all of them
@@ -258,12 +259,12 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
     </Card>
   );
 
-  // The camera unmounts when its page is not shown, which stops the stream.
-  const camera = wide || page === "camera" ? <PrinterCamera relayBase={printer.relayBase} secureUrl={printer.secureUrl} reachable={printer.relayReachable} /> : null;
+  // On a phone the camera has its own page: it starts when the page opens, and unmounts (stopping the stream) when it closes.
+  const camera = wide || page === "camera" ? <PrinterCamera relayBase={printer.relayBase} secureUrl={printer.secureUrl} reachable={printer.relayReachable} autoStart={!wide} /> : null;
 
   const files = <PrinterFiles relayBase={printer.relayBase} reachable={printer.relayReachable} printingName={active ? info?.Filename : undefined} usbIn={attributes?.UsbDiskStatus === 1} />;
 
-  const vitals = (
+  const healthPage = (
     <>
       <Card title="Printer" right={attributes?.FirmwareVersion !== undefined ? <Text style={[styles.faint, { color: text.tertiaryLabel }]}>Firmware {attributes.FirmwareVersion}</Text> : undefined}>
         {film !== undefined && filmMax !== undefined && filmRatio !== undefined ? (
@@ -302,18 +303,20 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
         </Card>
       ) : null}
 
-      {header !== undefined ? (
-        <Card title="Print settings">
-          {previewUri !== undefined ? (
-            <View style={styles.preview}>
-              <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-            </View>
-          ) : null}
-          <Cells cells={settingsCells(header)} />
-        </Card>
-      ) : null}
     </>
   );
+
+  const printSettings =
+    header !== undefined ? (
+      <Card title="Print settings">
+        {previewUri !== undefined ? (
+          <View style={styles.preview}>
+            <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          </View>
+        ) : null}
+        <Cells cells={settingsCells(header)} />
+      </Card>
+    ) : null;
 
   const footer = (
     <>
@@ -337,11 +340,12 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             <View style={styles.columns}>
               <View style={{ width: mainWidth }}>
                 {stage}
+                {printSettings}
                 {files}
               </View>
               <View style={styles.side}>
                 {camera}
-                {vitals}
+                {healthPage}
               </View>
             </View>
             {footer}
@@ -351,11 +355,12 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
           <>
             <View style={page === "print" ? null : styles.hidden}>
               {stage}
+              {printSettings}
               {footer}
             </View>
             {camera}
             <View style={page === "files" ? null : styles.hidden}>{files}</View>
-            <View style={page === "printer" ? null : styles.hidden}>{vitals}</View>
+            <View style={page === "health" ? null : styles.hidden}>{healthPage}</View>
           </>
         )}
       </ScrollView>
@@ -364,13 +369,13 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   );
 };
 
-type Page = "print" | "camera" | "files" | "printer";
+type Page = "print" | "camera" | "files" | "health";
 
 const PAGES: ReadonlyArray<{ readonly key: Page; readonly label: string; readonly icon: SFSymbol }> = [
   { key: "print", label: "Print", icon: "square.3.layers.3d" },
   { key: "camera", label: "Camera", icon: "video" },
   { key: "files", label: "Files", icon: "folder" },
-  { key: "printer", label: "Printer", icon: "gauge.with.dots.needle.33percent" },
+  { key: "health", label: "Health", icon: "waveform.path.ecg" },
 ];
 
 const PAGE_BAR_HEIGHT = 62;

@@ -33,24 +33,33 @@ const CameraView = (props: { readonly uri: string }): React.ReactElement => (
   />
 );
 
-export const PrinterCamera = (props: { readonly relayBase: string; readonly secureUrl: string | undefined; readonly reachable: boolean }): React.ReactElement => {
+/**
+ * The camera card. With `autoStart` (the camera's own page) the feed starts
+ * as soon as the card shows, and again when the app comes back to the
+ * foreground; otherwise it waits for a tap.
+ */
+export const PrinterCamera = (props: { readonly relayBase: string; readonly secureUrl: string | undefined; readonly reachable: boolean; readonly autoStart?: boolean }): React.ReactElement => {
   const text = useTextColors();
   const insets = useSafeAreaInsets();
-  const [watching, setWatching] = React.useState(false);
+  const autoStart = props.autoStart === true;
+  const [wanted, setWatching] = React.useState(autoStart);
   const [full, setFull] = React.useState(false);
+  const watching = wanted && props.reachable;
   const base = props.secureUrl ?? props.relayBase;
   const uri = `${base}/?view=camera&bare=1`;
 
-  // Leaving the app stops watching, so the printer's stream slot is freed.
+  // Leaving the app stops watching, so the printer's stream slot is freed. Coming back restarts an auto-start feed.
   React.useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") {
         setWatching(false);
         setFull(false);
+      } else if (autoStart) {
+        setWatching(true);
       }
     });
     return () => subscription.remove();
-  }, []);
+  }, [autoStart]);
 
   const right = (
     <View style={styles.actions}>
