@@ -17,7 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
 import { AppState } from "react-native";
 import { authedFetch } from "../auth/serverTokens";
-import { CMD_ATTRIBUTES, CMD_STATUS, PRINTER_PORT, PRINTER_WEBSOCKET_PATH, RELAY_PORT, parseFrame, refreshRequest, type PrinterAttributes, type PrinterStatus, type RelayState } from "./sdcp";
+import { CMD_ATTRIBUTES, CMD_STATUS, controlRequest, PRINTER_PORT, PRINTER_WEBSOCKET_PATH, RELAY_PORT, parseFrame, refreshRequest, type ControlCmd, type PrinterAttributes, type PrinterStatus, type RelayState } from "./sdcp";
 
 /** Which way the page is connected. */
 export type Via = "Direct" | "Relay";
@@ -47,7 +47,16 @@ export interface PrinterLink {
   readonly updatedAt: number | undefined;
   /** Drops the connection and starts over (direct first). */
   readonly reconnect: () => void;
+  /**
+   * Sends pause, stop, or resume over whichever connection is open (the
+   * printer, or the relay, which passes it on) and resolves with the
+   * printer's ack: 0 is OK. Rejects when there is no connection or no answer.
+   */
+  readonly sendControl: (cmd: ControlCmd) => Promise<number>;
 }
+
+/** Pause can take a while to be acknowledged; a stop must never be resent blindly, so wait long. */
+const CONTROL_TIMEOUT_MS = 20000;
 
 const DIRECT_TIMEOUT_MS = 2500;
 const RELAY_TIMEOUT_MS = 6000;
@@ -143,6 +152,8 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
 
   const printerIp = identity?.ip;
   const printerPort = identity?.port ?? PRINTER_PORT;
+  const socketRef = React.useRef<WebSocket | undefined>(undefined);
+  const pendingRef = React.useRef(new Map<string, (ack: number) => void>());
 
   // The socket: direct first when the printer's address is known, then the relay.
   React.useEffect(() => {
@@ -159,6 +170,7 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
 
     const attach = (opened: WebSocket, via: Via): void => {
       socket = opened;
+      socketRef.current = opened;
       setLink({ kind: "Open", via });
       opened.onmessage = (event) => {
         if (typeof event.data !== "string") return;
@@ -170,11 +182,18 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
           setAttributes(frame.attributes);
         } else if (frame.kind === "notice") {
           setNotice(frame.message);
+        } else if (frame.kind === "response" && frame.ack !== undefined) {
+          const resolve = pendingRef.current.get(frame.requestId);
+          if (resolve !== undefined) {
+            pendingRef.current.delete(frame.requestId);
+            resolve(frame.ack);
+          }
         }
       };
       opened.onclose = () => {
         if (!alive) return;
         socket = undefined;
+        socketRef.current = undefined;
         setLink({ kind: "Offline", retryAt: Date.now() + RETRY_MS });
         retry = setTimeout(connect, RETRY_MS);
       };
@@ -224,10 +243,37 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
         socket.onclose = null;
         socket.close();
       }
+      socketRef.current = undefined;
     };
   }, [serverAddress, relayBase, printerIp, printerPort, generation]);
 
   const reconnect = React.useCallback(() => setGeneration((g) => g + 1), []);
 
-  return { link, status, attributes, relayBase, relayReachable, printerIp, notice, updatedAt, reconnect };
+  const sendControl = React.useCallback(
+    (cmd: ControlCmd): Promise<number> =>
+      new Promise((resolve, reject) => {
+        const socket = socketRef.current;
+        const ids = identityRef.current;
+        if (socket === undefined || socket.readyState !== WebSocket.OPEN || ids === undefined) {
+          reject(new Error("Not connected to the printer"));
+          return;
+        }
+        const id = requestId();
+        const timer = setTimeout(() => {
+          pendingRef.current.delete(id);
+          reject(new Error("The printer did not answer"));
+        }, CONTROL_TIMEOUT_MS);
+        pendingRef.current.set(id, (ack) => {
+          clearTimeout(timer);
+          resolve(ack);
+          // Ask for status at once so the page shows the new state.
+          const current = socketRef.current;
+          if (current !== undefined && current.readyState === WebSocket.OPEN) current.send(refreshRequest(CMD_STATUS, ids, requestId(), Date.now()));
+        });
+        socket.send(controlRequest(cmd, ids, id, Date.now()));
+      }),
+    [],
+  );
+
+  return { link, status, attributes, relayBase, relayReachable, printerIp, notice, updatedAt, reconnect, sendControl };
 };

@@ -1,7 +1,7 @@
 # Elegoo resin printer page (Saturn 4 Ultra 16K)
 
 **Status:** prototype, 2026-10-17. JavaScript only. Dev build `cf9744f5` (variant iota) finished on EAS; Metro for iota runs on :8083 (tmux `iota-metro`). Not yet seen on a device.
-**Scope:** a read-only printer page under Servers, a relay on the home server, and a web portal.
+**Scope:** a printer page under Servers (live status, layer image, pause, resume, stop), a relay on the home server, and a web portal.
 **Related:** [server-pages-and-widgets.md](./server-pages-and-widgets.md) · [double-agent-repo-screen-and-plugin-system.md](./double-agent-repo-screen-and-plugin-system.md) §22 · the relay lives in the separate repo `nikolasstow/saturn-uploader`, branch `feat/relay-portal`.
 
 ## 0. Confirm before acting
@@ -56,7 +56,7 @@ Routes on port 5197:
 | Route | Returns |
 |---|---|
 | `GET /` | The portal. |
-| `GET /websocket` | The printer's SDCP frames, fanned out. Read-only: Cmd 0 and Cmd 1 are answered from the cache; every other command gets a notice and is not sent. |
+| `GET /websocket` | The printer's SDCP frames, fanned out. Cmd 0 and Cmd 1 are answered from the cache. Pause, stop, and resume (129, 130, 131) go to the printer and the client gets the printer's ack (`-1` if no answer). Every other command gets a notice and is not sent. |
 | `GET /api/state` | Printer identity, connection, derived print view with image URLs, and the raw status and attributes. |
 | `GET /api/prints/:taskId` | File header summary and how many layers are indexed. |
 | `GET /api/prints/:taskId/layers/:index.png` | Layer image. Query: `scale` (default 8), `crop` (default 1), `mirror` (default 0), `alpha` (default 0). Cached forever by the client. |
@@ -136,7 +136,7 @@ Tailscale.
 ## 7. DECISIONS, 2026-10-17
 
 1. The relay lives in `saturn-uploader`, not in this monorepo. It is printer software and reuses that repo's SDCP client. The app talks to it over HTTP only.
-2. The relay is read-only. It never forwards a command that could change a print.
+2. The relay passes on pause, stop, and resume, and nothing else (owner, 2026-10-17: controls must work remotely too). It never starts a print or deletes files.
 3. The relay fans out unchanged frames, so direct and relay clients share one parser.
 4. On the LAN the app decodes layers itself from Range reads of the printer's file server; the relay does the same only for remote clients and the browser portal. A local copy is used only when its name and size match.
 6. The relay is lazy: no printer connection while no client uses it (owner: "I don't want a relay if it's not needed").
@@ -147,7 +147,19 @@ Tailscale.
 - Downloading the whole print file to the relay. It is about 490 MB over the printer's WiFi, during a print.
 - Matching a local file by name only. The Desktop copy of the running print had the same name and a different size: it was a different slice.
 
-## 8. Open questions
+## 8. Print controls and the Elegoo app
+
+The page has Pause/Resume and Stop, each behind a confirmation, over either connection. Stop cannot be undone; pause takes about a minute to settle (the buttons wait while the printer is Pausing or Stopping).
+
+The owner wants every control of Elegoo's iOS app, above all changing exposure and other print settings mid-print. Firmware analysis (V1.4.4B, from Elegoo's support site) found:
+
+| Over the LAN (SDCP) | Only over Elegoo's cloud |
+|---|---|
+| 0, 1, 128 start, 129 pause, 130 stop, 131 resume, 192 rename, 255, 258 files, 259 delete, 320/321 history, 386 camera, 387 timelapse | 135 change print params (BottomExposureTime, BottomLayer, BottomRestTimeAfterDrop, BottomResetTimeBeforeLift, NormalExposureTime, NormalRestTimeAfterDrop, NormalResetTimeBeforeLift, TransitionLayer, LightOffTime), 134 motor move, 145 home, 146 motor stop, 151 light, 147/148 self-check |
+
+Next steps for Cmd 135: check whether V1.5.6 (on the printer) accepts it over the LAN; if not, act as the official app against Elegoo's real cloud with the owner's account (capture the iOS app's traffic to learn login, tokens, and the send path). CAUTION: 135's exposure values are most likely seconds; sending milliseconds would expose each layer for half an hour. Never send unknown command numbers during a print: on some Elegoo firmware they crash the printer app.
+
+## 9. Open questions
 
 1. Install the relay as a LaunchDaemon on the Mac mini (section 6, item 1)? It needs the password once.
 2. Should the relay also run the uploader's watch folder, so one service does both?
@@ -155,7 +167,7 @@ Tailscale.
 4. A Live Activity with layer progress? It needs the relay to send ActivityKit pushes through `activityPush.ts`, and the base build.
 5. The camera: an MJPEG or HLS proxy in the relay (one ffmpeg, stopped with SIGTERM)?
 
-## 9. Build order
+## 10. Build order
 
 1. Owner looks at the page on a device and decides on the open questions.
 2. Relay as a LaunchDaemon.

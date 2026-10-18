@@ -4,10 +4,11 @@
  *
  * The page connects straight to the printer when the phone is on the same
  * LAN, and through the relay on the server (saturn-uploader `relay`, port
- * 5197) when it is not. See `printer/usePrinterLink.ts`. The page is
- * read-only: it never starts, pauses, or stops a print.
+ * 5197) when it is not. See `printer/usePrinterLink.ts`. Pause, resume, and
+ * stop work either way; each asks for confirmation first, and stop cannot be
+ * undone.
  *
- * The layer image is an alpha mask from the relay, tinted UV violet here. It
+ * The layer image is an alpha mask, tinted UV violet here. It
  * glows while the printer exposes the layer and dims while it lifts and
  * drops.
  *
@@ -20,9 +21,9 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { GlassView } from "expo-glass-effect";
 import * as React from "react";
-import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, Image, Pressable, ScrollView, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { isPrinting, layerIndexOf, machineLabel, PHASE_COMPLETE, PHASE_EXPOSING, phaseLabel, PRINTER_PORT, type PrintInfo } from "./printer/sdcp";
+import { CMD_PAUSE, CMD_RESUME, CMD_STOP, controlAckLabel, isPrinting, layerIndexOf, machineLabel, PHASE_COMPLETE, PHASE_EXPOSING, PHASE_PAUSED, PHASE_PAUSING, PHASE_STOPPING, phaseLabel, PRINTER_PORT, type ControlCmd, type PrintInfo } from "./printer/sdcp";
 import { useDirectLayer } from "./printer/directLayers";
 import { usePrinterLink, type LinkState } from "./printer/usePrinterLink";
 import type { RootStackParamList } from "./RootNavigator";
@@ -228,6 +229,8 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             <Stat styles={styles} label="Machine" value={(status.CurrentStatus ?? []).map(machineLabel).join(", ") || "—"} />
           </View>
 
+          {printing ? <Controls styles={styles} phase={info?.Status} send={printer.sendControl} /> : null}
+
           <Pressable onPress={() => setMirror((m) => !m)} style={styles.toggle}>
             <Text style={styles.toggleText}>{mirror ? "Showing as on the LCD (mirrored)" : "Showing as sliced"}</Text>
             <Text style={styles.toggleAction}>{mirror ? "Unmirror" : "Mirror"}</Text>
@@ -264,6 +267,55 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
         </>
       )}
     </ScrollView>
+  );
+};
+
+const CONFIRM: Record<ControlCmd, { readonly title: string; readonly message: string; readonly action: string; readonly destructive: boolean }> = {
+  [CMD_PAUSE]: { title: "Pause the print?", message: "The printer finishes the current layer and lifts. It takes about a minute to settle.", action: "Pause", destructive: false },
+  [CMD_RESUME]: { title: "Resume the print?", message: "The printer continues from the layer where it paused.", action: "Resume", destructive: false },
+  [CMD_STOP]: { title: "Stop the print?", message: "The print ends and cannot be resumed.", action: "Stop Print", destructive: true },
+};
+
+/**
+ * Pause or resume, and stop, for a running print. Each asks first. While the
+ * printer is pausing or stopping the buttons wait, because a second command
+ * then gets a "busy" ack.
+ */
+const Controls = (props: { readonly styles: ReturnType<typeof makeStyles>; readonly phase: number | undefined; readonly send: (cmd: ControlCmd) => Promise<number> }): React.ReactElement => {
+  const [busy, setBusy] = React.useState<ControlCmd | undefined>(undefined);
+  const paused = props.phase === PHASE_PAUSED;
+  const settling = props.phase === PHASE_PAUSING || props.phase === PHASE_STOPPING;
+  const run = (cmd: ControlCmd): void => {
+    const confirm = CONFIRM[cmd];
+    Alert.alert(confirm.title, confirm.message, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: confirm.action,
+        style: confirm.destructive ? "destructive" : "default",
+        onPress: () => {
+          setBusy(cmd);
+          props
+            .send(cmd)
+            .then((ack) => {
+              if (ack !== 0) Alert.alert(`${confirm.action} failed`, controlAckLabel(ack));
+            })
+            .catch((error: unknown) => Alert.alert(`${confirm.action} failed`, error instanceof Error ? error.message : String(error)))
+            .finally(() => setBusy(undefined));
+        },
+      },
+    ]);
+  };
+  const toggleCmd = paused ? CMD_RESUME : CMD_PAUSE;
+  const disabled = busy !== undefined || settling;
+  return (
+    <View style={props.styles.controls}>
+      <Pressable disabled={disabled} onPress={() => run(toggleCmd)} style={[props.styles.control, disabled ? props.styles.controlOff : null]}>
+        {busy === toggleCmd ? <ActivityIndicator color={UV} /> : <Text style={[props.styles.controlText, { color: UV }]}>{settling && props.phase === PHASE_PAUSING ? "Pausing…" : paused ? "Resume" : "Pause"}</Text>}
+      </Pressable>
+      <Pressable disabled={disabled} onPress={() => run(CMD_STOP)} style={[props.styles.control, props.styles.controlStop, disabled ? props.styles.controlOff : null]}>
+        {busy === CMD_STOP ? <ActivityIndicator color={RED} /> : <Text style={[props.styles.controlText, { color: RED }]}>{props.phase === PHASE_STOPPING ? "Stopping…" : "Stop"}</Text>}
+      </Pressable>
+    </View>
   );
 };
 
@@ -323,6 +375,11 @@ const makeStyles = (text: TextColors) =>
     statCell: { width: "47%", flexGrow: 1, backgroundColor: "rgba(127,127,127,0.1)", borderRadius: 14, paddingVertical: 12, paddingHorizontal: 12 },
     statV: { color: text.label, fontSize: 19, fontWeight: "800", fontVariant: ["tabular-nums"] },
     statK: { color: text.secondaryLabel, fontSize: 11, fontWeight: "600", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.3 },
+    controls: { flexDirection: "row", gap: 10, marginTop: 14 },
+    control: { flex: 1, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(169,139,255,0.16)" },
+    controlStop: { backgroundColor: "rgba(255,69,58,0.14)" },
+    controlOff: { opacity: 0.45 },
+    controlText: { fontSize: 16, fontWeight: "700" },
     toggle: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingVertical: 8, paddingHorizontal: 4 },
     toggleText: { color: text.secondaryLabel, fontSize: 13 },
     toggleAction: { color: UV, fontSize: 14, fontWeight: "600" },

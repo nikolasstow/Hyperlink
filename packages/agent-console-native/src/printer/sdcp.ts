@@ -84,6 +84,7 @@ export type Frame =
   | { readonly kind: "status"; readonly status: PrinterStatus; readonly mainboardId: string | undefined }
   | { readonly kind: "attributes"; readonly attributes: PrinterAttributes; readonly brandId: string | undefined; readonly mainboardId: string | undefined }
   | { readonly kind: "notice"; readonly message: string }
+  | { readonly kind: "response"; readonly cmd: number | undefined; readonly requestId: string; readonly ack: number | undefined }
   | { readonly kind: "other" };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null;
@@ -107,10 +108,35 @@ export const parseFrame = (text: string): Frame => {
   if (message.Topic.startsWith("sdcp/notice/") && isRecord(message.Data) && isRecord(message.Data.Data)) {
     return { kind: "notice", message: String(message.Data.Data.Message) };
   }
+  if (message.Topic.startsWith("sdcp/response/") && isRecord(message.Data) && typeof message.Data.RequestID === "string") {
+    const ack = isRecord(message.Data.Data) && typeof message.Data.Data.Ack === "number" ? message.Data.Data.Ack : undefined;
+    return { kind: "response", cmd: typeof message.Data.Cmd === "number" ? message.Data.Cmd : undefined, requestId: message.Data.RequestID, ack };
+  }
   return { kind: "other" };
 };
 
-/** A status or attributes refresh request. Only these two are ever sent: the page never controls the printer. */
+export const CMD_PAUSE = 129;
+export const CMD_STOP = 130;
+export const CMD_RESUME = 131;
+export type ControlCmd = typeof CMD_PAUSE | typeof CMD_STOP | typeof CMD_RESUME;
+
+/** A pause, stop, or resume request. The printer replies on the response topic with the same request id. */
+export const controlRequest = (cmd: ControlCmd, ids: { readonly brandId: string; readonly mainboardId: string }, requestId: string, nowMs: number): string =>
+  JSON.stringify({
+    Id: ids.brandId,
+    Data: { Cmd: cmd, Data: {}, RequestID: requestId, MainboardID: ids.mainboardId, TimeStamp: Math.floor(nowMs / 1000), From: 3 },
+    Topic: `sdcp/request/${ids.mainboardId}`,
+  });
+
+/** What an ack from a print control means (spec `sdcp_print_ctrl_ack_t`; -1 is the relay's "no answer"). */
+export const controlAckLabel = (ack: number): string =>
+  ack === 0 ? "OK" : ack === 1 ? "The printer is not in a state that allows this" : ack === -1 ? "The printer did not answer" : `Printer error ${ack}`;
+
+export const PHASE_PAUSING = 5;
+export const PHASE_PAUSED = 6;
+export const PHASE_STOPPING = 7;
+
+/** A status or attributes refresh request. */
 export const refreshRequest = (cmd: typeof CMD_STATUS | typeof CMD_ATTRIBUTES, ids: { readonly brandId: string; readonly mainboardId: string }, requestId: string, nowMs: number): string =>
   JSON.stringify({
     Id: ids.brandId,
