@@ -25,7 +25,7 @@ import { cachedReposNow } from "../repoScanCache";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScreenBackground } from "../theme";
 import { WorktreePicker } from "../WorktreePicker";
-import { type FileNavEntry, RECENT_TAB_COUNT, recentTabs, tabEntry } from "./FileNav";
+import { type FileNavEntry, RECENT_TAB_COUNT, recentTabs, tabEntry, tabsUnder } from "./FileNav";
 import { FileListing } from "./FileListing";
 import { RecentTabsGrid } from "./RecentTabsGrid";
 import { selectFileTab, useFilePlaces } from "./useFileNav";
@@ -53,17 +53,17 @@ export const FilesHomeScreen = (props: Props): React.ReactElement => {
   const primary = usePrimaryWorktree(repo, dir);
   const places = useFilePlaces();
   const place = Option.getOrUndefined(HashMap.get(places, repo));
-  const recent = React.useMemo(
-    () =>
-      place === undefined
-        ? []
-        : recentTabs(place, RECENT_TAB_COUNT).flatMap((index) => {
-            const tab = place.tabs[index];
-            const entry = tab === undefined ? undefined : tabEntry(tab);
-            return entry === undefined ? [] : [{ index, entry }];
-          }),
-    [place],
-  );
+  // The repo's tabs only: those showing something in one of its worktrees.
+  const roots = primary.worktrees.length > 0 ? primary.worktrees.map((worktree) => worktree.path) : [primary.dir];
+  const repoTabs = place === undefined ? [] : tabsUnder(place, roots);
+  const recent =
+    place === undefined
+      ? []
+      : recentTabs(place, repoTabs, RECENT_TAB_COUNT).flatMap((index) => {
+          const tab = place.tabs[index];
+          const entry = tab === undefined ? undefined : tabEntry(tab);
+          return entry === undefined ? [] : [{ index, entry }];
+        });
   const headerHeight = insets.top + HOME_HEADER_HEIGHT;
 
   const openTab = (index: number): void => {
@@ -84,7 +84,7 @@ export const FilesHomeScreen = (props: Props): React.ReactElement => {
         onOpen={openEntry}
         onOpenInNewTab={openEntry}
         onScroll={noScroll}
-        header={<RecentTabsGrid tabs={recent} total={place?.tabs.length ?? 0} pageTop={headerHeight} onSelect={openTab} onAllTabs={openAllTabs} />}
+        header={<RecentTabsGrid tabs={recent} total={repoTabs.length} pageTop={headerHeight} onSelect={openTab} onAllTabs={openAllTabs} />}
       />
       <RepoComposer name={repo} dir={dir} isRepo={isRepo} scanned={scanned} onScanned={setScanned} />
     </View>

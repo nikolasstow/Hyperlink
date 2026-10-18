@@ -53,17 +53,29 @@ const HISTORY_LIMIT = 200;
 export const tabEntry = (tab: FileTab): FileNavEntry | undefined => tab.entries[tab.index];
 export const activeTab = (place: FilePlace): FileTab | undefined => place.tabs[place.active];
 
-/** A place's tabs, most recently visited first (by their shown entry's
- * latest visit; one never visited last), at most `count`: their indexes. */
-export const recentTabs = (place: FilePlace, count: number): ReadonlyArray<number> => {
+/** The tabs showing something under one of `roots` (a repo's worktrees):
+ * their indexes. */
+export const tabsUnder = (place: FilePlace, roots: ReadonlyArray<string>): ReadonlyArray<number> =>
+  place.tabs.flatMap((tab, index) => {
+    const entry = tabEntry(tab);
+    return entry !== undefined && roots.some((root) => under(entry.path, root) !== undefined) ? [index] : [];
+  });
+
+/** Of a place's tabs `among` (their indexes), the most recently visited
+ * first (by their shown entry's latest visit; one never visited last), at
+ * most `count`: their indexes. */
+export const recentTabs = (place: FilePlace, among: ReadonlyArray<number>, count: number): ReadonlyArray<number> => {
   const lastVisit = (tab: FileTab): number => {
     const entry = tabEntry(tab);
     if (entry === undefined) return Number.POSITIVE_INFINITY;
     const at = place.history.findIndex((visit) => fromHome(visit.entry.path) === fromHome(entry.path));
     return at === -1 ? Number.POSITIVE_INFINITY : at;
   };
-  return place.tabs
-    .map((tab, index) => ({ index, rank: lastVisit(tab) }))
+  return among
+    .flatMap((index) => {
+      const tab = place.tabs[index];
+      return tab === undefined ? [] : [{ index, rank: lastVisit(tab) }];
+    })
     .sort((a, b) => a.rank - b.rank || b.index - a.index)
     .slice(0, count)
     .map((each) => each.index);

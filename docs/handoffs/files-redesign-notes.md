@@ -289,7 +289,8 @@ swipe on the pill switches tabs at once (no slide); file previews are plain mono
 
 The repo's Files page (`FilesHomeScreen` → `RecentTabsRow`) shows up to **two rows of three**
 instead of one row of three. When not every tab fits, the **last cell is an "All tabs" cell**:
-the tabs icon and the number of tabs; it opens the tab overview (all tabs).
+the tabs icon and "+N", N = the repo's tabs not shown; it opens the tab overview (all tabs).
+Only the repo's tabs count: those showing something in one of its worktrees (owner, 2026-10-17).
 
 | Tabs | Grid | Cells |
 | --- | --- | --- |

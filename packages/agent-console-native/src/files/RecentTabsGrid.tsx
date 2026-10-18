@@ -3,7 +3,7 @@
  * grid of up to two rows of three above its root's files: the page Files
  * opens on from the repo's Files button, so a recent tab is one tap away.
  * Each looks as it does in the tab overview, at a third of the width. When
- * not every tab fits, the last cell is All tabs (the tab count), which opens
+ * not every tab fits, the last cell is All tabs (+ the tabs not shown), which opens
  * the tab overview (docs/handoffs/files-redesign-notes.md). Fixed sizes
  * (nothing measured).
  *
@@ -29,7 +29,7 @@ export const RecentTabsGrid = (props: {
   /** The most recent tabs, newest first: each tab's index and the entry it
    * shows (`RECENT_TAB_COUNT` at most). */
   readonly tabs: ReadonlyArray<{ readonly index: number; readonly entry: FileNavEntry }>;
-  /** How many tabs the repo has. */
+  /** How many tabs the repo has (those in its worktrees). */
   readonly total: number;
   /** Room at a page's top, as the previews draw it. */
   readonly pageTop: number;
@@ -64,11 +64,11 @@ export const RecentTabsGrid = (props: {
     )),
     ...(grid.allTabs
       ? [
-          <Pressable key="all-tabs" style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`All ${props.total} tabs`} onPress={props.onAllTabs}>
+          <Pressable key="all-tabs" style={{ width: cellWidth }} accessibilityRole="button" accessibilityLabel={`All tabs, ${props.total - grid.previews} more`} onPress={props.onAllTabs}>
             <View style={[styles.shadow, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT, backgroundColor: background }]}>
               <View style={[styles.preview, styles.allTabs, { width: cellWidth, height: cellWidth * PREVIEW_ASPECT }]}>
                 <SystemIcon name="square.on.square" size={28} weight="medium" color={textColors.label} />
-                <Text style={styles.count}>{props.total}</Text>
+                <Text style={styles.count}>{`+${props.total - grid.previews}`}</Text>
                 <View style={styles.outline} pointerEvents="none" />
               </View>
             </View>

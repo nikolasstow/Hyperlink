@@ -1,7 +1,7 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabGridOf, tabRerooted } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabGridOf, tabRerooted, tabsUnder } from "./FileNav";
 
 const dir = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "directory" });
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
@@ -180,8 +180,15 @@ describe("recentTabs", () => {
   };
 
   it("orders a place's tabs by their latest visit, newest first, at most so many", () => {
-    expect(recentTabs(place, 3)).toEqual([2, 0, 1]);
-    expect(recentTabs(place, 9)).toEqual([2, 0, 1, 3]);
+    expect(recentTabs(place, [0, 1, 2, 3], 3)).toEqual([2, 0, 1]);
+    expect(recentTabs(place, [0, 1, 2, 3], 9)).toEqual([2, 0, 1, 3]);
+    expect(recentTabs(place, [1, 3], 9)).toEqual([1, 3]);
+  });
+
+  it("finds the tabs under a repo's worktrees, however their paths are written", () => {
+    const mixed: FilePlace = { ...place, tabs: [tab("/r/a.ts"), tab("/other/b.ts"), tab("~/../w/c.ts"), tab("/rr/d.ts")] };
+    expect(tabsUnder(mixed, ["/r", "/w"])).toEqual([0]);
+    expect(tabsUnder({ ...mixed, tabs: [tab("/Users/me/r/a.ts"), tab("~/r/b.ts"), tab("~/rr/c.ts")] }, ["~/r"])).toEqual([0, 1]);
   });
 });
 
