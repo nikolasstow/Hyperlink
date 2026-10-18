@@ -1,7 +1,7 @@
 import { Effect, HashMap, Layer, Option, Stream } from "effect";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, rerooted, tabEntry, tabGridOf, tabRerooted, tabsUnder } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, FileNav, type FileNavEntry, type FilePlace, type FileTab, opened, recentTabs, type RepoFilter, repoFilterFrom, rerooted, tabEntry, tabGridOf, tabRerooted, tabsUnder } from "./FileNav";
 
 const dir = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "directory" });
 const file = (path: string): FileNavEntry => ({ path, name: path.split("/").pop() ?? path, kind: "file" });
@@ -204,5 +204,36 @@ describe("tabGridOf", () => {
       { previews: 5, allTabs: true },
       { previews: 5, allTabs: true },
     ]);
+  });
+});
+
+describe("repoFilterFrom", () => {
+  const set: RepoFilter = { kind: "repos", repos: ["a", "b"] };
+
+  it("follows the tab's repo for one repo (or none chosen), keeps all, and keeps a set that holds the tab's repo", () => {
+    expect(repoFilterFrom(Option.none(), "a")).toEqual({ kind: "repo", repo: "a" });
+    expect(repoFilterFrom(Option.some({ kind: "repo", repo: "b" }), "a")).toEqual({ kind: "repo", repo: "a" });
+    expect(repoFilterFrom(Option.some({ kind: "all" }), "a")).toEqual({ kind: "all" });
+    expect(repoFilterFrom(Option.some(set), "b")).toEqual(set);
+    expect(repoFilterFrom(Option.some(set), "c")).toEqual({ kind: "repo", repo: "c" });
+  });
+
+  it("keeps the user's choice on the device", async () => {
+    const storage = deviceStorage();
+    const chosen = (nav: FileNav["Service"]) => nav.repoFilter.pipe(Stream.take(1), Stream.runHead, Effect.map(Option.flatten));
+    await run(
+      Effect.gen(function* () {
+        const nav = yield* FileNav;
+        yield* nav.chooseRepoFilter(set);
+      }),
+      storage,
+    );
+    const after = await run(
+      Effect.gen(function* () {
+        return yield* chosen(yield* FileNav);
+      }),
+      storage,
+    );
+    expect(Option.getOrUndefined(after)).toEqual(set);
   });
 });

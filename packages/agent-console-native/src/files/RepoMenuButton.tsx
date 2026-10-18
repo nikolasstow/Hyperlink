@@ -1,6 +1,7 @@
 /**
  * The tab view's repo filter, its own glass in the middle of the top bar:
- * the repo whose tabs are shown (and its worktree), or All Repos, with a
+ * the repo whose tabs are shown (and its worktree), a set of repos, or All
+ * Repos, with a
  * chevron. Tapping it opens a native popover listing All Repos, then every
  * repo with tabs open. A repo's
  * row is two controls: its name shows its tabs (a filter); its chevron opens
@@ -24,9 +25,10 @@ import { SystemIcon } from "../SystemIcon";
 import { type TextColors, useTextColors, useThemedStyles } from "../theme";
 import { PILL_HEIGHT } from "../titlePillStyle";
 import { worktreeName } from "../WorktreePicker";
+import type { RepoFilter } from "./FileNav";
 
-/** Whose tabs the tab view shows: every repo's, or one's. */
-export type RepoFilter = { readonly kind: "all" } | { readonly kind: "repo"; readonly repo: string };
+/** The filter's title: All Repos, the repo, or how many repos. */
+export const repoFilterTitle = (filter: RepoFilter): string => (filter.kind === "all" ? "All Repos" : filter.kind === "repo" ? filter.repo : `${filter.repos.length} Repos`);
 
 /** The popover's rows: their width, and their room. */
 const ROW_WIDTH = 260;
@@ -113,7 +115,7 @@ export const RepoMenuButton = (props: {
                 <GlassView style={styles.glassFill} glassEffectStyle="regular" colorScheme={scheme} />
                 <View style={styles.names}>
                   <Text style={styles.title} numberOfLines={1}>
-                    {filter.kind === "all" ? "All Repos" : filter.repo}
+                    {repoFilterTitle(filter)}
                   </Text>
                   {shown === undefined ? null : (
                     <Text style={styles.worktree} numberOfLines={1}>
@@ -134,7 +136,7 @@ export const RepoMenuButton = (props: {
             </Button>
             <Divider />
             {props.repos.map((repo) => {
-              const chosen = filter.kind === "repo" && filter.repo === repo;
+              const chosen = filter.kind === "repo" ? filter.repo === repo : filter.kind === "repos" && filter.repos.includes(repo);
               const worktrees = worktreesOf(repo);
               const primary = primaryWorktreeOf(repo);
               const row = (

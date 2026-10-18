@@ -44,8 +44,28 @@ export const FilePlace = Schema.Struct({
 });
 export type FilePlace = typeof FilePlace.Type;
 
+/** Whose tabs the tab overview shows: every repo's, one repo's, or a set
+ * of repos'. */
+export const RepoFilter = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("all") }),
+  Schema.Struct({ kind: Schema.Literal("repo"), repo: Schema.String }),
+  Schema.Struct({ kind: Schema.Literal("repos"), repos: Schema.Array(Schema.String) }),
+]);
+export type RepoFilter = typeof RepoFilter.Type;
+
+/** What the overview shows, opened from a tab in `repo`, by the filter the
+ * user chose last (none: one repo). All stays all; one repo follows the
+ * tab's repo; a set stays when it holds the tab's repo, else the tab's repo
+ * alone (the set stays chosen, for the next time). */
+export const repoFilterFrom = (chosen: Option.Option<RepoFilter>, repo: string): RepoFilter =>
+  Option.match(chosen, {
+    onNone: (): RepoFilter => ({ kind: "repo", repo }),
+    onSome: (filter): RepoFilter => (filter.kind === "all" || (filter.kind === "repos" && filter.repos.includes(repo)) ? filter : { kind: "repo", repo }),
+  });
+
 const Stored = Schema.Record(Schema.String, FilePlace);
 const STORE_KEY = "places";
+const FILTER_KEY = "repoFilter";
 /** Visits kept in the history, newest first. */
 const HISTORY_LIMIT = 200;
 
@@ -170,7 +190,14 @@ const visited = (place: FilePlace, entry: FileNavEntry): FilePlace => ({
 });
 
 const make = Effect.gen(function* () {
-  const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, Stored);
+  const kv = yield* KeyValueStore.KeyValueStore;
+  const store = KeyValueStore.toSchemaStore(kv, Stored);
+  const filterStore = KeyValueStore.toSchemaStore(kv, RepoFilter);
+  const chosenFilter = yield* SubscriptionRef.make(
+    yield* filterStore.get(FILTER_KEY).pipe(
+      Effect.catch((error) => Effect.logError("[files] the chosen repo filter could not be read; starting without it", error).pipe(Effect.as(Option.none<RepoFilter>()))),
+    ),
+  );
   const stored = yield* store.get(STORE_KEY).pipe(
     Effect.map(Option.getOrElse((): typeof Stored.Type => ({}))),
     Effect.catch((error) => Effect.logError("[files] the kept places could not be read; starting without them", error).pipe(Effect.as({}))),
@@ -192,6 +219,14 @@ const make = Effect.gen(function* () {
   return {
     /** Every repo's place, as they change (the current ones first). */
     changes: SubscriptionRef.changes(state),
+    /** The overview's repo filter the user chose last, as it changes. */
+    repoFilter: SubscriptionRef.changes(chosenFilter),
+    /** Keeps the user's choice of repo filter. */
+    chooseRepoFilter: (filter: RepoFilter) =>
+      SubscriptionRef.set(chosenFilter, Option.some(filter)).pipe(
+        Effect.andThen(filterStore.set(FILTER_KEY, filter)),
+        Effect.catch((error) => Effect.logError("[files] saving the repo filter failed", error)),
+      ),
     /** Seeds a repo at `root` (its main worktree) when it has no place yet; a
      * repo that already has tabs keeps them (each tab holds its own worktree,
      * switched per tab via `rerootTab`). */
@@ -243,5 +278,13 @@ export const fileNavChanges = Stream.unwrap(
   Effect.gen(function* () {
     const nav = yield* FileNav;
     return nav.changes;
+  }),
+);
+
+/** The repo filter the user chose last, as it changes, for React. */
+export const repoFilterChanges = Stream.unwrap(
+  Effect.gen(function* () {
+    const nav = yield* FileNav;
+    return nav.repoFilter;
   }),
 );

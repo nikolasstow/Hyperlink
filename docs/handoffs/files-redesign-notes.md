@@ -303,3 +303,15 @@ Rule: show every tab when they fill the grid exactly (≤3, or 6); else the last
 
 **Considering (not decided):** redesign the Files page to look like the repo page, with this
 tab grid in place of the repo page's menu. Ask the owner before building it.
+
+## Tab overview: repo filter follows the user's last choice (owner, 2026-10-17) — built
+
+The overview opens on the repo filter the user chose last (kept on the device; `RepoFilter`,
+`repoFilterFrom` in FileNav.ts):
+
+- **One repo**: stays one repo, whichever the opened tab is in.
+- **Set of repos**: the set when the opened tab's repo is in it; else that repo alone. The set
+  stays chosen, so the next time a tab in it opens, the set shows.
+- **All**: stays all.
+
+No choice yet: one repo. Picking a set in the popover is not built: issue #118.

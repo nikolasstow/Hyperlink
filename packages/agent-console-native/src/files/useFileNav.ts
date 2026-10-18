@@ -8,9 +8,10 @@
 import { Effect, HashMap, Option, Stream } from "effect";
 import * as React from "react";
 import { forkApp, runApp } from "../effect/runtime";
-import { FileNav, type FileNavEntry, fileNavChanges, type FilePlace } from "./FileNav";
+import { FileNav, type FileNavEntry, fileNavChanges, type FilePlace, type RepoFilter, repoFilterChanges } from "./FileNav";
 
 let places: HashMap.HashMap<string, FilePlace> = HashMap.empty();
+let chosenFilter: Option.Option<RepoFilter> = Option.none();
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void): (() => void) => {
   listeners.add(listener);
@@ -21,7 +22,8 @@ const subscribe = (listener: () => void): (() => void) => {
 
 let started = false;
 
-/** Reads back the kept places and mirrors them for React (once). */
+/** Reads back the kept places (and the repo filter chosen last) and mirrors
+ * them for React (once). */
 export const startFileNav = (): void => {
   if (started) return;
   started = true;
@@ -35,6 +37,16 @@ export const startFileNav = (): void => {
       ),
     ),
   );
+  forkApp(
+    repoFilterChanges.pipe(
+      Stream.runForEach((next) =>
+        Effect.sync(() => {
+          chosenFilter = next;
+          listeners.forEach((listener) => listener());
+        }),
+      ),
+    ),
+  );
 };
 
 /** Every repo's place in Files, by repo. */
@@ -43,6 +55,10 @@ export const useFilePlaces = (): HashMap.HashMap<string, FilePlace> => React.use
 /** A repo's place in Files (its tabs), or undefined before it has one. */
 export const useFileNav = (repo: string): FilePlace | undefined =>
   React.useSyncExternalStore(subscribe, () => Option.getOrUndefined(HashMap.get(places, repo)));
+
+/** The tab overview's repo filter the user chose last (none before one is
+ * chosen). */
+export const useChosenRepoFilter = (): Option.Option<RepoFilter> => React.useSyncExternalStore(subscribe, () => chosenFilter);
 
 const run = (name: string, f: (nav: FileNav["Service"]) => Effect.Effect<void>): void => {
   runApp(
@@ -67,4 +83,6 @@ export const selectFileTab = (repo: string, index: number): void => run("switchi
 export const newFileTab = (repo: string, entry: FileNavEntry): void => run("opening a tab", (nav) => nav.newTab(repo, entry));
 /** Switches one tab's worktree (its entries move from `from` to `to`). */
 export const rerootFileTab = (repo: string, index: number, from: string, to: FileNavEntry): void => run("switching a tab's worktree", (nav) => nav.rerootTab(repo, index, from, to));
+/** Keeps the user's choice of the overview's repo filter. */
+export const chooseRepoFilter = (filter: RepoFilter): void => run("choosing the repo filter", (nav) => nav.chooseRepoFilter(filter));
 export const closeFileTab = (repo: string, index: number): void => run("closing a tab", (nav) => nav.close(repo, index));

@@ -58,7 +58,7 @@ import { Button, ControlGroup, Host, HStack, Image, Label, Menu } from "@expo/ui
 import { buttonStyle, contentShape, frame, glassEffect, menuActionDismissBehavior, menuIndicator, menuStyle, shapes } from "@expo/ui/swift-ui/modifiers";
 import { canReload, reloadApp } from "../reload";
 import { WorktreePicker, worktreeName, worktreePickerWidth } from "../WorktreePicker";
-import { activeTab, canGoBack, canGoForward, type FileNavEntry, tabEntry } from "./FileNav";
+import { activeTab, canGoBack, canGoForward, type FileNavEntry, type RepoFilter, repoFilterFrom, tabEntry } from "./FileNav";
 import { FileListing } from "./FileListing";
 import { FileNavBar, NAV_BAR_HEIGHT } from "./FileNavBar";
 import { FileView } from "./FileView";
@@ -66,7 +66,7 @@ import { OVERVIEW_TOP_ROOM, TabOverview } from "./TabOverview";
 import { sameTab, type ShownRepo, type TabFilter, type TabLayout, tabLayout, type TabRef } from "./tabLayout";
 import { CARD_SCALE, cardStepAt, PREVIEW_RADIUS } from "./tabShape";
 import { TabPreview } from "./TabPreview";
-import { closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, openOrSelectFileTab, rerootFileTab, selectFileTab, useFileNav, useFilePlaces } from "./useFileNav";
+import { chooseRepoFilter, closeFileTab, ensureFileRoot, fileBack, fileForward, newFileTab, openFileEntry, openOrSelectFileTab, rerootFileTab, selectFileTab, useChosenRepoFilter, useFileNav, useFilePlaces } from "./useFileNav";
 import { HistorySheet } from "./HistorySheet";
 import { pathCrumbs } from "./breadcrumbs";
 import { EDITOR_BOTTOM_ROOM } from "./editorLayout";
@@ -74,7 +74,7 @@ import { useFontSizeIcons } from "./fontSizeIcons";
 import { BreadcrumbPill } from "./BreadcrumbPill";
 import type { RollDirection } from "./crumbRoll";
 import type { ScopeSymbol } from "./stickyRanges";
-import { type RepoFilter, RepoMenuButton, repoFilterWidth } from "./RepoMenuButton";
+import { RepoMenuButton, repoFilterTitle, repoFilterWidth } from "./RepoMenuButton";
 import { useAppContext } from "../AppContext";
 import { useCodeTheme } from "../useCodeTheme";
 import { saveFileNow } from "./fileSave";
@@ -204,11 +204,18 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   }, []);
   const [filter, setFilter] = React.useState<TabFilter>("all");
   const [historyOpen, setHistoryOpen] = React.useState(false);
-  // Whose tabs the overview shows: this repo's (each time it opens), or
-  // every repo's, or another's.
-  const [repoFilter, setRepoFilter] = React.useState<RepoFilter>({ kind: "repo", repo });
+  // Whose tabs the overview shows: by the filter the user chose last
+  // (repoFilterFrom), each time it opens; or what is chosen while open.
+  const chosenFilter = useChosenRepoFilter();
+  const [repoFilter, setRepoFilter] = React.useState<RepoFilter>(() => repoFilterFrom(chosenFilter, repo));
   const repoNow = React.useRef(repo);
   repoNow.current = repo;
+  const chosenNow = React.useRef(chosenFilter);
+  chosenNow.current = chosenFilter;
+  const chooseFilter = (next: RepoFilter): void => {
+    setRepoFilter(next);
+    chooseRepoFilter(next);
+  };
   // The repos with tabs open: this one first, the rest by name.
   const reposWithTabs = [
     ...(place === undefined ? [] : [repo]),
@@ -288,7 +295,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   React.useEffect(() => setCrumbsOpen(false), [current.path, overview.kind]);
   // The tab view's filter is centered, search/history fixed at the right:
   // keep the filter clear of both (symmetric), and back clear of the filter.
-  const filterLabel = repoFilter.kind === "all" ? "All Repos" : repoFilter.repo;
+  const filterLabel = repoFilterTitle(repoFilter);
   const filterWorktree = repoFilter.kind === "repo" ? primaryWorktreeOf(repoFilter.repo) : undefined;
   const filterMax = screen.width - TOP_SIDE * 2 - (TAB_TOP_ACTIONS_WIDTH + TOP_GAP) * 2;
   const filterWidth = Math.min(repoFilterWidth(filterLabel, filterWorktree === undefined ? undefined : worktreeName(filterWorktree)), filterMax);
@@ -325,11 +332,11 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   // it (at its root), the others' as kept.
   const shownRepos = (among: RepoFilter, extra?: FileNavEntry): ReadonlyArray<ShownRepo> => {
     const thisRepo: ShownRepo = { repo, place: place ?? { root: root.path, tabs: [], active: 0, history: [] }, extra };
-    if (among.kind === "repo" && among.repo === repo) return [thisRepo];
-    const others = (among.kind === "repo" ? [among.repo] : reposWithTabs.filter((each) => each !== repo)).flatMap((each): ReadonlyArray<ShownRepo> =>
+    const listed = among.kind === "all" ? reposWithTabs : among.kind === "repos" ? among.repos : [among.repo];
+    const others = listed.filter((each) => each !== repo).flatMap((each): ReadonlyArray<ShownRepo> =>
       Option.match(HashMap.get(places, each), { onNone: () => [], onSome: (kept) => [{ repo: each, place: kept }] }),
     );
-    return among.kind === "all" ? [thisRepo, ...others] : others;
+    return listed.includes(repo) ? [thisRepo, ...others] : others;
   };
   const layoutFor = (among: TabFilter, extra?: FileNavEntry, repos: RepoFilter = repoFilter): TabLayout =>
     tabLayout(shownRepos(repos, extra), among, screen, insets.top + OVERVIEW_TOP_ROOM);
@@ -350,11 +357,12 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const opened = React.useCallback(() => setOverview((now) => (now.kind === "opening" ? { ...now, kind: "open" } : now)), []);
   const openTabs = (): void => {
     if (place === undefined || overview.kind !== "closed") return;
-    // Opened onto this repo's tabs, every kind, scrolled to the one showing.
+    // Opened onto the repos the chosen filter gives, every kind, scrolled to
+    // the tab showing.
     setFilter("all");
-    const thisRepo: RepoFilter = { kind: "repo", repo };
-    setRepoFilter(thisRepo);
-    const laid = layoutFor("all", undefined, thisRepo);
+    const shownFilter = repoFilterFrom(chosenFilter, repo);
+    setRepoFilter(shownFilter);
+    const laid = layoutFor("all", undefined, shownFilter);
     const showing: TabRef = { repo, index: place.active };
     const initialScroll = scrollFor(laid, showing);
     scroll.current = initialScroll;
@@ -386,10 +394,10 @@ export const FilesScreen = (props: Props): React.ReactElement => {
   const closed = React.useCallback(() => {
     setOverview({ kind: "closed" });
     setFilter("all");
-    setRepoFilter({ kind: "repo", repo: repoNow.current });
+    setRepoFilter(repoFilterFrom(chosenNow.current, repoNow.current));
   }, []);
   // The grid while closed: scrolled to the tab showing, as it will open.
-  const closedScroll = place === undefined ? 0 : scrollFor(layoutFor("all", undefined, { kind: "repo", repo }), { repo, index: place.active });
+  const closedScroll = place === undefined ? 0 : scrollFor(layoutFor("all", undefined, repoFilterFrom(chosenFilter, repo)), { repo, index: place.active });
   const zoomInto = (next: Overview): void => {
     setOverview(next);
     if (next.kind !== "closed") zoomTarget.value = next.frame;
@@ -713,7 +721,7 @@ export const FilesScreen = (props: Props): React.ReactElement => {
               width={filterWidth}
               filter={repoFilter}
               repos={reposWithTabs}
-              onFilter={setRepoFilter}
+              onFilter={chooseFilter}
               onWorktree={(of, path) => {
                 setPrimaryWorktree(of, path);
                 ensureFileRoot(of, { path, name: lastSegment(path, of), kind: "directory" });
