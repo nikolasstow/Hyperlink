@@ -23,6 +23,7 @@ import * as React from "react";
 import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, useColorScheme, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isPrinting, layerIndexOf, machineLabel, PHASE_COMPLETE, PHASE_EXPOSING, phaseLabel, PRINTER_PORT, type PrintInfo } from "./printer/sdcp";
+import { useDirectLayer } from "./printer/directLayers";
 import { usePrinterLink, type LinkState } from "./printer/usePrinterLink";
 import type { RootStackParamList } from "./RootNavigator";
 import { type TextColors, useScreenBackground, useThemedStyles } from "./theme";
@@ -153,23 +154,40 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   // Ticks only arrive with a push; between pushes, count on from the last one.
   const sincePush = printing && printer.updatedAt !== undefined ? now - printer.updatedAt : 0;
 
+  // On the LAN the page reads the print file from the printer and decodes the layer itself;
+  // the relay draws it only when the phone is away from home.
+  const direct = printer.link.kind === "Open" && printer.link.via === "Direct" && printer.printerIp !== undefined;
+  const printerBase = printer.printerIp === undefined ? undefined : `http://${printer.printerIp}:${PRINTER_PORT}`;
+  const directLayer = useDirectLayer(
+    direct && printerBase !== undefined && info?.TaskId !== undefined && info.Filename !== undefined && index !== undefined
+      ? { printerBase, filename: info.Filename, taskId: info.TaskId, index, totalLayers: total, mirror }
+      : undefined,
+  );
   const taskBase = info?.TaskId === undefined ? undefined : `${printer.relayBase}/api/prints/${encodeURIComponent(info.TaskId)}`;
-  const layerUri = taskBase !== undefined && index !== undefined && printer.relayReachable ? `${taskBase}/layers/${index}.png?alpha=1&crop=1&scale=8&mirror=${mirror ? 1 : 0}` : undefined;
-  const shownUri = useLoadedUri(layerUri);
-  // Without the relay, the printer's own task thumbnail is the best picture there is.
+  const relayLayerUri = !direct && taskBase !== undefined && index !== undefined && printer.relayReachable ? `${taskBase}/layers/${index}.png?alpha=1&crop=1&scale=8&mirror=${mirror ? 1 : 0}` : undefined;
+  const relayShownUri = useLoadedUri(relayLayerUri);
+  const shownUri = direct ? directLayer.uri : relayShownUri;
   const thumbUri =
     info?.TaskId === undefined
       ? undefined
-      : printer.link.kind === "Open" && printer.link.via === "Direct" && printer.printerIp !== undefined
-        ? `http://${printer.printerIp}:${PRINTER_PORT}/media/mmcblk0p1/history_image/${encodeURIComponent(info.TaskId)}.bmp`
+      : direct && printerBase !== undefined
+        ? `${printerBase}/media/mmcblk0p1/history_image/${encodeURIComponent(info.TaskId)}.bmp`
         : taskBase !== undefined
           ? `${taskBase}/thumbnail.bmp`
           : undefined;
-  const previewUri = taskBase !== undefined && printer.relayReachable ? `${taskBase}/preview.png` : undefined;
+  const previewUri = direct ? directLayer.previewUri : taskBase !== undefined && printer.relayReachable ? `${taskBase}/preview.png` : undefined;
+  const lcdNote = direct
+    ? directLayer.progress !== undefined
+      ? `Reading the layer index from the printer (once per print): ${directLayer.progress.indexed.toLocaleString()} / ${directLayer.progress.target.toLocaleString()}`
+      : directLayer.error !== undefined
+        ? `Could not read the layer: ${directLayer.error}`
+        : "Reading the layer from the printer…"
+    : printer.relayReachable
+      ? undefined
+      : "Away from home, layer images come from the relay on the server, which is not reachable.";
 
   const pill = linkPill(printer.link);
   const cardW = width - 32;
-  const lcdNote = printer.relayReachable ? undefined : "Layer images come from the relay on the server, which is not reachable.";
 
   return (
     <ScrollView style={{ backgroundColor: background }} contentInsetAdjustmentBehavior="never" contentContainerStyle={{ padding: 16, paddingTop: headerHeight + 8, paddingBottom: insets.bottom + 48 }}>

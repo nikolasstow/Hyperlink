@@ -1,6 +1,6 @@
 # Elegoo resin printer page (Saturn 4 Ultra 16K)
 
-**Status:** prototype, built 2026-10-17. JavaScript only. Not yet seen on a device.
+**Status:** prototype, 2026-10-17. JavaScript only. Dev build `cf9744f5` (variant iota) finished on EAS; Metro for iota runs on :8083 (tmux `iota-metro`). Not yet seen on a device.
 **Scope:** a read-only printer page under Servers, a relay on the home server, and a web portal.
 **Related:** [server-pages-and-widgets.md](./server-pages-and-widgets.md) · [double-agent-repo-screen-and-plugin-system.md](./double-agent-repo-screen-and-plugin-system.md) §22 · the relay lives in the separate repo `nikolasstow/saturn-uploader`, branch `feat/relay-portal`.
 
@@ -31,10 +31,13 @@ changes between the two paths.
                                                        the relay on the Mac mini
 ```
 
-1. A client asks the relay `GET /api/state` for the printer's LAN address and ids.
+1. A client learns the printer's LAN address and ids once from the relay (`GET /api/state`, which does not touch the printer) and keeps them.
 2. The client tries the printer directly, with a 2.5 s timeout.
-3. If that fails (the phone is away from home), the client uses the relay's `/websocket`.
-4. Layer images always come from the relay, because only the relay can read and decode the print file.
+3. On the LAN the app does everything directly: SDCP status from the printer's WebSocket, and layer images read from the printer's file server and decoded on the phone. The relay is not used.
+4. Away from home (the direct try fails), the client uses the relay's `/websocket` and the relay's layer images.
+5. The relay opens its own printer connection only while a relay client is active, and closes it 60 s after the last one.
+
+The web portal is loaded from the relay, and on the LAN it takes status directly from the printer. Its layer images still come from the relay: the printer's file server sends no CORS headers, so a browser cannot read the print file.
 
 ## 3. What exists
 
@@ -65,12 +68,16 @@ Routes on port 5197:
 | File | Role |
 |---|---|
 | `src/printer/sdcp.ts` | Frame parser, labels, `layerIndexOf`, the refresh request. |
-| `src/printer/usePrinterLink.ts` | The hook: direct first, then the relay. Keeps the printer identity in AsyncStorage. Reconnects on foreground. Sends Cmd 0 every 15 s. |
+| `src/printer/usePrinterLink.ts` | The hook: direct first, then the relay. Keeps the printer identity in AsyncStorage and stops asking the relay once it is connected directly. Reconnects on foreground. Sends Cmd 0 every 15 s. |
+| `src/printer/goo.ts` | The `.goo` decoder and a PNG writer (fflate), run on the phone. A port of the relay's `Goo.ts`. |
+| `src/printer/directLayers.ts` | Reads the print file from the printer in byte ranges, walks and saves the layer offset table (AsyncStorage, once per print), decodes the current layer, and prepares the next. One request at a time. |
 | `src/PrinterScreen.tsx` | The page: the LCD card with the layer tinted UV violet (it glows while exposing), progress, stats, thumbnails, printer facts. |
 | `src/ServerScreen.tsx` | New Services row "Resin Printer". |
 | `src/RootNavigator.tsx` | New route `ServerPrinter: { serverName; serverAddress }`. |
 
-The layer image in the app is an alpha mask (`alpha=1`): white where the LCD
+New dependency: `fflate` 0.8.3 (pure JS, no native change).
+
+The layer image in the app is an alpha mask (decoded on the phone, or `alpha=1` from the relay): white where the LCD
 is lit, transparent elsewhere. `Image` `tintColor` colours it, and the iOS
 shadow on the wrapper follows the lit shape, which makes the glow.
 
@@ -97,17 +104,14 @@ SATURN_PRINTER_IP=192.168.1.31 node dist/main.js relay
 Then open `http://100.67.32.32:5197/` in a browser. Check `GET /api/state`
 for `"connection": "Connected"`.
 
-The app page needs no native change, so it rides Metro. This worktree's
-variant (`DoubleAgent · iota`) has no build yet. To see the page, do one of
-these:
-
-1. Run `pnpm build:dev` here (metered EAS build), then Metro on a free port, for example `pnpm start --port 8083`.
-2. Or merge this branch into the epsilon worktree and reload its dev client.
+The app page needs no native change, so it rides Metro. Install the iota dev
+build from EAS build `cf9744f5-c488-4f80-8c51-731744178b98`, open it, and
+point it at Metro on `100.67.32.32:8083` (tmux `iota-metro`).
 
 Open Home, then Servers, then Mac mini, then Resin Printer.
 
 Verification so far: app `tsc` exit 0; eslint 0 errors on the changed files;
-395 app tests pass (6 new). The relay: typecheck and lint clean, 118 tests
+402 app tests pass (13 new). The relay: typecheck and lint clean, 118 tests
 pass (13 new), and it served live layers of a running print through
 Tailscale.
 
@@ -125,7 +129,7 @@ Tailscale.
 2. WARNING: the printer's file server on port 3030 has no login and exposes the whole filesystem to the LAN, including `/config/wpa_supplicant.conf` (the WiFi password). This is the firmware's behaviour, not ours. Keep the printer on a trusted network.
 3. The layer numbering is an assumption: `CurrentLayer` counts from 1, so the LCD shows index `CurrentLayer - 1`. Check it at the end of a print. If the print finishes with `CurrentLayer == TotalLayer`, the assumption holds.
 4. Only the current print can be read through the relay. A request for another `TaskId` returns 404.
-5. A first request for a late layer after a relay restart walks the offset table from layer 0 first (about 8 ms per layer, so about 40 s at layer 5000). The relay prefetches the current print's offsets as soon as it starts, so this is rare.
+5. The first look at a print walks the layer offset table from layer 0 (one 70-byte request per layer). Uncontested it is about 8 ms per layer; with another reader on the printer it was about 70 ms. The phone saves its table in AsyncStorage and the relay saves its table under `~/.cache/saturn-uploader`, so each walks once per print.
 6. Worktree variants drop the native extensions, so a printer Live Activity can only be tested on the base build (`pnpm build:master`).
 7. The camera allows few streams, and a client killed without RTSP TEARDOWN can hold a slot until a power cycle. Do not add camera code that can leak a stream.
 
@@ -134,7 +138,8 @@ Tailscale.
 1. The relay lives in `saturn-uploader`, not in this monorepo. It is printer software and reuses that repo's SDCP client. The app talks to it over HTTP only.
 2. The relay is read-only. It never forwards a command that could change a print.
 3. The relay fans out unchanged frames, so direct and relay clients share one parser.
-4. Layer images are decoded on the relay from Range reads of the printer's file server. A local copy is used only when its name and size match.
+4. On the LAN the app decodes layers itself from Range reads of the printer's file server; the relay does the same only for remote clients and the browser portal. A local copy is used only when its name and size match.
+6. The relay is lazy: no printer connection while no client uses it (owner: "I don't want a relay if it's not needed").
 5. The app page is a bundled native screen under Servers, the UPS pattern, not a server-driven plugin page. The plugin system has no `requirement: "server"` or widget support yet.
 
 ### Do not resurrect

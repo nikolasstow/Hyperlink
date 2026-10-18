@@ -104,6 +104,8 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
   const [generation, setGeneration] = React.useState(0);
   const identityRef = React.useRef<PrinterIdentity | undefined>(undefined);
   identityRef.current = identity;
+  const linkRef = React.useRef<LinkState>(link);
+  linkRef.current = link;
 
   // The relay's view: printer identity, and a first status to draw before any frame arrives.
   React.useEffect(() => {
@@ -113,6 +115,9 @@ export const usePrinterLink = (serverAddress: string | undefined): PrinterLink =
       if (alive && cached !== undefined && identityRef.current === undefined) setIdentity(cached);
     });
     const tick = (): void => {
+      // The relay is only for when the printer cannot be reached: once the page knows the
+      // printer's address and is connected to it directly, leave the relay alone.
+      if (identityRef.current !== undefined && linkRef.current.kind === "Open" && linkRef.current.via === "Direct") return;
       void authedFetch(`${relayBase}/api/state`, { cache: "no-store" })
         .then((response) => response.json())
         .then((state: RelayState) => {
