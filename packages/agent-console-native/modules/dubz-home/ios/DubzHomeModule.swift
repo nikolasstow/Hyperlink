@@ -83,8 +83,10 @@ public class DubzHomeModule: Module {
         //    so the native composer is usable in the existing window.
         // 4: + window — the WHOLE Dubz window (glass + Part A + Part B) as one
         //    self-sizing SwiftUI view that morphs collapsed bar ↔ open window.
+        // 5: window canvas BOUNDED — v4's window laid out an infinite frame and
+        //    froze the UI; the RN canvas now has a finite height.
         Constants([
-            "apiVersion": 4,
+            "apiVersion": 5,
         ])
 
         View(DubzHomeView.self)

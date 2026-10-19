@@ -35,6 +35,7 @@ import { DubzCompactSync } from "./dubz/DubzCompactSync";
 import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
+import { BAR_GAP } from "./dubz/barWindowGeometry";
 import { DubzHomeNativeView, type DubzSessionRow, isDubzComposerNative, isDubzHomeNative, isDubzWindowNative } from "../modules/dubz-home";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -417,9 +418,14 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   // when the gate is off or the build is a step behind.
   if (DUBZ_NATIVE_WINDOW && isDubzWindowNative && NativeComposerView !== undefined) {
     const nativeOpen = winState.phase === "open";
+    // A BOUNDED, absolute canvas (never flex: an unbounded flex let the SwiftUI
+    // frame grow to infinity and froze the UI). It sits where the BarWindow sat
+    // — left/right MARGIN, bottom BAR_GAP — a fixed tall box the glass
+    // bottom-anchors in; the parent rides it with the keyboard.
+    const maxWindowHeight = Math.round(screenH * 0.6);
     return (
-      <View style={styles.nativeWindowCanvas} pointerEvents="box-none">
-        <Host style={StyleSheet.absoluteFill} ignoreSafeArea="all">
+      <View style={[styles.nativeWindowCanvas, { height: maxWindowHeight }]} pointerEvents="box-none">
+        <Host style={styles.nativeWindowHost} ignoreSafeArea="all">
           <NativeComposerView
             window
             open={nativeOpen}
@@ -428,7 +434,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
             topInset={0}
             bottomInset={0}
             minHeight={cachedDefaultHeight ?? SINGLE_SUGGESTION_HEIGHT}
-            maxHeight={Math.round(screenH * 0.7)}
+            maxHeight={maxWindowHeight}
             draft={text}
             placeholder={`Ask ${AGENT_NAME}…`}
             labelColor={textColors.label}
@@ -724,9 +730,16 @@ const makeStyles = (text: TextColors) =>
   composerHost: {
     flex: 1,
   },
-  // The all-native window's canvas: fills the space the parent gives Dubz (the
-  // BarWindow's old spot); the native view bottom-anchors the glass in it.
+  // The all-native window's canvas: a BOUNDED absolute box where the BarWindow
+  // sat; the native view bottom-anchors the glass in it. Never flex — an
+  // unbounded height froze the UI (SwiftUI laid out an infinite frame).
   nativeWindowCanvas: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: BAR_GAP,
+  },
+  nativeWindowHost: {
     flex: 1,
   },
 });

@@ -124,13 +124,15 @@ const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.a
 // 2: + the composer bottom bar (Part B) can live in this view.
 // 3: + composerOnly — the composer row usable in the existing RN pill.
 // 4: + window — the whole Dubz window as one self-sizing SwiftUI view.
+// 5: window canvas bounded (v4 froze the UI with an infinite frame).
 const available = apiVersion >= 1;
 /** Whether this build's native view carries the usable composer (composerOnly),
  * so JS may put the native composer in the pill. A build behind → RN composer. */
 export const isDubzComposerNative = apiVersion >= 3;
-/** Whether this build carries the whole-window native view, so JS may run the
- * all-native Dubz window. A build behind → the RN BarWindow. */
-export const isDubzWindowNative = apiVersion >= 4;
+/** Whether this build carries the whole-window native view with the BOUNDED
+ * canvas fix, so JS may run the all-native Dubz window. A build behind (incl.
+ * the v4 window that froze the UI) → the RN BarWindow. */
+export const isDubzWindowNative = apiVersion >= 5;
 
 /** The native Dubz home surface, or undefined where this build has none (or too old). */
 export const DubzHomeNativeView: React.ComponentType<DubzHomeNativeProps> | undefined = available
