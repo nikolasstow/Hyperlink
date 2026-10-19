@@ -35,7 +35,7 @@ import { DubzCompactSync } from "./dubz/DubzCompactSync";
 import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
-import { DubzHomeNativeView, type DubzSessionRow, isDubzComposerNative, isDubzHomeNative } from "../modules/dubz-home";
+import { DubzHomeNativeView, type DubzSessionRow, isDubzComposerNative, isDubzHomeNative, isDubzWindowNative } from "../modules/dubz-home";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
 import { getBarPages, setBarPages, type BarPage } from "./settings";
@@ -57,6 +57,12 @@ const DUBZ_DEBUG: boolean = true;
  * window would not resize. The composer must live in the native WINDOW instead
  * (the locked plan). RN composer meanwhile. */
 const DUBZ_NATIVE_COMPOSER: boolean = false;
+
+/** Run the all-native Dubz WINDOW (glass + suggestions + composer, one SwiftUI
+ * view that sizes itself) where the build carries it (apiVersion >= 4). The RN
+ * BarWindow becomes just a keyboard-aware canvas. Flip false to fall back to the
+ * RN BarWindow on a reload. */
+const DUBZ_NATIVE_WINDOW: boolean = true;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
@@ -221,7 +227,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const NativeComposerView = DubzHomeNativeView;
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const { address } = useAppContext();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
@@ -404,6 +410,47 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
       if (finished === true) runOnJS(turn)(open);
     });
   }, [pageBack, begin, turn, pageX, open, close]);
+
+  // All-native window: SwiftUI owns the glass, suggestions and composer and
+  // sizes itself; the RN side is just a keyboard-aware canvas the parent
+  // positions (same spot the BarWindow sat). Falls back to the BarWindow below
+  // when the gate is off or the build is a step behind.
+  if (DUBZ_NATIVE_WINDOW && isDubzWindowNative && NativeComposerView !== undefined) {
+    const nativeOpen = winState.phase === "open";
+    return (
+      <View style={styles.nativeWindowCanvas} pointerEvents="box-none">
+        <Host style={StyleSheet.absoluteFill} ignoreSafeArea="all">
+          <NativeComposerView
+            window
+            open={nativeOpen}
+            sessions={NO_SESSIONS}
+            contentWidth={screenW - 48}
+            topInset={0}
+            bottomInset={0}
+            minHeight={cachedDefaultHeight ?? SINGLE_SUGGESTION_HEIGHT}
+            maxHeight={Math.round(screenH * 0.7)}
+            draft={text}
+            placeholder={`Ask ${AGENT_NAME}…`}
+            labelColor={textColors.label}
+            secondaryColor={textColors.secondaryLabel}
+            plusFill={CHIP_FILL}
+            plusIcon={CHIP_ICON}
+            sendActiveFill={themeColors.secondaryFill}
+            sendMutedFill={themeColors.secondaryMutedFill}
+            tint="rgba(0,0,0,0.18)"
+            debug={DUBZ_DEBUG}
+            onOpenComposer={onOpen}
+            onDraftChange={(event) => setDraft(event.nativeEvent.text)}
+            onPlus={nativeOpen ? noop : onOpen}
+            onSend={(event) => {
+              if (session !== undefined) sendBody(event.nativeEvent.text);
+              else setDraft("");
+            }}
+          />
+        </Host>
+      </View>
+    );
+  }
 
   return (
     <BarWindow
@@ -675,6 +722,11 @@ const makeStyles = (text: TextColors) =>
   // The native composer row fills the pill's width; its height matches content
   // (Host matchContents vertical), so the pill grows with the input.
   composerHost: {
+    flex: 1,
+  },
+  // The all-native window's canvas: fills the space the parent gives Dubz (the
+  // BarWindow's old spot); the native view bottom-anchors the glass in it.
+  nativeWindowCanvas: {
     flex: 1,
   },
 });

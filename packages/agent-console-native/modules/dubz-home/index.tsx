@@ -81,6 +81,18 @@ export interface DubzHomeNativeProps extends ViewProps {
   /** Render ONLY the composer row (no scroll, no glass) for the RN pill to
    * wrap — the native composer used in the existing window. */
   readonly composerOnly?: boolean;
+  /** Render the WHOLE Dubz window (glass + Part A + Part B) as one self-sizing
+   * SwiftUI view that morphs the collapsed bar ↔ the open window. RN only
+   * provides a keyboard-aware canvas + the open intent. */
+  readonly window?: boolean;
+  /** The open window's floor (the dragged default) and cap (space above the
+   * keyboard); the glass sizes between them to content. */
+  readonly minHeight?: number;
+  readonly maxHeight?: number;
+  /** Clear glass (the window) vs regular (the bar). */
+  readonly clearGlass?: boolean;
+  /** Tint the window glass (hex string at runtime). */
+  readonly tint?: ColorValue;
   /** Seed text to restore a saved draft; typing is owned natively after. */
   readonly draft?: string;
   readonly placeholder?: string;
@@ -111,10 +123,14 @@ const apiVersion = typeof nativeModule?.apiVersion === "number" ? nativeModule.a
 //    row animation, all native (session area as the content).
 // 2: + the composer bottom bar (Part B) can live in this view.
 // 3: + composerOnly — the composer row usable in the existing RN pill.
+// 4: + window — the whole Dubz window as one self-sizing SwiftUI view.
 const available = apiVersion >= 1;
 /** Whether this build's native view carries the usable composer (composerOnly),
  * so JS may put the native composer in the pill. A build behind → RN composer. */
 export const isDubzComposerNative = apiVersion >= 3;
+/** Whether this build carries the whole-window native view, so JS may run the
+ * all-native Dubz window. A build behind → the RN BarWindow. */
+export const isDubzWindowNative = apiVersion >= 4;
 
 /** The native Dubz home surface, or undefined where this build has none (or too old). */
 export const DubzHomeNativeView: React.ComponentType<DubzHomeNativeProps> | undefined = available

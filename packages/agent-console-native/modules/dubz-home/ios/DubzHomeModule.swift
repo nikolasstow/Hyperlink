@@ -32,6 +32,18 @@ public final class DubzHomeProps: ExpoSwiftUI.ViewProps {
     /** Render ONLY the composer row (no scroll, no glass), for the RN pill to
      * wrap — validates the native composer in the existing window. */
     @Field var composerOnly: Bool = false
+    /** Render the WHOLE Dubz window — glass + suggestions (Part A) + composer
+     * (Part B) — bottom-anchored in the view's frame, sizing the glass to its
+     * content in one SwiftUI pass (the all-native window). */
+    @Field var window: Bool = false
+    /** The floor the open window rests at (the user's dragged default), and the
+     * cap (space above the keyboard). The glass sizes between them to content. */
+    @Field var minHeight: Double = 0
+    @Field var maxHeight: Double = 0
+    /** Clear glass (the window) vs regular (collapsed bar). */
+    @Field var clearGlass: Bool = true
+    /** Tint the window glass (hex at runtime). */
+    @Field var tint: Color?
     /** Seed text to restore a saved draft; typing is owned natively after. */
     @Field var draft: String = ""
     @Field var placeholder: String = ""
@@ -69,8 +81,10 @@ public class DubzHomeModule: Module {
         //    `showComposer`; dormant until JS wires it.
         // 3: + composerOnly — the composer row alone, for the RN pill to wrap,
         //    so the native composer is usable in the existing window.
+        // 4: + window — the WHOLE Dubz window (glass + Part A + Part B) as one
+        //    self-sizing SwiftUI view that morphs collapsed bar ↔ open window.
         Constants([
-            "apiVersion": 3,
+            "apiVersion": 4,
         ])
 
         View(DubzHomeView.self)
@@ -88,6 +102,9 @@ private let COMPOSER_CHIP: CGFloat = 32
 private let COMPOSER_SEND: CGFloat = 38
 private let COMPOSER_FIELD_PADDING: CGFloat = 10
 private let INPUT_MAX_LINES = 8
+// The whole-window glass: inner padding and corner radius (match BarWindow).
+private let WINDOW_PAD: CGFloat = 12
+private let WINDOW_RADIUS: CGFloat = 30
 
 /// Dubz home's suggestions surface. A bottom-anchored ScrollView that fills the
 /// window and scrolls BEHIND the top and bottom bars (contentMargins by the
@@ -118,7 +135,12 @@ public struct DubzHomeView: ExpoSwiftUI.View {
     }
 
     public var body: some View {
-        if props.composerOnly {
+        if props.window {
+            // The WHOLE Dubz window, all native: one glass that morphs between
+            // the collapsed composer bar and the open window as its frame
+            // animates (SwiftUI re-samples the glass itself — move-together).
+            windowBody
+        } else if props.composerOnly {
             // Part B alone, to validate the native composer in the existing RN
             // pill (the pill supplies the glass). It reports its natural height
             // so the window floor grows with the input — the same contract the
@@ -270,6 +292,76 @@ public struct DubzHomeView: ExpoSwiftUI.View {
             .padding(.horizontal, COMPOSER_FIELD_PADDING)
             .padding(.vertical, COMPOSER_FIELD_PADDING)
             .modifier(GlassCapsule())
+    }
+
+    // MARK: - The whole window (all native)
+
+    @ViewBuilder
+    private var windowBody: some View {
+        if #available(iOS 17.0, *) {
+            windowImpl
+        } else {
+            EmptyView()
+        }
+    }
+
+    // One glass that sizes to its content, bottom-anchored in the canvas. The
+    // frame animates on `open`, so the glass morphs between the collapsed
+    // composer bar and the open window; the composer grows the glass with no RN
+    // feedback (move-together).
+    @available(iOS 17.0, *)
+    private var windowImpl: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            glassWindow
+                // Collapsed: a tap on the bar opens the window (the field is
+                // disabled until then). Open: children take their own taps; this
+                // fires only on empty glass and is a no-op.
+                .contentShape(Rectangle())
+                .onTapGesture { if !props.open { props.onOpenComposer([:]) } }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: props.open)
+    }
+
+    @available(iOS 17.0, *)
+    @ViewBuilder
+    private var glassWindow: some View {
+        if #available(iOS 26.0, *) {
+#if compiler(>=6.2)
+            // The container is the shared sampling region so the +/send chip
+            // glass can sit inside the window glass.
+            GlassEffectContainer(spacing: GAP) {
+                windowContent
+                    .glassEffect(Glass.regular, in: RoundedRectangle(cornerRadius: WINDOW_RADIUS))
+            }
+#else
+            windowContent.background(RoundedRectangle(cornerRadius: WINDOW_RADIUS).fill(.ultraThinMaterial))
+#endif
+        } else {
+            windowContent.background(RoundedRectangle(cornerRadius: WINDOW_RADIUS).fill(.ultraThinMaterial))
+        }
+    }
+
+    // Part A (suggestions) over Part B (composer). Collapsed → the composer row
+    // only (the bar). Open → the suggestions appear above and the frame grows to
+    // the dragged floor, capped at the max (content beyond it scrolls).
+    @available(iOS 17.0, *)
+    private var windowContent: some View {
+        VStack(spacing: GAP) {
+            if props.open {
+                scrollContent
+            }
+            composerRow
+        }
+        .padding(WINDOW_PAD)
+        .frame(maxWidth: .infinity, alignment: .bottom)
+        .frame(
+            minHeight: props.open ? CGFloat(props.minHeight) : nil,
+            maxHeight: props.open ? CGFloat(props.maxHeight) : nil,
+            alignment: .bottom
+        )
+        .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
     }
 
     // MARK: - Rows
