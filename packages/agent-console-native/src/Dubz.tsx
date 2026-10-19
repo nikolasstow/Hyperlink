@@ -51,9 +51,12 @@ const DUBZ_PROBE: boolean = false;
 const DUBZ_DEBUG: boolean = true;
 
 /** Use the native SwiftUI composer in the pill where the build carries it
- * (apiVersion >= 3). Flip false to fall back to the RN composer on a reload,
- * without a rebuild, if the native one regresses. */
-const DUBZ_NATIVE_COMPOSER: boolean = true;
+ * (apiVersion >= 3). OFF: an RN pill cannot host a growing native field
+ * (matchContents is set once on mount; a fixed RN frame cannot report the
+ * field's natural growing height), so the glass hugged the first line and the
+ * window would not resize. The composer must live in the native WINDOW instead
+ * (the locked plan). RN composer meanwhile. */
+const DUBZ_NATIVE_COMPOSER: boolean = false;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
