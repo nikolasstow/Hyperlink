@@ -36,6 +36,8 @@ import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { BAR_GAP } from "./dubz/barWindowGeometry";
+import { sessionsForFile } from "./dubz/sessionsForFile";
+import { cachedSessionsNow } from "./sessionCache";
 import { DubzHomeNativeView, type DubzSessionRow, isDubzComposerNative, isDubzHomeNative, isDubzWindowNative } from "../modules/dubz-home";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -412,6 +414,22 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     });
   }, [pageBack, begin, turn, pageX, open, close]);
 
+  // The session rows for the native window (the Sessions suggestion's file),
+  // built the same way DubzSessionArea does so the two match.
+  const sessionRows: ReadonlyArray<DubzSessionRow> = React.useMemo(() => {
+    const sessionsSuggestion = suggestions.find((candidate) => candidate._tag === "Sessions");
+    if (sessionsSuggestion === undefined || sessionsSuggestion._tag !== "Sessions") return NO_SESSIONS;
+    const { related, all } = sessionsForFile(cachedSessionsNow(), sessionsSuggestion.file.path);
+    const list = related.length > 0 ? related : all;
+    return list.map((item) => ({
+      id: item.id,
+      title: item.title,
+      updated: item.time.updated,
+      directory: item.directory,
+      count: list.length,
+    }));
+  }, [suggestions]);
+
   // All-native window: SwiftUI owns the glass, suggestions and composer and
   // sizes itself; the RN side is just a keyboard-aware canvas the parent
   // positions (same spot the BarWindow sat). Falls back to the BarWindow below
@@ -429,12 +447,13 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
           <NativeComposerView
             window
             open={nativeOpen}
-            sessions={NO_SESSIONS}
+            sessions={sessionRows}
             contentWidth={screenW - 48}
             topInset={0}
             bottomInset={0}
             minHeight={cachedDefaultHeight ?? SINGLE_SUGGESTION_HEIGHT}
             maxHeight={maxWindowHeight}
+            onOpenSession={(event) => props.onOpenSessionPage?.(event.nativeEvent.id)}
             draft={text}
             placeholder={`Ask ${AGENT_NAME}…`}
             labelColor={textColors.label}

@@ -85,8 +85,10 @@ public class DubzHomeModule: Module {
         //    self-sizing SwiftUI view that morphs collapsed bar ↔ open window.
         // 5: window canvas BOUNDED — v4's window laid out an infinite frame and
         //    froze the UI; the RN canvas now has a finite height.
+        // 6: window hugs content via a plain VStack (no greedy ScrollView +
+        //    GeometryReader loop, which still froze the UI in v5); real sessions.
         Constants([
-            "apiVersion": 5,
+            "apiVersion": 6,
         ])
 
         View(DubzHomeView.self)
@@ -182,36 +184,42 @@ public struct DubzHomeView: ExpoSwiftUI.View {
         }
     }
 
-    // Part A: the suggestions scroll.
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            // Top → bottom: the + / View All row, the extra sessions, then the
-            // main row — so the main pill rests at the bottom (on the composer
-            // pill) and the rest reveal above it.
-            VStack(alignment: .leading, spacing: GAP) {
-                if expanded {
-                    actionsRow
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    ForEach(extras, id: \.id) { session in
-                        sessionPill(session, width: rowWidth)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                if let top = props.sessions.first {
-                    HStack(spacing: GAP) {
-                        sessionPill(top, width: rowWidth - NUMBER_WIDTH - GAP)
-                        numberPill(count: top.count)
-                    }
+    // The session rows, top → bottom: the + / View All row, the extra sessions,
+    // then the main row — so the main pill rests at the bottom (on the composer)
+    // and the rest reveal above it. A plain VStack (sizes to content); the
+    // window uses it directly, no ScrollView.
+    private var suggestionRows: some View {
+        VStack(alignment: .leading, spacing: GAP) {
+            if expanded {
+                actionsRow
+                ForEach(extras, id: \.id) { session in
+                    sessionPill(session, width: rowWidth)
                 }
             }
-            .frame(width: rowWidth, alignment: .leading)
-            .padding(.leading, leftGap)
-            // Measure the REAL content height (not a row estimate) and report it.
-            .background(GeometryReader { proxy in
-                Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
-            })
-            // DEBUG: a border drawn ON the content, so the outline matches it.
-            .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
+            if let top = props.sessions.first {
+                HStack(spacing: GAP) {
+                    sessionPill(top, width: rowWidth - NUMBER_WIDTH - GAP)
+                    numberPill(count: top.count)
+                }
+            }
+        }
+        .frame(width: rowWidth, alignment: .leading)
+        .padding(.leading, leftGap)
+    }
+
+    // Part A for the non-window modes: the rows in a bottom-anchored scroll that
+    // measures and reports its content height. NOTE: do NOT use this in the
+    // self-sizing window — a greedy ScrollView + its GeometryReader form a layout
+    // feedback loop there and freeze the UI. The window uses suggestionRows.
+    private var scrollContent: some View {
+        ScrollView(showsIndicators: false) {
+            suggestionRows
+                // Measure the REAL content height (not a row estimate) and report.
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                })
+                // DEBUG: a border drawn ON the content, so the outline matches it.
+                .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
         }
         .modifier(BottomAnchoredScrollBehind(top: CGFloat(props.topInset), bottom: CGFloat(props.bottomInset)))
         .onPreferenceChange(ContentHeightKey.self) { height in
@@ -350,19 +358,18 @@ public struct DubzHomeView: ExpoSwiftUI.View {
     // the dragged floor, capped at the max (content beyond it scrolls).
     @available(iOS 17.0, *)
     private var windowContent: some View {
-        VStack(spacing: GAP) {
+        VStack(alignment: .leading, spacing: GAP) {
             if props.open {
-                scrollContent
+                suggestionRows
             }
             composerRow
         }
         .padding(WINDOW_PAD)
-        .frame(maxWidth: .infinity, alignment: .bottom)
-        .frame(
-            minHeight: props.open ? CGFloat(props.minHeight) : nil,
-            maxHeight: props.open ? CGFloat(props.maxHeight) : nil,
-            alignment: .bottom
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Hug the content; cap at the max (content beyond it clips for now —
+        // scroll comes later). No forced floor, so the window is as small as its
+        // content: a plain VStack sizes itself, no ScrollView loop, no freeze.
+        .frame(maxHeight: props.open ? CGFloat(props.maxHeight) : nil, alignment: .bottom)
         .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
     }
 
