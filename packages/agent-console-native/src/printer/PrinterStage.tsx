@@ -23,25 +23,48 @@ import { AMBER, Button, Dot, GREEN, LCD, UV } from "./ui";
 /**
  * Shows the newest image only once it has loaded, so the LCD never flashes
  * empty between layers (one a few seconds apart on a 16K printer).
+ *
+ * One fetch at a time, always for the newest uri: the relay draws one layer
+ * image at a time, and a slow printer would otherwise build a queue of old
+ * layers there.
  */
 export const useLoadedUri = (uri: string | undefined): string | undefined => {
   const [shown, setShown] = React.useState<string | undefined>(undefined);
+  const wanted = React.useRef<string | undefined>(undefined);
+  const loading = React.useRef(false);
+  const alive = React.useRef(true);
+  React.useEffect(
+    () => () => {
+      alive.current = false;
+    },
+    [],
+  );
+  const pump = React.useCallback((): void => {
+    const next = wanted.current;
+    if (loading.current || next === undefined) return;
+    loading.current = true;
+    void Image.prefetch(next)
+      .then((ok) => {
+        // Still newer than the image on screen, even if the printer has moved on.
+        if (alive.current && ok && wanted.current !== undefined) setShown(next);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        loading.current = false;
+        // A failed fetch waits for the next layer; a newer layer starts now.
+        if (alive.current && wanted.current !== next) pump();
+      });
+  }, []);
   React.useEffect(() => {
     if (uri === undefined) return;
     if (uri.startsWith("data:")) {
+      wanted.current = undefined;
       setShown(uri);
       return;
     }
-    let alive = true;
-    void Image.prefetch(uri)
-      .then((ok) => {
-        if (alive && ok) setShown(uri);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [uri]);
+    wanted.current = uri;
+    pump();
+  }, [uri, pump]);
   return shown;
 };
 
