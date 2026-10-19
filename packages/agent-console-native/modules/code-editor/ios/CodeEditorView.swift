@@ -57,6 +57,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     let onCaretChange = EventDispatcher()
     /// An inline suggestion was taken (a tap, or a double space): `{id}`.
     let onSuggestionAccept = EventDispatcher()
+    /// TEMPORARY (double-space diagnosis): each edit and suggestion change,
+    /// as one line: `{line}`. Remove once the period shortcut is found.
+    let onEditTrace = EventDispatcher()
     private var reportedCaret: Int?
     /// True while Return's indent goes in, so that edit is not indented again.
     private var isIndenting = false
@@ -228,6 +231,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         }
         ghost.onViewsChanged = { [weak self] in
             self?.keepAboveGutter()
+        }
+        ghost.onTrace = { [weak self] line in
+            self?.onEditTrace(["line": line])
         }
         return ghost
     }()
@@ -968,8 +974,10 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     // MARK: - TextViewDelegate
 
     func textView(_ textView: TextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        suggestion.trace("change \(range.location)+\(range.length) \(text.debugDescription)")
         // A double space takes the suggestion instead (it puts it in itself).
         guard suggestion.shouldChange(in: range, replacementText: text) else {
+            suggestion.trace("  taken")
             periodShortcut.reset()
             return false
         }
@@ -978,6 +986,7 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
            let from = textView.position(from: textView.beginningOfDocument, offset: over.location),
            let to = textView.position(from: from, offset: over.length),
            let spaces = textView.textRange(from: from, to: to) {
+            suggestion.trace("  period shortcut: two spaces")
             textView.replace(spaces, withText: "  ")
             return false
         }
@@ -1034,6 +1043,8 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
         changeMarks.layout()
         diagnostics.layout()
         suggestion.layout()
+        let before = (textView.text as NSString).substring(to: min(textView.selectedRange.location, (textView.text as NSString).length))
+        suggestion.trace("did change, before caret \(String(before.suffix(8)).debugDescription)")
         onTextChange(["text": textView.text])
     }
 }

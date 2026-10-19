@@ -333,6 +333,7 @@ export const CodeEditor = (props: {
         {...(canShowDiagnostics && props.onCaret !== undefined ? { onCaretChange: (event) => props.onCaret?.(event.nativeEvent.offset) } : {})}
         {...(canSuggestInline ? { inlineSuggestionJson } : {})}
         {...(canSuggestInline && props.onSuggestionAccept !== undefined ? { onSuggestionAccept: (event) => props.onSuggestionAccept?.(event.nativeEvent.id) } : {})}
+        {...(canSuggestInline ? { onEditTrace: (event) => console.log(`[edit-trace] ${event.nativeEvent.line}`) } : {})}
         editable={props.editable}
         tokensJson={tokensJson}
         stickyRangesJson={stickyJson}

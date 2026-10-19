@@ -95,7 +95,7 @@ public final class CodeEditorModule: Module {
         }.runOnQueue(.main)
 
         View(CodeEditorView.self) {
-            Events("onTextChange", "onConflictAction", "onOpenSession", "onLineChange", "onScrollRest", "onCaretChange", "onSuggestionAccept")
+            Events("onTextChange", "onConflictAction", "onOpenSession", "onLineChange", "onScrollRest", "onCaretChange", "onSuggestionAccept", "onEditTrace")
 
             Prop("text") { (view: CodeEditorView, value: String) in
                 view.setText(value)

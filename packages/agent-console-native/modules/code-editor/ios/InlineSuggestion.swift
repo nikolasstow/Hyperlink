@@ -34,6 +34,8 @@ final class InlineSuggestion {
     var onAccept: (String) -> Void = { _ in }
     /// Its view changed: the editor keeps it above the gutter.
     var onViewsChanged: () -> Void = {}
+    /// TEMPORARY (double-space diagnosis): one line per edit or change.
+    var onTrace: (String) -> Void = { _ in }
 
     var views: [UIView] {
         view.superview == nil ? [] : [view]
@@ -65,6 +67,7 @@ final class InlineSuggestion {
 
     /// The suggestion to show (none: whatever showed goes).
     func set(_ suggestion: InlineSuggestionNative?) {
+        trace("set \(suggestion.map { "#\($0.id) at \($0.at) \($0.text.prefix(12).debugDescription)" } ?? "none")")
         // The one showing, grown (it streams in), after typing into it: kept
         // where the typing took it, the first of two spaces still waiting.
         // Taken from the top, it would go back before the typing, off the
@@ -178,6 +181,13 @@ final class InlineSuggestion {
         spaceTypedThrough = false
         hide()
         return true
+    }
+
+    /// TEMPORARY (double-space diagnosis): `what`, with the state after it.
+    func trace(_ what: String) {
+        let shown = current.map { "#\($0.id) at \($0.at) \($0.text.prefix(12).debugDescription)" } ?? "none"
+        let caret = textView?.selectedRange ?? NSRange(location: -1, length: 0)
+        onTrace("\(what) | shown \(shown) space \(pendingSpace.map(String.init) ?? "-")\(spaceTypedThrough ? " own" : "") period \(pendingPeriod.map(String.init) ?? "-") caret \(caret.location)+\(caret.length)")
     }
 
     /// Put the suggestion where the caret is, or hide it if the caret is

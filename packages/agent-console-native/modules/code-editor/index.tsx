@@ -124,6 +124,8 @@ export interface CodeEditorNativeProps extends ViewProps {
   readonly inlineSuggestionJson?: string;
   /** A suggestion was taken: a tap on it, or a double space (`apiVersion` 15). */
   readonly onSuggestionAccept?: (event: NativeSyntheticEvent<{ readonly id: string }>) => void;
+  /** TEMPORARY (double-space diagnosis): each edit and suggestion change. */
+  readonly onEditTrace?: (event: NativeSyntheticEvent<{ readonly line: string }>) => void;
   /** The line you are at (0-based), when it changes: the caret's while
    * editing, else the top of the visible code (`apiVersion` 10). */
   readonly onLineChange?: (event: NativeSyntheticEvent<{ readonly line: number }>) => void;
