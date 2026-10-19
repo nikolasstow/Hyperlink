@@ -62,6 +62,12 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 - The server starts it with a push-to-start when a print starts (iOS 17.2+), and the printer page has a Start button. Pushes go on each status change and about once a minute, through `activityPush.ts`. It ends on finish or stop.
 - CAUTION: it is native code. App variants drop the Live Activity extension, so it needs the base build (`pnpm build:master`, an EAS build) and a change to the server on 5199.
 
+## 8. Printer page redesign (owner, 2026-10-19)
+
+- No bottom tab bar on the printer page. The header has buttons at the top right: Files, Health, and Settings.
+- With a print running, the page opens to the print. With no print, it opens to Files.
+- The Camera page goes. The layer view becomes a pager: page 1 is the layer, page 2 is the camera. Swiping may wrap around (infinite). The page remembers which one the owner left it on.
+
 ## DECISIONS
 
 ### 2026-10-19
@@ -77,6 +83,8 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 9. No compatibility wrapper for the old listing API (`no-backward-compat`): every call site moves with the change.
 10. The iota app pairs with the main server on 5199 (epsilon, trunk). The seven trunk commits iota lacks are native Dubz changes.
 11. Print history comes from the printer (Cmd 320, 321). A finished print's record never changes, so the relay asks for it once. Recent prints are the newest print of each file.
+12. Printer page: no bottom bar; Files, Health, and Settings buttons at the top right; opens to Files when no print runs (owner).
+13. The camera is page 2 of a pager on the layer view, not its own page. The pager remembers the last page; it may wrap around (owner).
 
 ### Do not resurrect
 
