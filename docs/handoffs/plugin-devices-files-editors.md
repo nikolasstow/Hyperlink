@@ -70,7 +70,7 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 
 ## 9. State and next steps (handoff, 2026-10-19)
 
-Work moves to the Mac mini: start the next session there (`~/Coding`).
+Work moves to the Mac mini: start the next Claude Code session there, in the home folder (`~`), where the session memory is.
 
 ### Where things are
 
