@@ -60,6 +60,8 @@ enum PrinterActivityTokens {
    */
   static func rescan() {
     guard #available(iOS 17.2, *) else { return }
+    // The relay starts a new activity when the one it drives is not here (a reinstall ends them all).
+    sendRunning()
     for activity in Activity<PrinterActivityAttributes>.activities {
       follow(activity)
       if let data = activity.pushToken {
@@ -69,6 +71,18 @@ enum PrinterActivityTokens {
         log("activity for \(activity.attributes.taskId) has no update token yet")
       }
     }
+  }
+
+  /// Tells the relay which printer activities this phone still has.
+  @available(iOS 16.2, *)
+  private static func sendRunning() {
+    let taskIds = Activity<PrinterActivityAttributes>.activities.map { $0.attributes.taskId }
+    guard
+      let base = UserDefaults(suiteName: suite)?.string(forKey: relayKey),
+      let url = URL(string: base + "/api/activity/running"),
+      let data = try? JSONSerialization.data(withJSONObject: ["taskIds": taskIds])
+    else { return }
+    post(url: url, data: data, label: "/api/activity/running")
   }
 
   /// A line in the relay log, so token problems can be seen without the phone's console.
@@ -133,6 +147,10 @@ enum PrinterActivityTokens {
       let url = URL(string: base + path),
       let data = try? JSONSerialization.data(withJSONObject: body)
     else { return }
+    post(url: url, data: data, label: path)
+  }
+
+  private static func post(url: URL, data: Data, label: String) {
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -145,10 +163,10 @@ enum PrinterActivityTokens {
       do {
         let (_, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode >= 300 {
-          NSLog("[printer-activity] %@ answered HTTP %d", path, http.statusCode)
+          NSLog("[printer-activity] %@ answered HTTP %d", label, http.statusCode)
         }
       } catch {
-        NSLog("[printer-activity] %@ failed: %@", path, error.localizedDescription)
+        NSLog("[printer-activity] %@ failed: %@", label, error.localizedDescription)
       }
     }
   }

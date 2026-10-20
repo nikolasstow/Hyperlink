@@ -71,6 +71,8 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 - **Lock screen:** a header (glyph, title, time left), one row of tiles (thumbnail, layer on black, camera), the bar, and the details. Before the first update, the thumbnail beside the details.
 - **Icon:** `PrinterGlyph` (template SVG in the widget's asset catalog): plate, arm, and a rectangular vat, the same drawing as the portal icon.
 - **Update token:** the first build never sent one. The app now also reads `activity.pushToken` at launch and on each return to the app, and reports each step to the relay log (`POST /api/activity/log`, lines "Live Activity (phone): …").
+- **Lost activity:** a reinstall ends the app's Live Activities, and the relay kept updating a dead one. The app now reports its running activities on each open (`POST /api/activity/running`), and the relay starts a new activity when its own is missing. A swiped-away activity also comes back on the next app open.
+- **Exposure:** the printer reports no exposure setting over the LAN; changes on its screen or in Matrix never reach the file. Elegoo's cloud has it. Findings in saturn-uploader `docs/elegoo-cloud.md`. Timing the Exposing phase was rejected (owner: "could never be accurate").
 - WARNING: on 2026-10-20 the printer froze at layer 760 of "base 7 + 8", 2 minutes after a relay restart left its camera stream open and a camera start went unanswered. The print was lost and the printer recorded no history entry. The relay now limits a camera start to 15 s, waits 2 minutes after a failure, and gives stream-off 3 s on shutdown. Do not restart the relay during a print while the camera is on.
 
 ## 8. Printer page redesign (owner, 2026-10-19)
