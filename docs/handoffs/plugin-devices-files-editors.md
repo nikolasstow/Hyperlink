@@ -65,7 +65,7 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 - **Content:** the thumbnail, the file name, the phase, layer N of M with %, a progress bar and the time left (both run on the phone from `startedAt` and `endsAt`), and the end time. Colours: the theme's primary colour (from the app group, `setActivityAccent`), and the system's green, orange, and red for states.
 - **Dynamic Island (owner):** minimal shows only a printer icon. Compact shows the icon and the time left. Expanded shows the thumbnail, the title, the time left, the bar, and the details.
 - **App code:** `targets/activity/PrinterActivityAttributes.swift` and `PrinterActivityWidget.swift`; `modules/live-activity/ios/PrinterActivityAttributes.swift` (the copy) and `PrinterActivityTokens.swift` (token forwarding from launch, through an AppDelegate subscriber); `setPrinterRelay` and `setActivityAccent` from `RootNavigator`.
-- CAUTION: it is native code. App variants drop the Live Activity extension, so it needs the base build (`pnpm build:master`, an EAS build). Ask before the build.
+- CAUTION: it is native code. App variants drop the Live Activity extension, so it needs the base build (`pnpm build:master`, an EAS build). Start builds without asking (owner).
 - Not built: a Start button on the printer page. The relay starts the activity by itself.
 
 ## 8. Printer page redesign (owner, 2026-10-19)
@@ -105,7 +105,7 @@ Work moves to the Mac mini: start the next Claude Code session there, in the hom
 
 1. The owner pairs the iota app and checks the printer page and the repo Files listing.
 2. Editor (build order item 2): a form editor drawn from `GET /api/files/form`, checked live with `POST /api/files/check` (errors and the new print time), saved with `POST /api/files/save` (Save, Save As, Print, overwrite with a confirm). Save As uses `Explorer` in `PickFolder` mode over the relay roots, with `saveInto` (`Top` on the printer, `Anywhere` on the home server, a name field, New folder). Add Send and Print for Home server files (`/api/files/save` with `destination: /local/<name>`, `start: true`). The portal's editor (`saturn-uploader/portal/index.html`) shows the flows the owner already approved.
-3. Live Activity (section 7). Native: needs the base build and a change to the server on 5199. Ask before the EAS build (metered).
+3. Live Activity (section 7). Built; needs the base build (`pnpm build:master`).
 4. Devices, then widgets (sections 6).
 5. Port the explorer to eta (its `FileListing` adds a `header` prop; merge iota or cherry-pick).
 
