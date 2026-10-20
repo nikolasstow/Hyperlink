@@ -65,7 +65,7 @@ const DUBZ_NATIVE_COMPOSER: boolean = false;
  * view that sizes itself) where the build carries it (apiVersion >= 4). The RN
  * BarWindow becomes just a keyboard-aware canvas. Flip false to fall back to the
  * RN BarWindow on a reload. */
-const DUBZ_NATIVE_WINDOW: boolean = true;
+const DUBZ_NATIVE_WINDOW: boolean = false;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
