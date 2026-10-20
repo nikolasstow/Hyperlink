@@ -1,6 +1,6 @@
 # Elegoo resin printer page (Saturn 4 Ultra 16K)
 
-**Status:** working page, 2026-10-18. JavaScript only: every module the page uses is already in the app. Dev build `cf9744f5` (variant iota) finished on EAS; Metro for iota runs on :8083 (tmux `iota-metro`). Not yet seen on a device or a simulator.
+**Status:** superseded in part on 2026-10-19 by [plugin-devices-files-editors.md](./plugin-devices-files-editors.md) (explorer, header buttons, camera pager). Working page, 2026-10-18. JavaScript only: every module the page uses is already in the app. Dev build `cf9744f5` (variant iota) finished on EAS; Metro for iota runs on :8083 (tmux `iota-metro`). Not yet seen on a device or a simulator.
 **Scope:** a printer page under Servers (live print, layer image, controls, camera, file browser, uploads), a relay on the home server, and a web portal.
 **Related:** [server-pages-and-widgets.md](./server-pages-and-widgets.md) · [double-agent-repo-screen-and-plugin-system.md](./double-agent-repo-screen-and-plugin-system.md) §22 · the relay lives in the separate repo `nikolasstow/saturn-uploader`, branch `feat/relay-portal`.
 

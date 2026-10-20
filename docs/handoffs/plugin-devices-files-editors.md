@@ -1,6 +1,6 @@
 # Plugin file systems, Devices, editors, widgets, and the printer Live Activity
 
-**Status:** design, 2026-10-19. Phase 1 (relay routes) is done in saturn-uploader `94107a3`. App work waits for the owner's go.
+**Status:** 2026-10-19. Relay routes done (saturn-uploader `94107a3`). Explorer and printer page redesign done in iota (`fb30d4e3b`), not yet seen on a device. Next: the editor (section 9).
 **Scope:** a shared file explorer that plugins can give a file system to, Devices as a kind of server plugin, file editors from plugins, widgets with an edit mode, and a printer Live Activity.
 **Related:** [elegoo-printer-plugin.md](./elegoo-printer-plugin.md) · [server-pages-and-widgets.md](./server-pages-and-widgets.md) · [double-agent-repo-screen-and-plugin-system.md](./double-agent-repo-screen-and-plugin-system.md) §22 · [files-explorer-spec.md](./files-explorer-spec.md)
 
@@ -68,6 +68,47 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 - With a print running, the page opens to the print. With no print, it opens to Files.
 - The Camera page goes. The layer view becomes a pager: page 1 is the layer, page 2 is the camera. Swiping may wrap around (infinite). The page remembers which one the owner left it on.
 
+## 9. State and next steps (handoff, 2026-10-19)
+
+Work moves to the Mac mini: start the next session there (`~/Coding`).
+
+### Where things are
+
+| What | Where |
+|---|---|
+| Relay repo | `~/Coding/saturn-uploader`, branch `feat/relay-portal`. Push to GitHub after each commit (owner rule). The mini clone has 11 extra merge commits with the same tree as `origin/feat/relay-portal`; resetting it to origin loses nothing, but ask the owner first. |
+| Relay process | tmux `saturn-relay` runs `~/.local/share/saturn-uploader/relay-loop.sh`. To deploy: `pnpm -s build`, check `GET /api/uploads` has no running job, then `pkill -f "^/usr/local/bin/node dist/main.js relay"`. The old process can take up to a minute to exit; the loop starts the new one 5 s after. |
+| App worktree | `~/Coding/Hyperlink/worktrees/iota`, branch `feat/elegoo-printer-plugin`: commits `9dfcfe7d5`, `5252c09aa`, `fb30d4e3b`. Not pushed: ask the owner before a push. |
+| Metro for iota | tmux `iota-metro`, port 8083. Dev client link: `doubleagentiota://expo-development-client/?url=http%3A%2F%2F100.67.32.32%3A8083`. |
+| Dev build | EAS build `cf9744f5-c488-4f80-8c51-731744178b98` (variant iota, bundle id `com.nikolasstow.agentconsolenative.iota`). |
+| Pairing | `cd packages/agent-console && AGENT_CONSOLE_API_PORT=5199 AGENT_CONSOLE_STATE_DIR=~/Coding/Hyperlink/worktrees/epsilon/packages/agent-console/.agent-console pnpm -s pair` (in iota). A code works once, for 20 minutes. The main server on 5199 runs from epsilon. |
+| Parked relay work | `~/Coding/saturn-research/parked/print-finished-notice.patch` (Print Finished push through DoubleAgent). Base `10e7373`; `git apply -3` gives conflicts in `src/Cli.ts` and `src/Relay.ts`. Low priority. |
+
+### Done on 2026-10-19
+
+1. Relay: `GET /api/history` (Cmd 320, 321; `perFile=1` for recent prints with `exists`), `lastPrint` on printer files, `GET /api/files/roots`, `GET /api/files/form`, `POST /api/files/check`. 161 tests pass. Deployed and checked live: 38 history records.
+2. App: `src/explorer/` (`FileSource`, `useSourceTree`, `sourceRows`, `Explorer`, `ExplorerHome`, `httpFileSource`), the repo Files listing on it (`files/repoSource.ts`; `fileTree.ts` removed), and the printer page redesign (section 8, decision 14). tsc (both configs), eslint, and 415 app tests pass; Metro builds the iOS bundle.
+
+### Not verified
+
+- Nobody has seen the new printer page or the repo listing on a device. The Mac mini has no CocoaPods, so there is no simulator build of the variant. The owner checks it on the phone first.
+- Header button badges show on iOS 26 only.
+- The pager's wrap (a strip of four pages) is untested with fast swipes.
+
+### Next, in order
+
+1. The owner pairs the iota app and checks the printer page and the repo Files listing.
+2. Editor (build order item 2): a form editor drawn from `GET /api/files/form`, checked live with `POST /api/files/check` (errors and the new print time), saved with `POST /api/files/save` (Save, Save As, Print, overwrite with a confirm). Save As uses `Explorer` in `PickFolder` mode over the relay roots, with `saveInto` (`Top` on the printer, `Anywhere` on the home server, a name field, New folder). Add Send and Print for Home server files (`/api/files/save` with `destination: /local/<name>`, `start: true`). The portal's editor (`saturn-uploader/portal/index.html`) shows the flows the owner already approved.
+3. Live Activity (section 7). Native: needs the base build and a change to the server on 5199. Ask before the EAS build (metered).
+4. Devices, then widgets (sections 6).
+5. Port the explorer to eta (its `FileListing` adds a `header` prop; merge iota or cherry-pick).
+
+### Open items for the owner
+
+- The LaunchDaemon for the relay (`service/macos/install.sh`, needs sudo once).
+- The release film was at 69,716 of 60,000 cycles.
+- The printer's history shows the last three base 1 runs stopped with "Foreign object found".
+
 ## DECISIONS
 
 ### 2026-10-19
@@ -85,6 +126,7 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 11. Print history comes from the printer (Cmd 320, 321). A finished print's record never changes, so the relay asks for it once. Recent prints are the newest print of each file.
 12. Printer page: no bottom bar; Files, Health, and Settings buttons at the top right; opens to Files when no print runs (owner).
 13. The camera is page 2 of a pager on the layer view, not its own page. The pager remembers the last page; it may wrap around (owner).
+14. Every colour on the printer page follows the user's theme: the accent is the theme's primary colour, states use the system's green, orange, and red. Only the LCD stays dark (owner).
 
 ### Do not resurrect
 
