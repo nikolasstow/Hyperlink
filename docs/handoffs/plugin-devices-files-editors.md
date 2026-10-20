@@ -58,9 +58,15 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 
 ## 7. Printer Live Activity
 
-- One Live Activity type for any device: title, status, detail, progress, end time. For a print: file name, status, layer N of M, progress, and a countdown the phone runs itself.
-- The server starts it with a push-to-start when a print starts (iOS 17.2+), and the printer page has a Start button. Pushes go on each status change and about once a minute, through `activityPush.ts`. It ends on finish or stop.
-- CAUTION: it is native code. App variants drop the Live Activity extension, so it needs the base build (`pnpm build:master`, an EAS build) and a change to the server on 5199.
+**Status:** 2026-10-20. Built. The relay part is deployed (saturn-uploader `e975ec6`). The native part is in iota, not yet in a build.
+
+- **Who pushes:** the relay, not the server on 5199 (owner). It holds its printer connection open for good, so it sees every print start. Code: saturn-uploader `src/LiveActivity.ts` (what to push, no IO), `src/RelayActivity.ts` (tokens, pushes, thumbnail), `src/Apns.ts` (JWT and HTTP/2).
+- **Flow:** the app sends its push-to-start token to the relay. When a print starts, the relay sends a push-to-start (iOS 17.2+) with the slicer preview as a JPEG of 2 KB or less. iOS gives the activity an update token (iOS 18+), and the native code sends it to the relay without JavaScript. The relay pushes on each phase change and once a minute, and ends the activity when the print ends (it stays 15 minutes).
+- **Content:** the thumbnail, the file name, the phase, layer N of M with %, a progress bar and the time left (both run on the phone from `startedAt` and `endsAt`), and the end time. Colours: the theme's primary colour (from the app group, `setActivityAccent`), and the system's green, orange, and red for states.
+- **Dynamic Island (owner):** minimal shows only a printer icon. Compact shows the icon and the time left. Expanded shows the thumbnail, the title, the time left, the bar, and the details.
+- **App code:** `targets/activity/PrinterActivityAttributes.swift` and `PrinterActivityWidget.swift`; `modules/live-activity/ios/PrinterActivityAttributes.swift` (the copy) and `PrinterActivityTokens.swift` (token forwarding from launch, through an AppDelegate subscriber); `setPrinterRelay` and `setActivityAccent` from `RootNavigator`.
+- CAUTION: it is native code. App variants drop the Live Activity extension, so it needs the base build (`pnpm build:master`, an EAS build). Ask before the build.
+- Not built: a Start button on the printer page. The relay starts the activity by itself.
 
 ## 8. Printer page redesign (owner, 2026-10-19)
 
@@ -127,6 +133,13 @@ Work moves to the Mac mini: start the next Claude Code session there, in the hom
 12. Printer page: no bottom bar; Files, Health, and Settings buttons at the top right; opens to Files when no print runs (owner).
 13. The camera is page 2 of a pager on the layer view, not its own page. The pager remembers the last page; it may wrap around (owner).
 14. Every colour on the printer page follows the user's theme: the accent is the theme's primary colour, states use the system's green, orange, and red. Only the LCD stays dark (owner).
+
+### 2026-10-20
+
+15. The Live Activity shows the slicer thumbnail, a progress bar, and the main details. No layer or camera images for now (owner).
+16. The relay sends the Live Activity pushes and keeps its printer connection open for good: "a server never sleeps" (owner).
+17. Dynamic Island: a printer icon alone in the minimal form; the time left only where the icon and the time both fit (owner).
+18. The relay may delete printer files (Finder drive) and start prints (UVtools' Print request) (owner, 2026-10-19).
 
 ### Do not resurrect
 

@@ -29,6 +29,8 @@ type LiveActivityNative = {
   readonly end: (sessionID: string, status: string) => Promise<boolean>;
   readonly endAll: () => Promise<number>;
   readonly setServerConfig: (url: string, password: string | null) => boolean;
+  readonly setPrinterRelay?: (url: string) => void;
+  readonly setActivityAccent?: (hex: string) => void;
   readonly takePendingOpenSession: () => string | null;
   readonly addListener: (
     event: "onLiveActivityPushToken",
@@ -62,6 +64,23 @@ export const setExtensionServerConfig = (url: string): void => {
   } catch {
     // Extensions degrade to no-ops without it; not worth surfacing.
   }
+};
+
+/**
+ * Tells the native side where the resin printer's relay is. The relay drives
+ * the printer Live Activity over APNs; the native side sends it the push
+ * tokens, also while the app is suspended. A no-op on a binary without it.
+ */
+export const setPrinterRelay = (url: string): void => {
+  native?.setPrinterRelay?.(url);
+};
+
+/**
+ * Saves the theme's primary colour (`#RRGGBB`) for the printer Live Activity,
+ * which follows the user's theme. A no-op on a binary without it.
+ */
+export const setActivityAccent = (hex: string): void => {
+  native?.setActivityAccent?.(hex);
 };
 
 /**

@@ -54,6 +54,19 @@ public class LiveActivityModule: Module {
       return true
     }
 
+    // The resin printer's relay, which drives the printer Live Activity. Its
+    // tokens go there (see PrinterActivityTokens). Called at app start.
+    Function("setPrinterRelay") { (url: String) in
+      PrinterActivityTokens.setRelay(url)
+      PrinterActivityTokens.observe()
+    }
+
+    // The theme's primary colour (#RRGGBB), so the printer Live Activity
+    // follows the user's theme like the printer page does.
+    Function("setActivityAccent") { (hex: String) in
+      UserDefaults(suiteName: PrinterActivityTokens.suite)?.set(hex, forKey: "activityAccent")
+    }
+
     // Reads and clears the session id the Open-a-Session App Intent stashed in
     // the app group. Called by the app on launch/foreground to navigate there.
     Function("takePendingOpenSession") { () -> String? in

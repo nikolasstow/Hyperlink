@@ -12,6 +12,9 @@
 /** The relay runs on the home server at this port (saturn-uploader `relay`). */
 export const RELAY_PORT = 5197;
 
+/** The relay's base URL on a server. */
+export const relayBaseOf = (serverAddress: string): string => `http://${serverAddress}:${RELAY_PORT}`;
+
 /** The printer's own WebSocket port and path. */
 export const PRINTER_PORT = 3030;
 export const PRINTER_WEBSOCKET_PATH = "/websocket";

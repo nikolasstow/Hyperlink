@@ -12,7 +12,7 @@ import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import * as React from "react";
 import { AppState, Linking, useColorScheme } from "react-native";
-import { setExtensionServerConfig, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
+import { setActivityAccent, setExtensionServerConfig, setPrinterRelay, subscribeActivityPushTokens, takePendingOpenSession } from "../modules/live-activity";
 import { useAppContext } from "./AppContext";
 import { PerfMonitor, setPerfScreen } from "./perfMonitor";
 import { AGENT } from "./agentConstants";
@@ -24,6 +24,8 @@ import { useCustomBackground, useScreenBackground, useTheme } from "./theme";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
+import { relayBaseOf } from "./printer/sdcp";
+import { useServers } from "./servers";
 import { homeHeaderOptions } from "./homeHeader";
 import { HomeScreen } from "./HomeScreen";
 import { SessionChatScreen } from "./SessionChatScreen";
@@ -153,7 +155,7 @@ export const RootNavigator = (): React.ReactElement => {
   // system's: painted here, behind every screen, so a change shows at once.
   const background = useScreenBackground();
   const plainBackground = useScreenBackground("plain");
-  const { theme } = useTheme();
+  const { theme, colors } = useTheme();
   const customBackground = useCustomBackground(theme, scheme === "dark" ? "dark" : "light");
   const baseTheme = scheme === "dark" ? DARK_THEME : LIGHT_THEME;
   const navigationTheme =
@@ -180,6 +182,19 @@ export const RootNavigator = (): React.ReactElement => {
   React.useEffect(() => {
     setExtensionServerConfig(normalizeServerAddress(address));
   }, [address]);
+
+  // The printer's relay drives the print Live Activity; the native side sends
+  // it the push tokens. Every server shows the printer page for now (phase 1),
+  // so the first server's relay is the printer's.
+  const printerServer = useServers()[0];
+  React.useEffect(() => {
+    if (printerServer !== undefined) setPrinterRelay(relayBaseOf(printerServer.address));
+  }, [printerServer]);
+
+  // The printer Live Activity follows the theme's primary colour.
+  React.useEffect(() => {
+    setActivityAccent(colors.primary);
+  }, [colors.primary]);
 
   // The Open-a-Session App Intent stashes a session id in the app group and
   // launches the app; pick it up on mount and on each return to the foreground,

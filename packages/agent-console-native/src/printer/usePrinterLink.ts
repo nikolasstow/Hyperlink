@@ -17,7 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
 import { AppState } from "react-native";
 import { authedFetch } from "../auth/serverTokens";
-import { CMD_ATTRIBUTES, CMD_STATUS, controlRequest, PRINTER_PORT, PRINTER_WEBSOCKET_PATH, RELAY_PORT, parseFrame, refreshRequest, type ControlCmd, type PrinterAttributes, type PrinterStatus, type RelayState } from "./sdcp";
+import { CMD_ATTRIBUTES, CMD_STATUS, controlRequest, PRINTER_PORT, PRINTER_WEBSOCKET_PATH, parseFrame, relayBaseOf, refreshRequest, type ControlCmd, type PrinterAttributes, type PrinterStatus, type RelayState } from "./sdcp";
 
 /** Which way the page is connected. */
 export type Via = "Direct" | "Relay";
@@ -104,7 +104,7 @@ const openSocket = (url: string, timeoutMs: number): Promise<WebSocket> =>
 const requestId = (): string => `${Date.now().toString(16)}${Math.floor(Math.random() * 0xffffffff).toString(16)}`;
 
 export const usePrinterLink = (serverAddress: string | undefined): PrinterLink => {
-  const relayBase = serverAddress === undefined ? "" : `http://${serverAddress}:${RELAY_PORT}`;
+  const relayBase = serverAddress === undefined ? "" : relayBaseOf(serverAddress);
   const [link, setLink] = React.useState<LinkState>({ kind: "Connecting" });
   const [status, setStatus] = React.useState<PrinterStatus | undefined>(undefined);
   const [attributes, setAttributes] = React.useState<PrinterAttributes | undefined>(undefined);
