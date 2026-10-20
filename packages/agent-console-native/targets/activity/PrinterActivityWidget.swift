@@ -86,11 +86,10 @@ struct PrinterActivityWidget: Widget {
         }
         DynamicIslandExpandedRegion(.trailing) {
           VStack(alignment: .trailing, spacing: 0) {
-            TimeLeft(state: context.state)
+            Text("\(context.state.percent)%")
               .font(.title3.weight(.semibold).monospacedDigit())
               .foregroundStyle(context.state.tint)
-              .multilineTextAlignment(.trailing)
-            Text(context.state.isPrinting ? "left" : " ")
+            Text(context.state.label)
               .font(.caption2)
               .foregroundStyle(.secondary)
           }
@@ -102,22 +101,16 @@ struct PrinterActivityWidget: Widget {
             Text(context.attributes.title)
               .font(.headline)
               .lineLimit(1)
-            Text("Layer \(context.state.layer.formatted()) of \(context.state.layers.formatted())")
-              .font(.caption.monospacedDigit())
-              .foregroundStyle(.secondary)
-              .lineLimit(1)
           }
         }
         DynamicIslandExpandedRegion(.bottom) {
           VStack(spacing: 6) {
             PrintBar(state: context.state)
             HStack {
-              Text("\(context.state.percent)%")
+              Text("Layer \(context.state.layer.formatted()) of \(context.state.layers.formatted())")
               Spacer(minLength: 8)
               if context.state.isPrinting {
                 Text("Ends \(context.state.endsAt, style: .time)")
-              } else {
-                Text(context.state.label)
               }
             }
             .font(.caption2.monospacedDigit())
@@ -132,13 +125,10 @@ struct PrinterActivityWidget: Widget {
           .frame(width: 18, height: 18)
           .foregroundStyle(context.state.tint)
       } compactTrailing: {
-        // `Text(timerInterval:)` reserves room for its widest value, so a
-        // fixed frame keeps the island hugging its content.
-        TimeLeft(state: context.state)
-          .font(.caption2.monospacedDigit())
+        // The percentage, not a countdown (owner): it reads at a glance, and its width is steady.
+        Text("\(context.state.percent)%")
+          .font(.caption2.weight(.semibold).monospacedDigit())
           .foregroundStyle(context.state.tint)
-          .multilineTextAlignment(.center)
-          .frame(maxWidth: 52, alignment: .center)
       } minimal: {
         PrinterGlyph()
           .frame(width: 16, height: 16)
