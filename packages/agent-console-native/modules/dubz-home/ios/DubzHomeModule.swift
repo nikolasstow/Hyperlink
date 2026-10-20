@@ -87,8 +87,11 @@ public class DubzHomeModule: Module {
         //    froze the UI; the RN canvas now has a finite height.
         // 6: window hugs content via a plain VStack (no greedy ScrollView +
         //    GeometryReader loop, which still froze the UI in v5); real sessions.
+        // 7: window STRIPPED to the floating composer bar (fixedSize, no fill)
+        //    + an RN canvas sized to it, to nail touch pass-through / self-size
+        //    / keyboard before layering suggestions + open/close back on.
         Constants([
-            "apiVersion": 6,
+            "apiVersion": 7,
         ])
 
         View(DubzHomeView.self)
@@ -276,6 +279,9 @@ public struct DubzHomeView: ExpoSwiftUI.View {
                 .focused($composerFocused)
                 .disabled(!props.open)
                 .frame(minHeight: COMPOSER_SEND, alignment: .center)
+                // Hug the text height (grow with lines) — never expand to fill
+                // the window, which made the input the whole glass.
+                .fixedSize(horizontal: false, vertical: true)
                 .onChange(of: text) { _, next in props.onDraftChange(["text": next]) }
 
             Button { send() } label: {
@@ -305,72 +311,28 @@ public struct DubzHomeView: ExpoSwiftUI.View {
     }
 
     // MARK: - The whole window (all native)
-
+    //
+    // STRIPPED to the hardest core (owner: "start with the hardest problems,
+    // remove all other distractions"): a glass composer bar that
+    //   1. floats over the TAPPABLE page — the RN canvas tracks this view's
+    //      size (onLayoutContent) so everything outside it passes touches
+    //      through; the view must size to its content, not fill;
+    //   2. SIZES to its content (grows with lines) — fixedSize, no fill, no
+    //      ScrollView, so no layout-loop freeze;
+    //   3. rides the keyboard (the RN canvas is placed above it).
+    // Suggestions, the open/close morph, the grabber and sessions layer on only
+    // once this floats + self-sizes + stays tappable without freezing.
     @ViewBuilder
     private var windowBody: some View {
         if #available(iOS 17.0, *) {
-            windowImpl
+            composerBarImpl
+                // Hug the content height (grow with lines); never fill — filling
+                // made the input the whole glass and blocked the page.
+                .fixedSize(horizontal: false, vertical: true)
+                .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
         } else {
             EmptyView()
         }
-    }
-
-    // One glass that sizes to its content, bottom-anchored in the canvas. The
-    // frame animates on `open`, so the glass morphs between the collapsed
-    // composer bar and the open window; the composer grows the glass with no RN
-    // feedback (move-together).
-    @available(iOS 17.0, *)
-    private var windowImpl: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            glassWindow
-                // Collapsed: a tap on the bar opens the window (the field is
-                // disabled until then). Open: children take their own taps; this
-                // fires only on empty glass and is a no-op.
-                .contentShape(Rectangle())
-                .onTapGesture { if !props.open { props.onOpenComposer([:]) } }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: props.open)
-    }
-
-    @available(iOS 17.0, *)
-    @ViewBuilder
-    private var glassWindow: some View {
-        if #available(iOS 26.0, *) {
-#if compiler(>=6.2)
-            // The container is the shared sampling region so the +/send chip
-            // glass can sit inside the window glass.
-            GlassEffectContainer(spacing: GAP) {
-                windowContent
-                    .glassEffect(Glass.regular, in: RoundedRectangle(cornerRadius: WINDOW_RADIUS))
-            }
-#else
-            windowContent.background(RoundedRectangle(cornerRadius: WINDOW_RADIUS).fill(.ultraThinMaterial))
-#endif
-        } else {
-            windowContent.background(RoundedRectangle(cornerRadius: WINDOW_RADIUS).fill(.ultraThinMaterial))
-        }
-    }
-
-    // Part A (suggestions) over Part B (composer). Collapsed → the composer row
-    // only (the bar). Open → the suggestions appear above and the frame grows to
-    // the dragged floor, capped at the max (content beyond it scrolls).
-    @available(iOS 17.0, *)
-    private var windowContent: some View {
-        VStack(alignment: .leading, spacing: GAP) {
-            if props.open {
-                suggestionRows
-            }
-            composerRow
-        }
-        .padding(WINDOW_PAD)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Hug the content; cap at the max (content beyond it clips for now —
-        // scroll comes later). No forced floor, so the window is as small as its
-        // content: a plain VStack sizes itself, no ScrollView loop, no freeze.
-        .frame(maxHeight: props.open ? CGFloat(props.maxHeight) : nil, alignment: .bottom)
-        .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
     }
 
     // MARK: - Rows

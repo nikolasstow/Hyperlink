@@ -15,7 +15,7 @@ import { useRoute } from "@react-navigation/native";
 import * as React from "react";
 import { Pressable, StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
-import Reanimated, { Easing, runOnJS, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
+import Reanimated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AGENT_NAME, useAgentButtonVisible, type AgentSurface } from "./agentButtonSettings";
 import { useAppContext } from "./AppContext";
@@ -36,8 +36,6 @@ import { DubzActiveProbe } from "./dubz/DubzActiveProbe";
 import { DUBZ_COMPACT_LEFT_GAP, DubzSessionArea, DubzSessionListPage, DubzSessionPage, DubzTopBack, PILL_AREA, SINGLE_SUGGESTION_HEIGHT, SLIDE_MS, type DubzOpenSession } from "./dubz/DubzSessions";
 import { requestedHeightOf } from "./dubz/dubzWindowMachine";
 import { BAR_GAP } from "./dubz/barWindowGeometry";
-import { sessionsForFile } from "./dubz/sessionsForFile";
-import { cachedSessionsNow } from "./sessionCache";
 import { DubzHomeNativeView, type DubzSessionRow, isDubzComposerNative, isDubzHomeNative, isDubzWindowNative } from "../modules/dubz-home";
 import { readDubzDefaultHeight } from "./dubz/useBarWindow";
 import { useDubzWindow } from "./dubz/useDubzWindow";
@@ -65,7 +63,7 @@ const DUBZ_NATIVE_COMPOSER: boolean = false;
  * view that sizes itself) where the build carries it (apiVersion >= 4). The RN
  * BarWindow becomes just a keyboard-aware canvas. Flip false to fall back to the
  * RN BarWindow on a reload. */
-const DUBZ_NATIVE_WINDOW: boolean = false;
+const DUBZ_NATIVE_WINDOW: boolean = true;
 
 /** The line of text a collapsed pill shows, and a single line's height. */
 const LINE_HEIGHT = 21;
@@ -230,7 +228,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const NativeComposerView = DubzHomeNativeView;
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
-  const { width: screenW, height: screenH } = useWindowDimensions();
+  const { width: screenW } = useWindowDimensions();
   const { address } = useAppContext();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
@@ -268,6 +266,12 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   React.useEffect(() => {
     if (!open) composerHeight.value = COMPOSER_PILL_HEIGHT;
   }, [open, composerHeight]);
+  // The all-native window's RN canvas height: it TRACKS the native view's own
+  // size (onLayoutContent), so the canvas is only as big as the glass and the
+  // rest of the screen passes touches through to the page behind. The glass
+  // sizes itself in SwiftUI; this just follows it for the touch bounds.
+  const canvasHeight = useSharedValue(COMPOSER_PILL_HEIGHT);
+  const canvasStyle = useAnimatedStyle(() => ({ height: canvasHeight.value }));
   // In the compact zone the top controls are a side bar, so the content always
   // shifts right for it — the gap (and the sub-page's hidden right button) key on
   // `compact`, not on whether the content overflows.
@@ -414,46 +418,30 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
     });
   }, [pageBack, begin, turn, pageX, open, close]);
 
-  // The session rows for the native window (the Sessions suggestion's file),
-  // built the same way DubzSessionArea does so the two match.
-  const sessionRows: ReadonlyArray<DubzSessionRow> = React.useMemo(() => {
-    const sessionsSuggestion = suggestions.find((candidate) => candidate._tag === "Sessions");
-    if (sessionsSuggestion === undefined || sessionsSuggestion._tag !== "Sessions") return NO_SESSIONS;
-    const { related, all } = sessionsForFile(cachedSessionsNow(), sessionsSuggestion.file.path);
-    const list = related.length > 0 ? related : all;
-    return list.map((item) => ({
-      id: item.id,
-      title: item.title,
-      updated: item.time.updated,
-      directory: item.directory,
-      count: list.length,
-    }));
-  }, [suggestions]);
-
-  // All-native window: SwiftUI owns the glass, suggestions and composer and
-  // sizes itself; the RN side is just a keyboard-aware canvas the parent
-  // positions (same spot the BarWindow sat). Falls back to the BarWindow below
-  // when the gate is off or the build is a step behind.
+  // All-native window, STRIPPED to the hardest core: the RN canvas is a
+  // Reanimated box that TRACKS the native glass size (onLayoutContent), so it
+  // covers only the glass and the rest of the page stays tappable
+  // (pointerEvents box-none). The glass sizes ITSELF in SwiftUI (fixedSize). No
+  // sessions / open-close morph / drag yet — prove float + self-size + keyboard
+  // first, then layer them back. Falls back to the BarWindow when the gate is
+  // off or the build is behind.
   if (DUBZ_NATIVE_WINDOW && isDubzWindowNative && NativeComposerView !== undefined) {
-    const nativeOpen = winState.phase === "open";
-    // A BOUNDED, absolute canvas (never flex: an unbounded flex let the SwiftUI
-    // frame grow to infinity and froze the UI). It sits where the BarWindow sat
-    // — left/right MARGIN, bottom BAR_GAP — a fixed tall box the glass
-    // bottom-anchors in; the parent rides it with the keyboard.
-    const maxWindowHeight = Math.round(screenH * 0.6);
     return (
-      <View style={[styles.nativeWindowCanvas, { height: maxWindowHeight }]} pointerEvents="box-none">
-        <Host style={styles.nativeWindowHost} ignoreSafeArea="all">
+      <Reanimated.View style={[styles.nativeWindowCanvas, canvasStyle]} pointerEvents="box-none">
+        <Host
+          style={StyleSheet.absoluteFill}
+          ignoreSafeArea="all"
+          onLayoutContent={(event) => {
+            canvasHeight.value = event.nativeEvent.height;
+          }}
+        >
           <NativeComposerView
             window
-            open={nativeOpen}
-            sessions={sessionRows}
+            open
+            sessions={NO_SESSIONS}
             contentWidth={screenW - 48}
             topInset={0}
             bottomInset={0}
-            minHeight={cachedDefaultHeight ?? SINGLE_SUGGESTION_HEIGHT}
-            maxHeight={maxWindowHeight}
-            onOpenSession={(event) => props.onOpenSessionPage?.(event.nativeEvent.id)}
             draft={text}
             placeholder={`Ask ${AGENT_NAME}…`}
             labelColor={textColors.label}
@@ -462,18 +450,16 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
             plusIcon={CHIP_ICON}
             sendActiveFill={themeColors.secondaryFill}
             sendMutedFill={themeColors.secondaryMutedFill}
-            tint="rgba(0,0,0,0.18)"
             debug={DUBZ_DEBUG}
-            onOpenComposer={onOpen}
             onDraftChange={(event) => setDraft(event.nativeEvent.text)}
-            onPlus={nativeOpen ? noop : onOpen}
+            onPlus={noop}
             onSend={(event) => {
               if (session !== undefined) sendBody(event.nativeEvent.text);
               else setDraft("");
             }}
           />
         </Host>
-      </View>
+      </Reanimated.View>
     );
   }
 
