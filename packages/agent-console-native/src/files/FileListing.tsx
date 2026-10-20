@@ -1,109 +1,32 @@
 /**
- * A folder's listing in Files: an iOS Files-style outline (a plain full-width
- * list, a blue leading disclosure chevron, the file's icon, its name,
- * hairline separators under the name). Each folder row has two tap targets:
- * the chevron expands it in place (children load lazily, cache-first:
- * fileTree.ts), and the rest of the row opens it. A file row opens the file.
- * Opening goes through Files' own navigation (`onOpen`), not the app's stack.
+ * A folder's listing in Files: the shared explorer (explorer/Explorer.tsx)
+ * over the repo's files (repoSource.ts), with what Files adds to a row: the
+ * long-press menu (Open in New Tab, Favorite, Keep On Device) and the marks
+ * for unsaved changes and files kept on the device. Opening goes through
+ * Files' own navigation (`onOpen`), not the app's stack.
  *
  * @internal
  */
 import * as React from "react";
-import { ActivityIndicator, DynamicColorIOS, LayoutAnimation, type NativeScrollEvent, type NativeSyntheticEvent, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { useAppContext } from "../AppContext";
-import { colors } from "../colors";
-import { iconForFile } from "../fileIcon";
-import { type FileRow, useFileTree } from "../fileTree";
-import { SetiIcon } from "../SetiIcon";
-import { setiDefaultGlyph, setiFolderGlyph } from "../setiIcons";
-import { SystemIcon } from "../SystemIcon";
-import { type TextColors, useTextColors, useThemedStyles } from "../theme";
-import { type TreePaneColors, useTreePaneColors } from "../treePaneColors";
-import type { FileNavEntry } from "./FileNav";
-import { ContextMenuView, type MenuAction } from "../../modules/context-menu";
+import { Explorer, type ExplorerMenu } from "../explorer/Explorer";
+import type { SourceRow } from "../explorer/sourceRows";
 import { fileTarget, folderTarget, repoScope, sameTarget } from "../favorites/model";
 import { toggleFavorite, useBoard } from "../favorites/useFavorites";
+import { SystemIcon } from "../SystemIcon";
 import { useCodeTheme } from "../useCodeTheme";
 import { useDirtyPaths } from "./fileEdits";
 import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
+import type { FileNavEntry } from "./FileNav";
 import { preloadFile } from "./preloadFile";
+import { repoSource } from "./repoSource";
 
-/** Green = unsaved local changes (pending upload); blue = kept on device
- * (downloaded for offline). */
+/** Green = unsaved local changes (pending upload); blue = kept on device (downloaded for offline). */
 const UPLOAD_COLOR = "#32d74b";
 const DOWNLOAD_COLOR = "#0a84ff";
 
-/** Left screen inset, indentation per level, and the leading chevron column.
- * Tuned to the Files reference: a small chevron with generous room around it,
- * icon at ~40pt, name at ~80pt. */
-const EDGE = 0;
-const INDENT = 20;
-const CHEVRON_COL = 20;
-const CHEVRON_ICON_GAP = 6;
-const ICON_COL = 30;
-const ICON_GAP = 12;
-/** A hand-set row divider, a touch darker than the system `separator`/
- * `opaqueSeparator` (both too faint here) without being heavy. */
-const DIVIDER = DynamicColorIOS({ light: "rgba(60,60,67,0.4)", dark: "rgba(120,120,128,0.5)" });
-const Row = (props: {
-  readonly row: FileRow;
-  readonly last: boolean;
-  /** Has unsaved local changes (pending upload to disk). */
-  readonly dirty: boolean;
-  /** Kept on device for offline (downloaded). */
-  readonly kept: boolean;
-  /** The pane's theme colours — the row paints its text, chevron and separator
-   * from the enabled code theme, like a VS Code tree. */
-  readonly pane: TreePaneColors;
-  readonly onToggle: (row: FileRow) => void;
-  readonly onOpen: (row: FileRow) => void;
-}): React.ReactElement => {
-  const styles = useThemedStyles(makeStyles);
-  const { row, pane } = props;
-  const isDir = row.type === "directory";
-  const fileSpec = isDir ? undefined : iconForFile(row.name);
-  const indent = row.depth * INDENT;
-  // Separator starts at the name and runs to the right edge — the icon lives in
-  // the leading block (with the chevron), so the border never runs under it.
-  const separatorInset = EDGE + indent + CHEVRON_COL + CHEVRON_ICON_GAP + ICON_COL + ICON_GAP;
-  return (
-    <View>
-      <View style={[styles.row, { paddingLeft: EDGE + indent }]}>
-        {isDir ? (
-          <TouchableOpacity
-            style={styles.chevron}
-            onPress={() => props.onToggle(row)}
-            hitSlop={{ top: 14, bottom: 14, left: 8, right: 10 }}
-          >
-            {row.loading ? (
-              <ActivityIndicator size="small" color={pane.icon} />
-            ) : (
-              <SystemIcon
-                name={row.failed ? "exclamationmark.triangle.fill" : row.expanded ? "chevron.down" : "chevron.right"}
-                size={13}
-                weight="semibold"
-                color={row.failed ? colors.warning : pane.icon}
-              />
-            )}
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.chevron} />
-        )}
-        <TouchableOpacity style={styles.iconCol} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
-          <SetiIcon glyph={fileSpec === undefined ? setiFolderGlyph ?? setiDefaultGlyph : fileSpec.glyph} size={26} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.body} activeOpacity={0.5} onPress={() => props.onOpen(row)}>
-          <Text style={[styles.name, { color: pane.foreground }]} numberOfLines={1}>
-            {row.name}
-          </Text>
-        </TouchableOpacity>
-        {props.kept ? <SystemIcon name="arrow.down.circle.fill" size={15} color={DOWNLOAD_COLOR} /> : null}
-        {props.dirty ? <SystemIcon name="arrow.up.circle.fill" size={15} color={UPLOAD_COLOR} /> : null}
-      </View>
-      {props.last ? null : <View style={[styles.separator, { marginLeft: separatorInset, backgroundColor: pane.separator }]} />}
-    </View>
-  );
-};
+const navEntry = (row: SourceRow): FileNavEntry => ({ path: row.path, name: row.name, kind: row.kind });
 
 export const FileListing = (props: {
   /** The repo/workspace this listing belongs to — the page a file/folder
@@ -119,12 +42,8 @@ export const FileListing = (props: {
   /** Its scrolling (the bar hides as it scrolls down). */
   readonly onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
 }): React.ReactElement => {
-  const styles = useThemedStyles(makeStyles);
-  const textColors = useTextColors();
-  const pane = useTreePaneColors();
   const { backend } = useAppContext();
-  const tree = useFileTree(backend, props.dir);
-  const { rows } = tree;
+  const source = React.useMemo(() => repoSource(backend), [backend]);
   const { repo, onOpen, onOpenInNewTab } = props;
   // A file/folder favorites to this repo/workspace's scope.
   const favScope = React.useMemo(() => repoScope(repo), [repo]);
@@ -134,142 +53,48 @@ export const FileListing = (props: {
   const kept = useKeptPaths();
   const theme = useCodeTheme();
 
-  const onToggle = (row: FileRow): void => {
-    LayoutAnimation.configureNext(LayoutAnimation.create(180, "easeInEaseOut", "opacity"));
-    tree.toggle(row);
+  const menu = (row: SourceRow): ExplorerMenu => {
+    const target = row.kind === "directory" ? folderTarget(repo, row.path, row.name) : fileTarget(repo, row.path, row.name);
+    const isFav = favBoard.some((each) => sameTarget(each, target));
+    const isKept = kept.has(row.path);
+    return {
+      actions: [
+        { id: "newTab", title: "Open in New Tab", systemImage: "plus.square.on.square" },
+        { id: "favorite", title: isFav ? "Unfavorite" : "Favorite", systemImage: isFav ? "star.slash" : "star" },
+        // Keep On Device is for files (a folder isn't a single document).
+        ...(row.kind === "directory" ? [] : [{ id: "keep", title: isKept ? "Remove from Device" : "Keep On Device", systemImage: isKept ? "trash" : "arrow.down.circle" }]),
+      ],
+      onAction: (id) => {
+        if (id === "newTab") onOpenInNewTab(navEntry(row));
+        else if (id === "favorite") void toggleFavorite(favScope, target);
+        else if (id === "keep") {
+          if (isKept) removeFromDevice(row.path);
+          else {
+            keepOnDevice(row.path);
+            // Download it now so it's available offline.
+            void preloadFile(backend, row.path, row.name, theme);
+          }
+        }
+      },
+    };
   };
-  const open = (row: FileRow): void => onOpen({ path: row.path, name: row.name, kind: row.type });
 
-  if (tree.rootLoading) {
-    return (
-      <View style={[styles.fill, styles.center, { backgroundColor: pane.background, paddingTop: props.topInset + 40 }]}>
-        <ActivityIndicator color={textColors.secondaryLabel} />
-      </View>
+  const marks = (row: SourceRow): React.ReactNode =>
+    row.kind === "directory" ? null : (
+      <>
+        {kept.has(row.path) ? <SystemIcon name="arrow.down.circle.fill" size={15} color={DOWNLOAD_COLOR} /> : null}
+        {dirty.has(row.path) ? <SystemIcon name="arrow.up.circle.fill" size={15} color={UPLOAD_COLOR} /> : null}
+      </>
     );
-  }
-  if (tree.rootFailed) {
-    return (
-      <View style={[styles.fill, styles.center, { backgroundColor: pane.background, paddingTop: props.topInset + 40 }]}>
-        <Text style={styles.error}>Couldn’t load this folder.</Text>
-        {tree.rootError !== undefined ? <Text style={styles.errorDetail}>{tree.rootError}</Text> : null}
-        <TouchableOpacity onPress={tree.reloadRoot} activeOpacity={0.6}>
-          <Text style={styles.retry}>Try again</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-  if (rows.length === 0) {
-    return (
-      <View style={[styles.fill, { backgroundColor: pane.background }]}>
-        <Text style={[styles.empty, { marginTop: props.topInset + 24 }]}>Empty folder.</Text>
-      </View>
-    );
-  }
+
   return (
-    <ScrollView style={[styles.fill, { backgroundColor: pane.background }]} onScroll={props.onScroll} scrollEventThrottle={16} contentContainerStyle={{ paddingTop: props.topInset + 4, paddingBottom: props.bottomInset, paddingHorizontal: 14 }}>
-      {rows.map((row, index) => {
-        const target = row.type === "directory" ? folderTarget(repo, row.path, row.name) : fileTarget(repo, row.path, row.name);
-        const isFav = favBoard.some((each) => sameTarget(each, target));
-        const isKept = kept.has(row.path);
-        const actions: ReadonlyArray<MenuAction> = [
-          { id: "newTab", title: "Open in New Tab", systemImage: "plus.square.on.square" },
-          { id: "favorite", title: isFav ? "Unfavorite" : "Favorite", systemImage: isFav ? "star.slash" : "star" },
-          // Keep On Device is for files (a folder isn't a single document).
-          ...(row.type === "directory" ? [] : [{ id: "keep", title: isKept ? "Remove from Device" : "Keep On Device", systemImage: isKept ? "trash" : "arrow.down.circle" }]),
-        ];
-        return (
-          // A long press: the row's menu (iOS's own, the row lifting).
-          <ContextMenuView
-            key={row.path}
-            actions={actions}
-            previewCornerRadius={10}
-            onAction={(id) => {
-              if (id === "newTab") onOpenInNewTab({ path: row.path, name: row.name, kind: row.type });
-              else if (id === "favorite") void toggleFavorite(favScope, target);
-              else if (id === "keep") {
-                if (isKept) removeFromDevice(row.path);
-                else {
-                  keepOnDevice(row.path);
-                  // Download it now so it's available offline.
-                  void preloadFile(backend, row.path, row.name, theme);
-                }
-              }
-            }}
-          >
-            <Row row={row} last={index === rows.length - 1} dirty={row.type !== "directory" && dirty.has(row.path)} kept={row.type !== "directory" && kept.has(row.path)} pane={pane} onToggle={onToggle} onOpen={open} />
-          </ContextMenuView>
-        );
-      })}
-    </ScrollView>
+    <Explorer
+      source={source}
+      root={props.dir}
+      onOpen={(row) => onOpen(navEntry(row))}
+      menu={menu}
+      marks={marks}
+      scroll={{ topInset: props.topInset, bottomInset: props.bottomInset, onScroll: props.onScroll }}
+    />
   );
 };
-
-const makeStyles = (text: TextColors) =>
-  StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  fill: {
-    flex: 1,
-  },
-  center: {
-    alignItems: "center",
-    gap: 10,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingRight: 0,
-    minHeight: 54,
-  },
-  chevron: {
-    width: CHEVRON_COL,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    alignSelf: "stretch",
-    paddingLeft: 4,
-  },
-  body: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingLeft: ICON_GAP,
-    paddingVertical: 12,
-  },
-  iconCol: {
-    width: ICON_COL,
-    marginLeft: CHEVRON_ICON_GAP,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "stretch",
-  },
-  name: {
-    flex: 1,
-    color: text.label,
-    fontSize: 15,
-    fontWeight: "400",
-    paddingRight: 4,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: DIVIDER,
-  },
-  empty: {
-    color: text.secondaryLabel,
-    textAlign: "center",
-  },
-  error: {
-    color: text.secondaryLabel,
-    fontSize: 15,
-  },
-  errorDetail: {
-    color: text.secondaryLabel,
-    fontSize: 12,
-    fontFamily: "Menlo",
-  },
-  retry: {
-    color: colors.tint,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-});

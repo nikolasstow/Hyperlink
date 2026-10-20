@@ -7,7 +7,8 @@
  * relay and the phone's decoder correct for it), so every layer shows at one
  * scale. The Measurements switch adds a 10 mm grid, a ruler, and the layer
  * number; it is off by default. The lit area glows while the printer
- * exposes the layer and dims while it lifts and drops.
+ * exposes the layer and dims while it lifts and drops. The glow and the
+ * progress bar take the theme's colours (printer/ui.tsx `usePalette`).
  *
  * @internal
  */
@@ -15,10 +16,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
 import { Alert, Animated, Image, StyleSheet, Text, View } from "react-native";
 import Svg, { Line, Text as SvgText } from "react-native-svg";
-import { useTextColors } from "../theme";
+import { towardWhite, useTextColors } from "../theme";
 import { fmtDuration } from "./printerFormat";
 import { CMD_PAUSE, CMD_RESUME, CMD_STOP, controlAckLabel, PHASE_PAUSED, PHASE_PAUSING, PHASE_STOPPING, type ControlCmd } from "./sdcp";
-import { AMBER, Button, Dot, GREEN, LCD, UV } from "./ui";
+import { Button, Dot, LCD, usePalette } from "./ui";
 
 /**
  * Shows the newest image only once it has loaded, so the LCD never flashes
@@ -82,6 +83,7 @@ export const Lcd = (props: {
   readonly measure: boolean;
   readonly note: string | undefined;
 }): React.ReactElement => {
+  const palette = usePalette();
   const height = props.width * (props.lcdMm.height / props.lcdMm.width);
   const glow = React.useRef(new Animated.Value(props.exposing ? 1 : 0)).current;
   React.useEffect(() => {
@@ -122,14 +124,14 @@ export const Lcd = (props: {
             StyleSheet.absoluteFill,
             {
               opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [props.active ? 0.4 : 0.55, 1] }),
-              shadowColor: UV,
+              shadowColor: palette.accent,
               shadowOpacity: 0.95,
               shadowRadius: 9,
               shadowOffset: { width: 0, height: 0 },
             },
           ]}
         >
-          <Image source={{ uri: props.uri }} style={StyleSheet.absoluteFill} resizeMode="stretch" tintColor="#f1ecff" />
+          <Image source={{ uri: props.uri }} style={StyleSheet.absoluteFill} resizeMode="stretch" tintColor={towardWhite(palette.accent, 0.88)} />
         </Animated.View>
       ) : (
         <View style={styles.lcdEmpty}>
@@ -144,7 +146,7 @@ export const Lcd = (props: {
       {props.active && props.phase !== undefined ? (
         <Hud style={styles.tr}>
           {props.exposing ? <Dot tone="uv" size={6} /> : null}
-          <Text style={[styles.hudText, props.exposing ? styles.hudLit : null]}>{props.phase}</Text>
+          <Text style={[styles.hudText, props.exposing ? { color: towardWhite(palette.accent, 0.7) } : null]}>{props.phase}</Text>
         </Hud>
       ) : null}
     </View>
@@ -166,10 +168,11 @@ export const Progress = (props: {
   readonly columns: 2 | 4;
 }): React.ReactElement => {
   const text = useTextColors();
+  const palette = usePalette();
   const cell = props.columns === 2 ? styles.statHalf : styles.statQuarter;
   const whole = Math.floor(props.percent);
   const fraction = Math.floor((props.percent % 1) * 10);
-  const fill = props.complete ? [GREEN, GREEN] : props.paused ? [AMBER, AMBER] : ["#5b7bff", UV];
+  const fill: readonly [string, string] = props.complete ? [palette.ok, palette.ok] : props.paused ? [palette.warn, palette.warn] : [palette.second, palette.accent];
   return (
     <View style={styles.progress}>
       <View style={styles.progressTop}>
@@ -179,7 +182,7 @@ export const Progress = (props: {
         </Text>
       </View>
       <View style={styles.track}>
-        <LinearGradient colors={fill as [string, string]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.fill, { width: `${Math.min(100, props.percent)}%` }]} />
+        <LinearGradient colors={fill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.fill, { width: `${Math.min(100, props.percent)}%` }]} />
       </View>
       <View style={styles.stats}>
         <Stat style={cell} label="Elapsed" value={fmtDuration(props.elapsedMs)} />
@@ -262,7 +265,6 @@ const styles = StyleSheet.create({
   lcdNote: { color: "rgba(244,245,249,0.5)", fontSize: 13, textAlign: "center" },
   hud: { position: "absolute", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, height: 22, borderRadius: 7, backgroundColor: "rgba(10,11,18,0.62)", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.12)" },
   hudText: { color: "rgba(244,245,249,0.88)", fontSize: 11, fontWeight: "600", fontVariant: ["tabular-nums"] },
-  hudLit: { color: "#dcd2ff" },
   tl: { top: 8, left: 8 },
   tr: { top: 8, right: 8 },
   progress: { marginTop: 16 },

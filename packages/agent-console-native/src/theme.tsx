@@ -79,6 +79,18 @@ const toRgb = (hex: string): readonly [number, number, number] => {
   return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
 };
 
+/** A hex colour at alpha `alpha`, as `rgba()`: for a tint or a soft fill of a theme colour. */
+export const withAlpha = (hex: string, alpha: number): string => {
+  const [r, g, b] = toRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+/** A hex colour mixed toward white by `amount` (0 to 1), as `rgb()`: a light ink of a theme colour. */
+export const towardWhite = (hex: string, amount: number): string => {
+  const [r, g, b] = toRgb(hex).map((c) => Math.round(c + (255 - c) * amount));
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
 /** Send button fill translucency, so the button's glass shows through. */
 const SEND_FILL_ALPHA = 0.85;
 /** How far the muted (unarmed) fill is mixed toward white. */

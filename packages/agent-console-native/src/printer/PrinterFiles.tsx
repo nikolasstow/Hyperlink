@@ -1,9 +1,12 @@
 /**
- * The printer's files on the printer page: onboard storage and the USB drive,
- * with previews and print details, and uploads from the phone.
+ * The printer's files on the printer page: the shared explorer's home over
+ * the relay (explorer/httpFileSource.ts). It shows the storage areas as tabs
+ * (the printer, its USB drive, the home server), then the recent prints, then
+ * the files, with previews. A file opens its details; a printer or USB file
+ * can print from there.
  *
- * An upload goes from the phone to the relay, then from the relay to the
- * printer (saturn-uploader's delivery: MD5 check, verified listing). It never
+ * Uploads go from the phone to the relay, then from the relay to the printer
+ * (saturn-uploader's delivery: MD5 check, verified listing). An upload never
  * starts a print. While a print runs, the relay paces the upload so the
  * printer is not disturbed, and it refuses to replace the file being printed.
  *
@@ -14,11 +17,14 @@ import * as React from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { showToast } from "../AppToast";
 import { colors } from "../colors";
+import { ExplorerHome } from "../explorer/ExplorerHome";
+import { httpFileSource, previewUrl } from "../explorer/httpFileSource";
+import type { SourceRow } from "../explorer/sourceRows";
 import { SystemIcon } from "../SystemIcon";
-import { useTextColors } from "../theme";
-import { fmtBytes, isPrintableName, settingsCells } from "./printerFormat";
-import { cancelUpload, fetchFileInfo, fetchFiles, fetchUploads, filePreviewUrl, startUpload, UploadCancelled, UploadRefused, type FileList, type FileView, type PrintHeader, type UploadJob, type UploadStage } from "./relayApi";
-import { Button, Card, Cells, Chip, GREEN, LCD, RED, UV, UV_INK } from "./ui";
+import { useTextColors, withAlpha } from "../theme";
+import { isPrintableName, settingsCells } from "./printerFormat";
+import { cancelUpload, fetchFileInfo, fetchUploads, printFile, startUpload, UploadCancelled, UploadRefused, type PrintHeader, type UploadJob, type UploadStage } from "./relayApi";
+import { Button, Card, Cells, LCD, usePalette } from "./ui";
 
 /** An upload as the page shows it: the phone's leg, then the relay's job. */
 interface Upload {
@@ -36,9 +42,13 @@ interface Upload {
 const STAGE_LABEL: Record<Upload["stage"], string> = {
   uploading: "Uploading to the relay",
   queued: "Waiting its turn",
+  copying: "Copying",
+  editing: "Changing settings",
   hashing: "Preparing",
   sending: "Sending to the printer",
   verifying: "The printer is verifying it",
+  saving: "Saving",
+  starting: "Starting the print",
   done: "On the printer",
   failed: "Failed",
   cancelled: "Cancelled",
@@ -75,67 +85,33 @@ const uploadStore = (() => {
   };
 })();
 
-/** How many uploads are still on their way to the printer, for the page's Files tab. */
+/** How many uploads are still on their way to the printer, for the page's Files button. */
 export const useRunningUploads = (): number => React.useSyncExternalStore(uploadStore.subscribe, uploadStore.rows).filter((u) => !finished(u.stage)).length;
 
-const rootOf = (storage: "local" | "usb"): string => (storage === "usb" ? "/usb/" : "/local/");
+/** A file the details sheet shows. */
+interface OpenFile {
+  readonly path: string;
+  readonly name: string;
+  readonly detail: string | undefined;
+  readonly printing: boolean;
+}
 
-const parentOf = (folder: string, root: string): string => (folder === root ? root : folder.slice(0, folder.slice(0, -1).lastIndexOf("/") + 1));
+const isPrinterFile = (path: string): boolean => path.startsWith("/local/") || path.startsWith("/usb/");
 
-export const PrinterFiles = (props: { readonly relayBase: string; readonly reachable: boolean; readonly printingName: string | undefined; readonly usbIn: boolean }): React.ReactElement => {
+export const PrinterFiles = (props: {
+  readonly relayBase: string;
+  readonly reachable: boolean;
+  /** The file being printed, while a print runs or waits paused. */
+  readonly printingName: string | undefined;
+}): React.ReactElement => {
   const { relayBase, reachable } = props;
   const text = useTextColors();
-  const [storage, setStorage] = React.useState<"local" | "usb">("local");
-  // The folder the owner asked for, and the last listing of it.
-  const [path, setPath] = React.useState("/local/");
-  const [list, setList] = React.useState<FileList | undefined>(undefined);
-  const [error, setError] = React.useState<string | undefined>(undefined);
-  const [loading, setLoading] = React.useState(false);
-  const [refreshes, setRefreshes] = React.useState(0);
+  const palette = usePalette();
+  const source = React.useMemo(() => httpFileSource(relayBase), [relayBase]);
+  const [reloadKey, setReloadKey] = React.useState(0);
   const uploads = React.useSyncExternalStore(uploadStore.subscribe, uploadStore.rows);
-  const [open, setOpen] = React.useState<FileView | undefined>(undefined);
-
-  // List the folder. A reply for a folder the owner has left is dropped.
-  React.useEffect(() => {
-    if (!reachable) return;
-    let current = true;
-    setLoading(true);
-    fetchFiles(relayBase, path)
-      .then((next) => {
-        if (!current) return;
-        setList(next);
-        setError(undefined);
-      })
-      .catch((cause: unknown) => {
-        if (!current) return;
-        setList(undefined);
-        setError(path.startsWith("/usb/") ? "No USB drive, or it could not be read." : `Could not list the printer's files: ${messageOf(cause)}`);
-      })
-      .finally(() => {
-        if (current) setLoading(false);
-      });
-    return () => {
-      current = false;
-      setLoading(false);
-    };
-  }, [relayBase, reachable, path, refreshes]);
-
-  const refresh = (): void => setRefreshes((n) => n + 1);
-
-  const go = (target: string): void => {
-    if (target === path) {
-      refresh();
-      return;
-    }
-    setPath(target);
-    setList(undefined);
-    setError(undefined);
-  };
-
-  const chooseStorage = (next: "local" | "usb"): void => {
-    setStorage(next);
-    go(rootOf(next));
-  };
+  const [open, setOpen] = React.useState<OpenFile | undefined>(undefined);
+  const refresh = (): void => setReloadKey((n) => n + 1);
 
   // Show uploads that went on while the page was closed, or that another device started.
   React.useEffect(() => {
@@ -145,7 +121,7 @@ export const PrinterFiles = (props: { readonly relayBase: string; readonly reach
       .then((jobs) => {
         if (current) uploadStore.change((rows) => [...jobs.filter((job) => !finished(job.stage) && !rows.some((u) => u.jobId === job.id)).map(rowOf), ...rows]);
       })
-      .catch(() => undefined);
+      .catch((cause: unknown) => console.error("[printer] reading the relay's uploads failed", cause));
     return () => {
       current = false;
     };
@@ -175,9 +151,9 @@ export const PrinterFiles = (props: { readonly relayBase: string; readonly reach
               return { ...u, stage: job.stage, progress: job.size > 0 ? job.sent / job.size : 0, paced: job.paced, error: job.error };
             }),
           );
-          if (landed) setRefreshes((n) => n + 1);
+          if (landed) setReloadKey((n) => n + 1);
         })
-        .catch(() => undefined);
+        .catch((cause: unknown) => console.error("[printer] following the relay's uploads failed", cause));
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -224,15 +200,8 @@ export const PrinterFiles = (props: { readonly relayBase: string; readonly reach
             Alert.alert("Printing now", `${asset.name} is printing. It cannot be replaced until the print ends.`);
             continue;
           }
-          const listed = list?.storage === "local" && list.path === "/local/" && list.entries.some((e) => e.kind === "file" && e.name === asset.name);
-          if (listed) {
-            Alert.alert(`Replace ${asset.name}?`, "A file with this name is already on the printer. The upload replaces it.", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Replace", onPress: () => send(asset, true) },
-            ]);
-          } else {
-            send(asset, false);
-          }
+          // The relay asks before it replaces a file of the same name (UploadRefused with `exists`).
+          send(asset, false);
         }
       })
       .catch((cause: unknown) => showToast({ message: `Could not open the file picker: ${messageOf(cause)}` }));
@@ -248,35 +217,23 @@ export const PrinterFiles = (props: { readonly relayBase: string; readonly reach
     cancelUpload(relayBase, u.jobId).catch((cause: unknown) => showToast({ message: `Could not cancel ${u.name}: ${messageOf(cause)}` }));
   };
 
-  const files = list?.entries ?? [];
-  const fileCount = files.filter((e) => e.kind === "file").length;
-  const root = rootOf(storage);
-  const inFolder = path !== root;
+  const openRow = (row: SourceRow): void => setOpen({ path: row.path, name: row.name, detail: row.detail, printing: row.badge === "Printing" });
 
   const right = (
     <View style={styles.headRight}>
-      {fileCount > 0 ? <Text style={[styles.count, { color: text.tertiaryLabel }]}>{fileCount}</Text> : null}
       <Pressable hitSlop={8} onPress={refresh} accessibilityLabel="Refresh">
-        {loading ? <ActivityIndicator /> : <SystemIcon name="arrow.clockwise" size={15} color={text.secondaryLabel} weight="semibold" />}
+        <SystemIcon name="arrow.clockwise" size={15} color={text.secondaryLabel} weight="semibold" />
+      </Pressable>
+      <Pressable hitSlop={8} onPress={pick} disabled={!reachable} accessibilityLabel="Upload to the printer">
+        <SystemIcon name="square.and.arrow.up" size={16} color={reachable ? palette.accent : text.tertiaryLabel} weight="semibold" />
       </Pressable>
     </View>
   );
 
   return (
     <Card title="Files" right={right}>
-      <View style={styles.toolbar}>
-        <View style={styles.segment}>
-          {(["local", "usb"] as const).map((s) => (
-            <Pressable key={s} disabled={s === "usb" && !props.usbIn} onPress={() => chooseStorage(s)} style={[styles.segmentItem, storage === s ? styles.segmentOn : null, s === "usb" && !props.usbIn ? styles.segmentOff : null]}>
-              <Text style={[styles.segmentText, { color: storage === s ? text.label : text.secondaryLabel }]}>{s === "local" ? "Printer" : "USB drive"}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Button label="Upload" icon="square.and.arrow.up" kind="primary" disabled={!reachable} onPress={pick} style={styles.uploadButton} />
-      </View>
-
       {uploads.map((u) => (
-        <View key={u.key} style={[styles.job, u.stage === "done" ? styles.jobDone : u.stage === "failed" ? styles.jobFailed : null]}>
+        <View key={u.key} style={[styles.job, { backgroundColor: withAlpha(u.stage === "done" ? palette.ok : u.stage === "failed" ? palette.bad : palette.accent, 0.12) }]}>
           <View style={styles.jobTop}>
             <Text style={[styles.jobName, { color: text.label }]} numberOfLines={1}>
               {u.name}
@@ -290,101 +247,93 @@ export const PrinterFiles = (props: { readonly relayBase: string; readonly reach
             </Pressable>
           </View>
           <View style={styles.jobTrack}>
-            <View style={[styles.jobFill, { width: `${u.stage === "done" ? 100 : Math.min(100, u.progress * 100)}%`, backgroundColor: u.stage === "done" ? GREEN : u.stage === "failed" ? RED : UV }]} />
+            <View style={[styles.jobFill, { width: `${u.stage === "done" ? 100 : Math.min(100, u.progress * 100)}%`, backgroundColor: u.stage === "done" ? palette.ok : u.stage === "failed" ? palette.bad : palette.accent }]} />
           </View>
-          {u.stage === "failed" && u.error !== undefined ? <Text style={[styles.jobNote, { color: RED }]}>{u.error}</Text> : null}
+          {u.stage === "failed" && u.error !== undefined ? <Text style={[styles.jobNote, { color: palette.bad }]}>{u.error}</Text> : null}
           {u.paced && !finished(u.stage) ? <Text style={[styles.jobNote, { color: text.tertiaryLabel }]}>Paced to protect the running print.</Text> : null}
           {u.stage === "sending" && u.progress === 0 ? <Text style={[styles.jobNote, { color: text.tertiaryLabel }]}>The printer takes a few seconds to accept the first packet.</Text> : null}
-          {u.stage === "done" ? <Text style={[styles.jobNote, { color: text.tertiaryLabel }]}>Start it on the printer when you are ready.</Text> : null}
+          {u.stage === "done" ? <Text style={[styles.jobNote, { color: text.tertiaryLabel }]}>Open it below to print it.</Text> : null}
         </View>
       ))}
 
-      {inFolder ? (
-        <Pressable style={styles.up} onPress={() => go(parentOf(path, root))}>
-          <SystemIcon name="chevron.left" size={13} color={UV_INK} weight="semibold" />
-          <Text style={[styles.upText, { color: UV_INK }]}>{path.slice(root.length, -1)}</Text>
-        </Pressable>
-      ) : null}
-
       {!reachable ? (
         <Text style={[styles.empty, { color: text.secondaryLabel }]}>The file browser needs the relay, which is not reachable.</Text>
-      ) : error !== undefined ? (
-        <Text style={[styles.empty, { color: text.secondaryLabel }]}>{error}</Text>
-      ) : list === undefined ? (
-        <ActivityIndicator style={styles.spinner} />
-      ) : files.length === 0 ? (
-        <Text style={[styles.empty, { color: text.secondaryLabel }]}>No print files here yet. Upload a .goo or .ctb file.</Text>
       ) : (
-        files.map((entry, index) => <FileRow key={entry.path} entry={entry} relayBase={relayBase} last={index === files.length - 1} onPress={() => (entry.kind === "folder" ? go(entry.path) : setOpen(entry))} />)
+        <ExplorerHome source={source} onOpen={openRow} folderTap="expand" reloadKey={reloadKey} emptyText="No print files here yet. Upload a .goo or .ctb file." />
       )}
 
       <Text style={[styles.hint, { color: text.tertiaryLabel }]}>Uploads go to the printer’s onboard storage. A running print is safe: uploads slow down while it prints, and nothing starts by itself.</Text>
 
-      <FileSheet entry={open} relayBase={relayBase} onClose={() => setOpen(undefined)} />
+      <FileSheet file={open} relayBase={relayBase} printRunning={props.printingName !== undefined} onClose={() => setOpen(undefined)} onPrinted={refresh} />
     </Card>
   );
 };
 
-const FileRow = (props: { readonly entry: FileView; readonly relayBase: string; readonly last: boolean; readonly onPress: () => void }): React.ReactElement => {
-  const text = useTextColors();
-  const { entry } = props;
-  const goo = entry.kind === "file" && /\.goo$/i.test(entry.name);
-  const ext = entry.name.includes(".") ? entry.name.slice(entry.name.lastIndexOf(".") + 1).toUpperCase() : "";
-  const meta = entry.kind === "folder" ? "Folder" : [fmtBytes(entry.size), ext].filter((s) => s !== "").join(" · ");
-  return (
-    <Pressable onPress={props.onPress} style={({ pressed }) => [styles.fileRow, props.last ? null : styles.fileLine, pressed ? styles.pressed : null]}>
-      <View style={[styles.thumb, entry.kind === "folder" ? styles.thumbFolder : null]}>
-        {goo ? <Image source={{ uri: filePreviewUrl(props.relayBase, entry.path) }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <SystemIcon name={entry.kind === "folder" ? "folder.fill" : "doc"} size={18} color={entry.kind === "folder" ? UV_INK : "rgba(244,245,249,0.6)"} />}
-      </View>
-      <View style={styles.fileText}>
-        <Text style={[styles.fileName, { color: text.label }]} numberOfLines={1}>
-          {entry.name}
-        </Text>
-        <Text style={[styles.fileMeta, { color: text.tertiaryLabel }]}>{meta}</Text>
-      </View>
-      {entry.printing ? <Chip tone="uv" label="Printing" dot={false} /> : null}
-      <SystemIcon name="chevron.right" size={13} color={text.tertiaryLabel} weight="semibold" />
-    </Pressable>
-  );
-};
-
-/** A file's preview and print details, read from the file's header on the printer. */
-const FileSheet = (props: { readonly entry: FileView | undefined; readonly relayBase: string; readonly onClose: () => void }): React.ReactElement => {
+/** A file's preview and print details, read from the file's header, and Print for a printer or USB file. */
+const FileSheet = (props: { readonly file: OpenFile | undefined; readonly relayBase: string; readonly printRunning: boolean; readonly onClose: () => void; readonly onPrinted: () => void }): React.ReactElement => {
   const text = useTextColors();
   const [info, setInfo] = React.useState<PrintHeader | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
+  const [starting, setStarting] = React.useState(false);
   // Keep the last file on screen while the sheet slides away.
-  const [shown, setShown] = React.useState(props.entry);
-  if (props.entry !== undefined && props.entry !== shown) setShown(props.entry);
-  const entry = props.entry ?? shown;
-  const goo = entry !== undefined && /\.goo$/i.test(entry.name);
+  const [shown, setShown] = React.useState(props.file);
+  if (props.file !== undefined && props.file !== shown) setShown(props.file);
+  const file = props.file ?? shown;
+  const goo = file !== undefined && /\.goo$/i.test(file.name);
   React.useEffect(() => {
     setInfo(undefined);
     setError(undefined);
-    if (entry === undefined || !/\.goo$/i.test(entry.name)) return;
+    if (file === undefined || !/\.goo$/i.test(file.name)) return;
     let alive = true;
-    fetchFileInfo(props.relayBase, entry.path)
+    fetchFileInfo(props.relayBase, file.path)
       .then((next) => {
         if (alive) setInfo(next);
       })
       .catch((cause: unknown) => {
-        if (alive) setError(cause instanceof Error ? cause.message : String(cause));
+        if (alive) setError(messageOf(cause));
       });
     return () => {
       alive = false;
     };
-  }, [entry, props.relayBase]);
+  }, [file, props.relayBase]);
+
+  const canPrint = file !== undefined && isPrinterFile(file.path) && isPrintableName(file.name) && !props.printRunning;
+  const print = (): void => {
+    if (file === undefined) return;
+    Alert.alert(`Print ${file.name}?`, "Make sure the build plate is clean and the vat has enough resin. The print starts from the first layer.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Print",
+        onPress: () => {
+          setStarting(true);
+          printFile(props.relayBase, file.path)
+            .then(() => {
+              showToast({ message: `Printing ${file.name}.` });
+              props.onPrinted();
+              props.onClose();
+            })
+            .catch((cause: unknown) => Alert.alert("The print did not start", messageOf(cause)))
+            .finally(() => setStarting(false));
+        },
+      },
+    ]);
+  };
+
+  const where = file === undefined ? "" : file.printing ? "PRINTING NOW" : file.path.startsWith("/usb/") ? "ON THE USB DRIVE" : file.path.startsWith("/server/") ? "ON THE HOME SERVER" : "ON THE PRINTER";
   return (
-    <Modal visible={props.entry !== undefined} animationType="slide" presentationStyle="pageSheet" onRequestClose={props.onClose}>
+    <Modal visible={props.file !== undefined} animationType="slide" presentationStyle="pageSheet" onRequestClose={props.onClose}>
       <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.sheet}>
         <View style={styles.sheetHead}>
-          <View style={styles.sheetPreview}>{goo && entry !== undefined ? <Image source={{ uri: filePreviewUrl(props.relayBase, entry.path, true) }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <SystemIcon name="doc" size={30} color="rgba(244,245,249,0.6)" />}</View>
+          <View style={styles.sheetPreview}>{goo && file !== undefined ? <Image source={{ uri: previewUrl(props.relayBase, file.path, true) }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <SystemIcon name="doc" size={30} color="rgba(244,245,249,0.6)" />}</View>
           <View style={styles.sheetText}>
-            <Text style={[styles.sheetEyebrow, { color: text.tertiaryLabel }]}>{entry?.printing === true ? "PRINTING NOW" : entry?.path.startsWith("/usb/") === true ? "ON THE USB DRIVE" : "ON THE PRINTER"}</Text>
-            <Text style={[styles.sheetName, { color: text.label }]}>{entry?.name ?? ""}</Text>
-            <Text style={[styles.fileMeta, { color: text.secondaryLabel }]}>{fmtBytes(entry?.size)}</Text>
+            <Text style={[styles.sheetEyebrow, { color: text.tertiaryLabel }]}>{where}</Text>
+            <Text style={[styles.sheetName, { color: text.label }]}>{file?.name ?? ""}</Text>
+            {file?.detail !== undefined ? <Text style={[styles.sheetMeta, { color: text.secondaryLabel }]}>{file.detail}</Text> : null}
           </View>
         </View>
+        {file !== undefined && isPrinterFile(file.path) && isPrintableName(file.name) ? (
+          <Button label={props.printRunning ? "A print is running" : "Print"} icon="printer.fill" kind="primary" busy={starting} disabled={!canPrint} onPress={print} style={styles.sheetPrint} />
+        ) : null}
         {!goo ? (
           <Text style={[styles.empty, { color: text.secondaryLabel }]}>Details are shown for .goo files.</Text>
         ) : info !== undefined ? (
@@ -401,36 +350,16 @@ const FileSheet = (props: { readonly entry: FileView | undefined; readonly relay
 };
 
 const styles = StyleSheet.create({
-  headRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  count: { fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"] },
-  toolbar: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  segment: { flex: 1, flexDirection: "row", padding: 3, borderRadius: 11, backgroundColor: "rgba(127,127,127,0.14)" },
-  segmentItem: { flex: 1, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  segmentOn: { backgroundColor: "rgba(255,255,255,0.16)" },
-  segmentOff: { opacity: 0.4 },
-  segmentText: { fontSize: 13, fontWeight: "600" },
-  uploadButton: { height: 38, paddingHorizontal: 14 },
-  job: { padding: 12, borderRadius: 13, backgroundColor: "rgba(143,115,255,0.12)", marginBottom: 8 },
-  jobDone: { backgroundColor: "rgba(50,208,124,0.12)" },
-  jobFailed: { backgroundColor: "rgba(255,90,95,0.12)" },
+  headRight: { flexDirection: "row", alignItems: "center", gap: 16 },
+  job: { padding: 12, borderRadius: 13, marginBottom: 8 },
   jobTop: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   jobName: { flex: 1, fontSize: 14, fontWeight: "600" },
   jobState: { fontSize: 12, fontVariant: ["tabular-nums"] },
   jobTrack: { height: 4, borderRadius: 2, backgroundColor: "rgba(127,127,127,0.2)", overflow: "hidden" },
   jobFill: { height: 4, borderRadius: 2 },
   jobNote: { fontSize: 12, marginTop: 6 },
-  up: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 8 },
-  upText: { fontSize: 14, fontWeight: "600" },
   empty: { fontSize: 14, textAlign: "center", paddingVertical: 20 },
   spinner: { paddingVertical: 20 },
-  fileRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9 },
-  fileLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.separator },
-  pressed: { opacity: 0.6 },
-  thumb: { width: 44, height: 44, borderRadius: 10, overflow: "hidden", backgroundColor: LCD, alignItems: "center", justifyContent: "center" },
-  thumbFolder: { backgroundColor: "rgba(143,115,255,0.18)" },
-  fileText: { flex: 1 },
-  fileName: { fontSize: 15, fontWeight: "600" },
-  fileMeta: { fontSize: 12, marginTop: 2, fontVariant: ["tabular-nums"] },
   hint: { fontSize: 12, marginTop: 12, lineHeight: 17 },
   sheet: { padding: 20, paddingBottom: 48 },
   sheetHead: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 18 },
@@ -438,5 +367,7 @@ const styles = StyleSheet.create({
   sheetText: { flex: 1 },
   sheetEyebrow: { fontSize: 11, fontWeight: "700", letterSpacing: 0.7 },
   sheetName: { fontSize: 20, fontWeight: "700", marginTop: 4, letterSpacing: -0.3 },
+  sheetMeta: { fontSize: 13, marginTop: 4 },
+  sheetPrint: { marginBottom: 16 },
   sheetDone: { marginTop: 20 },
 });
