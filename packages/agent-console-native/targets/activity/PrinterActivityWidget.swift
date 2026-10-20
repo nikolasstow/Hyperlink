@@ -48,9 +48,27 @@ private extension PrinterActivityAttributes {
     (filename as NSString).deletingPathExtension
   }
 
-  var image: UIImage? {
-    guard !thumbnail.isEmpty, let data = Data(base64Encoded: thumbnail) else { return nil }
-    return UIImage(data: data)
+  var image: UIImage? { decodedImage(thumbnail) }
+}
+
+private extension PrinterActivityAttributes.ContentState {
+  var layerPicture: UIImage? { decodedImage(layerImage) }
+  var cameraPicture: UIImage? { decodedImage(cameraImage) }
+  var percent: Int { Int((progress * 100).rounded()) }
+}
+
+private func decodedImage(_ base64: String) -> UIImage? {
+  guard !base64.isEmpty, let data = Data(base64Encoded: base64) else { return nil }
+  return UIImage(data: data)
+}
+
+/// The resin printer (plate, arm, rectangular vat), the same drawing as the portal icon.
+private struct PrinterGlyph: View {
+  var body: some View {
+    Image("PrinterGlyph")
+      .renderingMode(.template)
+      .resizable()
+      .scaledToFit()
   }
 }
 
@@ -63,28 +81,55 @@ struct PrinterActivityWidget: Widget {
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          Thumbnail(attributes: context.attributes, size: 44)
+          Thumbnail(attributes: context.attributes, size: 52)
+            .padding(.leading, 4)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          TimeLeft(state: context.state)
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
+          VStack(alignment: .trailing, spacing: 0) {
+            TimeLeft(state: context.state)
+              .font(.title3.weight(.semibold).monospacedDigit())
+              .foregroundStyle(context.state.tint)
+              .multilineTextAlignment(.trailing)
+            Text(context.state.isPrinting ? "left" : " ")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
+          .frame(maxHeight: .infinity)
+          .padding(.trailing, 4)
         }
         DynamicIslandExpandedRegion(.center) {
-          Text(context.attributes.title)
-            .font(.headline)
-            .lineLimit(1)
+          VStack(spacing: 2) {
+            Text(context.attributes.title)
+              .font(.headline)
+              .lineLimit(1)
+            Text("Layer \(context.state.layer.formatted()) of \(context.state.layers.formatted())")
+              .font(.caption.monospacedDigit())
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+          }
         }
         DynamicIslandExpandedRegion(.bottom) {
           VStack(spacing: 6) {
             PrintBar(state: context.state)
-            Details(state: context.state)
-              .font(.caption2.monospacedDigit())
-              .foregroundStyle(.secondary)
+            HStack {
+              Text("\(context.state.percent)%")
+              Spacer(minLength: 8)
+              if context.state.isPrinting {
+                Text("Ends \(context.state.endsAt, style: .time)")
+              } else {
+                Text(context.state.label)
+              }
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
           }
+          // The island's corners are round: keep the bottom row clear of them.
+          .padding(.horizontal, 12)
+          .padding(.top, 4)
         }
       } compactLeading: {
-        Image(systemName: "printer.fill")
+        PrinterGlyph()
+          .frame(width: 18, height: 18)
           .foregroundStyle(context.state.tint)
       } compactTrailing: {
         // `Text(timerInterval:)` reserves room for its widest value, so a
@@ -95,7 +140,8 @@ struct PrinterActivityWidget: Widget {
           .multilineTextAlignment(.center)
           .frame(maxWidth: 52, alignment: .center)
       } minimal: {
-        Image(systemName: "printer.fill")
+        PrinterGlyph()
+          .frame(width: 16, height: 16)
           .foregroundStyle(context.state.tint)
       }
       .keylineTint(context.state.tint)
@@ -103,7 +149,7 @@ struct PrinterActivityWidget: Widget {
   }
 }
 
-/// The slicer preview, or a printer symbol when the push had no room for it.
+/// The slicer preview, or the printer glyph when the push had no room for it.
 private struct Thumbnail: View {
   let attributes: PrinterActivityAttributes
   let size: CGFloat
@@ -115,8 +161,8 @@ private struct Thumbnail: View {
           .resizable()
           .scaledToFill()
       } else {
-        Image(systemName: "printer.fill")
-          .font(.system(size: size * 0.4))
+        PrinterGlyph()
+          .padding(size * 0.25)
           .foregroundStyle(accent)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .background(Color.white.opacity(0.08))
@@ -124,6 +170,23 @@ private struct Thumbnail: View {
     }
     .frame(width: size, height: size)
     .clipShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
+  }
+}
+
+/// A picture in a dark, rounded tile: the layer on its LCD, or the camera.
+private struct PictureTile: View {
+  let image: UIImage
+  /// Fill crops the picture to the tile; fit shows all of it on black.
+  let fill: Bool
+
+  var body: some View {
+    Image(uiImage: image)
+      .resizable()
+      .interpolation(.high)
+      .aspectRatio(contentMode: fill ? .fill : .fit)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color.black)
+      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
   }
 }
 
@@ -168,7 +231,7 @@ private struct Details: View {
 
   var body: some View {
     HStack(spacing: 8) {
-      Text("Layer \(state.layer.formatted()) of \(state.layers.formatted()) · \(Int((state.progress * 100).rounded()))%")
+      Text("Layer \(state.layer.formatted()) of \(state.layers.formatted()) · \(state.percent)%")
         .lineLimit(1)
       Spacer(minLength: 8)
       if state.isPrinting {
@@ -182,38 +245,73 @@ private struct Details: View {
 private struct PrinterLockScreenView: View {
   let context: ActivityViewContext<PrinterActivityAttributes>
 
-  var body: some View {
-    HStack(alignment: .center, spacing: 12) {
-      Thumbnail(attributes: context.attributes, size: 64)
+  private var status: some View {
+    Group {
+      if context.state.isPrinting {
+        TimeLeft(state: context.state)
+          .font(.subheadline.weight(.semibold).monospacedDigit())
+          .foregroundStyle(accent)
+          .multilineTextAlignment(.trailing)
+          .frame(maxWidth: 80, alignment: .trailing)
+      } else {
+        Text(context.isStale ? "Not updated" : context.state.label)
+          .font(.subheadline.weight(.semibold))
+          .foregroundStyle(context.state.tint)
+      }
+    }
+  }
 
-      VStack(alignment: .leading, spacing: 6) {
+  var body: some View {
+    let layer = context.state.layerPicture
+    let camera = context.state.cameraPicture
+    if layer == nil && camera == nil {
+      // Before the first update brings pictures: the thumbnail beside the details.
+      HStack(alignment: .center, spacing: 12) {
+        Thumbnail(attributes: context.attributes, size: 64)
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(spacing: 8) {
+            Text(context.attributes.title)
+              .font(.headline)
+              .lineLimit(1)
+            Spacer(minLength: 8)
+            status
+          }
+          PrintBar(state: context.state)
+          Details(state: context.state)
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+      }
+      .padding(16)
+    } else {
+      VStack(alignment: .leading, spacing: 8) {
         HStack(spacing: 8) {
+          PrinterGlyph()
+            .frame(width: 16, height: 16)
+            .foregroundStyle(accent)
           Text(context.attributes.title)
             .font(.headline)
             .lineLimit(1)
-
           Spacer(minLength: 8)
-
-          if context.state.isPrinting {
-            TimeLeft(state: context.state)
-              .font(.subheadline.monospacedDigit())
-              .foregroundStyle(accent)
-              .multilineTextAlignment(.trailing)
-              .frame(maxWidth: 80, alignment: .trailing)
-          } else {
-            Text(context.isStale ? "Not updated" : context.state.label)
-              .font(.subheadline.weight(.semibold))
-              .foregroundStyle(context.state.tint)
+          status
+        }
+        HStack(spacing: 8) {
+          Thumbnail(attributes: context.attributes, size: 64)
+          if let layer {
+            PictureTile(image: layer, fill: false)
+          }
+          if let camera {
+            PictureTile(image: camera, fill: true)
+              .frame(width: 68)
           }
         }
-
+        .frame(height: 64)
         PrintBar(state: context.state)
-
         Details(state: context.state)
           .font(.caption.monospacedDigit())
           .foregroundStyle(.secondary)
       }
+      .padding(14)
     }
-    .padding(16)
   }
 }

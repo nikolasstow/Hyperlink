@@ -26,6 +26,38 @@ struct PrinterActivityAttributes: ActivityAttributes {
     var startedAt: Date
     /// When the printer expects to finish.
     var endsAt: Date
+    /// The layer on the LCD as a base64 black and white PNG, or "".
+    var layerImage: String
+    /// The camera picture as a base64 JPEG, or "" (the relay's `activityCamera` is off).
+    var cameraImage: String
+
+    init(phase: String, layer: Int, layers: Int, progress: Double, startedAt: Date, endsAt: Date, layerImage: String = "", cameraImage: String = "") {
+      self.phase = phase
+      self.layer = layer
+      self.layers = layers
+      self.progress = progress
+      self.startedAt = startedAt
+      self.endsAt = endsAt
+      self.layerImage = layerImage
+      self.cameraImage = cameraImage
+    }
+
+    private enum CodingKeys: String, CodingKey {
+      case phase, layer, layers, progress, startedAt, endsAt, layerImage, cameraImage
+    }
+
+    /// The pictures may be missing: a start push has no room for them.
+    init(from decoder: Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      phase = try container.decode(String.self, forKey: .phase)
+      layer = try container.decode(Int.self, forKey: .layer)
+      layers = try container.decode(Int.self, forKey: .layers)
+      progress = try container.decode(Double.self, forKey: .progress)
+      startedAt = try container.decode(Date.self, forKey: .startedAt)
+      endsAt = try container.decode(Date.self, forKey: .endsAt)
+      layerImage = try container.decodeIfPresent(String.self, forKey: .layerImage) ?? ""
+      cameraImage = try container.decodeIfPresent(String.self, forKey: .cameraImage) ?? ""
+    }
   }
 
   var taskId: String

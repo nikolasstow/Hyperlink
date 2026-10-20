@@ -67,6 +67,11 @@ One adapter in the app turns any files-v1 endpoint into a `FileSource`. The prin
 - **App code:** `targets/activity/PrinterActivityAttributes.swift` and `PrinterActivityWidget.swift`; `modules/live-activity/ios/PrinterActivityAttributes.swift` (the copy) and `PrinterActivityTokens.swift` (token forwarding from launch, through an AppDelegate subscriber); `setPrinterRelay` and `setActivityAccent` from `RootNavigator`.
 - CAUTION: it is native code. App variants drop the Live Activity extension, so it needs the base build (`pnpm build:master`, an EAS build). Start builds without asking (owner).
 - Not built: a Start button on the printer page. The relay starts the activity by itself.
+- **Pictures (2026-10-20):** each update (every 30 s) carries the layer on the LCD (black and white PNG cropped to the model, 1.2 KB or less) and, only with the relay setting `activityCamera`, the camera (JPEG, 1.15 KB or less). The camera window follows the plate (`LiveActivity.cameraWindow`): small and close early, larger as the plate rises, the top part once done. Its calibration (`plateInFrame`) comes from one frame; check it against later frames.
+- **Lock screen:** a header (glyph, title, time left), one row of tiles (thumbnail, layer on black, camera), the bar, and the details. Before the first update, the thumbnail beside the details.
+- **Icon:** `PrinterGlyph` (template SVG in the widget's asset catalog): plate, arm, and a rectangular vat, the same drawing as the portal icon.
+- **Update token:** the first build never sent one. The app now also reads `activity.pushToken` at launch and on each return to the app, and reports each step to the relay log (`POST /api/activity/log`, lines "Live Activity (phone): …").
+- WARNING: on 2026-10-20 the printer froze at layer 760 of "base 7 + 8", 2 minutes after a relay restart left its camera stream open and a camera start went unanswered. The print was lost and the printer recorded no history entry. The relay now limits a camera start to 15 s, waits 2 minutes after a failure, and gives stream-off 3 s on shutdown. Do not restart the relay during a print while the camera is on.
 
 ## 8. Printer page redesign (owner, 2026-10-19)
 
@@ -140,6 +145,9 @@ Work moves to the Mac mini: start the next Claude Code session there, in the hom
 16. The relay sends the Live Activity pushes and keeps its printer connection open for good: "a server never sleeps" (owner).
 17. Dynamic Island: a printer icon alone in the minimal form; the time left only where the icon and the time both fit (owner).
 18. The relay may delete printer files (Finder drive) and start prints (UVtools' Print request) (owner, 2026-10-19).
+19. The Live Activity shows the layer and the camera on the lock screen (owner). The camera picture keeps the full height and drops the sides; the window follows the plate (owner).
+20. Dynamic Island icon: the portal's printer drawing with a rectangular vat, in the portal icon too (owner).
+21. After the freeze, camera pictures in the Live Activity are off until the camera code is proven (`activityCamera`).
 
 ### Do not resurrect
 

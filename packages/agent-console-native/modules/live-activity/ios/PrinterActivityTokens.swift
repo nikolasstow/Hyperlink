@@ -36,6 +36,7 @@ enum PrinterActivityTokens {
     if observing { return }
     observing = true
 
+    log("observing; \(Activity<PrinterActivityAttributes>.activities.count) printer activities running")
     Task {
       for await data in Activity<PrinterActivityAttributes>.pushToStartTokenUpdates {
         let token = hex(data)
@@ -45,12 +46,34 @@ enum PrinterActivityTokens {
     }
     Task {
       for await activity in Activity<PrinterActivityAttributes>.activityUpdates {
+        log("activity appeared for \(activity.attributes.taskId)")
         follow(activity)
       }
     }
+    rescan()
+  }
+
+  /**
+   Sends the current update token of every running activity. Called at
+   launch and each time the app becomes active, so a token the token stream
+   never delivered still reaches the relay.
+   */
+  static func rescan() {
+    guard #available(iOS 17.2, *) else { return }
     for activity in Activity<PrinterActivityAttributes>.activities {
       follow(activity)
+      if let data = activity.pushToken {
+        remember(taskId: activity.attributes.taskId, token: hex(data))
+        send(path: "/api/activity/update-token", body: ["taskId": activity.attributes.taskId, "token": hex(data)])
+      } else {
+        log("activity for \(activity.attributes.taskId) has no update token yet")
+      }
     }
+  }
+
+  /// A line in the relay log, so token problems can be seen without the phone's console.
+  static func log(_ event: String) {
+    send(path: "/api/activity/log", body: ["event": event])
   }
 
   /// Saves the relay address and sends the tokens that waited for it.
@@ -77,17 +100,22 @@ enum PrinterActivityTokens {
     Task {
       for await data in activity.pushTokenUpdates {
         let token = hex(data)
-        if let defaults = UserDefaults(suiteName: suite) {
-          // Keep only live activities' tokens: an ended one is never updated again.
-          var tokens = updateTokens(defaults).filter { entry in
-            Activity<PrinterActivityAttributes>.activities.contains { $0.attributes.taskId == entry.key }
-          }
-          tokens[taskId] = token
-          defaults.set(tokens, forKey: updateTokensKey)
-        }
+        log("update token for \(taskId) from the token stream")
+        remember(taskId: taskId, token: token)
         send(path: "/api/activity/update-token", body: ["taskId": taskId, "token": token])
       }
     }
+  }
+
+  /// Keeps the token for `setRelay`, dropping ended activities' tokens: they are never updated again.
+  @available(iOS 16.2, *)
+  private static func remember(taskId: String, token: String) {
+    guard let defaults = UserDefaults(suiteName: suite) else { return }
+    var tokens = updateTokens(defaults).filter { entry in
+      Activity<PrinterActivityAttributes>.activities.contains { $0.attributes.taskId == entry.key }
+    }
+    tokens[taskId] = token
+    defaults.set(tokens, forKey: updateTokensKey)
   }
 
   private static func updateTokens(_ defaults: UserDefaults) -> [String: String] {
@@ -126,10 +154,14 @@ enum PrinterActivityTokens {
   }
 }
 
-/// Starts `PrinterActivityTokens` at launch, also on a background wake.
+/// Starts `PrinterActivityTokens` at launch, also on a background wake, and resends tokens on each return to the app.
 public class PrinterActivityAppDelegateSubscriber: ExpoAppDelegateSubscriber {
   public func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
     PrinterActivityTokens.observe()
     return true
+  }
+
+  public func applicationDidBecomeActive(_ application: UIApplication) {
+    PrinterActivityTokens.rescan()
   }
 }
