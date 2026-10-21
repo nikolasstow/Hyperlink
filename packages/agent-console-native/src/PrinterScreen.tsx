@@ -27,6 +27,7 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useHeaderHeight } from "@react-navigation/elements";
+import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackHeaderItem, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
@@ -34,19 +35,20 @@ import { ActivityIndicator, Animated, Image, ScrollView, StyleSheet, Switch, Tex
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import type { SFSymbol } from "sf-symbols-typescript";
+import { PrinterPip } from "../modules/printer-pip";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { useDirectLayer } from "./printer/directLayers";
 import { CameraPane } from "./printer/PrinterCamera";
 import { PrinterFiles, useRunningUploads } from "./printer/PrinterFiles";
 import { Controls, Lcd, Progress, useLoadedUri } from "./printer/PrinterStage";
 import { DEFAULT_LCD_MM, fmtBytes, healthItems, settingsCells } from "./printer/printerFormat";
-import { fetchPrintHeader, printPreviewUrl, type PrintHeader } from "./printer/relayApi";
+import { cameraSocketUrl, fetchPrintHeader, printPreviewUrl, type PrintHeader } from "./printer/relayApi";
 import { isPrinting, layerIndexOf, PHASE_COMPLETE, PHASE_EXPOSING, PHASE_PAUSED, PHASE_PAUSING, PHASE_STOPPED, PHASE_STOPPING, phaseLabel, PRINTER_PORT, printErrorLabel, type PrinterStatus } from "./printer/sdcp";
 import { StagePager } from "./printer/StagePager";
 import { Card, Cells, Chip, Dot, Row, usePalette, type Tone } from "./printer/ui";
 import { usePrinterLink, type LinkState } from "./printer/usePrinterLink";
 import type { RootStackParamList } from "./RootNavigator";
-import { useScreenBackground, useTextColors, useTheme, withAlpha } from "./theme";
+import { towardWhite, useScreenBackground, useTextColors, useTheme, withAlpha } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerPrinter">;
 
@@ -140,6 +142,7 @@ const BUTTONS: ReadonlyArray<{ readonly view: Exclude<PageView, "Print">; readon
 export const PrinterScreen = (props: Props): React.ReactElement => {
   const text = useTextColors();
   const palette = usePalette();
+  const focused = useIsFocused();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
@@ -290,6 +293,18 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
         height={lcdHeight}
         layer={<Lcd width={lcdWidth} lcdMm={lcdMm} uri={hasJob ? layerUri : undefined} exposing={exposing} active={active} layer={hasJob ? current : undefined} phase={active ? phaseLabel(info?.Status) : undefined} measure={measure} note={lcdNote} />}
         camera={(visible) => <CameraPane relayBase={printer.relayBase} secureUrl={printer.secureUrl} reachable={printer.relayReachable} visible={visible && view === "Print"} width={lcdWidth} height={lcdHeight} />}
+        behind={(page) => (
+          // Leaving the app opens Picture in Picture of this page: the camera, or the layer while a print runs.
+          <PrinterPip
+            style={StyleSheet.absoluteFill}
+            mode={page === "Camera" ? "camera" : "layer"}
+            cameraUrl={printer.relayReachable ? cameraSocketUrl(printer.relayBase) : undefined}
+            layerUri={hasJob ? layerUri : undefined}
+            tint={towardWhite(palette.accent, 0.88)}
+            aspect={lcdMm.width / lcdMm.height}
+            enabled={focused && view === "Print" && (page === "Camera" ? printer.relayReachable : hasJob)}
+          />
+        )}
       />
       {timeline}
       {active && online ? <Controls phase={info?.Status} send={printer.sendControl} /> : null}

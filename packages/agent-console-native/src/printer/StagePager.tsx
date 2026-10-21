@@ -9,6 +9,10 @@
  * same page in the middle, with no animation. Only the middle camera page is
  * live; the end one is a still placeholder for the moment of the swipe.
  *
+ * `behind` draws under the strip at the stage's size, for the page that is
+ * open: the Picture in Picture source (modules/printer-pip), which the camera
+ * page shows through.
+ *
  * @internal
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -57,6 +61,8 @@ export const StagePager = (props: {
   readonly layer: React.ReactNode;
   /** The camera page; `visible` is true while it shows. */
   readonly camera: (visible: boolean) => React.ReactNode;
+  /** Drawn under the pages, for the page that is open. */
+  readonly behind?: (page: StagePage) => React.ReactNode;
 }): React.ReactElement => {
   const { colors } = useTheme();
   const [stored, setStored] = useStoredPage();
@@ -85,6 +91,7 @@ export const StagePager = (props: {
   const placeholder = <View style={[styles.still, { width: props.width, height: props.height }]} />;
   return (
     <View>
+      {props.behind !== undefined ? <View style={[styles.behind, { width: props.width, height: props.height }]}>{props.behind(page)}</View> : null}
       <ScrollView
         ref={strip}
         horizontal
@@ -112,6 +119,7 @@ export const StagePager = (props: {
 
 const styles = StyleSheet.create({
   still: { borderRadius: 16, backgroundColor: "#000000" },
+  behind: { position: "absolute", top: 0, left: 0, borderRadius: 16, overflow: "hidden" },
   dots: { flexDirection: "row", justifyContent: "center", gap: 8, marginTop: 10 },
   dot: { width: 7, height: 7, borderRadius: 3.5 },
 });

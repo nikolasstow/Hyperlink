@@ -1,0 +1,422 @@
+import AVFoundation
+import AVKit
+import CoreMedia
+import ExpoModulesCore
+import UIKit
+
+/// The source of the printer's Picture in Picture: the camera, or the current
+/// layer as a still frame. It sits behind the stage, so the picture iOS takes
+/// into the window when the owner leaves the app is the page they last had open.
+///
+/// The camera comes from the relay's `/api/camera.h264` WebSocket: one H.264
+/// access unit (Annex B, parameter sets on each keyframe) per message. The
+/// units go to an `AVSampleBufferDisplayLayer` as they are, with no decoder of
+/// our own and no added delay.
+final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
+  enum Mode { case camera, layer }
+
+  var mode: Mode = .layer { didSet { if mode != oldValue { refresh() } } }
+  var cameraUrl: URL? { didSet { if cameraUrl != oldValue { refresh() } } }
+  var layerUri: URL? { didSet { if layerUri != oldValue { loadLayer() } } }
+  var tint: UIColor = .white { didSet { showLayer() } }
+  var aspect: CGFloat = 16.0 / 9.0 { didSet { if aspect != oldValue { showLayer() } } }
+  /// True while the stage is on screen: only then may leaving the app start the window.
+  var enabled = false { didSet { if enabled != oldValue { refresh() } } }
+
+  private let display = AVSampleBufferDisplayLayer()
+  private var pip: AVPictureInPictureController?
+  private var pipActive = false
+  private var foreground = UIApplication.shared.applicationState != .background
+
+  private let queue = DispatchQueue(label: "printer-pip.video")
+  private var socket: URLSessionWebSocketTask?
+  private var socketUrl: URL?
+  private var format: CMVideoFormatDescription?
+  private var sps: Data?
+  private var pps: Data?
+
+  private var layerImage: UIImage?
+  private var layerTask: URLSessionDataTask?
+  /// iOS treats a source with no new frames as stalled: the still is shown again every second.
+  private var stillTimer: Timer?
+
+  required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+    isUserInteractionEnabled = false
+    backgroundColor = .black
+    clipsToBounds = true
+    display.videoGravity = .resizeAspect
+    display.backgroundColor = UIColor.black.cgColor
+    layer.addSublayer(display)
+
+    let center = NotificationCenter.default
+    center.addObserver(self, selector: #selector(didEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+    center.addObserver(self, selector: #selector(willEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+    stillTimer?.invalidate()
+    layerTask?.cancel()
+    socket?.cancel(with: .goingAway, reason: nil)
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    display.frame = bounds
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window != nil, pip == nil, AVPictureInPictureController.isPictureInPictureSupported() {
+      let controller = AVPictureInPictureController(
+        contentSource: AVPictureInPictureController.ContentSource(sampleBufferDisplayLayer: display, playbackDelegate: self)
+      )
+      controller.delegate = self
+      controller.requiresLinearPlayback = true
+      pip = controller
+    }
+    refresh()
+  }
+
+  // MARK: - What runs
+
+  /// Shows the source the props and the app's state call for, and stops what is not needed.
+  private func refresh() {
+    let live = (enabled && window != nil && foreground) || pipActive
+    pip?.canStartPictureInPictureAutomaticallyFromInline = enabled && window != nil
+    if enabled { Self.preparePlayback() }
+
+    if live && mode == .camera, let url = cameraUrl {
+      stopStill()
+      connect(url)
+    } else {
+      disconnect()
+      if live && mode == .layer { startStill() } else { stopStill() }
+    }
+  }
+
+  @objc private func didEnterBackground() {
+    foreground = false
+    // The window starts as the app leaves; give it a moment before stopping the feed.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.refresh() }
+  }
+
+  @objc private func willEnterForeground() {
+    foreground = true
+    refresh()
+  }
+
+  /// PiP needs a playback audio session. Mixing keeps the owner's music playing.
+  private static var playbackReady = false
+  private static func preparePlayback() {
+    guard !playbackReady else { return }
+    playbackReady = true
+    do {
+      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+    } catch {
+      NSLog("[printer-pip] audio session: \(error)")
+    }
+  }
+
+  // MARK: - Camera
+
+  private func connect(_ url: URL) {
+    if socket != nil && socketUrl == url { return }
+    disconnect()
+    display.flushAndRemoveImage()
+    let task = URLSession.shared.webSocketTask(with: url)
+    socket = task
+    socketUrl = url
+    task.resume()
+    receive(task)
+  }
+
+  private func disconnect() {
+    socket?.cancel(with: .goingAway, reason: nil)
+    socket = nil
+    socketUrl = nil
+  }
+
+  private func receive(_ task: URLSessionWebSocketTask) {
+    task.receive { [weak self] result in
+      guard let self else { return }
+      switch result {
+      case .success(.data(let unit)):
+        self.queue.async { self.enqueue(accessUnit: unit) }
+        self.receive(task)
+      case .success:
+        self.receive(task)
+      case .failure(let error):
+        DispatchQueue.main.async {
+          guard self.socket === task else { return }
+          NSLog("[printer-pip] camera socket closed: \(error.localizedDescription)")
+          self.socket = nil
+          self.socketUrl = nil
+          // The relay restarts the printer's stream on demand: try again shortly.
+          DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.refresh() }
+        }
+      }
+    }
+  }
+
+  /// Turns one Annex B access unit into a sample the display layer shows at once.
+  private func enqueue(accessUnit: Data) {
+    var body = Data()
+    for nal in Self.nalUnits(accessUnit) {
+      guard let first = nal.first else { continue }
+      switch first & 0x1f {
+      case 7: sps = nal
+      case 8: pps = nal
+      case 9: continue
+      default:
+        var length = UInt32(nal.count).bigEndian
+        body.append(Data(bytes: &length, count: 4))
+        body.append(nal)
+      }
+    }
+    if let sps, let pps, format == nil || !Self.matches(format, sps: sps, pps: pps) {
+      format = Self.formatDescription(sps: sps, pps: pps)
+    }
+    guard let format, !body.isEmpty, let sample = Self.sample(body, format: format) else { return }
+    DispatchQueue.main.async { [weak self] in
+      guard let self, self.mode == .camera else { return }
+      self.show(sample)
+    }
+  }
+
+  // MARK: - Layer
+
+  private func loadLayer() {
+    layerTask?.cancel()
+    guard let url = layerUri else {
+      layerImage = nil
+      showLayer()
+      return
+    }
+    let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+      guard let data, error == nil, let image = UIImage(data: data) else { return }
+      DispatchQueue.main.async {
+        guard let self, self.layerUri == url else { return }
+        self.layerImage = image
+        self.showLayer()
+      }
+    }
+    layerTask = task
+    task.resume()
+  }
+
+  private func startStill() {
+    showLayer()
+    guard stillTimer == nil else { return }
+    stillTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.showLayer() }
+  }
+
+  private func stopStill() {
+    stillTimer?.invalidate()
+    stillTimer = nil
+  }
+
+  /// Draws the layer the way the stage does: lit pixels in the tint, on black, at the LCD's shape.
+  private func showLayer() {
+    guard mode == .layer, stillTimer != nil || enabled || pipActive else { return }
+    let width = 960
+    let height = max(2, Int((CGFloat(width) / aspect).rounded() / 2) * 2)
+    guard let buffer = Self.pixelBuffer(width: width, height: height, draw: { context, size in
+      context.setFillColor(UIColor.black.cgColor)
+      context.fill(CGRect(origin: .zero, size: size))
+      guard let image = self.layerImage?.withTintColor(self.tint, renderingMode: .alwaysOriginal) else { return }
+      UIGraphicsPushContext(context)
+      image.draw(in: CGRect(origin: .zero, size: size))
+      UIGraphicsPopContext()
+    }), let sample = Self.sample(buffer) else { return }
+    show(sample)
+  }
+
+  private func show(_ sample: CMSampleBuffer) {
+    if #available(iOS 17.0, *) {
+      let renderer = display.sampleBufferRenderer
+      if renderer.status == .failed { renderer.flush() }
+      renderer.enqueue(sample)
+    } else {
+      if display.status == .failed { display.flush() }
+      display.enqueue(sample)
+    }
+  }
+
+  // MARK: - Picture in Picture
+
+  func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
+    pipActive = true
+    refresh()
+  }
+
+  func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
+    pipActive = false
+    refresh()
+  }
+
+  func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
+    NSLog("[printer-pip] could not start: \(error.localizedDescription)")
+    pipActive = false
+    refresh()
+  }
+
+  func pictureInPictureController(_ controller: AVPictureInPictureController, setPlaying playing: Bool) {}
+
+  /// A live source: no start, no end, nothing to seek.
+  func pictureInPictureControllerTimeRangeForPlayback(_ controller: AVPictureInPictureController) -> CMTimeRange {
+    CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
+  }
+
+  func pictureInPictureControllerIsPlaybackPaused(_ controller: AVPictureInPictureController) -> Bool { false }
+
+  func pictureInPictureController(_ controller: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions) {}
+
+  func pictureInPictureController(_ controller: AVPictureInPictureController, skipByInterval skipInterval: CMTime, completion completionHandler: @escaping () -> Void) {
+    completionHandler()
+  }
+
+  // MARK: - Helpers
+
+  static func color(hex: String) -> UIColor {
+    let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+    guard digits.count == 6 || digits.count == 8, let value = UInt64(digits, radix: 16) else { return .white }
+    let rgb = digits.count == 8 ? value >> 8 : value
+    return UIColor(
+      red: CGFloat((rgb >> 16) & 0xff) / 255,
+      green: CGFloat((rgb >> 8) & 0xff) / 255,
+      blue: CGFloat(rgb & 0xff) / 255,
+      alpha: 1
+    )
+  }
+
+  /// The NAL units of an Annex B byte stream, without their start codes.
+  static func nalUnits(_ data: Data) -> [Data] {
+    let bytes = [UInt8](data)
+    var starts: [(code: Int, body: Int)] = []
+    var i = 0
+    while i + 2 < bytes.count {
+      if bytes[i] == 0, bytes[i + 1] == 0, bytes[i + 2] == 1 {
+        let code = i > 0 && bytes[i - 1] == 0 ? i - 1 : i
+        starts.append((code, i + 3))
+        i += 3
+      } else {
+        i += 1
+      }
+    }
+    return starts.enumerated().compactMap { index, start in
+      let end = index + 1 < starts.count ? starts[index + 1].code : bytes.count
+      return end > start.body ? Data(bytes[start.body..<end]) : nil
+    }
+  }
+
+  private static func formatDescription(sps: Data, pps: Data) -> CMVideoFormatDescription? {
+    var format: CMVideoFormatDescription?
+    let status = sps.withUnsafeBytes { spsBytes in
+      pps.withUnsafeBytes { ppsBytes -> OSStatus in
+        let pointers = [
+          spsBytes.bindMemory(to: UInt8.self).baseAddress!,
+          ppsBytes.bindMemory(to: UInt8.self).baseAddress!,
+        ]
+        let sizes = [sps.count, pps.count]
+        return CMVideoFormatDescriptionCreateFromH264ParameterSets(
+          allocator: kCFAllocatorDefault,
+          parameterSetCount: 2,
+          parameterSetPointers: pointers,
+          parameterSetSizes: sizes,
+          nalUnitHeaderLength: 4,
+          formatDescriptionOut: &format
+        )
+      }
+    }
+    return status == noErr ? format : nil
+  }
+
+  /// True when `format` was made from these parameter sets.
+  private static func matches(_ format: CMVideoFormatDescription?, sps: Data, pps: Data) -> Bool {
+    guard let format else { return false }
+    func parameterSet(_ index: Int) -> Data? {
+      var pointer: UnsafePointer<UInt8>?
+      var size = 0
+      let status = CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
+        format, parameterSetIndex: index, parameterSetPointerOut: &pointer, parameterSetSizeOut: &size,
+        parameterSetCountOut: nil, nalUnitHeaderLengthOut: nil
+      )
+      guard status == noErr, let pointer else { return nil }
+      return Data(bytes: pointer, count: size)
+    }
+    return parameterSet(0) == sps && parameterSet(1) == pps
+  }
+
+  /// One length-prefixed access unit as a sample to show at once.
+  private static func sample(_ body: Data, format: CMVideoFormatDescription) -> CMSampleBuffer? {
+    var block: CMBlockBuffer?
+    guard CMBlockBufferCreateWithMemoryBlock(
+      allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: body.count, blockAllocator: kCFAllocatorDefault,
+      customBlockSource: nil, offsetToData: 0, dataLength: body.count, flags: kCMBlockBufferAssureMemoryNowFlag,
+      blockBufferOut: &block
+    ) == noErr, let block else { return nil }
+    let copied = body.withUnsafeBytes { bytes in
+      CMBlockBufferReplaceDataBytes(with: bytes.baseAddress!, blockBuffer: block, offsetIntoDestination: 0, dataLength: body.count)
+    }
+    guard copied == noErr else { return nil }
+    var sample: CMSampleBuffer?
+    var size = body.count
+    guard CMSampleBufferCreateReady(
+      allocator: kCFAllocatorDefault, dataBuffer: block, formatDescription: format, sampleCount: 1,
+      sampleTimingEntryCount: 0, sampleTimingArray: nil, sampleSizeEntryCount: 1, sampleSizeArray: &size,
+      sampleBufferOut: &sample
+    ) == noErr, let sample else { return nil }
+    displayImmediately(sample)
+    return sample
+  }
+
+  /// A drawn frame as a sample to show at once.
+  private static func sample(_ buffer: CVPixelBuffer) -> CMSampleBuffer? {
+    var format: CMVideoFormatDescription?
+    guard CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault, imageBuffer: buffer, formatDescriptionOut: &format) == noErr,
+          let format else { return nil }
+    var timing = CMSampleTimingInfo(duration: .invalid, presentationTimeStamp: CMClockGetTime(CMClockGetHostTimeClock()), decodeTimeStamp: .invalid)
+    var sample: CMSampleBuffer?
+    guard CMSampleBufferCreateReadyWithImageBuffer(
+      allocator: kCFAllocatorDefault, imageBuffer: buffer, formatDescription: format, sampleTiming: &timing, sampleBufferOut: &sample
+    ) == noErr, let sample else { return nil }
+    displayImmediately(sample)
+    return sample
+  }
+
+  private static func displayImmediately(_ sample: CMSampleBuffer) {
+    guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: true),
+          CFArrayGetCount(attachments) > 0 else { return }
+    let dictionary = unsafeBitCast(CFArrayGetValueAtIndex(attachments, 0), to: CFMutableDictionary.self)
+    CFDictionarySetValue(
+      dictionary,
+      Unmanaged.passUnretained(kCMSampleAttachmentKey_DisplayImmediately).toOpaque(),
+      Unmanaged.passUnretained(kCFBooleanTrue).toOpaque()
+    )
+  }
+
+  private static func pixelBuffer(width: Int, height: Int, draw: (CGContext, CGSize) -> Void) -> CVPixelBuffer? {
+    var buffer: CVPixelBuffer?
+    let attributes: [CFString: Any] = [
+      kCVPixelBufferCGImageCompatibilityKey: true,
+      kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+      kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+    ]
+    guard CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attributes as CFDictionary, &buffer) == kCVReturnSuccess,
+          let buffer else { return nil }
+    CVPixelBufferLockBaseAddress(buffer, [])
+    defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+    guard let context = CGContext(
+      data: CVPixelBufferGetBaseAddress(buffer), width: width, height: height, bitsPerComponent: 8,
+      bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+    ) else { return nil }
+    // UIKit draws top-down; the bitmap context is bottom-up.
+    context.translateBy(x: 0, y: CGFloat(height))
+    context.scaleBy(x: 1, y: -1)
+    draw(context, CGSize(width: width, height: height))
+    return buffer
+  }
+}

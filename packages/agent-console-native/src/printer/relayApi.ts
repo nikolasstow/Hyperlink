@@ -76,6 +76,9 @@ const readJson = async <A>(response: Response, schema: Schema.Codec<A, unknown>)
 export const fetchPrintHeader = async (relayBase: string, taskId: string): Promise<PrintHeader> =>
   (await readJson(await authedFetch(`${relayBase}/api/prints/${encodeURIComponent(taskId)}`, { cache: "no-store" }), Schema.Struct({ header: PrintHeader }))).header;
 
+/** The relay's camera as H.264 over a WebSocket: one access unit per message. */
+export const cameraSocketUrl = (relayBase: string): string => `${relayBase.replace(/^http/, "ws")}/api/camera.h264`;
+
 export const printPreviewUrl = (relayBase: string, taskId: string): string => `${relayBase}/api/prints/${encodeURIComponent(taskId)}/preview.png`;
 
 export const fetchFileInfo = async (relayBase: string, path: string): Promise<PrintHeader> =>

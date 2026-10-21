@@ -3,12 +3,14 @@
  * LCD's size.
  *
  * Phones cannot open the printer's RTSP stream either, so the camera comes
- * through the relay. The pane embeds the relay's own camera page
- * (`/?view=camera&bare=1`): on the relay's HTTPS address it plays the
- * camera's H.264 at 30 fps (WebCodecs needs a secure page); on plain HTTP it
- * shows MJPEG at 10 fps. The view exists only while its page shows and the
- * app is in the foreground, so the relay turns the printer's stream off again
- * soon after.
+ * through the relay. On the page, the picture is the Picture in Picture
+ * source under the stage (modules/printer-pip), which plays the relay's H.264
+ * natively; this pane is clear while it plays and draws only the chip and the
+ * full-screen button. Full screen embeds the relay's own camera page
+ * (`/?view=camera&bare=1`): H.264 at 30 fps on the relay's HTTPS address
+ * (WebCodecs needs a secure page), MJPEG at 10 fps on plain HTTP. The feed
+ * runs only while its page shows and the app is in the foreground (or the
+ * window is open), so the relay turns the printer's stream off again soon after.
  *
  * @internal
  */
@@ -64,10 +66,8 @@ export const CameraPane = (props: {
   if (full && !foreground) setFull(false);
 
   return (
-    <View style={[styles.frame, { width: props.width, height: props.height }]}>
-      {watching && !full ? (
-        <CameraView uri={uri} />
-      ) : (
+    <View style={[styles.frame, { width: props.width, height: props.height, backgroundColor: watching && !full ? "transparent" : "#000000" }]}>
+      {watching && !full ? null : (
         <View style={styles.idle}>
           <View style={[styles.play, { backgroundColor: withAlpha(palette.accent, 0.55) }]}>
             <SystemIcon name={full ? "pip" : "video.fill"} size={20} color="#ffffff" />
@@ -78,7 +78,7 @@ export const CameraPane = (props: {
       {watching && !full ? (
         <>
           <View style={styles.live}>
-            <Chip tone="uv" label={props.secureUrl !== undefined ? "Live" : "Live · 10 fps"} />
+            <Chip tone="uv" label="Live" />
           </View>
           <Pressable style={styles.expand} hitSlop={10} onPress={() => setFull(true)} accessibilityLabel="Full screen">
             <SystemIcon name="arrow.up.left.and.arrow.down.right" size={14} color="#ffffff" weight="semibold" />
@@ -98,7 +98,7 @@ export const CameraPane = (props: {
 };
 
 const styles = StyleSheet.create({
-  frame: { borderRadius: 16, overflow: "hidden", backgroundColor: "#000000" },
+  frame: { borderRadius: 16, overflow: "hidden" },
   web: { flex: 1, backgroundColor: "#000000" },
   idle: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   play: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.3)" },

@@ -20,6 +20,9 @@
         "NSSupportsLiveActivitiesFrequentUpdates": true,
         "NSUserActivityTypes": [
           "INSendMessageIntent"
+        ],
+        "UIBackgroundModes": [
+          "audio"
         ]
       },
       "entitlements": {
