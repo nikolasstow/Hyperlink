@@ -66,6 +66,8 @@ public final class DubzHomeProps: ExpoSwiftUI.ViewProps {
     var onPlus = EventDispatcher()
     /** The collapsed bar tapped — JS opens the window. */
     var onOpenComposer = EventDispatcher()
+    /** The window was dragged down past its minimum — JS closes it. */
+    var onClose = EventDispatcher()
 }
 
 public class DubzHomeModule: Module {
@@ -90,8 +92,11 @@ public class DubzHomeModule: Module {
         // 7: window STRIPPED to the floating composer bar (fixedSize, no fill)
         //    + an RN canvas sized to it, to nail touch pass-through / self-size
         //    / keyboard before layering suggestions + open/close back on.
+        // 8: + the RESIZABLE glass window — open shows a glass panel whose height
+        //    is a drag-driven @State (fixed per frame, so a bounded ScrollView
+        //    can't loop), grabber to resize, drag-down-to-close.
         Constants([
-            "apiVersion": 7,
+            "apiVersion": 8,
         ])
 
         View(DubzHomeView.self)
@@ -112,6 +117,9 @@ private let INPUT_MAX_LINES = 8
 // The whole-window glass: inner padding and corner radius (match BarWindow).
 private let WINDOW_PAD: CGFloat = 12
 private let WINDOW_RADIUS: CGFloat = 30
+// The open window's smallest drag height; below it a release closes Dubz.
+private let OPEN_MIN: CGFloat = 140
+private let OPEN_DEFAULT: CGFloat = 300
 
 /// Dubz home's suggestions surface. A bottom-anchored ScrollView that fills the
 /// window and scrolls BEHIND the top and bottom bars (contentMargins by the
@@ -126,10 +134,19 @@ public struct DubzHomeView: ExpoSwiftUI.View {
     // (seeded from props.draft to restore a saved draft).
     @State private var text = ""
     @FocusState private var composerFocused: Bool
+    // The open window's drag-driven height (remembered across open/close). The
+    // drag sets it; the glass is this tall; a bounded ScrollView fills the
+    // middle (fixed height → no self-sizing loop).
+    @State private var windowHeight: CGFloat = OPEN_DEFAULT
+    @State private var dragStartHeight: CGFloat = OPEN_DEFAULT
+    @State private var isDragging = false
 
     public init(props: DubzHomeProps) {
         self.props = props
     }
+
+    private var openMax: CGFloat { props.maxHeight > 0 ? CGFloat(props.maxHeight) : 500 }
+    private var clampedHeight: CGFloat { min(max(windowHeight, OPEN_MIN), openMax) }
 
     private var label: Color { props.labelColor ?? .primary }
     private var secondary: Color { props.secondaryColor ?? .secondary }
@@ -325,14 +342,83 @@ public struct DubzHomeView: ExpoSwiftUI.View {
     @ViewBuilder
     private var windowBody: some View {
         if #available(iOS 17.0, *) {
-            composerBarImpl
-                // Hug the content height (grow with lines); never fill — filling
-                // made the input the whole glass and blocked the page.
-                .fixedSize(horizontal: false, vertical: true)
-                .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
+            if props.open {
+                resizableWindow
+            } else {
+                // Collapsed: the composer bar; a tap opens the window.
+                composerBarImpl
+                    .fixedSize(horizontal: false, vertical: true)
+                    .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
+                    .contentShape(Rectangle())
+                    .onTapGesture { props.onOpenComposer([:]) }
+            }
         } else {
             EmptyView()
         }
+    }
+
+    // The RESIZABLE glass window: a glass panel whose height is the drag-driven
+    // @State (fixed per frame, NOT self-sizing — so the inner ScrollView is
+    // bounded and can't loop/freeze). The grabber drags the height; the glass
+    // resizes natively; the RN canvas tracks it (onLayoutContent).
+    @available(iOS 17.0, *)
+    private var resizableContent: some View {
+        VStack(spacing: GAP) {
+            grabber
+            ScrollView(showsIndicators: false) {
+                suggestionRows.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .defaultScrollAnchor(.bottom)
+            .frame(maxHeight: .infinity)
+            composerBarImpl
+        }
+        .padding(WINDOW_PAD)
+        .frame(width: CGFloat(props.contentWidth), height: clampedHeight)
+    }
+
+    @available(iOS 17.0, *)
+    @ViewBuilder
+    private var resizableWindow: some View {
+        if #available(iOS 26.0, *) {
+#if compiler(>=6.2)
+            // The container is the shared sampling region so the composer pill
+            // and chip glass can sit inside the window glass.
+            GlassEffectContainer(spacing: GAP) {
+                resizableContent
+                    .glassEffect(Glass.regular, in: RoundedRectangle(cornerRadius: WINDOW_RADIUS))
+            }
+            .border(props.debug ? Color.green : Color.clear, width: props.debug ? 1 : 0)
+#else
+            resizableContent.background(RoundedRectangle(cornerRadius: WINDOW_RADIUS).fill(.ultraThinMaterial))
+#endif
+        } else {
+            resizableContent.background(RoundedRectangle(cornerRadius: WINDOW_RADIUS).fill(.ultraThinMaterial))
+        }
+    }
+
+    // Drag the grabber to resize (up = taller). Release below the minimum closes.
+    @available(iOS 17.0, *)
+    private var grabber: some View {
+        Capsule()
+            .fill(secondary.opacity(0.4))
+            .frame(width: 40, height: 5)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if !isDragging {
+                            isDragging = true
+                            dragStartHeight = clampedHeight
+                        }
+                        windowHeight = dragStartHeight - value.translation.height
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        if windowHeight < OPEN_MIN { props.onClose([:]) }
+                        windowHeight = clampedHeight
+                    }
+            )
     }
 
     // MARK: - Rows

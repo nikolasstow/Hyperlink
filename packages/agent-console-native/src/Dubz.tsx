@@ -228,7 +228,7 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
   const NativeComposerView = DubzHomeNativeView;
   const { open, instant, onOpen, onClose, inputRef, context, pageBack } = props;
   const suggestions = React.useMemo(() => suggestionsFor(context), [context]);
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const { address } = useAppContext();
   const text = React.useSyncExternalStore(subscribeDraft, () => draft);
 
@@ -437,11 +437,12 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
         >
           <NativeComposerView
             window
-            open
+            open={winState.phase === "open"}
             sessions={NO_SESSIONS}
-            contentWidth={screenW - 48}
+            contentWidth={screenW - 24}
             topInset={0}
             bottomInset={0}
+            maxHeight={Math.round(screenH * 0.6)}
             draft={text}
             placeholder={`Ask ${AGENT_NAME}…`}
             labelColor={textColors.label}
@@ -451,6 +452,8 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
             sendActiveFill={themeColors.secondaryFill}
             sendMutedFill={themeColors.secondaryMutedFill}
             debug={DUBZ_DEBUG}
+            onOpenComposer={onOpen}
+            onClose={close}
             onDraftChange={(event) => setDraft(event.nativeEvent.text)}
             onPlus={noop}
             onSend={(event) => {

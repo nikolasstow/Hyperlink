@@ -112,6 +112,8 @@ export interface DubzHomeNativeProps extends ViewProps {
   readonly onPlus?: (event: NativeSyntheticEvent<Record<string, never>>) => void;
   /** The collapsed bar tapped — JS opens the window. */
   readonly onOpenComposer?: (event: NativeSyntheticEvent<Record<string, never>>) => void;
+  /** The window was dragged down past its minimum — JS closes it. */
+  readonly onClose?: (event: NativeSyntheticEvent<Record<string, never>>) => void;
 }
 
 const nativeModule =
@@ -133,7 +135,7 @@ export const isDubzComposerNative = apiVersion >= 3;
 /** Whether this build carries the whole-window native view with the BOUNDED
  * canvas fix, so JS may run the all-native Dubz window. A build behind (incl.
  * the v4 window that froze the UI) → the RN BarWindow. */
-export const isDubzWindowNative = apiVersion >= 7;
+export const isDubzWindowNative = apiVersion >= 8;
 
 /** The native Dubz home surface, or undefined where this build has none (or too old). */
 export const DubzHomeNativeView: React.ComponentType<DubzHomeNativeProps> | undefined = available
