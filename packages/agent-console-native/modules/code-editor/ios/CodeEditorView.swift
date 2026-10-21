@@ -64,6 +64,9 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
     /// True while Return's indent goes in, so that edit is not indented again.
     private var isIndenting = false
     private var periodShortcut = PeriodShortcut()
+    /// True while the period shortcut's two spaces go in, so that edit is
+    /// not taken for typing.
+    private var isPuttingSpaces = false
     /// Where to rest the code once it is laid out (a file reopening where it
     /// was left); applied once.
     private var pendingOffset: CGPoint?
@@ -982,13 +985,22 @@ final class CodeEditorView: ExpoView, TextViewDelegate, UIScrollViewDelegate {
             return false
         }
         // iOS's period shortcut: what was typed was two spaces.
-        if let over = periodShortcut.spaces(over: range, in: textView.text as NSString, replacement: text),
-           let from = textView.position(from: textView.beginningOfDocument, offset: over.location),
-           let to = textView.position(from: from, offset: over.length),
-           let spaces = textView.textRange(from: from, to: to) {
-            suggestion.trace("  period shortcut: two spaces")
-            textView.replace(spaces, withText: "  ")
+        switch isPuttingSpaces ? PeriodShortcut.Action.keep : periodShortcut.action(over: range, in: textView.text as NSString, replacement: text) {
+        case .keep:
+            break
+        case .drop:
+            suggestion.trace("  period shortcut: its space dropped")
             return false
+        case let .spaces(over):
+            if let from = textView.position(from: textView.beginningOfDocument, offset: over.location),
+               let to = textView.position(from: from, offset: over.length),
+               let spaces = textView.textRange(from: from, to: to) {
+                suggestion.trace("  period shortcut: two spaces")
+                isPuttingSpaces = true
+                textView.replace(spaces, withText: "  ")
+                isPuttingSpaces = false
+                return false
+            }
         }
         // Return indents the new line (AutoIndent.swift), as one edit.
         if text == "\n", range.length == 0, !isApplyingText, !isIndenting, !suggestion.isAccepting {

@@ -14,7 +14,8 @@ struct InlineSuggestionNative: Decodable {
 /// was made for; typing what it starts with shortens it (typed through). A
 /// tap on it takes it; so does a double space (the second
 /// space takes it, and the first is taken back; iOS's period shortcut, which
-/// turns two spaces into ". ", counts too). Anything else typed lets it go.
+/// turns two spaces into ". " or into "." and then " ", counts too).
+/// Anything else typed lets it go.
 final class InlineSuggestion {
     /// The theme's ghost text colour (`editorGhostText.foreground`).
     var ghostColor = UIColor(white: 1, alpha: 0.34) {
@@ -54,6 +55,9 @@ final class InlineSuggestion {
     /// shortcut, done as a delete then an insert): that insert takes the
     /// suggestion.
     private var pendingPeriod: Int?
+    /// iOS's period shortcut put "." over the first space and took the
+    /// suggestion: the " " it puts in next is dropped.
+    private var dropsSpace = false
     /// True while the suggestion is put in, so that edit is not taken for
     /// typing.
     private(set) var isAccepting = false
@@ -122,7 +126,17 @@ final class InlineSuggestion {
     /// Returns false when the change took the suggestion instead (the editor
     /// then does nothing more with it).
     func shouldChange(in range: NSRange, replacementText text: String) -> Bool {
-        guard !isAccepting, let suggestion = current else {
+        if isAccepting {
+            return true
+        }
+        // iOS's period shortcut, the " " after its ".": not wanted.
+        if dropsSpace {
+            dropsSpace = false
+            if text == " " && range.length == 0 {
+                return false
+            }
+        }
+        guard let suggestion = current else {
             return true
         }
         // iOS's period shortcut, second half: ". " where the space was.
@@ -141,6 +155,13 @@ final class InlineSuggestion {
             }
             if text == ". " && range.location == space && range.length == 1 {
                 accept(replacing: NSRange(location: space, length: 1))
+                return false
+            }
+            // iOS's period shortcut in two edits: "." over the space, then
+            // " " after it.
+            if text == "." && range.location == space && range.length == 1 {
+                accept(replacing: NSRange(location: space, length: 1))
+                dropsSpace = true
                 return false
             }
             // iOS's period shortcut, first half: the space taken back. The
