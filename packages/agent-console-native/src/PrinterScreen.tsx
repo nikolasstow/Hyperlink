@@ -302,6 +302,16 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             layerUri={hasJob ? layerUri : undefined}
             tint={towardWhite(palette.accent, 0.88)}
             aspect={lcdMm.width / lcdMm.height}
+            phase={active ? phaseLabel(info?.Status) : undefined}
+            exposing={exposing}
+            active={active}
+            glowColor={palette.accent}
+            phaseColor={towardWhite(palette.accent, 0.7)}
+            dotColor={palette.accentInk}
+            percent={hasJob ? percent : undefined}
+            progressColors={!active && info?.Status === PHASE_COMPLETE ? [palette.ok, palette.ok] : paused ? [palette.warn, palette.warn] : [palette.second, palette.accent]}
+            elapsedMs={active && info?.CurrentTicks !== undefined ? info.CurrentTicks + sincePush : undefined}
+            remainingMs={active ? remaining : undefined}
             enabled={focused && view === "Print" && (page === "Camera" ? printer.relayReachable : hasJob)}
           />
         )}

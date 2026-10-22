@@ -1,7 +1,8 @@
 /**
  * The source of the printer's Picture in Picture: the camera or the current
  * layer, whichever page of the stage was open. iOS starts the window by
- * itself when the owner leaves the app while `enabled` is on. iOS only;
+ * itself when the owner leaves the app while `enabled` is on. Its skip
+ * buttons switch between the camera and the layer. iOS only;
  * renders nothing elsewhere.
  *
  * @internal
@@ -20,6 +21,25 @@ export type PrinterPipProps = ViewProps & {
   readonly tint: string;
   /** Width over height of the LCD, for the layer frame. */
   readonly aspect: number;
+  /** The phase label while a print runs ("Exposing", "Lifting", …). */
+  readonly phase: string | undefined;
+  /** True while the printer exposes a layer: the lit pixels glow. */
+  readonly exposing: boolean;
+  /** True while a print runs. */
+  readonly active: boolean;
+  /** The glow around lit pixels. */
+  readonly glowColor: string;
+  /** The phase text while the printer exposes. */
+  readonly phaseColor: string;
+  /** The dot in the phase chip while the printer exposes. */
+  readonly dotColor: string;
+  /** The print's progress, 0 to 100. */
+  readonly percent: number | undefined;
+  /** The progress bar's gradient, left to right. */
+  readonly progressColors: ReadonlyArray<string>;
+  /** The print's elapsed and remaining time: the window's timeline. */
+  readonly elapsedMs: number | undefined;
+  readonly remainingMs: number | undefined;
   /** True while the stage is on screen: only then does leaving the app start the window. */
   readonly enabled: boolean;
 };
