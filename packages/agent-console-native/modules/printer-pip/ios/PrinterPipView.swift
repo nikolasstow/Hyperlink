@@ -15,8 +15,8 @@ import UIKit
 ///
 /// The layer frame matches the stage's LCD (`PrinterStage.tsx` `Lcd`): the lit
 /// pixels glow while the printer exposes and dim while it lifts and drops, and
-/// the phase shows top right, the percent top left, and the progress bar
-/// along the bottom.
+/// the phase shows top right and the percent top left. The window's own
+/// timeline is the progress bar.
 ///
 /// The window's skip back and skip forward buttons switch between the camera
 /// and the layer. The app's stage page sets the view again when the owner
@@ -40,8 +40,6 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
   var dotColor: UIColor = .white { didSet { showLayer() } }
   /// The print's progress, 0 to 100; nil with no print.
   var percent: Double? { didSet { if percent != oldValue { showLayer() } } }
-  /// The progress bar's gradient, left to right (the stage's `Progress` fill).
-  var progressColors: [UIColor] = [] { didSet { showLayer() } }
   var elapsedMs: Double? { didSet { updateTimeline() } }
   var remainingMs: Double? { didSet { updateTimeline() } }
   /// The window's timeline: the print's start and end on the host clock.
@@ -308,14 +306,14 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
         self.drawPhase(phase, scale: scale, width: size.width)
       }
       if let percent = self.percent {
-        self.drawProgress(percent, scale: scale, size: size)
+        self.drawPercent(percent, scale: scale)
       }
     }), let sample = Self.sample(buffer) else { return }
     show(sample)
   }
 
-  /// The percent in a chip top left, and the bar along the bottom.
-  private func drawProgress(_ percent: Double, scale: CGFloat, size: CGSize) {
+  /// The percent in a chip top left.
+  private func drawPercent(_ percent: Double, scale: CGFloat) {
     let font = UIFont.monospacedDigitSystemFont(ofSize: 11 * scale, weight: .semibold)
     let text = NSAttributedString(
       string: String(format: "%.1f%%", min(100, max(0, percent))),
@@ -326,18 +324,6 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
     Self.drawChip(chip, scale: scale)
     text.draw(at: CGPoint(x: chip.minX + 8 * scale, y: chip.midY - textSize.height / 2))
 
-    let track = CGRect(x: 8 * scale, y: size.height - 12 * scale, width: size.width - 16 * scale, height: 4 * scale)
-    UIColor(white: 0.5, alpha: 0.35).setFill()
-    UIBezierPath(roundedRect: track, cornerRadius: track.height / 2).fill()
-    let fill = CGRect(x: track.minX, y: track.minY, width: track.width * CGFloat(min(100, max(0, percent)) / 100), height: track.height)
-    guard fill.width > 0, let context = UIGraphicsGetCurrentContext() else { return }
-    let colors = progressColors.isEmpty ? [tint, tint] : progressColors.count == 1 ? progressColors + progressColors : progressColors
-    guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors.map(\.cgColor) as CFArray, locations: nil) else { return }
-    context.saveGState()
-    UIBezierPath(roundedRect: fill, cornerRadius: track.height / 2).addClip()
-    // The gradient spans the bar's fill, as `LinearGradient` does on the stage.
-    context.drawLinearGradient(gradient, start: CGPoint(x: fill.minX, y: 0), end: CGPoint(x: fill.maxX, y: 0), options: [])
-    context.restoreGState()
   }
 
   /// The stage's dark glass chip.

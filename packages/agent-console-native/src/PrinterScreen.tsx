@@ -309,7 +309,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             phaseColor={towardWhite(palette.accent, 0.7)}
             dotColor={palette.accentInk}
             percent={hasJob ? percent : undefined}
-            progressColors={!active && info?.Status === PHASE_COMPLETE ? [palette.ok, palette.ok] : paused ? [palette.warn, palette.warn] : [palette.second, palette.accent]}
             elapsedMs={active && info?.CurrentTicks !== undefined ? info.CurrentTicks + sincePush : undefined}
             remainingMs={active ? remaining : undefined}
             enabled={focused && view === "Print" && (page === "Camera" ? printer.relayReachable : hasJob)}

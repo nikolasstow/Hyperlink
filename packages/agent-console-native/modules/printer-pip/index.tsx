@@ -35,8 +35,6 @@ export type PrinterPipProps = ViewProps & {
   readonly dotColor: string;
   /** The print's progress, 0 to 100. */
   readonly percent: number | undefined;
-  /** The progress bar's gradient, left to right. */
-  readonly progressColors: ReadonlyArray<string>;
   /** The print's elapsed and remaining time: the window's timeline. */
   readonly elapsedMs: number | undefined;
   readonly remainingMs: number | undefined;

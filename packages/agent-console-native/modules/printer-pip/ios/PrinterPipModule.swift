@@ -41,9 +41,6 @@ public class PrinterPipModule: Module {
       Prop("percent") { (view: PrinterPipView, percent: Double?) in
         view.percent = percent
       }
-      Prop("progressColors") { (view: PrinterPipView, hexes: [String]) in
-        view.progressColors = hexes.map { PrinterPipView.color(hex: $0) }
-      }
       Prop("elapsedMs") { (view: PrinterPipView, ms: Double?) in
         view.elapsedMs = ms
       }
