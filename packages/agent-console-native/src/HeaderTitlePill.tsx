@@ -23,6 +23,20 @@ import { useTextColors } from "./theme";
 
 const MIN_WIDTH = 56;
 const MAX_WIDTH_RATIO = 0.6;
+/** The back button's end, from the screen's left edge (iOS 26 nav bar). */
+const BACK_END = 63;
+/** One right-hand bar button's width, and the bar's right margin. */
+const BAR_BUTTON_WIDTH = 55;
+const BAR_MARGIN = 20;
+/** The space iOS keeps between the title and the bar's items. */
+const ITEM_GAP = 6;
+
+/** The width between the back button and `buttons` right-hand bar buttons.
+ * iOS centers a title on the screen only when it fits there; a title that
+ * does not goes next to the back button. A title as wide as the gap fills
+ * it, so the pill centers in the gap. */
+const gapWidth = (buttons: number, screenWidth: number): number =>
+  screenWidth - BACK_END - BAR_MARGIN - buttons * BAR_BUTTON_WIDTH - ITEM_GAP * 2;
 
 /** The pill's width for a title (as drawn below), so a page can keep its
  * other pieces clear of it without measuring. */
@@ -33,15 +47,18 @@ export const HeaderTitlePill = (props: {
   readonly title: string;
   /** Trailing status dot: omit for no dot. */
   readonly dot?: "connected" | "disconnected";
+  /** The right-hand bar buttons, when they are too many for a title centered on the screen: the pill then centers between them and the back button. */
+  readonly rightButtons?: number;
 }): React.ReactElement => {
   const textColors = useTextColors();
   const { width: screenWidth } = useWindowDimensions();
   const hasDot = props.dot !== undefined;
   const pillWidth = headerTitlePillWidth(props.title, hasDot, screenWidth);
+  const slotWidth = props.rightButtons === undefined ? pillWidth : Math.max(pillWidth, gapWidth(props.rightButtons, screenWidth));
 
   return (
     <Host
-      style={{ width: pillWidth, height: PILL_HEIGHT }}
+      style={{ width: slotWidth, height: PILL_HEIGHT }}
       // Ignores the safe area: otherwise SwiftUI pads it as it moves under the
       // status bar (Files slides its title up and away), and it stays behind.
       ignoreSafeArea="all"
@@ -54,6 +71,7 @@ export const HeaderTitlePill = (props: {
           padding({ horizontal: PILL_PAD_H }),
           glassEffect({ glass: { variant: "regular" }, shape: "capsule" }),
           shadow(PILL_SHADOW),
+          frame({ width: slotWidth, height: PILL_HEIGHT }),
         ]}
       >
         <UIText modifiers={[font({ size: PILL_FONT_SIZE, weight: "semibold" }), foregroundStyle(textColors.label), lineLimit(1)]}>

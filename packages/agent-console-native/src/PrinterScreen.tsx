@@ -230,7 +230,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   // The header: the view's title, and the buttons at the top right. The one that is on goes back to the print.
   React.useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: () => <HeaderTitlePill title={view === "Print" ? "Printer" : view} />,
+      headerTitle: () => <HeaderTitlePill title={view === "Print" ? "Printer" : view} rightButtons={BUTTONS.length} />,
       unstable_headerRightItems: () =>
         BUTTONS.map((button): NativeStackHeaderItem => {
           const on = view === button.view;
