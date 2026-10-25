@@ -20,11 +20,16 @@ import { loadAutosaveSettings } from "./src/files/autosaveSettings";
 import { loadDirtyEdits } from "./src/files/fileEdits";
 import { loadKept } from "./src/files/fileKeep";
 import { startOutbox } from "./src/outbox/useOutbox";
+import { mark, watchErrors } from "./src/diagnostics/launchTrail";
 
 // Every bare `fetch` in the app is expo/fetch (it can stream a response
 // body; React Native's own reads it whole). Must run before any module
 // reaches for `fetch`, hence first here.
 globalThis.fetch = expoFetch;
+
+// The launch trail (diagnostics/launchTrail.ts): JS errors, and each step of the launch.
+watchErrors();
+mark("JS started");
 
 // The outbox resumes what was queued (and defines its background task, which
 // iOS may launch the app straight into).

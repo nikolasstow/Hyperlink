@@ -8,6 +8,8 @@
  * @internal
  */
 import { keepNav, keptNavNow } from "./navigation/useKeptNav";
+import { describeTrail, mark, markStable, setTrailRelay, STABLE_MS, unfinishedPrevious } from "./diagnostics/launchTrail";
+import { showToast } from "./AppToast";
 import { DarkTheme, DefaultTheme, NavigationContainer, useNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import * as React from "react";
@@ -169,6 +171,23 @@ export const RootNavigator = (): React.ReactElement => {
     return pages.length === 0 ? undefined : { routes: pages.map((page) => (page.params === undefined ? { name: page.name } : { name: page.name, params: page.params })) };
   });
 
+  // The launch trail: what this launch opens, how the app state goes, and when it has run long enough to count.
+  React.useEffect(() => {
+    mark(`navigator mounted, opening ${initialState === undefined ? "Home" : initialState.routes.map((route) => route.name).join(" > ")}`);
+    const subscription = AppState.addEventListener("change", (state) => mark(`app state: ${state}`));
+    const stable = setTimeout(markStable, STABLE_MS);
+    void unfinishedPrevious().then((last) => {
+      if (last === undefined) return;
+      const stopped = last.steps[last.steps.length - 1]?.step ?? "nothing";
+      mark(`the last launch (${last.id}) did not last ${STABLE_MS / 1000} s; its trail:\n${describeTrail(last)}`);
+      showToast({ message: `The last launch stopped after: ${stopped.split("\n")[0]}` });
+    });
+    return () => {
+      subscription.remove();
+      clearTimeout(stable);
+    };
+  }, [initialState]);
+
   // Establish the unread "setup date" on first launch, so pre-existing sessions
   // are treated as already-read rather than flooding Unread.
   React.useEffect(() => {
@@ -188,7 +207,9 @@ export const RootNavigator = (): React.ReactElement => {
   // so the first server's relay is the printer's.
   const printerServer = useServers()[0];
   React.useEffect(() => {
-    if (printerServer !== undefined) setPrinterRelay(relayBaseOf(printerServer.address));
+    if (printerServer === undefined) return;
+    setPrinterRelay(relayBaseOf(printerServer.address));
+    setTrailRelay(relayBaseOf(printerServer.address));
   }, [printerServer]);
 
   // The printer Live Activity follows the theme's primary colour.

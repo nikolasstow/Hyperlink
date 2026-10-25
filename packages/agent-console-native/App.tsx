@@ -23,6 +23,7 @@ import { ConversationPreloader } from "./src/conversations/ConversationPreloader
 import { LiveFilesFollower } from "./src/files/useLiveFiles";
 import { AppToastHost } from "./src/AppToast";
 import { ErrorBoundary } from "./src/ErrorBoundary";
+import { mark } from "./src/diagnostics/launchTrail";
 import { LaunchNavigator } from "./src/LaunchNavigator";
 import { Effect } from "effect";
 import { HttpClientError } from "effect/http";
@@ -102,6 +103,9 @@ const AppInner = (): React.ReactElement => {
   // the whole tree (LaunchNavigator → RootNavigator), and animating that made
   // the content slide down-and-up a few pixels. Swap instantly instead.
   const [screen, setScreen] = React.useState<Screen>({ step: "loading" });
+  React.useEffect(() => {
+    mark(`app screen: ${screen.step}`);
+  }, [screen.step]);
   const [addressInput, setAddressInput] = React.useState("");
   const [rootDirInput, setRootDirInput] = React.useState("");
   const [pairingCodeInput, setPairingCodeInput] = React.useState("");

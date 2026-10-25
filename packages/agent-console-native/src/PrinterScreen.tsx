@@ -36,6 +36,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { PrinterPip } from "../modules/printer-pip";
+import { mark } from "./diagnostics/launchTrail";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { useDirectLayer } from "./printer/directLayers";
 import { CameraPane } from "./printer/PrinterCamera";
@@ -152,6 +153,15 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const printer = usePrinterLink(serverAddress);
   const [measure, setMeasure] = useMeasure();
   const runningUploads = useRunningUploads();
+  // The launch trail: the printer page is the suspect in a launch that dies.
+  React.useEffect(() => {
+    mark("printer page mounted");
+    return () => mark("printer page unmounted");
+  }, []);
+  const linkStep = `printer link: ${printer.link.kind}${printer.link.kind === "Open" ? ` via ${printer.link.via}` : ""}`;
+  React.useEffect(() => {
+    mark(linkStep);
+  }, [linkStep]);
   useUploadWatch(printer.relayBase, printer.relayReachable);
   // The view the owner chose with a header button; until then, the print, or Files when no print runs.
   const [chosen, setChosen] = React.useState<PageView | undefined>(undefined);

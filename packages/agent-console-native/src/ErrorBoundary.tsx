@@ -7,6 +7,7 @@
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors } from "./colors";
+import { mark } from "./diagnostics/launchTrail";
 
 type Props = { readonly children: React.ReactNode };
 type State = { readonly error: Error | undefined; readonly componentStack: string | undefined };
@@ -23,6 +24,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     // bare message/stack misses (and it survives here: EAS bundles unminified
     // for Hermes). Shown below so a release crash is self-diagnosing.
     console.error("[ErrorBoundary]", error, info.componentStack);
+    mark(`render error: ${error.message}\n${(info.componentStack ?? "").split("\n").slice(0, 8).join("\n")}`);
     this.setState({ componentStack: info.componentStack ?? undefined });
   }
 
