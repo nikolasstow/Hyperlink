@@ -73,6 +73,30 @@ export const useLoadedUri = (uri: string | undefined): string | undefined => {
   return shown;
 };
 
+/**
+ * The layer, with no blank frame between two layers: the last image stays on
+ * screen until the next one has drawn under it. A scrub changes the layer on
+ * every frame.
+ */
+const LayerImage = (props: { readonly uri: string; readonly tint: string }): React.ReactElement => {
+  const [shown, setShown] = React.useState(props.uri);
+  return (
+    <>
+      <Image source={{ uri: shown }} style={StyleSheet.absoluteFill} resizeMode="stretch" tintColor={props.tint} />
+      {props.uri !== shown ? (
+        <Image
+          key={props.uri}
+          source={{ uri: props.uri }}
+          style={[StyleSheet.absoluteFill, styles.incoming]}
+          resizeMode="stretch"
+          tintColor={props.tint}
+          onLoad={() => setShown(props.uri)}
+        />
+      ) : null}
+    </>
+  );
+};
+
 const Hud = (props: { readonly children: React.ReactNode; readonly style: object }): React.ReactElement => <View style={[styles.hud, props.style]}>{props.children}</View>;
 
 /** The printer's LCD: dark glass, the lit layer, the phase, and (with `measure`) a 10 mm grid, a ruler, and the layer number. */
@@ -138,7 +162,7 @@ export const Lcd = (props: {
             },
           ]}
         >
-          <Image source={{ uri: props.uri }} style={StyleSheet.absoluteFill} resizeMode="stretch" tintColor={towardWhite(palette.accent, 0.88)} />
+          <LayerImage uri={props.uri} tint={towardWhite(palette.accent, 0.88)} />
         </Animated.View>
       ) : (
         <View style={styles.lcdEmpty}>
@@ -378,6 +402,7 @@ export const Controls = (props: { readonly phase: number | undefined; readonly s
 };
 
 const styles = StyleSheet.create({
+  incoming: { opacity: 0 },
   lcd: { backgroundColor: LCD, borderRadius: 16, overflow: "hidden", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.1)" },
   lcdEmpty: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center", padding: 20 },
   lcdNote: { color: "rgba(244,245,249,0.5)", fontSize: 13, textAlign: "center" },

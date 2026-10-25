@@ -54,6 +54,11 @@ import { towardWhite, useScreenBackground, useTextColors, useTheme, withAlpha } 
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerPrinter">;
 
+/** How long the grabber takes to glide back to live: longer for a longer way, within these bounds. */
+const SWEEP_MIN_MS = 350;
+const SWEEP_MAX_MS = 900;
+const SWEEP_MS_PER_LAYER = 0.25;
+
 const linkChip = (link: LinkState): { readonly label: string; readonly tone: Tone } => {
   switch (link.kind) {
     case "Open":
@@ -197,7 +202,20 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const viewIndex = scrubLayer !== undefined ? layerIndexOf(scrubLayer, total) : index;
   // The layer under the finger while the owner drags the grabber.
   const [dragLayer, setDragLayer] = React.useState<number | undefined>(undefined);
-  const dragIndex = hasJob && dragLayer !== undefined && total > 0 ? layerIndexOf(Math.min(dragLayer, total), total) : undefined;
+  // The layer on screen while the grabber sweeps back to live.
+  const [sweep, setSweep] = React.useState<number | undefined>(undefined);
+  const sweepFrame = React.useRef<number | undefined>(undefined);
+  const liveLayer = React.useRef(current);
+  liveLayer.current = current;
+  const stopSweep = React.useCallback((): void => {
+    if (sweepFrame.current !== undefined) cancelAnimationFrame(sweepFrame.current);
+    sweepFrame.current = undefined;
+    setSweep(undefined);
+  }, []);
+  React.useEffect(() => stopSweep, [stopSweep]);
+  const passing = dragLayer ?? sweep;
+  // The LCD shows these layers from the pack on the phone, with no request.
+  const dragIndex = hasJob && passing !== undefined && total > 0 ? layerIndexOf(Math.min(passing, total), total) : undefined;
   // Ticks only arrive with a push; between pushes, count on from the last one.
   const sincePush = active && !paused && printer.updatedAt !== undefined ? now - printer.updatedAt : 0;
   const remaining = info?.TotalTicks !== undefined && info.CurrentTicks !== undefined ? info.TotalTicks - info.CurrentTicks - sincePush : undefined;
@@ -249,8 +267,31 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
           ? `Could not read the layer: ${directLayer.error}`
           : "Reading the layer from the printer…"
       : printer.relayReachable
-        ? "Loading the layer…"
+        ? pack.state?.kind === "Building"
+          ? `Getting every layer ready for scrubbing: ${pack.state.done.toLocaleString()} of ${pack.state.total.toLocaleString()}`
+          : pack.state?.kind === "Downloading"
+            ? "Downloading every layer for scrubbing…"
+            : "Loading the layer…"
         : "Layer images come from the relay, which is not reachable.";
+
+  // Back to live: the grabber glides to the printer's layer, and the LCD shows each layer it passes.
+  const sweepToLive = (from: number): void => {
+    setScrub(undefined);
+    const started = Date.now();
+    const duration = Math.min(SWEEP_MAX_MS, SWEEP_MIN_MS + Math.abs(liveLayer.current - from) * SWEEP_MS_PER_LAYER);
+    const frame = (): void => {
+      const t = Math.min(1, (Date.now() - started) / duration);
+      const eased = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+      if (t >= 1) {
+        sweepFrame.current = undefined;
+        setSweep(undefined);
+        return;
+      }
+      setSweep(Math.round(from + (liveLayer.current - from) * eased));
+      sweepFrame.current = requestAnimationFrame(frame);
+    };
+    frame();
+  };
 
   const state = statusOf(status, online);
   const link = linkChip(printer.link);
@@ -295,9 +336,17 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       width={lcdWidth}
       totalLayers={total}
       liveLayer={current}
-      viewedLayer={scrubLayer}
-      onScrub={(layer) => setScrub(layer === undefined || info?.TaskId === undefined ? undefined : { taskId: info.TaskId, layer })}
-      onDrag={setDragLayer}
+      viewedLayer={sweep ?? scrubLayer}
+      onScrub={(layer) => {
+        stopSweep();
+        if (layer !== undefined && info?.TaskId !== undefined) setScrub({ taskId: info.TaskId, layer });
+        else if (scrubLayer !== undefined && pack.state?.kind === "Ready") sweepToLive(scrubLayer);
+        else setScrub(undefined);
+      }}
+      onDrag={(layer) => {
+        if (layer !== undefined) stopSweep();
+        setDragLayer(layer);
+      }}
       percent={percent}
       elapsedMs={info?.CurrentTicks === undefined ? undefined : info.CurrentTicks + sincePush}
       remainingMs={remaining}
