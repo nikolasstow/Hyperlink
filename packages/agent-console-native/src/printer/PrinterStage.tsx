@@ -10,13 +10,17 @@
  * exposes the layer and dims while it lifts and drops. The glow and the
  * progress bar take the theme's colours (printer/ui.tsx `usePalette`).
  *
+ * The progress bar's grabber scrubs through the layers: the LCD shows the
+ * layer under it, and Live goes back to the layer the printer is on.
+ *
  * @internal
  */
 import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
-import { Alert, Animated, Image, StyleSheet, Text, View } from "react-native";
+import { Alert, Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Svg, { Line, Text as SvgText } from "react-native-svg";
-import { towardWhite, useTextColors } from "../theme";
+import { towardWhite, useTextColors, withAlpha } from "../theme";
 import { fmtDuration } from "./printerFormat";
 import { CMD_PAUSE, CMD_RESUME, CMD_STOP, controlAckLabel, PHASE_PAUSED, PHASE_PAUSING, PHASE_STOPPING, type ControlCmd } from "./sdcp";
 import { Button, Dot, LCD, usePalette } from "./ui";
@@ -77,6 +81,8 @@ export const Lcd = (props: {
   readonly lcdMm: { readonly width: number; readonly height: number };
   readonly uri: string | undefined;
   readonly exposing: boolean;
+  /** Fully lit without the exposing mark: a layer the owner scrubbed to. */
+  readonly lit?: boolean;
   readonly active: boolean;
   readonly layer: number | undefined;
   readonly phase: string | undefined;
@@ -85,10 +91,11 @@ export const Lcd = (props: {
 }): React.ReactElement => {
   const palette = usePalette();
   const height = props.width * (props.lcdMm.height / props.lcdMm.width);
-  const glow = React.useRef(new Animated.Value(props.exposing ? 1 : 0)).current;
+  const bright = props.exposing || props.lit === true;
+  const glow = React.useRef(new Animated.Value(bright ? 1 : 0)).current;
   React.useEffect(() => {
-    Animated.timing(glow, { toValue: props.exposing ? 1 : 0, duration: 320, useNativeDriver: true }).start();
-  }, [glow, props.exposing]);
+    Animated.timing(glow, { toValue: bright ? 1 : 0, duration: 320, useNativeDriver: true }).start();
+  }, [glow, bright]);
   const perMm = props.width / props.lcdMm.width;
   const columns = Math.floor(props.lcdMm.width / 10);
   const rows = Math.floor(props.lcdMm.height / 10);
@@ -153,8 +160,86 @@ export const Lcd = (props: {
   );
 };
 
+/**
+ * How long the grabber rests before the LCD asks for the layer under it. Each
+ * layer image is a read from the printer's file server, so a drag asks for the
+ * layers it stops on, not every layer it passes.
+ */
+const SCRUB_SETTLE_MS = 200;
+const GRABBER = 22;
+
+/**
+ * The progress bar with a grabber. The fill is the print's progress; the
+ * grabber is the layer the LCD shows: the printer's own until the owner drags
+ * it or taps the bar. `onScrub` gets the chosen layer (1 to `total`).
+ */
+const Scrubber = (props: {
+  readonly width: number;
+  readonly total: number;
+  readonly live: number;
+  readonly viewed: number | undefined;
+  readonly percent: number;
+  readonly fill: readonly [string, string];
+  readonly onScrub: (layer: number) => void;
+  readonly onDrag: (layer: number | undefined) => void;
+}): React.ReactElement => {
+  const palette = usePalette();
+  const [dragging, setDragging] = React.useState<number | undefined>(undefined);
+  const settle = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  React.useEffect(() => () => clearTimeout(settle.current), []);
+  const layerAt = (x: number): number => Math.min(props.total, Math.max(1, Math.round((x / props.width) * props.total)));
+  const move = (x: number): void => {
+    const layer = layerAt(x);
+    setDragging(layer);
+    props.onDrag(layer);
+    clearTimeout(settle.current);
+    settle.current = setTimeout(() => props.onScrub(layer), SCRUB_SETTLE_MS);
+  };
+  const end = (x: number): void => {
+    clearTimeout(settle.current);
+    setDragging(undefined);
+    props.onDrag(undefined);
+    props.onScrub(layerAt(x));
+  };
+  // Sideways only, so the page still scrolls up and down over the bar.
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetX([-6, 6])
+    .failOffsetY([-12, 12])
+    .onUpdate((event) => move(event.x))
+    .onEnd((event) => end(event.x))
+    .onFinalize((_event, success) => {
+      if (!success) {
+        setDragging(undefined);
+        props.onDrag(undefined);
+      }
+    });
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .onEnd((event) => end(event.x));
+  const shown = dragging ?? props.viewed ?? props.live;
+  const x = Math.min(props.width, Math.max(0, (shown / props.total) * props.width));
+  const scrubbed = dragging !== undefined || props.viewed !== undefined;
+  return (
+    <GestureDetector gesture={Gesture.Race(pan, tap)}>
+      <View style={[styles.scrub, { width: props.width }]} accessibilityRole="adjustable" accessibilityLabel="Layer" accessibilityValue={{ min: 1, max: props.total, now: shown }}>
+        <View style={styles.track}>
+          <LinearGradient colors={props.fill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.fill, { width: `${Math.min(100, props.percent)}%` }]} />
+        </View>
+        <View pointerEvents="none" style={[styles.grabber, { left: x - GRABBER / 2, borderColor: scrubbed ? palette.accent : "rgba(0,0,0,0.12)" }]} />
+      </View>
+    </GestureDetector>
+  );
+};
+
 /** Percent, a bar, and elapsed, remaining, and finish time, and the Z height. `columns` is 2 on a phone, 4 when there is room. */
 export const Progress = (props: {
+  readonly width: number;
+  readonly totalLayers: number;
+  readonly liveLayer: number;
+  /** The layer the LCD shows when the owner scrubbed to one; undefined while it follows the printer. */
+  readonly viewedLayer: number | undefined;
+  readonly onScrub: (layer: number | undefined) => void;
   readonly percent: number;
   readonly elapsedMs: number | undefined;
   readonly remainingMs: number | undefined;
@@ -173,6 +258,9 @@ export const Progress = (props: {
   const whole = Math.floor(props.percent);
   const fraction = Math.floor((props.percent % 1) * 10);
   const fill: readonly [string, string] = props.complete ? [palette.ok, palette.ok] : props.paused ? [palette.warn, palette.warn] : [palette.second, palette.accent];
+  // The layer under the finger while dragging, before the LCD has it.
+  const [dragLayer, setDragLayer] = React.useState<number | undefined>(undefined);
+  const looking = dragLayer ?? props.viewedLayer;
   return (
     <View style={styles.progress}>
       <View style={styles.progressTop}>
@@ -180,10 +268,34 @@ export const Progress = (props: {
           {whole}
           <Text style={[styles.pctSmall, { color: text.secondaryLabel }]}>.{fraction}%</Text>
         </Text>
+        {looking !== undefined ? (
+          <View style={styles.scrubInfo}>
+            <Text style={[styles.scrubLayer, { color: text.secondaryLabel }]} numberOfLines={1}>
+              Layer {looking.toLocaleString()} of {props.totalLayers.toLocaleString()}
+            </Text>
+            <Pressable hitSlop={8} onPress={() => props.onScrub(undefined)} accessibilityLabel="Show the live layer" style={({ pressed }) => [styles.live, { backgroundColor: withAlpha(palette.accent, pressed ? 0.28 : 0.16) }]}>
+              <Dot tone="uv" size={6} />
+              <Text style={[styles.liveText, { color: palette.accentInk }]}>Live</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
-      <View style={styles.track}>
-        <LinearGradient colors={fill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.fill, { width: `${Math.min(100, props.percent)}%` }]} />
-      </View>
+      {props.totalLayers > 0 ? (
+        <Scrubber
+          width={props.width}
+          total={props.totalLayers}
+          live={props.liveLayer}
+          viewed={props.viewedLayer}
+          percent={props.percent}
+          fill={fill}
+          onScrub={props.onScrub}
+          onDrag={setDragLayer}
+        />
+      ) : (
+        <View style={styles.track}>
+          <LinearGradient colors={fill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.fill, { width: `${Math.min(100, props.percent)}%` }]} />
+        </View>
+      )}
       <View style={styles.stats}>
         <Stat style={cell} label="Elapsed" value={fmtDuration(props.elapsedMs)} />
         <Stat style={cell} label="Remaining" value={props.active ? fmtDuration(props.remainingMs) : "—"} />
@@ -272,6 +384,24 @@ const styles = StyleSheet.create({
   pct: { fontSize: 46, fontWeight: "700", letterSpacing: -1.5, fontVariant: ["tabular-nums"] },
   pctSmall: { fontSize: 20, fontWeight: "600", letterSpacing: -0.3 },
   track: { height: 8, borderRadius: 4, backgroundColor: "rgba(127,127,127,0.2)", overflow: "hidden" },
+  scrub: { height: 28, justifyContent: "center" },
+  grabber: {
+    position: "absolute",
+    top: (28 - GRABBER) / 2,
+    width: GRABBER,
+    height: GRABBER,
+    borderRadius: GRABBER / 2,
+    borderWidth: 2,
+    backgroundColor: "#ffffff",
+    shadowColor: "#000000",
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  scrubInfo: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, marginBottom: 8 },
+  scrubLayer: { fontSize: 13, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  live: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
+  liveText: { fontSize: 13, fontWeight: "700" },
   fill: { height: 8, borderRadius: 4 },
   stats: { flexDirection: "row", flexWrap: "wrap", marginTop: 14, columnGap: 8, rowGap: 12 },
   statHalf: { width: "48%" },

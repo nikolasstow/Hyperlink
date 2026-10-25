@@ -180,6 +180,10 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const current = info?.CurrentLayer ?? 0;
   const index = hasJob && total > 0 ? layerIndexOf(current, total) : undefined;
   const percent = total > 0 ? (current / total) * 100 : 0;
+  // The layer the owner scrubbed to (1 to total); undefined while the LCD follows the printer. A new print starts live.
+  const [scrub, setScrub] = React.useState<{ readonly taskId: string; readonly layer: number } | undefined>(undefined);
+  const scrubLayer = hasJob && scrub !== undefined && scrub.taskId === info?.TaskId ? Math.min(scrub.layer, total) : undefined;
+  const viewIndex = scrubLayer !== undefined ? layerIndexOf(scrubLayer, total) : index;
   // Ticks only arrive with a push; between pushes, count on from the last one.
   const sincePush = active && !paused && printer.updatedAt !== undefined ? now - printer.updatedAt : 0;
   const remaining = info?.TotalTicks !== undefined && info.CurrentTicks !== undefined ? info.TotalTicks - info.CurrentTicks - sincePush : undefined;
@@ -191,13 +195,20 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const direct = printer.link.kind === "Open" && printer.link.via === "Direct" && printer.printerIp !== undefined;
   const decodeHere = direct && !printer.relayReachable;
   const printerBase = printer.printerIp === undefined ? undefined : `http://${printer.printerIp}:${PRINTER_PORT}`;
+  // Decoded on the phone, the LCD and the Picture in Picture share the one layer: while scrubbed, the window shows it too.
   const directLayer = useDirectLayer(
-    decodeHere && printerBase !== undefined && hasJob && info?.TaskId !== undefined && info.Filename !== undefined && index !== undefined
-      ? { printerBase, filename: info.Filename, taskId: info.TaskId, index, totalLayers: total, mirror: false }
+    decodeHere && printerBase !== undefined && hasJob && info?.TaskId !== undefined && info.Filename !== undefined && viewIndex !== undefined
+      ? { printerBase, filename: info.Filename, taskId: info.TaskId, index: viewIndex, totalLayers: total, mirror: false }
       : undefined,
   );
-  const relayLayer = !decodeHere && printer.relayReachable && hasJob && info?.TaskId !== undefined && index !== undefined ? `${printer.relayBase}/api/prints/${encodeURIComponent(info.TaskId)}/layers/${index}.png?alpha=1&scale=8` : undefined;
-  const layerUri = useLoadedUri(decodeHere ? directLayer.uri : relayLayer);
+  const relayLayerAt = (at: number | undefined, scrubbed: boolean): string | undefined =>
+    !decodeHere && printer.relayReachable && hasJob && info?.TaskId !== undefined && at !== undefined
+      ? `${printer.relayBase}/api/prints/${encodeURIComponent(info.TaskId)}/layers/${at}.png?alpha=1&scale=8${scrubbed ? "&scrub=1" : ""}`
+      : undefined;
+  // The live layer feeds the Picture in Picture; the LCD shows the scrubbed one while there is one.
+  const layerUri = useLoadedUri(decodeHere ? directLayer.uri : relayLayerAt(index, false));
+  const scrubbedUri = useLoadedUri(decodeHere || scrubLayer === undefined ? undefined : relayLayerAt(viewIndex, true));
+  const stageUri = scrubLayer === undefined || decodeHere ? layerUri : scrubbedUri;
   const previewUri = hasJob && info?.TaskId !== undefined ? (decodeHere ? directLayer.previewUri : printer.relayReachable ? printPreviewUrl(printer.relayBase, info.TaskId) : undefined) : undefined;
   const lcdMm = header !== undefined ? { width: header.displayWidthMm, height: header.displayHeightMm } : (directLayer.lcdMm ?? DEFAULT_LCD_MM);
   const layerHeight = header?.layerHeightMm;
@@ -255,6 +266,11 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
 
   const timeline = hasJob ? (
     <Progress
+      width={lcdWidth}
+      totalLayers={total}
+      liveLayer={current}
+      viewedLayer={scrubLayer}
+      onScrub={(layer) => setScrub(layer === undefined || info?.TaskId === undefined ? undefined : { taskId: info.TaskId, layer })}
       percent={percent}
       elapsedMs={info?.CurrentTicks === undefined ? undefined : info.CurrentTicks + sincePush}
       remainingMs={remaining}
@@ -292,7 +308,20 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       <StagePager
         width={lcdWidth}
         height={lcdHeight}
-        layer={<Lcd width={lcdWidth} lcdMm={lcdMm} uri={hasJob ? layerUri : undefined} exposing={exposing} active={active} layer={hasJob ? current : undefined} phase={active ? phaseLabel(info?.Status) : undefined} measure={measure} note={lcdNote} />}
+        layer={
+          <Lcd
+            width={lcdWidth}
+            lcdMm={lcdMm}
+            uri={hasJob ? stageUri : undefined}
+            exposing={exposing && scrubLayer === undefined}
+            lit={scrubLayer !== undefined}
+            active={active || scrubLayer !== undefined}
+            layer={hasJob ? (scrubLayer ?? current) : undefined}
+            phase={scrubLayer !== undefined ? `Layer ${scrubLayer.toLocaleString()}` : active ? phaseLabel(info?.Status) : undefined}
+            measure={measure}
+            note={lcdNote}
+          />
+        }
         camera={(visible) => <CameraPane relayBase={printer.relayBase} secureUrl={printer.secureUrl} reachable={printer.relayReachable} visible={visible && view === "Print"} width={lcdWidth} height={lcdHeight} />}
         behind={(page) => (
           // Leaving the app opens Picture in Picture of this page: the camera, or the layer while a print runs.
