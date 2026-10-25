@@ -26,6 +26,7 @@ import { useCustomBackground, useScreenBackground, useTheme } from "./theme";
 import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push";
 import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
+import { watchForLayerPacks } from "./printer/layerPack";
 import { relayBaseOf } from "./printer/sdcp";
 import { useServers } from "./servers";
 import { homeHeaderOptions } from "./homeHeader";
@@ -210,6 +211,7 @@ export const RootNavigator = (): React.ReactElement => {
     if (printerServer === undefined) return;
     setPrinterRelay(relayBaseOf(printerServer.address));
     setTrailRelay(relayBaseOf(printerServer.address));
+    return watchForLayerPacks(relayBaseOf(printerServer.address));
   }, [printerServer]);
 
   // The printer Live Activity follows the theme's primary colour.

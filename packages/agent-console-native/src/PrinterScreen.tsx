@@ -41,6 +41,7 @@ import { HeaderTitlePill } from "./HeaderTitlePill";
 import { useDirectLayer } from "./printer/directLayers";
 import { CameraPane } from "./printer/PrinterCamera";
 import { PrinterFiles, useRunningUploads, useUploadWatch } from "./printer/PrinterFiles";
+import { useLayerPack } from "./printer/layerPack";
 import { Controls, Lcd, Progress, useLoadedUri } from "./printer/PrinterStage";
 import { DEFAULT_LCD_MM, fmtBytes, healthItems, settingsCells } from "./printer/printerFormat";
 import { cameraSocketUrl, fetchPrintHeader, printPreviewUrl, type PrintHeader } from "./printer/relayApi";
@@ -194,6 +195,9 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const [scrub, setScrub] = React.useState<{ readonly taskId: string; readonly layer: number } | undefined>(undefined);
   const scrubLayer = hasJob && scrub !== undefined && scrub.taskId === info?.TaskId ? Math.min(scrub.layer, total) : undefined;
   const viewIndex = scrubLayer !== undefined ? layerIndexOf(scrubLayer, total) : index;
+  // The layer under the finger while the owner drags the grabber.
+  const [dragLayer, setDragLayer] = React.useState<number | undefined>(undefined);
+  const dragIndex = hasJob && dragLayer !== undefined && total > 0 ? layerIndexOf(Math.min(dragLayer, total), total) : undefined;
   // Ticks only arrive with a push; between pushes, count on from the last one.
   const sincePush = active && !paused && printer.updatedAt !== undefined ? now - printer.updatedAt : 0;
   const remaining = info?.TotalTicks !== undefined && info.CurrentTicks !== undefined ? info.TotalTicks - info.CurrentTicks - sincePush : undefined;
@@ -215,10 +219,22 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
     !decodeHere && printer.relayReachable && hasJob && info?.TaskId !== undefined && at !== undefined
       ? `${printer.relayBase}/api/prints/${encodeURIComponent(info.TaskId)}/layers/${at}.png?alpha=1&scale=8${scrubbed ? "&scrub=1" : ""}`
       : undefined;
+  // Every layer, small, on the device: the LCD shows any layer at once while the full image loads.
+  const pack = useLayerPack(!decodeHere && printer.relayReachable ? printer.relayBase : undefined, hasJob ? info?.TaskId : undefined);
   // The live layer feeds the Picture in Picture; the LCD shows the scrubbed one while there is one.
   const layerUri = useLoadedUri(decodeHere ? directLayer.uri : relayLayerAt(index, false));
-  const scrubbedUri = useLoadedUri(decodeHere || scrubLayer === undefined ? undefined : relayLayerAt(viewIndex, true));
-  const stageUri = scrubLayer === undefined || decodeHere ? layerUri : scrubbedUri;
+  const wantedScrub = decodeHere || scrubLayer === undefined ? undefined : relayLayerAt(viewIndex, true);
+  const scrubbedUri = useLoadedUri(wantedScrub);
+  // A loaded full image is for the layer it names; until the one for this layer loads, the pack shows it.
+  const stageUri = decodeHere
+    ? layerUri
+    : dragIndex !== undefined
+      ? (pack.uriOf(dragIndex) ?? (scrubLayer === undefined ? layerUri : scrubbedUri))
+      : scrubLayer === undefined
+        ? (layerUri ?? pack.uriOf(index))
+        : scrubbedUri === wantedScrub
+          ? scrubbedUri
+          : (pack.uriOf(viewIndex) ?? scrubbedUri);
   const previewUri = hasJob && info?.TaskId !== undefined ? (decodeHere ? directLayer.previewUri : printer.relayReachable ? printPreviewUrl(printer.relayBase, info.TaskId) : undefined) : undefined;
   const lcdMm = header !== undefined ? { width: header.displayWidthMm, height: header.displayHeightMm } : (directLayer.lcdMm ?? DEFAULT_LCD_MM);
   const layerHeight = header?.layerHeightMm;
@@ -281,6 +297,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       liveLayer={current}
       viewedLayer={scrubLayer}
       onScrub={(layer) => setScrub(layer === undefined || info?.TaskId === undefined ? undefined : { taskId: info.TaskId, layer })}
+      onDrag={setDragLayer}
       percent={percent}
       elapsedMs={info?.CurrentTicks === undefined ? undefined : info.CurrentTicks + sincePush}
       remainingMs={remaining}
@@ -323,9 +340,9 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             width={lcdWidth}
             lcdMm={lcdMm}
             uri={hasJob ? stageUri : undefined}
-            exposing={exposing && scrubLayer === undefined}
-            lit={scrubLayer !== undefined}
-            active={active || scrubLayer !== undefined}
+            exposing={exposing && scrubLayer === undefined && dragIndex === undefined}
+            lit={scrubLayer !== undefined || dragIndex !== undefined}
+            active={active || scrubLayer !== undefined || dragIndex !== undefined}
             layer={hasJob ? (scrubLayer ?? current) : undefined}
             phase={scrubLayer !== undefined ? `Layer ${scrubLayer.toLocaleString()}` : active ? phaseLabel(info?.Status) : undefined}
             measure={measure}

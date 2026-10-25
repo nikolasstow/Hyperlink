@@ -161,9 +161,10 @@ export const Lcd = (props: {
 };
 
 /**
- * How long the grabber rests before the LCD asks for the layer under it. Each
- * layer image is a read from the printer's file server, so a drag asks for the
- * layers it stops on, not every layer it passes.
+ * How long the grabber rests before the LCD asks for the full layer under it.
+ * Each full layer image is a read from the printer's file server, so a drag
+ * asks for the layers it stops on, not every layer it passes. The layer pack
+ * on the device shows every layer the drag passes.
  */
 const SCRUB_SETTLE_MS = 200;
 const GRABBER = 22;
@@ -240,6 +241,8 @@ export const Progress = (props: {
   /** The layer the LCD shows when the owner scrubbed to one; undefined while it follows the printer. */
   readonly viewedLayer: number | undefined;
   readonly onScrub: (layer: number | undefined) => void;
+  /** The layer under the finger while the owner drags, and undefined when the drag ends. */
+  readonly onDrag?: (layer: number | undefined) => void;
   readonly percent: number;
   readonly elapsedMs: number | undefined;
   readonly remainingMs: number | undefined;
@@ -289,7 +292,10 @@ export const Progress = (props: {
           percent={props.percent}
           fill={fill}
           onScrub={props.onScrub}
-          onDrag={setDragLayer}
+          onDrag={(layer) => {
+            setDragLayer(layer);
+            props.onDrag?.(layer);
+          }}
         />
       ) : (
         <View style={styles.track}>
