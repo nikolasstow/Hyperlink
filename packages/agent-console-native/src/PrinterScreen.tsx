@@ -39,7 +39,7 @@ import { PrinterPip } from "../modules/printer-pip";
 import { HeaderTitlePill } from "./HeaderTitlePill";
 import { useDirectLayer } from "./printer/directLayers";
 import { CameraPane } from "./printer/PrinterCamera";
-import { PrinterFiles, useRunningUploads } from "./printer/PrinterFiles";
+import { PrinterFiles, useRunningUploads, useUploadWatch } from "./printer/PrinterFiles";
 import { Controls, Lcd, Progress, useLoadedUri } from "./printer/PrinterStage";
 import { DEFAULT_LCD_MM, fmtBytes, healthItems, settingsCells } from "./printer/printerFormat";
 import { cameraSocketUrl, fetchPrintHeader, printPreviewUrl, type PrintHeader } from "./printer/relayApi";
@@ -152,6 +152,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const printer = usePrinterLink(serverAddress);
   const [measure, setMeasure] = useMeasure();
   const runningUploads = useRunningUploads();
+  useUploadWatch(printer.relayBase, printer.relayReachable);
   // The view the owner chose with a header button; until then, the print, or Files when no print runs.
   const [chosen, setChosen] = React.useState<PageView | undefined>(undefined);
   const scroller = React.useRef<ScrollView>(null);

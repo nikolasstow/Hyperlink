@@ -36,15 +36,17 @@ export const PrintHeader = Schema.Struct({
 export type PrintHeader = typeof PrintHeader.Type;
 
 /** Every stage the relay reports for a job: a plain upload, or an edited copy that is saved and may start. */
-export const UploadStage = Schema.Literals(["queued", "copying", "editing", "hashing", "sending", "verifying", "saving", "starting", "done", "failed", "cancelled"]);
+export const UploadStage = Schema.Literals(["receiving", "queued", "copying", "editing", "hashing", "sending", "verifying", "saving", "starting", "done", "failed", "cancelled"]);
 export type UploadStage = typeof UploadStage.Type;
 
-/** An upload as the relay tracks it, after it has the whole file. */
+/** An upload as the relay tracks it, from its first byte. */
 export const UploadJob = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   size: Schema.Number,
   stage: UploadStage,
+  /** Bytes the relay has from the sender (`receiving`); older relays leave it out. */
+  received: Schema.optional(Schema.Number),
   sent: Schema.Number,
   paced: Schema.Boolean,
   error: Schema.optional(Schema.String),
@@ -52,6 +54,8 @@ export const UploadJob = Schema.Struct({
   savedPath: Schema.optional(Schema.String),
   note: Schema.optional(Schema.String),
   started: Schema.optional(Schema.Boolean),
+  /** Who sent the file, such as "UVtools on MacBook Pro (2)". */
+  from: Schema.optional(Schema.String),
 });
 export type UploadJob = typeof UploadJob.Type;
 

@@ -6,8 +6,9 @@
  * can print from there.
  *
  * Uploads go from the phone to the relay, then from the relay to the printer
- * (saturn-uploader's delivery: MD5 check, verified listing). An upload never
- * starts a print. While a print runs, the relay paces the upload so the
+ * (saturn-uploader's delivery: MD5 check, verified listing). Uploads that
+ * other devices send show too (`useUploadWatch`), from their first byte at the
+ * relay, with who sent them. An upload never starts a print. While a print runs, the relay paces the upload so the
  * printer is not disturbed, and it refuses to replace the file being printed.
  *
  * @internal
@@ -37,10 +38,15 @@ interface Upload {
   readonly paced: boolean;
   readonly error: string | undefined;
   readonly jobId: string | undefined;
+  /** Who sent it, from the relay. */
+  readonly from: string | undefined;
+  /** True for an upload another device sends. */
+  readonly remote: boolean;
 }
 
 const STAGE_LABEL: Record<Upload["stage"], string> = {
   uploading: "Uploading to the relay",
+  receiving: "Arriving at the relay",
   queued: "Waiting its turn",
   copying: "Copying",
   editing: "Changing settings",
@@ -58,8 +64,22 @@ const finished = (stage: Upload["stage"]): boolean => stage === "done" || stage 
 
 const messageOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
 
+/** The current leg's progress, 0 to 1: the bytes the relay has while it receives, then the bytes the printer has. */
+const progressOf = (job: UploadJob): number => (job.size > 0 ? (job.stage === "receiving" ? (job.received ?? 0) : job.sent) / job.size : 0);
+
 /** A relay job as an upload row: one this page started before it closed, or one from another device. */
-const rowOf = (job: UploadJob): Upload => ({ key: job.id, name: job.name, size: job.size, stage: job.stage, progress: job.size > 0 ? job.sent / job.size : 0, paced: job.paced, error: job.error, jobId: job.id });
+const rowOf = (job: UploadJob): Upload => ({
+  key: job.id,
+  name: job.name,
+  size: job.size,
+  stage: job.stage,
+  progress: progressOf(job),
+  paced: job.paced,
+  error: job.error,
+  jobId: job.id,
+  from: job.from,
+  remote: true,
+});
 
 /**
  * The upload rows, kept outside the page: an upload goes on when the owner
@@ -82,11 +102,79 @@ const uploadStore = (() => {
     },
     /** Cancels for uploads still on the phone's leg, by row key. */
     cancels: new Map<string, () => void>(),
+    /** Relay jobs already shown or dismissed, so a dismissed one does not come back. */
+    seen: new Set<string>(),
+    /** Counts the uploads that reached the printer, so the file list reloads. */
+    landed: 0,
   };
 })();
 
 /** How many uploads are still on their way to the printer, for the page's Files button. */
 export const useRunningUploads = (): number => React.useSyncExternalStore(uploadStore.subscribe, uploadStore.rows).filter((u) => !finished(u.stage)).length;
+
+/** How often the relay's jobs are read while an upload runs, and while none does. Reading them is cache-only on the relay. */
+const WATCH_RUNNING_MS = 1000;
+const WATCH_IDLE_MS = 3000;
+
+/**
+ * Follows the relay's upload jobs while the printer page is open: this
+ * phone's uploads, and the ones other devices send, which show from their
+ * first byte at the relay. At first only the jobs still running show; after
+ * that every new job does, also one that ended between two reads.
+ */
+export const useUploadWatch = (relayBase: string, reachable: boolean): void => {
+  React.useEffect(() => {
+    if (!reachable) return;
+    let current = true;
+    let first = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = (): void => {
+      fetchUploads(relayBase)
+        .then((jobs) => {
+          if (!current) return;
+          let landed = false;
+          uploadStore.change((rows) => {
+            const known = rows.map((u): Upload => {
+              if (u.jobId === undefined || finished(u.stage)) return u;
+              const job = jobs.find((j) => j.id === u.jobId);
+              // The relay keeps a job until it finishes, so a missing one was lost in a relay restart.
+              if (job === undefined) return { ...u, stage: "failed", error: "The relay restarted and lost this upload. Upload it again." };
+              if (job.stage === "done") {
+                landed = true;
+                showToast({ message: `${job.name} is on the printer.` });
+              }
+              if (job.stage === "failed") showToast({ message: `${job.name}: ${job.error ?? "the upload failed"}` });
+              return { ...u, stage: job.stage, progress: progressOf(job), paced: job.paced, error: job.error, from: job.from };
+            });
+            const fresh = jobs.filter((job) => {
+              if (uploadStore.seen.has(job.id) || rows.some((u) => u.jobId === job.id)) return false;
+              uploadStore.seen.add(job.id);
+              // This phone's own upload, still arriving: its row gets the job's id when the relay answers.
+              const ours = job.stage === "receiving" && rows.some((u) => u.stage === "uploading" && u.name === job.name);
+              return !ours && !(first && finished(job.stage));
+            });
+            return [...fresh.map(rowOf), ...known];
+          });
+          first = false;
+          if (landed) {
+            uploadStore.landed += 1;
+            uploadStore.change((rows) => rows);
+          }
+        })
+        .catch((cause: unknown) => console.error("[printer] following the relay's uploads failed", cause))
+        .finally(() => {
+          if (!current) return;
+          const running = uploadStore.rows().some((u) => !finished(u.stage));
+          timer = setTimeout(tick, running ? WATCH_RUNNING_MS : WATCH_IDLE_MS);
+        });
+    };
+    tick();
+    return () => {
+      current = false;
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, [relayBase, reachable]);
+};
 
 /** A file the details sheet shows. */
 interface OpenFile {
@@ -113,66 +201,25 @@ export const PrinterFiles = (props: {
   const [open, setOpen] = React.useState<OpenFile | undefined>(undefined);
   const refresh = (): void => setReloadKey((n) => n + 1);
 
-  // Show uploads that went on while the page was closed, or that another device started.
+  // An upload that reached the printer: show it in the list.
+  const landed = React.useSyncExternalStore(uploadStore.subscribe, () => uploadStore.landed);
   React.useEffect(() => {
-    if (!reachable) return;
-    let current = true;
-    fetchUploads(relayBase)
-      .then((jobs) => {
-        if (current) uploadStore.change((rows) => [...jobs.filter((job) => !finished(job.stage) && !rows.some((u) => u.jobId === job.id)).map(rowOf), ...rows]);
-      })
-      .catch((cause: unknown) => console.error("[printer] reading the relay's uploads failed", cause));
-    return () => {
-      current = false;
-    };
-  }, [relayBase, reachable]);
-
-  // Follow the relay's jobs while any upload is still on its way to the printer.
-  const following = uploads.some((u) => u.jobId !== undefined && !finished(u.stage));
-  React.useEffect(() => {
-    if (!following) return;
-    let current = true;
-    const tick = (): void => {
-      fetchUploads(relayBase)
-        .then((jobs) => {
-          if (!current) return;
-          let landed = false;
-          uploadStore.change((rows) =>
-            rows.map((u): Upload => {
-              if (u.jobId === undefined || finished(u.stage)) return u;
-              const job = jobs.find((j) => j.id === u.jobId);
-              // The relay keeps a job until it finishes, so a missing one was lost in a relay restart.
-              if (job === undefined) return { ...u, stage: "failed", error: "The relay restarted and lost this upload. Upload it again." };
-              if (job.stage === "done") {
-                landed = true;
-                showToast({ message: `${job.name} is on the printer.` });
-              }
-              if (job.stage === "failed") showToast({ message: `${job.name}: ${job.error ?? "the upload failed"}` });
-              return { ...u, stage: job.stage, progress: job.size > 0 ? job.sent / job.size : 0, paced: job.paced, error: job.error };
-            }),
-          );
-          if (landed) setReloadKey((n) => n + 1);
-        })
-        .catch((cause: unknown) => console.error("[printer] following the relay's uploads failed", cause));
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => {
-      current = false;
-      clearInterval(id);
-    };
-  }, [following, relayBase]);
+    if (landed > 0) setReloadKey((n) => n + 1);
+  }, [landed]);
 
   const send = (asset: DocumentPicker.DocumentPickerAsset, overwrite: boolean): void => {
     const key = `${Date.now()}-${asset.name}`;
-    const fresh: Upload = { key, name: asset.name, size: asset.size, stage: "uploading", progress: 0, paced: false, error: undefined, jobId: undefined };
+    const fresh: Upload = { key, name: asset.name, size: asset.size, stage: "uploading", progress: 0, paced: false, error: undefined, jobId: undefined, from: undefined, remote: false };
     // Keep the newest six rows, and every upload still running.
     uploadStore.change((rows) => [fresh, ...rows].filter((u, index) => index < 6 || !finished(u.stage)));
     const update = (change: (u: Upload) => Upload): void => uploadStore.change((rows) => rows.map((u) => (u.key === key ? change(u) : u)));
     const upload = startUpload(relayBase, asset.uri, asset.name, overwrite, (fraction) => update((u) => ({ ...u, progress: fraction })));
     uploadStore.cancels.set(key, upload.cancel);
     upload.done
-      .then((job) => update((u) => ({ ...u, stage: job.stage, progress: 0, jobId: job.id })))
+      .then((job) => {
+        uploadStore.seen.add(job.id);
+        update((u) => ({ ...u, stage: job.stage, progress: 0, jobId: job.id, from: job.from }));
+      })
       .catch((cause: unknown) => {
         if (cause instanceof UploadRefused && cause.exists) {
           uploadStore.change((rows) => rows.filter((u) => u.key !== key));
@@ -240,15 +287,19 @@ export const PrinterFiles = (props: {
             </Text>
             <Text style={[styles.jobState, { color: text.secondaryLabel }]} numberOfLines={1}>
               {STAGE_LABEL[u.stage]}
-              {u.stage === "uploading" || (u.stage === "sending" && u.progress > 0) ? ` · ${Math.floor(u.progress * 100)}%` : ""}
+              {u.stage === "uploading" || u.stage === "receiving" || (u.stage === "sending" && u.progress > 0) ? ` · ${Math.floor(u.progress * 100)}%` : ""}
             </Text>
-            <Pressable hitSlop={8} onPress={() => (finished(u.stage) ? uploadStore.change((rows) => rows.filter((x) => x.key !== u.key)) : cancel(u))} accessibilityLabel={finished(u.stage) ? "Dismiss" : "Cancel"}>
-              <SystemIcon name="xmark" size={12} color={text.secondaryLabel} weight="bold" />
-            </Pressable>
+            {/* The relay cannot stop an upload that another device is still sending. */}
+            {u.remote && u.stage === "receiving" ? null : (
+              <Pressable hitSlop={8} onPress={() => (finished(u.stage) ? uploadStore.change((rows) => rows.filter((x) => x.key !== u.key)) : cancel(u))} accessibilityLabel={finished(u.stage) ? "Dismiss" : "Cancel"}>
+                <SystemIcon name="xmark" size={12} color={text.secondaryLabel} weight="bold" />
+              </Pressable>
+            )}
           </View>
           <View style={styles.jobTrack}>
             <View style={[styles.jobFill, { width: `${u.stage === "done" ? 100 : Math.min(100, u.progress * 100)}%`, backgroundColor: u.stage === "done" ? palette.ok : u.stage === "failed" ? palette.bad : palette.accent }]} />
           </View>
+          {u.from !== undefined ? <Text style={[styles.jobNote, { color: text.tertiaryLabel }]}>From {u.from}.</Text> : null}
           {u.stage === "failed" && u.error !== undefined ? <Text style={[styles.jobNote, { color: palette.bad }]}>{u.error}</Text> : null}
           {u.paced && !finished(u.stage) ? <Text style={[styles.jobNote, { color: text.tertiaryLabel }]}>Paced to protect the running print.</Text> : null}
           {u.stage === "sending" && u.progress === 0 ? <Text style={[styles.jobNote, { color: text.tertiaryLabel }]}>The printer takes a few seconds to accept the first packet.</Text> : null}
