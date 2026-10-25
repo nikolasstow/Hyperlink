@@ -25,6 +25,12 @@
       "env": {
         "RNS_GAMMA_ENABLED": "1"
       }
+    },
+    "simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true
+      }
     }
   },
   "submit": {
