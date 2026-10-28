@@ -13,6 +13,8 @@
  *   for a file on the printer. Print stays off while a print runs or is
  *   paused, and until the app knows.
  * - The panel stays: it rests low, and the model takes touches above it.
+ * - AR at the top right shows the model in the room at its real size
+ *   (AR Quick Look), in its colour, with the crop.
  *
  * It opens for the current print (by task id) or for any file (by path).
  *
@@ -46,14 +48,15 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useIsFocused } from "@react-navigation/native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { NativeStackHeaderItem, NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Alert, Image as RNImage, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ModelViewer } from "../../modules/model-viewer";
+import { canPresentModelAR, ModelViewer, presentModelAR } from "../../modules/model-viewer";
 import { showToast } from "../AppToast";
 import { previewUrl } from "../explorer/httpFileSource";
 import type { RootStackParamList } from "../RootNavigator";
+import { HeaderTitlePill } from "../HeaderTitlePill";
 import { useScreenBackground, useTextColors, withAlpha } from "../theme";
 import { LayerRange, type Range } from "./LayerRange";
 import { RESIN_SWATCHES, setModelColor, useModelColor } from "./modelColor";
@@ -144,6 +147,35 @@ export const GooViewerScreen = (props: Props): React.ReactElement => {
 
   const cropMm =
     crop === undefined || layerHeight <= 0 ? undefined : { low: (crop.from - 1) * layerHeight, high: crop.to * layerHeight };
+
+  // AR at the top right: the finest level here, in the model's colour, with the crop.
+  const [arOpening, setArOpening] = React.useState(false);
+  const arUri = best?.uri;
+  const arLow = cropMm?.low;
+  const arHigh = cropMm?.high;
+  React.useLayoutEffect(() => {
+    if (!canPresentModelAR) return;
+    const openAR = (): void => {
+      if (arUri === undefined) return;
+      setArOpening(true);
+      presentModelAR({ uri: arUri, color, clipLowMm: arLow, clipHighMm: arHigh, title })
+        .catch((cause: unknown) => showToast({ message: cause instanceof Error ? cause.message : String(cause) }))
+        .finally(() => setArOpening(false));
+    };
+    props.navigation.setOptions({
+      headerTitle: () => <HeaderTitlePill title={title} rightButtons={1} />,
+      unstable_headerRightItems: () => [
+        {
+          type: "button",
+          label: "AR",
+          accessibilityLabel: "Show in AR",
+          icon: { type: "sfSymbol", name: "arkit" },
+          disabled: arUri === undefined || arOpening,
+          onPress: openAR,
+        } satisfies NativeStackHeaderItem,
+      ],
+    });
+  }, [props.navigation, title, arUri, color, arLow, arHigh, arOpening]);
 
   return (
     <View style={[styles.page, { backgroundColor: background }]}>

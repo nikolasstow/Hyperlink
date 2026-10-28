@@ -13,6 +13,7 @@
       "appleTeamId": "669Y72A3D7",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "The camera shows a print's 3D model in your room, in AR.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         },
