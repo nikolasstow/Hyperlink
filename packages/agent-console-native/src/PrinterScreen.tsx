@@ -11,8 +11,9 @@
  *   opens it (printer/GooViewerScreen.tsx).
  * - Files (the shared explorer over the relay, with uploads from the phone),
  *   Health (the printer's vitals and self-check), and Settings: real pages
- *   (printer/PrinterPages.tsx), from rows at the end of the page. The back
- *   button returns here. They share this page's live link.
+ *   (printer/PrinterPages.tsx), from the buttons at the top right of this
+ *   page. Those pages have no such buttons; the back button returns here.
+ *   They share this page's live link.
  *
  * Live status comes straight from the printer when the phone is on its LAN,
  * and through the relay otherwise (`printer/usePrinterLink.ts`). Layer images
@@ -29,14 +30,14 @@
  */
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useIsFocused } from "@react-navigation/native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { NativeStackHeaderItem, NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { PrinterPip } from "../modules/printer-pip";
 import { mark } from "./diagnostics/launchTrail";
-import { SystemIcon } from "./SystemIcon";
+import { HeaderTitlePill } from "./HeaderTitlePill";
 import { Backdrop } from "./printer/Backdrop";
 import { useDirectLayer } from "./printer/directLayers";
 import { ModelCard } from "./printer/ModelCard";
@@ -52,7 +53,7 @@ import { StagePager } from "./printer/StagePager";
 import { Card, Cells, Chip, usePalette, type Tone } from "./printer/ui";
 import { usePrinterLink, type LinkState } from "./printer/usePrinterLink";
 import type { RootStackParamList } from "./RootNavigator";
-import { towardWhite, useTextColors, withAlpha } from "./theme";
+import { towardWhite, useTextColors } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerPrinter">;
 
@@ -106,7 +107,7 @@ const usePrintHeader = (relayBase: string, taskId: string | undefined, reachable
   return header?.taskId === taskId ? header?.header : undefined;
 };
 
-/** The pages this page opens, as rows at its end. */
+/** The pages this page opens, as buttons at the top right, in order. */
 const PAGES: ReadonlyArray<{ readonly route: "ServerPrinterFiles" | "ServerPrinterHealth" | "ServerPrinterSettings"; readonly label: string; readonly icon: SFSymbol }> = [
   { route: "ServerPrinterFiles", label: "Files", icon: "folder" },
   { route: "ServerPrinterHealth", label: "Health", icon: "heart.text.square" },
@@ -267,6 +268,26 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const health = healthItems(attributes?.DevicesStatus);
   const healthBad = health.filter((item) => !item.ok).length;
 
+  // The buttons at the top right open the pages, with what needs attention on each.
+  const serverName = props.route.params?.serverName ?? "";
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => <HeaderTitlePill title="Printer" rightButtons={PAGES.length} />,
+      unstable_headerRightItems: () =>
+        PAGES.map((page): NativeStackHeaderItem => {
+          const count = page.route === "ServerPrinterFiles" ? runningUploads : page.route === "ServerPrinterHealth" ? healthBad : 0;
+          return {
+            type: "button",
+            label: page.label,
+            accessibilityLabel: page.label,
+            icon: { type: "sfSymbol", name: page.icon },
+            ...(count > 0 ? { badge: { value: count } } : {}),
+            onPress: () => navigation.navigate(page.route, { serverName, serverAddress: serverAddress ?? "" }),
+          };
+        }),
+    });
+  }, [navigation, runningUploads, healthBad, serverName, serverAddress]);
+
   const timeline = hasJob ? (
     <Progress
       width={lcdWidth}
@@ -382,32 +403,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       <ModelCard relayBase={printer.relayBase} taskId={info.TaskId} filename={info.Filename} navigation={navigation} />
     ) : null;
 
-  // The pages this one opens, with what needs attention on each.
-  const pages = (
-    <Card flush>
-      {PAGES.map((page, i) => {
-        const count = page.route === "ServerPrinterFiles" ? runningUploads : page.route === "ServerPrinterHealth" ? healthBad : 0;
-        return (
-          <Pressable
-            key={page.route}
-            onPress={() => navigation.navigate(page.route, { serverName: props.route.params?.serverName ?? "", serverAddress: serverAddress ?? "" })}
-            style={({ pressed }) => [styles.pageRow, i < PAGES.length - 1 ? styles.pageRowLine : null, pressed ? { backgroundColor: withAlpha("#7F7F7F", 0.12) } : null]}
-            accessibilityRole="button"
-          >
-            <SystemIcon name={page.icon} size={18} color={palette.accent} weight="semibold" />
-            <Text style={[styles.pageLabel, { color: text.label }]}>{page.label}</Text>
-            {count > 0 ? (
-              <View style={[styles.badge, { backgroundColor: page.route === "ServerPrinterHealth" ? palette.bad : palette.accent }]}>
-                <Text style={styles.badgeText}>{count}</Text>
-              </View>
-            ) : null}
-            <SystemIcon name="chevron.right" size={13} color={text.tertiaryLabel} weight="semibold" />
-          </Pressable>
-        );
-      })}
-    </Card>
-  );
-
   const footer = (
     <>
       {printer.notice !== undefined ? <Text style={[styles.foot, { color: text.tertiaryLabel }]}>{printer.notice}</Text> : null}
@@ -424,7 +419,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       <View style={styles.side}>
         {modelCard}
         {printSettings}
-        {pages}
       </View>
     </View>
   ) : (
@@ -432,7 +426,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       {stage}
       {modelCard}
       {printSettings}
-      {pages}
     </>
   );
 
@@ -475,11 +468,6 @@ const styles = StyleSheet.create({
   healthText: { fontSize: 13, flexShrink: 1 },
   preview: { alignSelf: "center", width: 180, height: 180, borderRadius: 16, overflow: "hidden", backgroundColor: "#050508", marginBottom: 12 },
   foot: { fontSize: 11, textAlign: "center", marginTop: 6 },
-  pageRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  pageRowLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(127,127,127,0.3)" },
-  pageLabel: { flex: 1, fontSize: 16 },
-  badge: { minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  badgeText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
   columns: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
   side: { flex: 1 },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },

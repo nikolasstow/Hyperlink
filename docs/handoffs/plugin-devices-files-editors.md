@@ -143,7 +143,7 @@ Work moves to the Mac mini: start the next Claude Code session there, in the hom
 | Cut through: two grabbers pick a layer range; a SceneKit fragment shader hides the rest and darkens inner walls (checked off-screen on macOS) | `printer/LayerRange.tsx`, `modules/model-viewer` |
 | Model downloads by print or by path, per level; quick views of every printer file at app open, foreground, every 2 minutes | `printer/printModel.ts`, `printer/relayDownload.ts`, `printer/layerPack.ts` |
 | Model card above Print settings: progress of both levels, Open | `printer/ModelCard.tsx` |
-| Files, Health, Settings as real pages from rows at the end of the printer page; they share its one live link | `printer/PrinterPages.tsx`, `printer/printerPageLink.ts` |
+| Files, Health, Settings as real pages from the buttons at the top right of the printer page; they share its one live link | `printer/PrinterPages.tsx`, `printer/printerPageLink.ts` |
 
 ### Open
 
@@ -184,7 +184,7 @@ Work moves to the Mac mini: start the next Claude Code session there, in the hom
 
 22. The relay makes a 3D model of each `.goo` (saturn-uploader `src/LayerMesh.ts`, `GET /api/prints/<taskId>/model.mesh`). It makes at least two resolutions in one pass; the phone shows the low one first and swaps to the high one in place (owner). The 600,000-triangle cap was only ours.
 23. The 3D model gets a card on the printer page, above Print settings: it shows the model's progress, then a button that opens the model, and it keeps showing the high resolution's progress (owner). No header button for it.
-24. Printer pages are real pages on the navigation stack: Files, Health, and Settings open as their own pages, and the back button returns to the main printer page. No buttons at the top right of the printer page, so that space is free for other things (owner). This replaces decision 12.
+24. Printer pages are real pages on the navigation stack: Files, Health, and Settings open as their own pages, and the back button returns to the main printer page. The main printer page keeps the Files, Health, and Settings buttons at the top right, and they open these pages. The pages themselves have no buttons at the top right, so that space is free for other things (owner). This replaces decision 12, except for the buttons.
 25. File viewers and editors come from plugins and say which file types they take. Any place that uses the explorer gets every viewer and editor (owner). The explorer can show one plugin's file system, for example the printer and its storage (owner, as in decisions 1 and 3).
 26. The printer plugin adds a `.goo` viewer like Apple Maps: the main view starts with the slicer thumbnail and shows the progress of the 3D model, then shows the model; a sliding glass panel holds the print details (owner).
 27. The relay processes every `.goo` on the printer in the background, so the viewer never waits long (owner).
