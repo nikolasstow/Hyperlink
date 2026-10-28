@@ -35,6 +35,7 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   buttonStyle,
+  disabled,
   font,
   foregroundStyle,
   interactiveDismissDisabled,
@@ -56,6 +57,7 @@ import { useScreenBackground, useTextColors, withAlpha } from "../theme";
 import { LayerRange, type Range } from "./LayerRange";
 import { RESIN_SWATCHES, setModelColor, useModelColor } from "./modelColor";
 import { fmtDuration, settingsCells } from "./printerFormat";
+import { usePrintRunning } from "./printerPageLink";
 import { usePrintModel, type ModelSource } from "./printModel";
 import { fetchFileInfo, fetchPrintHeader, printFile, printPreviewUrl, type PrintHeader } from "./relayApi";
 import { usePalette } from "./ui";
@@ -122,8 +124,10 @@ export const GooViewerScreen = (props: Props): React.ReactElement => {
   const note = best === undefined ? (progressOf(lowState) ?? "Getting the 3D model") : bestLevel === "low" && highState?.kind !== "Failed" ? "Getting full detail" : undefined;
 
   const onPrinter = path !== undefined && (path.startsWith("/local/") || path.startsWith("/usb/"));
+  const running = usePrintRunning(relayBase);
+  const canPrint = onPrinter && running === false;
   const print = (): void => {
-    if (path === undefined) return;
+    if (path === undefined || !canPrint) return;
     Alert.alert(`Print ${title}?`, "The printer starts from the first layer.", [
       { text: "Cancel", style: "cancel" },
       {
@@ -175,7 +179,14 @@ export const GooViewerScreen = (props: Props): React.ReactElement => {
                   <SwiftText modifiers={[font({ size: 22, weight: "bold" })]}>{title}</SwiftText>
                   {summary !== undefined ? <SwiftText modifiers={[secondaryText]}>{summary}</SwiftText> : null}
                 </VStack>
-                {onPrinter ? <Button label="Print" systemImage="printer" onPress={print} /> : null}
+                {onPrinter ? (
+                  <Button
+                    label={running === true ? "A print is running" : running === undefined ? "Checking the printer" : "Print"}
+                    systemImage="printer"
+                    onPress={print}
+                    modifiers={[disabled(!canPrint)]}
+                  />
+                ) : null}
               </Section>
               <Section title="Model">
                 <ColorPicker label="Colour" selection={color} onSelectionChange={(next) => setModelColor(next.slice(0, 7))} />
