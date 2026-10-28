@@ -1,6 +1,6 @@
 # Plugin file systems, Devices, editors, widgets, and the printer Live Activity
 
-**Status:** 2026-10-19. Relay routes done (saturn-uploader `94107a3`). Explorer and printer page redesign done in iota (`fb30d4e3b`), not yet seen on a device. Next: the editor (section 9).
+**Status:** 2026-10-28. Decisions 22–28 (3D models, real printer pages, file viewers from plugins, the `.goo` viewer) are new and not built yet, except the relay's mesher and `model.mesh` route (saturn-uploader `ed1c27c`, `a2fa9f4`) and a first 3D page (iota `3ab0485aa`). Earlier: relay routes (saturn-uploader `94107a3`), explorer and printer page redesign (iota `fb30d4e3b`).
 **Scope:** a shared file explorer that plugins can give a file system to, Devices as a kind of server plugin, file editors from plugins, widgets with an edit mode, and a printer Live Activity.
 **Related:** [elegoo-printer-plugin.md](./elegoo-printer-plugin.md) · [server-pages-and-widgets.md](./server-pages-and-widgets.md) · [double-agent-repo-screen-and-plugin-system.md](./double-agent-repo-screen-and-plugin-system.md) §22 · [files-explorer-spec.md](./files-explorer-spec.md)
 
@@ -150,6 +150,16 @@ Work moves to the Mac mini: start the next Claude Code session there, in the hom
 19. The Live Activity shows the layer and the camera on the lock screen (owner). The camera picture keeps the full height and drops the sides; the window follows the plate (owner).
 20. Dynamic Island icon: the portal's printer drawing with a rectangular vat, in the portal icon too (owner).
 21. After the freeze, camera pictures in the Live Activity are off until the camera code is proven (`activityCamera`).
+
+### 2026-10-28
+
+22. The relay makes a 3D model of each `.goo` (saturn-uploader `src/LayerMesh.ts`, `GET /api/prints/<taskId>/model.mesh`). It makes at least two resolutions in one pass; the phone shows the low one first and swaps to the high one in place (owner). The 600,000-triangle cap was only ours.
+23. The 3D model gets a card on the printer page, above Print settings: it shows the model's progress, then a button that opens the model, and it keeps showing the high resolution's progress (owner). No header button for it.
+24. Printer pages are real pages on the navigation stack: Files, Health, and Settings open as their own pages, and the back button returns to the main printer page. No buttons at the top right of the printer page, so that space is free for other things (owner). This replaces decision 12.
+25. File viewers and editors come from plugins and say which file types they take. Any place that uses the explorer gets every viewer and editor (owner). The explorer can show one plugin's file system, for example the printer and its storage (owner, as in decisions 1 and 3).
+26. The printer plugin adds a `.goo` viewer like Apple Maps: the main view starts with the slicer thumbnail and shows the progress of the 3D model, then shows the model; a sliding glass panel holds the print details (owner).
+27. The relay processes every `.goo` on the printer in the background, so the viewer never waits long (owner).
+28. Lower priority: in the 3D view, two grabbers pick a layer range (for example 500 to 4,000), and the model is cut at those heights to show the inside (owner).
 
 ### Do not resurrect
 
