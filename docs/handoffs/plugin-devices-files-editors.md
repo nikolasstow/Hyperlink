@@ -122,6 +122,35 @@ Work moves to the Mac mini: start the next Claude Code session there, in the hom
 - The release film was at 69,716 of 60,000 cycles.
 - The printer's history shows the last three base 1 runs stopped with "Foreign object found".
 
+## 10. 3D models, the `.goo` viewer, and real printer pages (2026-10-28)
+
+**Status:** built overnight, deployed on the relay, in EAS build (see the session report). Nobody has seen the app part on a device yet.
+
+### Relay (saturn-uploader `feat/relay-portal`, `d53d932`, `aa22185`)
+
+- `src/LayerMesh.ts`: a `.goo` to a 3D model. Voxels of about 0.1 mm, streaming surface nets, meshoptimizer. Two levels from one pass: `low` (at most 200,000 triangles, about 3 MB) and `high` (at most 2,000,000, about 30 MB). All levels share one frame (the model's bounds), so a client swaps them in place. Format `SLMS` v1 (module doc).
+- The relay builds models in a `nice` child process (its own `mesh` command), so it stays quick (measured: under 1 ms per request while it builds). Models come only from a local copy.
+- Routes: `GET /api/prints/<taskId>/model.mesh?level=low|high`, `GET /api/files/model.mesh?path=&level=`, `GET /api/files/layers.pack?path=`. 202 with progress while it builds, 503 after a failed build or with no local copy.
+- `src/PrintPrep.ts`: every `.goo` on the printer (onboard and USB, two folder levels) gets a local copy, a pack, and a model ahead of time. Copies from the printer only while it is idle, 4 MiB reads with 250 ms between them, stops at once when the printer becomes busy. Runs 2 minutes after start, then every 10 minutes.
+
+### App (iota `feat/elegoo-printer-plugin`, `d32441634`)
+
+| Part | Where |
+|---|---|
+| File viewers from plugins, by file type; every explorer page asks first | `src/viewers/fileViewers.ts`; hosts: `printer/PrinterFiles.tsx`, `files/FileListing.tsx` |
+| The `.goo` viewer (printer plugin): thumbnail, then the low model, then the high model in place; a glass panel (SwiftUI sheet, detents 150 pt, medium, large, background interaction up to medium) with colour, cut through, print settings, Print | `printer/gooViewer.ts`, `printer/GooViewerScreen.tsx` |
+| Model colour: Apple's colour picker, resin swatches, back to the theme's colour; one colour for all models, kept on the phone | `printer/modelColor.ts` |
+| Cut through: two grabbers pick a layer range; a SceneKit fragment shader hides the rest and darkens inner walls (checked off-screen on macOS) | `printer/LayerRange.tsx`, `modules/model-viewer` |
+| Model downloads by print or by path, per level; quick views of every printer file at app open, foreground, every 2 minutes | `printer/printModel.ts`, `printer/relayDownload.ts`, `printer/layerPack.ts` |
+| Model card above Print settings: progress of both levels, Open | `printer/ModelCard.tsx` |
+| Files, Health, Settings as real pages from rows at the end of the printer page; they share its one live link | `printer/PrinterPages.tsx`, `printer/printerPageLink.ts` |
+
+### Open
+
+- The high level is about 30 MB per print; not yet tried over Tailscale on the phone.
+- Peak mesher memory grows with the print's detail (2.1 GB for the 782 MB legs file).
+- Cut through is by layer range only; no cap face on the cut.
+
 ## DECISIONS
 
 ### 2026-10-19
