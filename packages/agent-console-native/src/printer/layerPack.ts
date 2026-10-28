@@ -4,8 +4,9 @@
  * scrubber shows any layer at once, with no request.
  *
  * The app downloads the pack once per print and keeps the last few packs in
- * the cache folder. While the relay builds a pack (about 40 s from its own
- * copy, longer from the printer), it answers 202 and the app asks again.
+ * the cache folder (relayDownload.ts). While the relay builds a pack (about
+ * 40 s from its own copy, longer from the printer), it answers 202 and the
+ * app asks again.
  *
  * The format is in saturn-uploader `src/LayerPacks.ts`: `SLPK`, the version,
  * the layer count, the image size, a table of where each PNG starts, then
@@ -16,28 +17,20 @@
  */
 import * as React from "react";
 import { AppState } from "react-native";
-import { Directory, File, Paths } from "expo-file-system";
-import { authedFetch, authHeaders } from "../auth/serverTokens";
+import type { File } from "expo-file-system";
+import { authedFetch } from "../auth/serverTokens";
 import { pngDataUri } from "./goo";
+import { printModels } from "./printModel";
+import { makeDownloads, type DownloadState } from "./relayDownload";
 
 const PACK_MAGIC = "SLPK";
 const PACK_VERSION = 1;
 const FIXED_FIELDS = 5;
-/** How many packs the device keeps; the oldest go first. */
-const KEEP = 3;
-/** How long the app waits before it asks again while the relay builds the pack. */
-const RETRY_MS = 5_000;
-/** How long the app waits after a failed download or build. */
-const FAILED_RETRY_MS = 60_000;
 /** How often the open app checks the relay for a new print. */
 const WATCH_MS = 120_000;
 
 /** Where a print's pack stands on this device. */
-export type PackState =
-  | { readonly kind: "Building"; readonly done: number; readonly total: number }
-  | { readonly kind: "Downloading" }
-  | { readonly kind: "Ready"; readonly layerCount: number }
-  | { readonly kind: "Failed"; readonly reason: string };
+export type PackState = Exclude<DownloadState, { readonly kind: "Ready" }> | { readonly kind: "Ready"; readonly layerCount: number };
 
 /** An open pack: its table, and the file it reads each layer from. */
 interface OpenPack {
@@ -45,20 +38,6 @@ interface OpenPack {
   readonly starts: ReadonlyArray<number>;
   readonly file: File;
 }
-
-const folder = (): Directory => new Directory(Paths.cache, "layer-packs");
-
-const fileOf = (taskId: string): File => new File(folder(), `${taskId.replace(/[^A-Za-z0-9._-]/g, "_")}.pack`);
-
-const states = new Map<string, PackState>();
-const opened = new Map<string, OpenPack>();
-const listeners = new Set<() => void>();
-const working = new Set<string>();
-
-const setState = (taskId: string, state: PackState): void => {
-  states.set(taskId, state);
-  listeners.forEach((listener) => listener());
-};
 
 const u32 = (bytes: Uint8Array, at: number): number => new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(at, true);
 
@@ -77,14 +56,13 @@ const openPack = (file: File): OpenPack | undefined => {
   }
 };
 
-/** Deletes all but the newest `KEEP` packs. */
-const prune = (): void => {
-  const packs = folder()
-    .list()
-    .filter((entry): entry is File => entry instanceof File && entry.name.endsWith(".pack"))
-    .sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0));
-  packs.slice(KEEP).forEach((old) => old.delete());
-};
+const packs = makeDownloads({
+  folder: "layer-packs",
+  route: "layers.pack",
+  extension: ".pack",
+  keep: 3,
+  open: openPack,
+});
 
 /** The layer's PNG as a `data:` URI, read from the pack on the device. */
 const layerUri = (pack: OpenPack, index: number): string | undefined => {
@@ -100,78 +78,23 @@ const layerUri = (pack: OpenPack, index: number): string | undefined => {
   }
 };
 
-const decodeAnswer = (text: string): PackState => {
-  try {
-    const body: unknown = JSON.parse(text);
-    if (typeof body === "object" && body !== null && "state" in body) {
-      if (body.state === "building" && "done" in body && "total" in body && typeof body.done === "number" && typeof body.total === "number") {
-        return { kind: "Building", done: body.done, total: body.total };
-      }
-      if (body.state === "failed" && "reason" in body && typeof body.reason === "string") return { kind: "Failed", reason: body.reason };
-    }
-    if (typeof body === "object" && body !== null && "error" in body && typeof body.error === "string") return { kind: "Failed", reason: body.error };
-  } catch {
-    // Not JSON: fall through.
-  }
-  return { kind: "Failed", reason: "The relay sent something that is not a layer pack" };
-};
-
 /**
  * Gets the pack for `taskId` onto the device, once. Asks again while the
  * relay builds it. Safe to call often: one download runs per print.
  */
-export const ensureLayerPack = (relayBase: string, taskId: string): void => {
-  if (working.has(taskId) || opened.has(taskId)) return;
-  const target = fileOf(taskId);
-  if (target.exists) {
-    const pack = openPack(target);
-    if (pack !== undefined) {
-      opened.set(taskId, pack);
-      setState(taskId, { kind: "Ready", layerCount: pack.layerCount });
-      return;
-    }
-    target.delete();
-  }
-  working.add(taskId);
-  const dir = folder();
-  if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
-  const part = new File(dir, `${target.name}.part`);
-  const url = `${relayBase}/api/prints/${encodeURIComponent(taskId)}/layers.pack`;
-  const again = (ms: number): void => {
-    setTimeout(() => ensureLayerPack(relayBase, taskId), ms);
-  };
-  setState(taskId, { kind: "Downloading" });
-  File.downloadFileAsync(url, part, { idempotent: true, headers: authHeaders(url) })
-    .then((downloaded) => {
-      const pack = openPack(downloaded);
-      if (pack === undefined) {
-        // A 202 or a 503: a short JSON answer, not the pack.
-        const answer = decodeAnswer(downloaded.textSync());
-        downloaded.delete();
-        setState(taskId, answer);
-        again(answer.kind === "Building" ? RETRY_MS : FAILED_RETRY_MS);
-        return;
-      }
-      if (target.exists) target.delete();
-      downloaded.move(target);
-      opened.set(taskId, { ...pack, file: target });
-      setState(taskId, { kind: "Ready", layerCount: pack.layerCount });
-      prune();
-    })
-    .catch((error: unknown) => {
-      if (part.exists) part.delete();
-      setState(taskId, { kind: "Failed", reason: error instanceof Error ? error.message : String(error) });
-      again(FAILED_RETRY_MS);
-    })
-    .finally(() => working.delete(taskId));
-};
+export const ensureLayerPack = (relayBase: string, taskId: string): void => packs.ensure(relayBase, taskId);
 
 /** Where the pack for `taskId` stands on this device. */
-export const layerPackState = (taskId: string): PackState | undefined => states.get(taskId);
+export const layerPackState = (taskId: string): PackState | undefined => {
+  const state = packs.state(taskId);
+  if (state?.kind !== "Ready") return state;
+  const pack = packs.opened(taskId);
+  return pack === undefined ? undefined : { kind: "Ready", layerCount: pack.layerCount };
+};
 
 /** Layer `index` of the pack for `taskId` as a `data:` URI, when the pack is on the device. */
 export const layerPackUri = (taskId: string, index: number): string | undefined => {
-  const pack = opened.get(taskId);
+  const pack = packs.opened(taskId);
   return pack === undefined ? undefined : layerUri(pack, index);
 };
 
@@ -184,17 +107,11 @@ export const useLayerPack = (
   taskId: string | undefined,
 ): { readonly state: PackState | undefined; readonly uriOf: (index: number | undefined) => string | undefined } => {
   const [, setVersion] = React.useState(0);
-  React.useEffect(() => {
-    const listener = (): void => setVersion((version) => version + 1);
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  }, []);
+  React.useEffect(() => packs.subscribe(() => setVersion((version) => version + 1)), []);
   React.useEffect(() => {
     if (relayBase !== undefined && taskId !== undefined) ensureLayerPack(relayBase, taskId);
   }, [relayBase, taskId]);
-  const pack = taskId === undefined ? undefined : opened.get(taskId);
+  const pack = taskId === undefined ? undefined : packs.opened(taskId);
   // The last few layers read, so a re-render does not read the file again.
   const cache = React.useRef(new Map<string, string>());
   const uriOf = React.useCallback(
@@ -212,7 +129,7 @@ export const useLayerPack = (
     },
     [pack, taskId],
   );
-  return { state: taskId === undefined ? undefined : states.get(taskId), uriOf };
+  return { state: taskId === undefined ? undefined : layerPackState(taskId), uriOf };
 };
 
 const currentTaskId = (body: unknown): string | undefined =>
@@ -221,9 +138,9 @@ const currentTaskId = (body: unknown): string | undefined =>
     : undefined;
 
 /**
- * Gets the current print's pack before the owner opens the printer page: at
- * app open, at each return to the foreground, and every 2 minutes while the
- * app is open. It reads the relay's `GET /api/state`, which the relay answers
+ * Gets the current print's pack and 3D model before the owner opens the
+ * printer page: at app open, at each return to the foreground, and every 2
+ * minutes while the app is open. It reads the relay's `GET /api/state`, which the relay answers
  * from its cache, so it sends nothing to the printer. Returns the stop.
  */
 export const watchForLayerPacks = (relayBase: string): (() => void) => {
@@ -233,7 +150,9 @@ export const watchForLayerPacks = (relayBase: string): (() => void) => {
       .then((response) => (response.ok ? response.json() : undefined))
       .then((body: unknown) => {
         const taskId = currentTaskId(body);
-        if (taskId !== undefined) ensureLayerPack(relayBase, taskId);
+        if (taskId === undefined) return;
+        ensureLayerPack(relayBase, taskId);
+        printModels.ensure(relayBase, taskId);
       })
       .catch(() => undefined);
   };

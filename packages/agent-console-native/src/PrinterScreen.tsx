@@ -307,11 +307,29 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const healthBad = health.filter((item) => !item.ok).length;
 
   // The header: the view's title, and the buttons at the top right. The one that is on goes back to the print.
+  // The 3D model needs the relay, which makes it from the print file.
+  const modelTask = hasJob && printer.relayReachable ? info?.TaskId : undefined;
+  const modelFile = info?.Filename;
+  const model = React.useMemo(
+    () => (modelTask === undefined || modelFile === undefined ? undefined : { relayBase: printer.relayBase, taskId: modelTask, filename: modelFile }),
+    [printer.relayBase, modelTask, modelFile],
+  );
   React.useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: () => <HeaderTitlePill title={view === "Print" ? "Printer" : view} rightButtons={BUTTONS.length} />,
-      unstable_headerRightItems: () =>
-        BUTTONS.map((button): NativeStackHeaderItem => {
+      headerTitle: () => <HeaderTitlePill title={view === "Print" ? "Printer" : view} rightButtons={BUTTONS.length + (model === undefined ? 0 : 1)} />,
+      unstable_headerRightItems: () => [
+        ...(model === undefined
+          ? []
+          : [
+              {
+                type: "button",
+                label: "3D model",
+                accessibilityLabel: "3D model",
+                icon: { type: "sfSymbol", name: "cube" },
+                onPress: () => navigation.navigate("ServerPrinterModel", model),
+              } satisfies NativeStackHeaderItem,
+            ]),
+        ...BUTTONS.map((button): NativeStackHeaderItem => {
           const on = view === button.view;
           const count = button.view === "Files" ? runningUploads : button.view === "Health" ? healthBad : 0;
           return {
@@ -328,8 +346,9 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             },
           };
         }),
+      ],
     });
-  }, [navigation, view, runningUploads, healthBad, palette.accent]);
+  }, [navigation, view, runningUploads, healthBad, palette.accent, model]);
 
   const timeline = hasJob ? (
     <Progress

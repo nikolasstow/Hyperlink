@@ -55,6 +55,7 @@ import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
+import { PrinterModelScreen } from "./PrinterModelScreen";
 import { PrinterScreen } from "./PrinterScreen";
 import { serverById } from "./servers";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
@@ -124,6 +125,8 @@ export type RootStackParamList = {
   // A server's resin printer page: live status and the layer on the LCD, direct
   // on the LAN or through the relay on that server.
   ServerPrinter: { serverName: string; serverAddress: string };
+  // The print's 3D model, from the relay.
+  ServerPrinterModel: { relayBase: string; taskId: string; filename: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -385,6 +388,7 @@ export const RootNavigator = (): React.ReactElement => {
         />
         <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
         <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
+        <Stack.Screen name="ServerPrinterModel" component={PrinterModelScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="3D model" /> }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
