@@ -7,7 +7,7 @@ import simd
 /// `src/LayerMesh.ts`), in SceneKit. One finger turns the model about the
 /// vertical axis and tilts it, two fingers move it, and a pinch zooms.
 ///
-/// The file: `SLMS`, the version (1), the vertex and triangle counts, the
+/// The file: `SLMS`, the version (2; version 1 files are mirrored), the vertex and triangle counts, the
 /// bounds' low and high corners in mm, the layer height and count, then each
 /// vertex as three u16 across the bounds, padding to 4 bytes, and each
 /// triangle as three u32 indices, counter-clockwise from outside. All
@@ -147,7 +147,7 @@ final class ModelViewerView: ExpoView {
     guard data.count >= fixed, data.prefix(4) == Data("SLMS".utf8) else { return nil }
     func u32(_ at: Int) -> UInt32 { data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: at, as: UInt32.self).littleEndian } }
     func f32(_ at: Int) -> Float { Float(bitPattern: u32(at)) }
-    guard u32(4) == 1 else { return nil }
+    guard u32(4) == 2 else { return nil }
     let vertexCount = Int(u32(8))
     let triangleCount = Int(u32(12))
     let low = SIMD3<Float>(f32(16), f32(20), f32(24))

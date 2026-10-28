@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { MESH_VERSION } from "./printModel";
 
 /** The device's files, by name, and what the relay answers, by URL. */
 const disk = new Map<string, Uint8Array>();
@@ -79,7 +80,7 @@ const modelOf = (): Uint8Array => {
   const out = new Uint8Array(indexStart + triangleCount * 12);
   const view = new DataView(out.buffer);
   out.set(new TextEncoder().encode("SLMS"), 0);
-  view.setUint32(4, 1, true);
+  view.setUint32(4, MESH_VERSION, true);
   view.setUint32(8, vertexCount, true);
   view.setUint32(12, triangleCount, true);
   [0, 1, 2].forEach((index) => view.setUint32(indexStart + index * 4, index, true));

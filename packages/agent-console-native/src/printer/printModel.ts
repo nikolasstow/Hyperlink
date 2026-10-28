@@ -16,7 +16,8 @@ import type { File } from "expo-file-system";
 import { makeDownloads, type DownloadState, type Downloads } from "./relayDownload";
 
 const MESH_MAGIC = "SLMS";
-const MESH_VERSION = 1;
+/** The format this app reads. Version 1 files are mirrored, so the app deletes them and gets them again. */
+export const MESH_VERSION = 2;
 const FIXED_BYTES = 48;
 
 /** The levels of detail, smallest first: the order the app gets them in. */
