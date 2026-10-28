@@ -10,7 +10,8 @@
  * - The panel has the model's colour (Apple's colour picker and resin
  *   swatches), a crop (two grabbers pick a layer range and the model shows
  *   only those layers, so the inside shows), the print settings, and Print
- *   for a file on the printer.
+ *   for a file on the printer. Print stays off while a print runs or is
+ *   paused, and until the app knows.
  * - The panel stays: it rests low, and the model takes touches above it.
  *
  * It opens for the current print (by task id) or for any file (by path).
