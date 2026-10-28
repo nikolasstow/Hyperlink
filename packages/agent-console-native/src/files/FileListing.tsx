@@ -7,6 +7,7 @@
  *
  * @internal
  */
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as React from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { useAppContext } from "../AppContext";
@@ -15,7 +16,9 @@ import type { SourceRow } from "../explorer/sourceRows";
 import { fileTarget, folderTarget, repoScope, sameTarget } from "../favorites/model";
 import { toggleFavorite, useBoard } from "../favorites/useFavorites";
 import { SystemIcon } from "../SystemIcon";
+import type { RootStackParamList } from "../RootNavigator";
 import { useCodeTheme } from "../useCodeTheme";
+import { viewerFor } from "../viewers/fileViewers";
 import { useDirtyPaths } from "./fileEdits";
 import { keepOnDevice, removeFromDevice, useKeptPaths } from "./fileKeep";
 import type { FileNavEntry } from "./FileNav";
@@ -45,6 +48,7 @@ export const FileListing = (props: {
   const { backend } = useAppContext();
   const source = React.useMemo(() => repoSource(backend), [backend]);
   const { repo, onOpen, onOpenInNewTab } = props;
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   // A file/folder favorites to this repo/workspace's scope.
   const favScope = React.useMemo(() => repoScope(repo), [repo]);
   const favBoard = useBoard(favScope);
@@ -91,7 +95,13 @@ export const FileListing = (props: {
     <Explorer
       source={source}
       root={props.dir}
-      onOpen={(row) => onOpen(navEntry(row))}
+      onOpen={(row) => {
+        // A file a plugin viewer takes opens there; the rest open in Files.
+        const target = { endpoint: undefined, path: row.path, name: row.name };
+        const viewer = row.kind === "directory" ? undefined : viewerFor(target);
+        if (viewer !== undefined) viewer.open(navigation, target);
+        else onOpen(navEntry(row));
+      }}
       menu={menu}
       marks={marks}
       scroll={{ topInset: props.topInset, bottomInset: props.bottomInset, onScroll: props.onScroll }}

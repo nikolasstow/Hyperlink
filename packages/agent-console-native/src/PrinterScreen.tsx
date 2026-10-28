@@ -7,10 +7,12 @@
  * - Print: the stage (the layer on the LCD at its real size in millimetres,
  *   and the camera as a second page: StagePager.tsx), the print's progress,
  *   pause, resume, and stop, and the file's print settings.
+ * - The 3D model: a card with the model's progress, then a button that
+ *   opens it (printer/GooViewerScreen.tsx).
  * - Files (the shared explorer over the relay, with uploads from the phone),
- *   Health (the printer's vitals and self-check), and Settings: buttons at
- *   the top right of the header. Tapping the one that is on goes back to the
- *   print. With no print running, the page opens on Files.
+ *   Health (the printer's vitals and self-check), and Settings: real pages
+ *   (printer/PrinterPages.tsx), from rows at the end of the page. The back
+ *   button returns here. They share this page's live link.
  *
  * Live status comes straight from the printer when the phone is on its LAN,
  * and through the relay otherwise (`printer/usePrinterLink.ts`). Layer images
@@ -25,32 +27,32 @@
  *
  * @internal
  */
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useIsFocused } from "@react-navigation/native";
-import type { NativeStackHeaderItem, NativeStackScreenProps } from "@react-navigation/native-stack";
-import { LinearGradient } from "expo-linear-gradient";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { ActivityIndicator, Animated, Image, ScrollView, StyleSheet, Switch, Text, useColorScheme, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import type { SFSymbol } from "sf-symbols-typescript";
 import { PrinterPip } from "../modules/printer-pip";
 import { mark } from "./diagnostics/launchTrail";
-import { HeaderTitlePill } from "./HeaderTitlePill";
+import { SystemIcon } from "./SystemIcon";
+import { Backdrop } from "./printer/Backdrop";
 import { useDirectLayer } from "./printer/directLayers";
+import { ModelCard } from "./printer/ModelCard";
 import { CameraPane } from "./printer/PrinterCamera";
-import { PrinterFiles, useRunningUploads, useUploadWatch } from "./printer/PrinterFiles";
+import { useRunningUploads, useUploadWatch } from "./printer/PrinterFiles";
 import { useLayerPack } from "./printer/layerPack";
+import { useMeasure, usePublishPrinterLink } from "./printer/printerPageLink";
 import { Controls, Lcd, Progress, useLoadedUri } from "./printer/PrinterStage";
-import { DEFAULT_LCD_MM, fmtBytes, healthItems, settingsCells } from "./printer/printerFormat";
+import { DEFAULT_LCD_MM, healthItems, settingsCells } from "./printer/printerFormat";
 import { cameraSocketUrl, fetchPrintHeader, printPreviewUrl, type PrintHeader } from "./printer/relayApi";
 import { isPrinting, layerIndexOf, PHASE_COMPLETE, PHASE_EXPOSING, PHASE_PAUSED, PHASE_PAUSING, PHASE_STOPPED, PHASE_STOPPING, phaseLabel, PRINTER_PORT, printErrorLabel, type PrinterStatus } from "./printer/sdcp";
 import { StagePager } from "./printer/StagePager";
-import { Card, Cells, Chip, Dot, Row, usePalette, type Tone } from "./printer/ui";
+import { Card, Cells, Chip, usePalette, type Tone } from "./printer/ui";
 import { usePrinterLink, type LinkState } from "./printer/usePrinterLink";
 import type { RootStackParamList } from "./RootNavigator";
-import { towardWhite, useScreenBackground, useTextColors, useTheme, withAlpha } from "./theme";
+import { towardWhite, useTextColors, withAlpha } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerPrinter">;
 
@@ -104,46 +106,11 @@ const usePrintHeader = (relayBase: string, taskId: string | undefined, reachable
   return header?.taskId === taskId ? header?.header : undefined;
 };
 
-/** The page's backdrop: the print's slicer render, blurred and darkened, with a wash of the theme's colour while the printer exposes. */
-const Backdrop = (props: { readonly uri: string | undefined; readonly glow: number }): React.ReactElement => {
-  const background = useScreenBackground("grouped");
-  const { colors: themeColors } = useTheme();
-  const dark = useColorScheme() === "dark";
-  const { width, height } = useWindowDimensions();
-  const glow = React.useRef(new Animated.Value(props.glow)).current;
-  React.useEffect(() => {
-    Animated.timing(glow, { toValue: props.glow, duration: 900, useNativeDriver: true }).start();
-  }, [glow, props.glow]);
-  return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: background }]} pointerEvents="none">
-      {props.uri !== undefined ? <Image source={{ uri: props.uri }} style={[StyleSheet.absoluteFill, { opacity: dark ? 0.55 : 0.4 }]} resizeMode="cover" blurRadius={60} /> : null}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: glow }]}>
-        <Svg width={width} height={height}>
-          <Defs>
-            <RadialGradient id="uv" cx="30%" cy="22%" r="70%">
-              <Stop offset="0" stopColor={themeColors.primary} stopOpacity={0.55} />
-              <Stop offset="1" stopColor={themeColors.primary} stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Rect x={0} y={0} width={width} height={height} fill="url(#uv)" />
-        </Svg>
-      </Animated.View>
-      <LinearGradient
-        colors={dark ? ["rgba(6,7,11,0.35)", "rgba(6,7,11,0.82)"] : ["rgba(240,242,248,0.25)", "rgba(240,242,248,0.8)"]}
-        style={StyleSheet.absoluteFill}
-      />
-    </View>
-  );
-};
-
-/** What the page shows: the print, or the view of one of the header's buttons. */
-type PageView = "Print" | "Files" | "Health" | "Settings";
-
-/** The header's buttons, in order, with their icons off and on. */
-const BUTTONS: ReadonlyArray<{ readonly view: Exclude<PageView, "Print">; readonly label: string; readonly icon: SFSymbol; readonly on: SFSymbol }> = [
-  { view: "Files", label: "Files", icon: "folder", on: "folder.fill" },
-  { view: "Health", label: "Health", icon: "heart.text.square", on: "heart.text.square.fill" },
-  { view: "Settings", label: "Settings", icon: "gearshape", on: "gearshape.fill" },
+/** The pages this page opens, as rows at its end. */
+const PAGES: ReadonlyArray<{ readonly route: "ServerPrinterFiles" | "ServerPrinterHealth" | "ServerPrinterSettings"; readonly label: string; readonly icon: SFSymbol }> = [
+  { route: "ServerPrinterFiles", label: "Files", icon: "folder" },
+  { route: "ServerPrinterHealth", label: "Health", icon: "heart.text.square" },
+  { route: "ServerPrinterSettings", label: "Settings", icon: "gearshape" },
 ];
 
 export const PrinterScreen = (props: Props): React.ReactElement => {
@@ -157,7 +124,8 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   // `?.` guards a nav state restored before this screen took params.
   const serverAddress = props.route.params?.serverAddress;
   const printer = usePrinterLink(serverAddress);
-  const [measure, setMeasure] = useMeasure();
+  usePublishPrinterLink(serverAddress, printer);
+  const [measure] = useMeasure();
   const runningUploads = useRunningUploads();
   // The launch trail: the printer page is the suspect in a launch that dies.
   React.useEffect(() => {
@@ -169,9 +137,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
     mark(linkStep);
   }, [linkStep]);
   useUploadWatch(printer.relayBase, printer.relayReachable);
-  // The view the owner chose with a header button; until then, the print, or Files when no print runs.
-  const [chosen, setChosen] = React.useState<PageView | undefined>(undefined);
-  const scroller = React.useRef<ScrollView>(null);
   // The spinner is for the first try only. After that the cards stay, so a page
   // that keeps retrying does not swap between the spinner and the cards.
   const [tried, setTried] = React.useState(false);
@@ -219,7 +184,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   // Ticks only arrive with a push; between pushes, count on from the last one.
   const sincePush = active && !paused && printer.updatedAt !== undefined ? now - printer.updatedAt : 0;
   const remaining = info?.TotalTicks !== undefined && info.CurrentTicks !== undefined ? info.TotalTicks - info.CurrentTicks - sincePush : undefined;
-  const view: PageView = chosen ?? (status === undefined || active ? "Print" : "Files");
 
   const header = usePrintHeader(printer.relayBase, hasJob ? info?.TaskId : undefined, printer.relayReachable);
 
@@ -300,55 +264,8 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const mainWidth = wide ? Math.floor((width - 32 - 14) * 0.6) : width - 32;
   const lcdWidth = mainWidth - 32;
   const lcdHeight = lcdWidth * (lcdMm.height / lcdMm.width);
-  const film = status?.ReleaseFilm;
-  const filmMax = attributes?.ReleaseFilmMax;
-  const filmRatio = film !== undefined && filmMax !== undefined && filmMax > 0 ? film / filmMax : undefined;
   const health = healthItems(attributes?.DevicesStatus);
   const healthBad = health.filter((item) => !item.ok).length;
-
-  // The header: the view's title, and the buttons at the top right. The one that is on goes back to the print.
-  // The 3D model needs the relay, which makes it from the print file.
-  const modelTask = hasJob && printer.relayReachable ? info?.TaskId : undefined;
-  const modelFile = info?.Filename;
-  const model = React.useMemo(
-    () => (modelTask === undefined || modelFile === undefined ? undefined : { relayBase: printer.relayBase, taskId: modelTask, filename: modelFile }),
-    [printer.relayBase, modelTask, modelFile],
-  );
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: () => <HeaderTitlePill title={view === "Print" ? "Printer" : view} rightButtons={BUTTONS.length + (model === undefined ? 0 : 1)} />,
-      unstable_headerRightItems: () => [
-        ...(model === undefined
-          ? []
-          : [
-              {
-                type: "button",
-                label: "3D model",
-                accessibilityLabel: "3D model",
-                icon: { type: "sfSymbol", name: "cube" },
-                onPress: () => navigation.navigate("ServerPrinterModel", model),
-              } satisfies NativeStackHeaderItem,
-            ]),
-        ...BUTTONS.map((button): NativeStackHeaderItem => {
-          const on = view === button.view;
-          const count = button.view === "Files" ? runningUploads : button.view === "Health" ? healthBad : 0;
-          return {
-            type: "button",
-            label: button.label,
-            accessibilityLabel: button.label,
-            icon: { type: "sfSymbol", name: on ? button.on : button.icon },
-            selected: on,
-            ...(on ? { tintColor: palette.accent } : {}),
-            ...(count > 0 ? { badge: { value: count } } : {}),
-            onPress: () => {
-              setChosen(on ? "Print" : button.view);
-              scroller.current?.scrollTo({ y: 0, animated: false });
-            },
-          };
-        }),
-      ],
-    });
-  }, [navigation, view, runningUploads, healthBad, palette.accent, model]);
 
   const timeline = hasJob ? (
     <Progress
@@ -417,7 +334,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             note={lcdNote}
           />
         }
-        camera={(visible) => <CameraPane relayBase={printer.relayBase} secureUrl={printer.secureUrl} reachable={printer.relayReachable} visible={visible && view === "Print"} width={lcdWidth} height={lcdHeight} />}
+        camera={(visible) => <CameraPane relayBase={printer.relayBase} secureUrl={printer.secureUrl} reachable={printer.relayReachable} visible={visible && focused} width={lcdWidth} height={lcdHeight} />}
         behind={(page) => (
           // Leaving the app opens Picture in Picture of this page: the camera, or the layer while a print runs.
           <PrinterPip
@@ -436,54 +353,13 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             percent={hasJob ? percent : undefined}
             elapsedMs={active && info?.CurrentTicks !== undefined ? info.CurrentTicks + sincePush : undefined}
             remainingMs={active ? remaining : undefined}
-            enabled={focused && view === "Print" && (page === "Camera" ? printer.relayReachable : hasJob)}
+            enabled={focused && (page === "Camera" ? printer.relayReachable : hasJob)}
           />
         )}
       />
       {timeline}
       {active && online ? <Controls phase={info?.Status} send={printer.sendControl} /> : null}
     </Card>
-  );
-
-  const healthView = (
-    <>
-      <Card title="Printer" right={attributes?.FirmwareVersion !== undefined ? <Text style={[styles.faint, { color: text.tertiaryLabel }]}>Firmware {attributes.FirmwareVersion}</Text> : undefined}>
-        {film !== undefined && filmMax !== undefined && filmRatio !== undefined ? (
-          <View style={styles.meter}>
-            <View style={styles.meterTop}>
-              <Text style={[styles.meterLabel, { color: text.secondaryLabel }]}>Release film</Text>
-              <Text style={[styles.meterValue, { color: text.label }]}>
-                {film.toLocaleString()} / {filmMax.toLocaleString()}
-              </Text>
-            </View>
-            <View style={styles.meterTrack}>
-              <View style={[styles.meterFill, { width: `${Math.min(100, filmRatio * 100)}%`, backgroundColor: filmRatio >= 1 ? palette.bad : filmRatio >= 0.85 ? palette.warn : palette.ok }]} />
-            </View>
-            {filmRatio >= 0.85 ? <Text style={[styles.meterNote, { color: filmRatio >= 1 ? palette.bad : text.tertiaryLabel }]}>{filmRatio >= 1 ? "Past its rated number of cycles. Replace the film soon." : "Nearing its rated number of cycles."}</Text> : null}
-          </View>
-        ) : null}
-        <Row label="UV LED" value={status?.TempOfUVLED !== undefined ? `${status.TempOfUVLED.toFixed(1)} °C` : "—"} />
-        <Row label="Resin" value={status?.TempOfTank !== undefined ? `${status.TempOfTank} °C${status.TempTargetTank ? ` · target ${status.TempTargetTank} °C` : ""}` : "—"} />
-        <Row label="Storage free" value={attributes?.RemainingMemory !== undefined ? fmtBytes(attributes.RemainingMemory) : "—"} />
-        <Row label="Network" value={`${attributes?.NetworkStatus === "eth" ? "Ethernet" : attributes?.NetworkStatus === "wlan" ? "Wi-Fi" : "—"}${attributes?.UsbDiskStatus === 1 ? " · USB drive in" : ""}`} />
-        <Row label="Address" value={printer.printerIp ?? "—"} last />
-      </Card>
-
-      {health.length > 0 ? (
-        <Card title="Self-check" right={<Text style={[styles.faint, { color: healthBad > 0 ? palette.bad : text.tertiaryLabel }]}>{healthBad === 0 ? "All normal" : `${healthBad} to check`}</Text>}>
-          <View style={styles.health}>
-            {health.map((item) => (
-              <View key={item.label} style={[styles.healthItem, item.ok ? null : { backgroundColor: withAlpha(palette.bad, 0.14) }]}>
-                <Dot tone={item.ok ? "ok" : "bad"} size={7} />
-                <Text style={[styles.healthText, { color: text.label }]} numberOfLines={1}>
-                  {item.label}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </Card>
-      ) : null}
-    </>
   );
 
   const printSettings =
@@ -500,24 +376,36 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
 
   const connection = online ? (printer.link.kind === "Open" && printer.link.via === "Direct" ? `Direct to the printer at ${printer.printerIp ?? "its address"}` : `Through the relay on ${props.route.params?.serverName ?? "the server"}`) : "Not connected";
 
-  const settingsView = (
-    <>
-      <Card title="Stage">
-        <View style={styles.switchRow}>
-          <View style={styles.switchText}>
-            <Text style={[styles.switchLabel, { color: text.label }]}>Measurements</Text>
-            <Text style={[styles.switchNote, { color: text.tertiaryLabel }]}>A 10 mm grid, a ruler, and the layer number on the LCD.</Text>
-          </View>
-          <Switch value={measure} onValueChange={setMeasure} trackColor={{ true: palette.accent, false: "rgba(127,127,127,0.3)" }} />
-        </View>
-      </Card>
-      <Card title="Connection">
-        <Row label="Status" value={connection} />
-        <Row label="Printer" value={printer.printerIp ?? "—"} />
-        <Row label="Relay" value={printer.relayReachable ? printer.relayBase.replace(/^https?:\/\//, "") : "Not reachable"} />
-        <Row label="Camera" value={printer.secureUrl !== undefined ? "H.264, 30 fps" : "MJPEG, 10 fps"} last />
-      </Card>
-    </>
+  // The model card: the 3D model needs the relay, which makes it from the print file.
+  const modelCard =
+    hasJob && printer.relayReachable && info?.TaskId !== undefined && info.Filename !== undefined ? (
+      <ModelCard relayBase={printer.relayBase} taskId={info.TaskId} filename={info.Filename} navigation={navigation} />
+    ) : null;
+
+  // The pages this one opens, with what needs attention on each.
+  const pages = (
+    <Card flush>
+      {PAGES.map((page, i) => {
+        const count = page.route === "ServerPrinterFiles" ? runningUploads : page.route === "ServerPrinterHealth" ? healthBad : 0;
+        return (
+          <Pressable
+            key={page.route}
+            onPress={() => navigation.navigate(page.route, { serverName: props.route.params?.serverName ?? "", serverAddress: serverAddress ?? "" })}
+            style={({ pressed }) => [styles.pageRow, i < PAGES.length - 1 ? styles.pageRowLine : null, pressed ? { backgroundColor: withAlpha("#7F7F7F", 0.12) } : null]}
+            accessibilityRole="button"
+          >
+            <SystemIcon name={page.icon} size={18} color={palette.accent} weight="semibold" />
+            <Text style={[styles.pageLabel, { color: text.label }]}>{page.label}</Text>
+            {count > 0 ? (
+              <View style={[styles.badge, { backgroundColor: page.route === "ServerPrinterHealth" ? palette.bad : palette.accent }]}>
+                <Text style={styles.badgeText}>{count}</Text>
+              </View>
+            ) : null}
+            <SystemIcon name="chevron.right" size={13} color={text.tertiaryLabel} weight="semibold" />
+          </Pressable>
+        );
+      })}
+    </Card>
   );
 
   const footer = (
@@ -533,60 +421,37 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const printView = wide ? (
     <View style={styles.columns}>
       <View style={{ width: mainWidth }}>{stage}</View>
-      <View style={styles.side}>{printSettings}</View>
+      <View style={styles.side}>
+        {modelCard}
+        {printSettings}
+        {pages}
+      </View>
     </View>
   ) : (
     <>
       {stage}
+      {modelCard}
       {printSettings}
+      {pages}
     </>
   );
 
   return (
     <View style={styles.root}>
       <Backdrop uri={previewUri} glow={exposing ? 1 : active ? 0.45 : 0} />
-      <ScrollView ref={scroller} contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
-        {view === "Print" ? titleBlock : null}
+      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
+        {titleBlock}
         {status === undefined && !tried ? (
           <ActivityIndicator style={styles.loading} />
         ) : (
-          // Hidden views stay mounted, so Files keeps its folder and the camera its page.
-          <View style={wide && view !== "Print" ? styles.narrow : null}>
-            <View style={view === "Print" ? null : styles.hidden}>{printView}</View>
-            <View style={view === "Files" ? null : styles.hidden}>
-              <PrinterFiles relayBase={printer.relayBase} reachable={printer.relayReachable} printingName={active ? info?.Filename : undefined} />
-            </View>
-            <View style={view === "Health" ? null : styles.hidden}>{healthView}</View>
-            <View style={view === "Settings" ? null : styles.hidden}>{settingsView}</View>
+          <View>
+            {printView}
             {footer}
           </View>
         )}
       </ScrollView>
     </View>
   );
-};
-
-const MEASURE_KEY = "agent-console-native:printer:measure";
-
-/** The Measurements switch, remembered on the phone. Off until the owner turns it on. */
-const useMeasure = (): readonly [boolean, (next: boolean) => void] => {
-  const [measure, setMeasure] = React.useState(false);
-  React.useEffect(() => {
-    let alive = true;
-    AsyncStorage.getItem(MEASURE_KEY)
-      .then((raw) => {
-        if (alive && raw === "1") setMeasure(true);
-      })
-      .catch((cause: unknown) => console.error("[printer] reading the Measurements switch failed", cause));
-    return () => {
-      alive = false;
-    };
-  }, []);
-  const change = React.useCallback((next: boolean) => {
-    setMeasure(next);
-    AsyncStorage.setItem(MEASURE_KEY, next ? "1" : "0").catch((cause: unknown) => console.error("[printer] keeping the Measurements switch failed", cause));
-  }, []);
-  return [measure, change];
 };
 
 const styles = StyleSheet.create({
@@ -610,8 +475,11 @@ const styles = StyleSheet.create({
   healthText: { fontSize: 13, flexShrink: 1 },
   preview: { alignSelf: "center", width: 180, height: 180, borderRadius: 16, overflow: "hidden", backgroundColor: "#050508", marginBottom: 12 },
   foot: { fontSize: 11, textAlign: "center", marginTop: 6 },
-  hidden: { display: "none" },
-  narrow: { width: "100%", maxWidth: 700, alignSelf: "center" },
+  pageRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
+  pageRowLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(127,127,127,0.3)" },
+  pageLabel: { flex: 1, fontSize: 16 },
+  badge: { minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  badgeText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
   columns: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
   side: { flex: 1 },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },

@@ -13,9 +13,31 @@ import simd
 /// triangle as three u32 indices, counter-clockwise from outside. All
 /// little-endian. The model's Z is up from the build plate; SceneKit's up is
 /// Y, so the model node turns a quarter turn about X.
+///
+/// A new file with the same bounds (a finer level of the same model) takes
+/// the old one's place and keeps the view. A crop (`clipLowMm`,
+/// `clipHighMm`, heights above the plate) hides the model outside the range,
+/// so the inside shows: its inner walls are drawn darker.
 final class ModelViewerView: ExpoView {
   var uri: URL? { didSet { if uri != oldValue { load() } } }
   var modelColor: UIColor = UIColor(white: 0.85, alpha: 1) { didSet { material.diffuse.contents = modelColor } }
+  var clipLowMm: Double? { didSet { if clipLowMm != oldValue { applyClip() } } }
+  var clipHighMm: Double? { didSet { if clipHighMm != oldValue { applyClip() } } }
+
+  /// Discards every fragment outside the crop, by its height in the model's own space, and darkens the back faces it shows.
+  private static let clipShader = """
+  #pragma arguments
+  float clipLow;
+  float clipHigh;
+  #pragma body
+  float4 local = scn_node.inverseModelViewTransform * float4(_surface.position, 1.0);
+  if (local.z < clipLow || local.z > clipHigh) {
+    discard_fragment();
+  }
+  if (dot(_surface.normal, _surface.view) < 0.0) {
+    _output.color.rgb *= 0.5;
+  }
+  """
 
   private let scnView = SCNView()
   private let scene = SCNScene()
@@ -77,13 +99,30 @@ final class ModelViewerView: ExpoView {
     }
   }
 
+  private func applyClip() {
+    guard clipLowMm != nil || clipHighMm != nil else {
+      material.shaderModifiers = nil
+      material.isDoubleSided = false
+      return
+    }
+    material.shaderModifiers = [.fragment: ModelViewerView.clipShader]
+    material.isDoubleSided = true
+    material.setValue(Float(clipLowMm ?? -1_000_000), forKey: "clipLow")
+    material.setValue(Float(clipHighMm ?? 1_000_000), forKey: "clipHigh")
+  }
+
   private func show(_ geometry: SCNGeometry) {
     geometry.materials = [material]
+    let previous = modelNode?.geometry?.boundingBox
     modelNode?.removeFromParentNode()
     let node = SCNNode(geometry: geometry)
     node.eulerAngles.x = -.pi / 2
     scene.rootNode.addChildNode(node)
     modelNode = node
+
+    // A finer level of the same model has the same bounds: keep the owner's view.
+    let (low, high) = geometry.boundingBox
+    if let previous, ModelViewerView.near(previous.min, low), ModelViewerView.near(previous.max, high) { return }
 
     // Frame the whole model: its bounding sphere fills the view, seen from the front and a little above.
     let (center, radius) = node.boundingSphere
@@ -96,6 +135,10 @@ final class ModelViewerView: ExpoView {
     cameraNode.look(at: middle)
     scnView.pointOfView = cameraNode
     scnView.defaultCameraController.target = middle
+  }
+
+  private static func near(_ a: SCNVector3, _ b: SCNVector3) -> Bool {
+    abs(a.x - b.x) < 1 && abs(a.y - b.y) < 1 && abs(a.z - b.z) < 1
   }
 
   /// The model as SceneKit geometry, with a normal per vertex from the triangles around it. Nil when the data is not a model.

@@ -1,8 +1,8 @@
 /**
  * Files the relay builds for each print, kept on the device: the layer pack
- * (layerPack.ts) and the 3D model (printModel.ts). Each kind is one route
- * under `/api/prints/<taskId>/`. While the relay builds the file it answers
- * 202 with its progress, and after a failed build 503; the app asks again.
+ * (layerPack.ts) and the 3D model's levels (printModel.ts), by print or by
+ * file path. While the relay builds the file it answers 202 with its
+ * progress, and after a failed build 503; the app asks again.
  *
  * The app downloads each file once per print and keeps the last few in the
  * cache folder, so the page that shows it never waits for the network.
@@ -16,6 +16,8 @@ import { authHeaders } from "../auth/serverTokens";
 const RETRY_MS = 5_000;
 /** How long the app waits after a failed download or build. */
 const FAILED_RETRY_MS = 60_000;
+/** How many failures in a row the app retries by itself; the next `ensure` starts again. */
+const MAX_FAILED_RETRIES = 5;
 
 /** Where a print's file stands on this device. */
 export type DownloadState =
@@ -26,9 +28,10 @@ export type DownloadState =
 
 /** One kind of file the relay builds. */
 export interface DownloadKind<T> {
-  /** The folder in the cache, and the route under `/api/prints/<taskId>/`. */
+  /** The folder in the cache. */
   readonly folder: string;
-  readonly route: string;
+  /** Where the relay serves the file with this id. */
+  readonly urlOf: (relayBase: string, id: string) => string;
   /** The file's extension on the device, with its dot. */
   readonly extension: string;
   /** How many prints' files the device keeps; the oldest go first. */
@@ -39,11 +42,11 @@ export interface DownloadKind<T> {
 
 /** The files of one kind on this device. */
 export interface Downloads<T> {
-  /** Gets the file for `taskId` onto the device, once. Safe to call often: one download runs per print. */
-  readonly ensure: (relayBase: string, taskId: string) => void;
-  readonly state: (taskId: string) => DownloadState | undefined;
+  /** Gets the file with `id` (a print's task id, or a file's id) onto the device, once. Safe to call often: one download runs per id. */
+  readonly ensure: (relayBase: string, id: string) => void;
+  readonly state: (id: string) => DownloadState | undefined;
   /** What `open` read from the file, once it is on the device. */
-  readonly opened: (taskId: string) => T | undefined;
+  readonly opened: (id: string) => T | undefined;
   /** Calls `listener` on each change of any state. Returns the stop. */
   readonly subscribe: (listener: () => void) => () => void;
 }
@@ -69,6 +72,8 @@ export const makeDownloads = <T>(kind: DownloadKind<T>): Downloads<T> => {
   const openedFiles = new Map<string, T>();
   const listeners = new Set<() => void>();
   const working = new Set<string>();
+  // Failures in a row, by id: a file the relay cannot make yet is not asked for forever.
+  const failures = new Map<string, number>();
 
   const folder = (): Directory => new Directory(Paths.cache, kind.folder);
   const fileOf = (taskId: string): File => new File(folder(), `${taskId.replace(/[^A-Za-z0-9._-]/g, "_")}${kind.extension}`);
@@ -88,6 +93,11 @@ export const makeDownloads = <T>(kind: DownloadKind<T>): Downloads<T> => {
   };
 
   const ensure = (relayBase: string, taskId: string): void => {
+    failures.delete(taskId);
+    fetchFile(relayBase, taskId);
+  };
+
+  const fetchFile = (relayBase: string, taskId: string): void => {
     if (working.has(taskId) || openedFiles.has(taskId)) return;
     const target = fileOf(taskId);
     if (target.exists) {
@@ -103,9 +113,14 @@ export const makeDownloads = <T>(kind: DownloadKind<T>): Downloads<T> => {
     const dir = folder();
     if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
     const part = new File(dir, `${target.name}.part`);
-    const url = `${relayBase}/api/prints/${encodeURIComponent(taskId)}/${kind.route}`;
+    const url = kind.urlOf(relayBase, taskId);
     const again = (ms: number): void => {
-      setTimeout(() => ensure(relayBase, taskId), ms);
+      setTimeout(() => fetchFile(relayBase, taskId), ms);
+    };
+    const failedAgain = (): void => {
+      const count = (failures.get(taskId) ?? 0) + 1;
+      failures.set(taskId, count);
+      if (count < MAX_FAILED_RETRIES) again(FAILED_RETRY_MS);
     };
     setState(taskId, { kind: "Downloading" });
     File.downloadFileAsync(url, part, { idempotent: true, headers: authHeaders(url) })
@@ -115,7 +130,8 @@ export const makeDownloads = <T>(kind: DownloadKind<T>): Downloads<T> => {
           const answer = decodeAnswer(downloaded.textSync());
           downloaded.delete();
           setState(taskId, answer);
-          again(answer.kind === "Building" ? RETRY_MS : FAILED_RETRY_MS);
+          if (answer.kind === "Building") again(RETRY_MS);
+          else failedAgain();
           return;
         }
         if (target.exists) target.delete();
@@ -123,17 +139,18 @@ export const makeDownloads = <T>(kind: DownloadKind<T>): Downloads<T> => {
         const ready = kind.open(target);
         if (ready === undefined) {
           setState(taskId, { kind: "Failed", reason: "The file did not read back after the download" });
-          again(FAILED_RETRY_MS);
+          failedAgain();
           return;
         }
         openedFiles.set(taskId, ready);
+        failures.delete(taskId);
         setState(taskId, { kind: "Ready" });
         prune();
       })
       .catch((error: unknown) => {
         if (part.exists) part.delete();
         setState(taskId, { kind: "Failed", reason: error instanceof Error ? error.message : String(error) });
-        again(FAILED_RETRY_MS);
+        failedAgain();
       })
       .finally(() => working.delete(taskId));
   };

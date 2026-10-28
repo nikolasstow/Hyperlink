@@ -2,8 +2,10 @@
  * The printer's files on the printer page: the shared explorer's home over
  * the relay (explorer/httpFileSource.ts). It shows the storage areas as tabs
  * (the printer, its USB drive, the home server), then the recent prints, then
- * the files, with previews. A file opens its details; a printer or USB file
- * can print from there.
+ * the files, with previews. A file that a plugin viewer takes opens in it
+ * (viewers/fileViewers.ts: a `.goo` opens its 3D model and details); any
+ * other file opens its details, and a printer or USB file can print from
+ * there.
  *
  * Uploads go from the phone to the relay, then from the relay to the printer
  * (saturn-uploader's delivery: MD5 check, verified listing). Uploads that
@@ -13,6 +15,7 @@
  *
  * @internal
  */
+import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as React from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -21,11 +24,13 @@ import { colors } from "../colors";
 import { ExplorerHome } from "../explorer/ExplorerHome";
 import { httpFileSource, previewUrl } from "../explorer/httpFileSource";
 import type { SourceRow } from "../explorer/sourceRows";
+import type { RootStackParamList } from "../RootNavigator";
 import { SystemIcon } from "../SystemIcon";
 import { useTextColors, withAlpha } from "../theme";
 import { isPrintableName, settingsCells } from "./printerFormat";
 import { cancelUpload, fetchFileInfo, fetchUploads, printFile, startUpload, UploadCancelled, UploadRefused, type PrintHeader, type UploadJob, type UploadStage } from "./relayApi";
 import { Button, Card, Cells, LCD, usePalette } from "./ui";
+import { viewerFor } from "../viewers/fileViewers";
 
 /** An upload as the page shows it: the phone's leg, then the relay's job. */
 interface Upload {
@@ -199,6 +204,7 @@ export const PrinterFiles = (props: {
   const [reloadKey, setReloadKey] = React.useState(0);
   const uploads = React.useSyncExternalStore(uploadStore.subscribe, uploadStore.rows);
   const [open, setOpen] = React.useState<OpenFile | undefined>(undefined);
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const refresh = (): void => setReloadKey((n) => n + 1);
 
   // An upload that reached the printer: show it in the list.
@@ -264,7 +270,12 @@ export const PrinterFiles = (props: {
     cancelUpload(relayBase, u.jobId).catch((cause: unknown) => showToast({ message: `Could not cancel ${u.name}: ${messageOf(cause)}` }));
   };
 
-  const openRow = (row: SourceRow): void => setOpen({ path: row.path, name: row.name, detail: row.detail, printing: row.badge === "Printing" });
+  const openRow = (row: SourceRow): void => {
+    const target = { endpoint: reachable ? relayBase : undefined, path: row.path, name: row.name };
+    const viewer = viewerFor(target);
+    if (viewer !== undefined) viewer.open(navigation, target);
+    else setOpen({ path: row.path, name: row.name, detail: row.detail, printing: row.badge === "Printing" });
+  };
 
   const right = (
     <View style={styles.headRight}>

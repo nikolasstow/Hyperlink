@@ -87,7 +87,8 @@ const modelOf = (): Uint8Array => {
 };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-const url = "http://relay:5197/api/prints/task-1/model.mesh";
+const lowUrl = "http://relay:5197/api/prints/task-1/model.mesh?level=low";
+const fileUrl = "http://relay:5197/api/files/model.mesh?path=%2Flocal%2Fpart.goo&level=high";
 
 describe("3D model on the device", () => {
   beforeEach(() => {
@@ -95,18 +96,27 @@ describe("3D model on the device", () => {
     served.clear();
   });
 
-  it("waits while the relay builds the model, then keeps it", async () => {
-    const { printModels } = await import("./printModel");
-    served.set(url, new TextEncoder().encode(JSON.stringify({ state: "building", done: 40, total: 3400 })));
-    printModels.ensure("http://relay:5197", "task-1");
-    await vi.waitFor(() => expect(printModels.state("task-1")).toEqual({ kind: "Building", done: 40, total: 3400 }));
+  it("waits while the relay builds a level, then keeps it", async () => {
+    const { ensurePrintModel, printModelLevel } = await import("./printModel");
+    const source = { kind: "Print", taskId: "task-1" } as const;
+    served.set(lowUrl, new TextEncoder().encode(JSON.stringify({ state: "building", done: 40, total: 3400 })));
+    ensurePrintModel("http://relay:5197", source, ["low"]);
+    await vi.waitFor(() => expect(printModelLevel(source, "low").state).toEqual({ kind: "Building", done: 40, total: 3400 }));
     expect(disk.size).toBe(0);
 
-    served.set(url, modelOf());
+    served.set(lowUrl, modelOf());
     await settle();
-    printModels.ensure("http://relay:5197", "task-1");
-    await vi.waitFor(() => expect(printModels.state("task-1")).toEqual({ kind: "Ready" }));
-    expect(printModels.opened("task-1")).toEqual({ uri: "file:///cache/task-1.mesh", vertexCount: 3, triangleCount: 1 });
+    ensurePrintModel("http://relay:5197", source, ["low"]);
+    await vi.waitFor(() => expect(printModelLevel(source, "low").state).toEqual({ kind: "Ready" }));
+    expect(printModelLevel(source, "low").model).toMatchObject({ uri: "file:///cache/task-1.low.mesh", vertexCount: 3, triangleCount: 1 });
+  });
+
+  it("gets a file's model by its path", async () => {
+    const { ensurePrintModel, printModelLevel } = await import("./printModel");
+    const source = { kind: "File", path: "/local/part.goo" } as const;
+    served.set(fileUrl, modelOf());
+    ensurePrintModel("http://relay:5197", source, ["high"]);
+    await vi.waitFor(() => expect(printModelLevel(source, "high").model?.triangleCount).toBe(1));
   });
 
   it("does not take a cut-off model", async () => {

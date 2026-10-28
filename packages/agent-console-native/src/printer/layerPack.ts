@@ -20,7 +20,7 @@ import { AppState } from "react-native";
 import type { File } from "expo-file-system";
 import { authedFetch } from "../auth/serverTokens";
 import { pngDataUri } from "./goo";
-import { printModels } from "./printModel";
+import { ensurePrintModel } from "./printModel";
 import { makeDownloads, type DownloadState } from "./relayDownload";
 
 const PACK_MAGIC = "SLPK";
@@ -58,7 +58,7 @@ const openPack = (file: File): OpenPack | undefined => {
 
 const packs = makeDownloads({
   folder: "layer-packs",
-  route: "layers.pack",
+  urlOf: (relayBase, taskId) => `${relayBase}/api/prints/${encodeURIComponent(taskId)}/layers.pack`,
   extension: ".pack",
   keep: 3,
   open: openPack,
@@ -132,15 +132,28 @@ export const useLayerPack = (
   return { state: taskId === undefined ? undefined : layerPackState(taskId), uriOf };
 };
 
+/** How many printer files' quick views the app gets ahead of time. */
+const PREFETCH_FILES = 30;
+
+/** The `.goo` paths in a relay folder listing (`GET /api/files`). */
+const gooPathsOf = (body: unknown): ReadonlyArray<string> =>
+  typeof body === "object" && body !== null && "entries" in body && Array.isArray(body.entries)
+    ? body.entries.flatMap((entry: unknown) =>
+        typeof entry === "object" && entry !== null && "path" in entry && typeof entry.path === "string" && "kind" in entry && entry.kind === "file" && entry.path.toLowerCase().endsWith(".goo")
+          ? [entry.path]
+          : [],
+      )
+    : [];
+
 const currentTaskId = (body: unknown): string | undefined =>
   typeof body === "object" && body !== null && "print" in body && typeof body.print === "object" && body.print !== null && "taskId" in body.print && typeof body.print.taskId === "string" && body.print.taskId !== ""
     ? body.print.taskId
     : undefined;
 
 /**
- * Gets the current print's pack and 3D model before the owner opens the
- * printer page: at app open, at each return to the foreground, and every 2
- * minutes while the app is open. It reads the relay's `GET /api/state`, which the relay answers
+ * Gets the current print's pack and 3D model, and the quick view of every
+ * print file on the printer, before the owner opens them: at app open, at
+ * each return to the foreground, and every 2 minutes while the app is open. It reads the relay's `GET /api/state`, which the relay answers
  * from its cache, so it sends nothing to the printer. Returns the stop.
  */
 export const watchForLayerPacks = (relayBase: string): (() => void) => {
@@ -152,7 +165,16 @@ export const watchForLayerPacks = (relayBase: string): (() => void) => {
         const taskId = currentTaskId(body);
         if (taskId === undefined) return;
         ensureLayerPack(relayBase, taskId);
-        printModels.ensure(relayBase, taskId);
+        ensurePrintModel(relayBase, { kind: "Print", taskId });
+      })
+      .catch(() => undefined);
+    // The quick view of every print file on the printer, so each one opens at once.
+    void authedFetch(`${relayBase}/api/files?path=${encodeURIComponent("/local/")}`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : undefined))
+      .then((body: unknown) => {
+        gooPathsOf(body)
+          .slice(0, PREFETCH_FILES)
+          .forEach((path) => ensurePrintModel(relayBase, { kind: "File", path }, ["low"]));
       })
       .catch(() => undefined);
   };

@@ -11,6 +11,12 @@ public class ModelViewerModule: Module {
       Prop("color") { (view: ModelViewerView, hex: String?) in
         view.modelColor = ModelViewerView.color(hex: hex ?? "")
       }
+      Prop("clipLowMm") { (view: ModelViewerView, mm: Double?) in
+        view.clipLowMm = mm
+      }
+      Prop("clipHighMm") { (view: ModelViewerView, mm: Double?) in
+        view.clipHighMm = mm
+      }
     }
   }
 }

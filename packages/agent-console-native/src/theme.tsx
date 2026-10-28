@@ -85,11 +85,20 @@ export const withAlpha = (hex: string, alpha: number): string => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+const mixedTowardWhite = (hex: string, amount: number): ReadonlyArray<number> => toRgb(hex).map((c) => Math.round(c + (255 - c) * amount));
+
 /** A hex colour mixed toward white by `amount` (0 to 1), as `rgb()`: a light ink of a theme colour. */
 export const towardWhite = (hex: string, amount: number): string => {
-  const [r, g, b] = toRgb(hex).map((c) => Math.round(c + (255 - c) * amount));
+  const [r, g, b] = mixedTowardWhite(hex, amount);
   return `rgb(${r}, ${g}, ${b})`;
 };
+
+/** The same mix as {@link towardWhite}, as `#RRGGBB`, for native views and pickers that take hex. */
+export const towardWhiteHex = (hex: string, amount: number): string =>
+  `#${mixedTowardWhite(hex, amount)
+    .map((c) => c.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase()}`;
 
 /** Send button fill translucency, so the button's glass shows through. */
 const SEND_FILL_ALPHA = 0.85;

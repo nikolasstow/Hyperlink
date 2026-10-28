@@ -55,7 +55,8 @@ import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
-import { PrinterModelScreen } from "./PrinterModelScreen";
+import { GooViewerScreen } from "./printer/GooViewerScreen";
+import { PrinterFilesScreen, PrinterHealthScreen, PrinterSettingsScreen } from "./printer/PrinterPages";
 import { PrinterScreen } from "./PrinterScreen";
 import { serverById } from "./servers";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
@@ -125,8 +126,12 @@ export type RootStackParamList = {
   // A server's resin printer page: live status and the layer on the LCD, direct
   // on the LAN or through the relay on that server.
   ServerPrinter: { serverName: string; serverAddress: string };
-  // The print's 3D model, from the relay.
-  ServerPrinterModel: { relayBase: string; taskId: string; filename: string };
+  // The printer page's own pages: real pages, back to the printer page.
+  ServerPrinterFiles: { serverName: string; serverAddress: string };
+  ServerPrinterHealth: { serverName: string; serverAddress: string };
+  ServerPrinterSettings: { serverName: string; serverAddress: string };
+  // The printer plugin's `.goo` viewer: the current print (taskId) or a file (path), on the relay at relayBase.
+  GooViewer: { relayBase: string; name: string; taskId?: string; path?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -388,7 +393,14 @@ export const RootNavigator = (): React.ReactElement => {
         />
         <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
         <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
-        <Stack.Screen name="ServerPrinterModel" component={PrinterModelScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="3D model" /> }} />
+        <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Files" /> }} />
+        <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Health" /> }} />
+        <Stack.Screen name="ServerPrinterSettings" component={PrinterSettingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Settings" /> }} />
+        <Stack.Screen
+          name="GooViewer"
+          component={GooViewerScreen}
+          options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={route.params.name.replace(/\.goo$/i, "")} /> })}
+        />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
