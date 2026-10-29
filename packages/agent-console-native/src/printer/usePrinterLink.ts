@@ -16,7 +16,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as React from "react";
 import { AppState } from "react-native";
-import { authedFetch } from "../auth/serverTokens";
+import { authedFetch, authHeaders } from "../auth/serverTokens";
 import { CMD_ATTRIBUTES, CMD_STATUS, controlRequest, PRINTER_PORT, PRINTER_WEBSOCKET_PATH, parseFrame, relayBaseOf, refreshRequest, type ControlCmd, type PrinterAttributes, type PrinterStatus, type RelayState } from "./sdcp";
 
 /** Which way the page is connected. */
@@ -84,9 +84,13 @@ const saveIdentity = (serverAddress: string, identity: PrinterIdentity): void =>
 };
 
 /** Opens a socket, or rejects when it does not open in time. */
+/** React Native's `WebSocket` takes headers as a third argument; the DOM types it is checked against do not say so. */
+const HeaderSocket: new (url: string, protocols: undefined, options: { readonly headers: Readonly<Record<string, string>> }) => WebSocket = WebSocket;
+
 const openSocket = (url: string, timeoutMs: number): Promise<WebSocket> =>
   new Promise((resolve, reject) => {
-    const socket = new WebSocket(url);
+    // The relay's socket needs its access token, if it has one; the printer's own socket gets none.
+    const socket = new HeaderSocket(url, undefined, { headers: authHeaders(url) });
     const timer = setTimeout(() => {
       socket.close();
       reject(new Error(`timed out opening ${url}`));

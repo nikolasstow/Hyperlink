@@ -11,7 +11,7 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RootStackParamList } from "../RootNavigator";
 import { useTextColors, withAlpha } from "../theme";
@@ -19,6 +19,7 @@ import { Backdrop } from "./Backdrop";
 import { PrinterFiles } from "./PrinterFiles";
 import { fmtBytes, healthItems } from "./printerFormat";
 import { useMeasure, usePrinterPageLink } from "./printerPageLink";
+import { saveRelayToken, useRelayToken } from "./relayToken";
 import { isPrinting } from "./sdcp";
 import { Card, Dot, Row, usePalette } from "./ui";
 import type { PrinterLink } from "./usePrinterLink";
@@ -117,6 +118,51 @@ export const PrinterHealthScreen = (props: PageProps<"ServerPrinterHealth">): Re
   );
 };
 
+/**
+ * The relay's access token (its `relayToken`). Empty when the relay has
+ * none. A change goes to the Keychain and is used at once, also by the Live
+ * Activity's token sender.
+ */
+const RelayTokenCard = (props: { readonly relayBase: string }): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  const saved = useRelayToken(props.relayBase) ?? "";
+  const [draft, setDraft] = React.useState(saved);
+  const [note, setNote] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => setDraft(saved), [saved]);
+  const save = (): void => {
+    if (draft.trim() === saved) return;
+    saveRelayToken(props.relayBase, draft)
+      .then(() => setNote(draft.trim() === "" ? "Removed. The app sends no token." : "Saved. The app sends it to the relay."))
+      .catch((cause: unknown) => {
+        console.error("[printer] keeping the relay token failed", cause);
+        setNote(`Not saved: ${cause instanceof Error ? cause.message : String(cause)}`);
+      });
+  };
+  return (
+    <Card title="Relay access">
+      <Text style={[styles.switchLabel, { color: text.label }]}>Access token</Text>
+      <TextInput
+        value={draft}
+        onChangeText={setDraft}
+        onEndEditing={save}
+        onSubmitEditing={save}
+        placeholder="None"
+        placeholderTextColor={text.tertiaryLabel}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        textContentType="password"
+        returnKeyType="done"
+        style={[styles.tokenInput, { color: text.label, borderColor: withAlpha(palette.accent, 0.4) }]}
+      />
+      <Text style={[styles.switchNote, { color: text.tertiaryLabel }]}>
+        {note ?? "The relay's relayToken setting. Leave it empty when the relay has none."}
+      </Text>
+    </Card>
+  );
+};
+
 export const PrinterSettingsScreen = (props: PageProps<"ServerPrinterSettings">): React.ReactElement => {
   const link = usePrinterPageLink(props.route.params.serverAddress);
   const text = useTextColors();
@@ -148,6 +194,7 @@ export const PrinterSettingsScreen = (props: PageProps<"ServerPrinterSettings">)
               <Row label="Relay" value={printer.relayReachable ? printer.relayBase.replace(/^https?:\/\//, "") : "Not reachable"} />
               <Row label="Camera" value={printer.secureUrl !== undefined ? "H.264, 30 fps" : "MJPEG, 10 fps"} last />
             </Card>
+            <RelayTokenCard relayBase={printer.relayBase} />
           </>
         );
       }}
@@ -174,4 +221,5 @@ const styles = StyleSheet.create({
   switchText: { flex: 1 },
   switchLabel: { fontSize: 15 },
   switchNote: { fontSize: 12, marginTop: 2 },
+  tokenInput: { fontSize: 15, marginTop: 8, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
 });

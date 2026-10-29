@@ -41,7 +41,9 @@ import { HeaderTitlePill } from "./HeaderTitlePill";
 import { Backdrop } from "./printer/Backdrop";
 import { useDirectLayer } from "./printer/directLayers";
 import { ModelCard } from "./printer/ModelCard";
+import { authedSource } from "./auth/serverTokens";
 import { CameraPane } from "./printer/PrinterCamera";
+import { useRelayToken } from "./printer/relayToken";
 import { useRunningUploads, useUploadWatch } from "./printer/PrinterFiles";
 import { useLayerPack } from "./printer/layerPack";
 import { useMeasure, usePublishPrinterLink } from "./printer/printerPageLink";
@@ -125,6 +127,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   // `?.` guards a nav state restored before this screen took params.
   const serverAddress = props.route.params?.serverAddress;
   const printer = usePrinterLink(serverAddress);
+  const relayToken = useRelayToken(printer.relayBase);
   usePublishPrinterLink(serverAddress, printer);
   const [measure] = useMeasure();
   const runningUploads = useRunningUploads();
@@ -362,6 +365,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             style={StyleSheet.absoluteFill}
             mode={page === "Camera" ? "camera" : "layer"}
             cameraUrl={printer.relayReachable ? cameraSocketUrl(printer.relayBase) : undefined}
+            relayToken={relayToken}
             layerUri={hasJob ? layerUri : undefined}
             tint={towardWhite(palette.accent, 0.88)}
             aspect={lcdMm.width / lcdMm.height}
@@ -388,7 +392,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       <Card title="Print settings">
         {previewUri !== undefined ? (
           <View style={styles.preview}>
-            <Image source={{ uri: previewUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <Image source={authedSource(previewUri)} style={StyleSheet.absoluteFill} resizeMode="cover" />
           </View>
         ) : null}
         <Cells cells={settingsCells(header)} />

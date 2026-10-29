@@ -14,6 +14,7 @@ import { useTextColors, withAlpha } from "../theme";
 import { usePrintModel, type LevelState, type ModelSource } from "./printModel";
 import { printPreviewUrl } from "./relayApi";
 import { Button, Card, usePalette } from "./ui";
+import { authedSource } from "../auth/serverTokens";
 
 /** A level's progress in words, and how far along it is (0 to 1) when that is known. */
 const progressOf = (level: LevelState): { readonly label: string; readonly fraction: number | undefined; readonly done: boolean } => {
@@ -48,7 +49,7 @@ export const ModelCard = (props: {
   return (
     <Card title="3D model">
       <View style={styles.body}>
-        <Image source={{ uri: printPreviewUrl(props.relayBase, props.taskId) }} style={styles.thumb} resizeMode="cover" />
+        <Image source={authedSource(printPreviewUrl(props.relayBase, props.taskId))} style={styles.thumb} resizeMode="cover" />
         <View style={styles.rows}>
           {rows.map(([label, level]) => {
             const progress = progressOf(level);

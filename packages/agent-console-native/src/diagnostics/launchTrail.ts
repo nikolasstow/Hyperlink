@@ -12,6 +12,7 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Option, Schema } from "effect";
+import { authedFetch } from "../auth/serverTokens";
 
 const STORE_KEY = "agent-console-native:launchTrail";
 /** How long the app must run after the navigator mounts to count as launched. */
@@ -52,9 +53,14 @@ const flush = (): void => {
   if (relay === undefined || unsent.length === 0) return;
   const lines = unsent;
   unsent = [];
-  fetch(`${relay}/api/app-log`, { method: "POST", headers: { "content-type": "text/plain" }, body: lines.join("\n") }).catch(() => {
-    unsent = [...lines, ...unsent].slice(-MAX_UNSENT);
-  });
+  authedFetch(`${relay}/api/app-log`, { method: "POST", headers: { "content-type": "text/plain" }, body: lines.join("\n") })
+    .then((response) => {
+      // A refusal (the relay's token was not read yet, or is wrong) keeps the lines for the next send.
+      if (!response.ok) throw new Error(`the relay answered HTTP ${response.status}`);
+    })
+    .catch(() => {
+      unsent = [...lines, ...unsent].slice(-MAX_UNSENT);
+    });
 };
 
 const send = (line: string): void => {

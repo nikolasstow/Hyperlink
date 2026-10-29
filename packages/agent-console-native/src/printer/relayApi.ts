@@ -13,7 +13,7 @@
  */
 import { Option, Schema } from "effect";
 import { File, UploadTask } from "expo-file-system";
-import { authedFetch } from "../auth/serverTokens";
+import { authedFetch, authHeaders } from "../auth/serverTokens";
 
 /** A `.goo` file's header, as the relay reports it. */
 export const PrintHeader = Schema.Struct({
@@ -139,7 +139,7 @@ export const startUpload = (
 ): { readonly done: Promise<UploadJob>; readonly cancel: () => void } => {
   const task = new UploadTask(new File(fileUri), `${relayBase}/api/uploads?name=${encodeURIComponent(name)}${overwrite ? "&overwrite=1" : ""}`, {
     httpMethod: "POST",
-    headers: { "content-type": "application/octet-stream" },
+    headers: { "content-type": "application/octet-stream", ...authHeaders(relayBase) },
     onProgress: (progress) => {
       if (progress.totalBytes > 0) onProgress(progress.bytesSent / progress.totalBytes);
     },

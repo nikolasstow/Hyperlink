@@ -27,6 +27,7 @@ import { loadNotifications, payloadOfResponse, replyFromResponse } from "./push"
 import { getSetupDate } from "./sessionReads";
 import { getBackendAddress } from "./settings";
 import { watchForLayerPacks } from "./printer/layerPack";
+import { loadRelayToken } from "./printer/relayToken";
 import { relayBaseOf } from "./printer/sdcp";
 import { useServers } from "./servers";
 import { homeHeaderOptions } from "./homeHeader";
@@ -218,6 +219,8 @@ export const RootNavigator = (): React.ReactElement => {
   React.useEffect(() => {
     if (printerServer === undefined) return;
     setPrinterRelay(relayBaseOf(printerServer.address));
+    // The relay's access token, if the owner set one (Settings on the printer page).
+    loadRelayToken(relayBaseOf(printerServer.address)).catch((cause: unknown) => console.error("[printer] reading the relay token failed", cause));
     setTrailRelay(relayBaseOf(printerServer.address));
     return watchForLayerPacks(relayBaseOf(printerServer.address));
   }, [printerServer]);

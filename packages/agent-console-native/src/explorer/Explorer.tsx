@@ -29,6 +29,7 @@ import { useTreePaneColors } from "../treePaneColors";
 import type { FileSource, FileSourceEntry } from "./FileSource";
 import type { SourceRow } from "./sourceRows";
 import { useSourceTree } from "./useSourceTree";
+import { authedSource } from "../auth/serverTokens";
 
 /** What a tap does: open rows (browse), or choose a folder (Save As). */
 export type ExplorerMode =
@@ -106,7 +107,7 @@ export const ExplorerRow = (props: {
         <TouchableOpacity style={[styles.iconCol, { width: lead }]} activeOpacity={0.5} disabled={dimmed} onPress={() => props.onOpen(row)}>
           {row.thumbnail !== undefined ? (
             <View style={styles.thumb}>
-              <Image source={{ uri: row.thumbnail }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+              <Image source={authedSource(row.thumbnail)} style={StyleSheet.absoluteFill} resizeMode="cover" />
             </View>
           ) : (
             <SetiIcon glyph={fileSpec === undefined ? (setiFolderGlyph ?? setiDefaultGlyph) : fileSpec.glyph} size={26} />

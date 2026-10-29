@@ -8,6 +8,10 @@
  * (`authHeaders`). A server not paired gets no token, and answers as before
  * if it does not ask for one.
  *
+ * The printer's relay (saturn-uploader) is not a paired server, but it can
+ * ask for its own token (its `relayToken`). printer/relayToken.ts keeps that
+ * token here too, for the relay's origin, so the same paths send it.
+ *
  * A module of its own, imported by the runtime and by the React mirror, so
  * neither imports the other.
  *
@@ -15,6 +19,7 @@
  */
 
 let tokens: ReadonlyMap<string, string> = new Map();
+let relayTokens: ReadonlyMap<string, string> = new Map();
 
 /** Replaces the known tokens (useServerAuth.ts, as ServerAuth changes). */
 export const setServerTokens = (next: ReadonlyMap<string, string>): void => {
@@ -25,16 +30,30 @@ export const setServerTokens = (next: ReadonlyMap<string, string>): void => {
  * hand: React Native's `URL` has no `canParse`. */
 export const originOf = (url: string): string | undefined => /^https?:\/\/[^/?#\s]+/i.exec(url)?.[0];
 
-/** The token for the server `url` is on, if paired. */
+/** Keeps the access token of the printer relay at `origin`, or forgets it (`undefined`). */
+export const setRelayToken = (origin: string, token: string | undefined): void => {
+  const next = new Map(relayTokens);
+  if (token === undefined) next.delete(origin);
+  else next.set(origin, token);
+  relayTokens = next;
+};
+
+/** The token for the server (or printer relay) `url` is on, if it has one. A `ws(s)` URL counts as its `http(s)` origin. */
 export const tokenFor = (url: string): string | undefined => {
-  const origin = originOf(url);
-  return origin === undefined ? undefined : tokens.get(origin);
+  const origin = originOf(url.replace(/^ws(s?):/i, "http$1:"));
+  return origin === undefined ? undefined : (tokens.get(origin) ?? relayTokens.get(origin));
 };
 
 /** The headers to send `url` with: the token, if its server is paired. */
 export const authHeaders = (url: string): Readonly<Record<string, string>> => {
   const token = tokenFor(url);
   return token === undefined ? {} : { authorization: `Bearer ${token}` };
+};
+
+/** An image source for `uri`, with the token when its server has one (React Native's `Image` sends `headers`). */
+export const authedSource = (uri: string): { readonly uri: string; readonly headers?: Readonly<Record<string, string>> } => {
+  const headers = authHeaders(uri);
+  return Object.keys(headers).length === 0 ? { uri } : { uri, headers };
 };
 
 const urlOf = (input: RequestInfo | URL): string => (typeof input === "string" ? input : input instanceof URL ? input.href : input.url);

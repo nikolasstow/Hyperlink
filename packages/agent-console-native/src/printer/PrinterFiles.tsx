@@ -31,6 +31,7 @@ import { isPrintableName, settingsCells } from "./printerFormat";
 import { cancelUpload, fetchFileInfo, fetchUploads, printFile, startUpload, UploadCancelled, UploadRefused, type PrintHeader, type UploadJob, type UploadStage } from "./relayApi";
 import { Button, Card, Cells, LCD, usePalette } from "./ui";
 import { viewerFor } from "../viewers/fileViewers";
+import { authedSource } from "../auth/serverTokens";
 
 /** An upload as the page shows it: the phone's leg, then the relay's job. */
 interface Upload {
@@ -386,7 +387,7 @@ const FileSheet = (props: { readonly file: OpenFile | undefined; readonly relayB
     <Modal visible={props.file !== undefined} animationType="slide" presentationStyle="pageSheet" onRequestClose={props.onClose}>
       <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.sheet}>
         <View style={styles.sheetHead}>
-          <View style={styles.sheetPreview}>{goo && file !== undefined ? <Image source={{ uri: previewUrl(props.relayBase, file.path, true) }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <SystemIcon name="doc" size={30} color="rgba(244,245,249,0.6)" />}</View>
+          <View style={styles.sheetPreview}>{goo && file !== undefined ? <Image source={authedSource(previewUrl(props.relayBase, file.path, true))} style={StyleSheet.absoluteFill} resizeMode="cover" /> : <SystemIcon name="doc" size={30} color="rgba(244,245,249,0.6)" />}</View>
           <View style={styles.sheetText}>
             <Text style={[styles.sheetEyebrow, { color: text.tertiaryLabel }]}>{where}</Text>
             <Text style={[styles.sheetName, { color: text.label }]}>{file?.name ?? ""}</Text>

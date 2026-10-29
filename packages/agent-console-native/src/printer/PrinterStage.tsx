@@ -24,6 +24,7 @@ import { towardWhite, useTextColors, withAlpha } from "../theme";
 import { fmtDuration } from "./printerFormat";
 import { CMD_PAUSE, CMD_RESUME, CMD_STOP, controlAckLabel, PHASE_PAUSED, PHASE_PAUSING, PHASE_STOPPING, type ControlCmd } from "./sdcp";
 import { Button, Dot, LCD, usePalette } from "./ui";
+import { authedFetch, authedSource, authHeaders } from "../auth/serverTokens";
 
 /**
  * Shows the newest image only once it has loaded, so the LCD never flashes
@@ -33,6 +34,14 @@ import { Button, Dot, LCD, usePalette } from "./ui";
  * image at a time, and a slow printer would otherwise build a queue of old
  * layers there.
  */
+/**
+ * Loads an image before it shows. `Image.prefetch` cannot send headers, so a
+ * relay image that needs the access token loads with `authedFetch`; the
+ * `Image` then sends the token too (`authedSource`).
+ */
+const prefetch = (uri: string): Promise<boolean> =>
+  Object.keys(authHeaders(uri)).length === 0 ? Image.prefetch(uri) : authedFetch(uri).then((response) => response.ok);
+
 export const useLoadedUri = (uri: string | undefined): string | undefined => {
   const [shown, setShown] = React.useState<string | undefined>(undefined);
   const wanted = React.useRef<string | undefined>(undefined);
@@ -48,7 +57,7 @@ export const useLoadedUri = (uri: string | undefined): string | undefined => {
     const next = wanted.current;
     if (loading.current || next === undefined) return;
     loading.current = true;
-    void Image.prefetch(next)
+    void prefetch(next)
       .then((ok) => {
         // Still newer than the image on screen, even if the printer has moved on.
         if (alive.current && ok && wanted.current !== undefined) setShown(next);
@@ -82,11 +91,11 @@ const LayerImage = (props: { readonly uri: string; readonly tint: string }): Rea
   const [shown, setShown] = React.useState(props.uri);
   return (
     <>
-      <Image source={{ uri: shown }} style={StyleSheet.absoluteFill} resizeMode="stretch" tintColor={props.tint} />
+      <Image source={authedSource(shown)} style={StyleSheet.absoluteFill} resizeMode="stretch" tintColor={props.tint} />
       {props.uri !== shown ? (
         <Image
           key={props.uri}
-          source={{ uri: props.uri }}
+          source={authedSource(props.uri)}
           style={[StyleSheet.absoluteFill, styles.incoming]}
           resizeMode="stretch"
           tintColor={props.tint}

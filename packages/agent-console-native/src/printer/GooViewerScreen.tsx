@@ -65,6 +65,7 @@ import { usePrintRunning } from "./printerPageLink";
 import { usePrintModel, type ModelSource } from "./printModel";
 import { fetchFileInfo, fetchPrintHeader, printFile, printPreviewUrl, type PrintHeader } from "./relayApi";
 import { usePalette } from "./ui";
+import { authedSource } from "../auth/serverTokens";
 
 type Props = NativeStackScreenProps<RootStackParamList, "GooViewer">;
 
@@ -180,7 +181,7 @@ export const GooViewerScreen = (props: Props): React.ReactElement => {
   return (
     <View style={[styles.page, { backgroundColor: background }]}>
       {best === undefined && thumbnail !== undefined ? (
-        <RNImage source={{ uri: thumbnail }} style={[styles.thumbnail, { top: headerHeight, bottom: PEEK_HEIGHT }]} resizeMode="contain" />
+        <RNImage source={authedSource(thumbnail)} style={[styles.thumbnail, { top: headerHeight, bottom: PEEK_HEIGHT }]} resizeMode="contain" />
       ) : null}
       <ModelViewer style={StyleSheet.absoluteFill} uri={best?.uri} color={color} clipLowMm={cropMm?.low} clipHighMm={cropMm?.high} />
       {note !== undefined ? (

@@ -10,6 +10,7 @@ import * as React from "react";
 import { Animated, Image, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import { useScreenBackground, useTheme } from "../theme";
+import { authedSource } from "../auth/serverTokens";
 
 /** The page's backdrop: the print's slicer render, blurred and darkened, with a wash of the theme's colour while the printer exposes. */
 export const Backdrop = (props: { readonly uri: string | undefined; readonly glow: number }): React.ReactElement => {
@@ -23,7 +24,7 @@ export const Backdrop = (props: { readonly uri: string | undefined; readonly glo
   }, [glow, props.glow]);
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: background }]} pointerEvents="none">
-      {props.uri !== undefined ? <Image source={{ uri: props.uri }} style={[StyleSheet.absoluteFill, { opacity: dark ? 0.55 : 0.4 }]} resizeMode="cover" blurRadius={60} /> : null}
+      {props.uri !== undefined ? <Image source={authedSource(props.uri)} style={[StyleSheet.absoluteFill, { opacity: dark ? 0.55 : 0.4 }]} resizeMode="cover" blurRadius={60} /> : null}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: glow }]}>
         <Svg width={width} height={height}>
           <Defs>

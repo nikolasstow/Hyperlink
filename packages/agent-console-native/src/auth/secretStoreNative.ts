@@ -12,7 +12,7 @@
  */
 import { requireOptionalNativeModule } from "expo";
 import { Effect, Layer, Option } from "effect";
-import { SecretStore, SecretStoreError } from "./SecretStore";
+import { SecretStore, SecretStoreError, type SecretStoreShape } from "./SecretStore";
 
 /** What a Keychain call takes: when the value may be read. */
 interface KeychainOptions {
@@ -43,9 +43,12 @@ const unavailable = new SecretStoreError({ message: "this build has no Keychain 
 const call = <A>(what: string, run: (keychain: ExpoSecureStore) => Promise<A>): Effect.Effect<A, SecretStoreError> =>
   native === null ? Effect.fail(unavailable) : Effect.tryPromise({ try: () => run(native), catch: failed(what) });
 
-export const layer = Layer.succeed(SecretStore)({
+/** The Keychain as a `SecretStore`. */
+export const keychain: SecretStoreShape = {
   available: native !== null,
   get: (key: string) => call(`reading ${key}`, (keychain) => keychain.getValueWithKeyAsync(key, options)).pipe(Effect.map(Option.fromNullishOr)),
   set: (key: string, value: string) => call(`keeping ${key}`, (keychain) => keychain.setValueWithKeyAsync(value, key, options)).pipe(Effect.asVoid),
   remove: (key: string) => call(`removing ${key}`, (keychain) => keychain.deleteValueWithKeyAsync(key, options)),
-});
+};
+
+export const layer = Layer.succeed(SecretStore)(keychain);

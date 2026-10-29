@@ -7,7 +7,8 @@
  * source under the stage (modules/printer-pip), which plays the relay's H.264
  * natively; this pane is clear while it plays and draws only the chip and the
  * full-screen button. Full screen embeds the relay's own camera page
- * (`/?view=camera&bare=1`): H.264 at 30 fps on the relay's HTTPS address
+ * (`/?view=camera&bare=1`, with `token=` when the relay has an access
+ * token: relayToken.ts): H.264 at 30 fps on the relay's HTTPS address
  * (WebCodecs needs a secure page), MJPEG at 10 fps on plain HTTP. The feed
  * runs only while its page shows and the app is in the foreground (or the
  * window is open), so the relay turns the printer's stream off again soon after.
@@ -20,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { SystemIcon } from "../SystemIcon";
 import { withAlpha } from "../theme";
+import { cameraPageUrl, useRelayToken } from "./relayToken";
 import { Chip, usePalette } from "./ui";
 
 const CameraView = (props: { readonly uri: string }): React.ReactElement => (
@@ -61,7 +63,7 @@ export const CameraPane = (props: {
   const foreground = useForeground();
   const [full, setFull] = React.useState(false);
   const watching = props.visible && props.reachable && foreground;
-  const uri = `${props.secureUrl ?? props.relayBase}/?view=camera&bare=1`;
+  const uri = cameraPageUrl(props.secureUrl ?? props.relayBase, useRelayToken(props.relayBase));
   // Leaving the app closes the full-screen view too, so the printer's stream slot is freed.
   if (full && !foreground) setFull(false);
 
