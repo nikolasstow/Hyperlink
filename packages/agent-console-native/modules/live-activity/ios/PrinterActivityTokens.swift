@@ -18,12 +18,20 @@ import UIKit
 
  The relay address comes from the app group (`setPrinterRelay`). Until it is
  known, the latest tokens wait in the app group and go out when it is set.
+
+ When the relay asks for an access token (its `relayToken`), the app keeps
+ it in the app group too (`setPrinterRelayToken`), and each request carries
+ `Authorization: Bearer <token>`. Each body names this app (`bundleId`), so
+ the relay sends this app's pushes with its own APNs topic.
  */
 enum PrinterActivityTokens {
   static let suite = "group.com.nikolasstow.agentconsolenative"
   static let relayKey = "printerRelayURL"
   static let startTokenKey = "printerStartToken"
   static let updateTokensKey = "printerUpdateTokens"
+  static let relayTokenKey = "printerRelayToken"
+  /// The app the relay knows (its `apnsBundleIds`). Variant builds send it too: their pushes use this topic, as before.
+  static let bundleId = "com.nikolasstow.agentconsolenative"
 
   nonisolated(unsafe) private static var observing = false
   nonisolated(unsafe) private static var observed = Set<String>()
@@ -41,7 +49,7 @@ enum PrinterActivityTokens {
       for await data in Activity<PrinterActivityAttributes>.pushToStartTokenUpdates {
         let token = hex(data)
         UserDefaults(suiteName: suite)?.set(token, forKey: startTokenKey)
-        send(path: "/api/activity/start-token", body: ["token": token])
+        send(path: "/api/activity/start-token", body: ["token": token, "bundleId": bundleId])
       }
     }
     Task {
@@ -66,7 +74,7 @@ enum PrinterActivityTokens {
       follow(activity)
       if let data = activity.pushToken {
         remember(taskId: activity.attributes.taskId, token: hex(data))
-        send(path: "/api/activity/update-token", body: ["taskId": activity.attributes.taskId, "token": hex(data)])
+        send(path: "/api/activity/update-token", body: ["taskId": activity.attributes.taskId, "token": hex(data), "bundleId": bundleId])
       } else {
         log("activity for \(activity.attributes.taskId) has no update token yet")
       }
@@ -80,7 +88,7 @@ enum PrinterActivityTokens {
     guard
       let base = UserDefaults(suiteName: suite)?.string(forKey: relayKey),
       let url = URL(string: base + "/api/activity/running"),
-      let data = try? JSONSerialization.data(withJSONObject: ["taskIds": taskIds])
+      let data = try? JSONSerialization.data(withJSONObject: ["taskIds": taskIds, "bundleId": bundleId] as [String: Any])
     else { return }
     post(url: url, data: data, label: "/api/activity/running")
   }
@@ -96,11 +104,29 @@ enum PrinterActivityTokens {
     let changed = defaults.string(forKey: relayKey) != url
     defaults.set(url, forKey: relayKey)
     guard changed else { return }
+    resend(defaults)
+  }
+
+  /// Saves the relay's access token (empty removes it) and sends the tokens again: the relay refused them without it.
+  static func setRelayToken(_ token: String) {
+    guard let defaults = UserDefaults(suiteName: suite) else { return }
+    let changed = (defaults.string(forKey: relayTokenKey) ?? "") != token
+    if token.isEmpty {
+      defaults.removeObject(forKey: relayTokenKey)
+    } else {
+      defaults.set(token, forKey: relayTokenKey)
+    }
+    guard changed else { return }
+    resend(defaults)
+  }
+
+  /// Sends the saved push-to-start token and update tokens.
+  private static func resend(_ defaults: UserDefaults) {
     if let token = defaults.string(forKey: startTokenKey) {
-      send(path: "/api/activity/start-token", body: ["token": token])
+      send(path: "/api/activity/start-token", body: ["token": token, "bundleId": bundleId])
     }
     for (taskId, token) in updateTokens(defaults) {
-      send(path: "/api/activity/update-token", body: ["taskId": taskId, "token": token])
+      send(path: "/api/activity/update-token", body: ["taskId": taskId, "token": token, "bundleId": bundleId])
     }
   }
 
@@ -116,7 +142,7 @@ enum PrinterActivityTokens {
         let token = hex(data)
         log("update token for \(taskId) from the token stream")
         remember(taskId: taskId, token: token)
-        send(path: "/api/activity/update-token", body: ["taskId": taskId, "token": token])
+        send(path: "/api/activity/update-token", body: ["taskId": taskId, "token": token, "bundleId": bundleId])
       }
     }
   }
@@ -154,6 +180,9 @@ enum PrinterActivityTokens {
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    if let token = UserDefaults(suiteName: suite)?.string(forKey: relayTokenKey), !token.isEmpty {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
     request.httpBody = data
     request.timeoutInterval = 15
     Task { @MainActor in

@@ -11,6 +11,9 @@ public class PrinterPipModule: Module {
       Prop("cameraUrl") { (view: PrinterPipView, url: String?) in
         view.cameraUrl = url.flatMap(URL.init(string:))
       }
+      Prop("relayToken") { (view: PrinterPipView, token: String?) in
+        view.relayToken = token.flatMap { $0.isEmpty ? nil : $0 }
+      }
       Prop("layerUri") { (view: PrinterPipView, uri: String?) in
         view.layerUri = uri.flatMap(URL.init(string:))
       }

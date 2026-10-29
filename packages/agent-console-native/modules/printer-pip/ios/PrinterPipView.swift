@@ -30,6 +30,16 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
   private var mode: Mode = .layer { didSet { if mode != oldValue { refresh() } } }
   var cameraUrl: URL? { didSet { if cameraUrl != oldValue { refresh() } } }
   var layerUri: URL? { didSet { if layerUri != oldValue { loadLayer() } } }
+  /// The relay's access token, if it asks for one: the camera socket and the layer image send it.
+  var relayToken: String? {
+    didSet {
+      guard relayToken != oldValue else { return }
+      // The open socket was made without it (or with the old one).
+      disconnect()
+      refresh()
+      loadLayer()
+    }
+  }
   var tint: UIColor = .white { didSet { tintedLayer = nil; showLayer() } }
   /// The phase label ("Exposing", "Lifting", …) while a print runs.
   var phase: String? { didSet { if phase != oldValue { showLayer() } } }
@@ -167,7 +177,7 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
     if socket != nil && socketUrl == url { return }
     disconnect()
     display.flushAndRemoveImage()
-    let task = URLSession.shared.webSocketTask(with: url)
+    let task = URLSession.shared.webSocketTask(with: authorized(url))
     socket = task
     socketUrl = url
     task.resume()
@@ -227,6 +237,15 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
     }
   }
 
+  /// A request for `url`, with `Authorization: Bearer <token>` when the relay has a token. A local file gets none.
+  private func authorized(_ url: URL) -> URLRequest {
+    var request = URLRequest(url: url)
+    if let token = relayToken, let scheme = url.scheme?.lowercased(), ["http", "https", "ws", "wss"].contains(scheme) {
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+    return request
+  }
+
   // MARK: - Layer
 
   private func loadLayer() {
@@ -236,7 +255,7 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
       showLayer()
       return
     }
-    let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
+    let task = URLSession.shared.dataTask(with: authorized(url)) { [weak self] data, _, error in
       guard let data, error == nil, let image = UIImage(data: data) else { return }
       DispatchQueue.main.async {
         guard let self, self.layerUri == url else { return }

@@ -61,6 +61,11 @@ public class LiveActivityModule: Module {
       PrinterActivityTokens.observe()
     }
 
+    // The relay's access token, if it asks for one. An empty text removes it.
+    Function("setPrinterRelayToken") { (token: String) in
+      PrinterActivityTokens.setRelayToken(token)
+    }
+
     // The theme's primary colour (#RRGGBB), so the printer Live Activity
     // follows the user's theme like the printer page does.
     Function("setActivityAccent") { (hex: String) in

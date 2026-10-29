@@ -15,6 +15,8 @@ export type PrinterPipProps = ViewProps & {
   readonly mode: "camera" | "layer";
   /** The relay's `/api/camera.h264` WebSocket. */
   readonly cameraUrl: string | undefined;
+  /** The relay's access token, if it asks for one: the camera socket and a relay layer image send it. A build from before this prop sends none. */
+  readonly relayToken?: string | undefined;
   /** The current layer image (white or alpha pixels on transparent). */
   readonly layerUri: string | undefined;
   /** The colour lit layer pixels are drawn in. */

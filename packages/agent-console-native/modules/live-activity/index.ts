@@ -30,6 +30,7 @@ type LiveActivityNative = {
   readonly endAll: () => Promise<number>;
   readonly setServerConfig: (url: string, password: string | null) => boolean;
   readonly setPrinterRelay?: (url: string) => void;
+  readonly setPrinterRelayToken?: (token: string) => void;
   readonly setActivityAccent?: (hex: string) => void;
   readonly takePendingOpenSession: () => string | null;
   readonly addListener: (
@@ -73,6 +74,15 @@ export const setExtensionServerConfig = (url: string): void => {
  */
 export const setPrinterRelay = (url: string): void => {
   native?.setPrinterRelay?.(url);
+};
+
+/**
+ * Gives the native side the relay's access token (its `relayToken`), so the
+ * push tokens it sends carry `Authorization: Bearer <token>`. An empty text
+ * removes it. A no-op on a binary without it: that binary sends no token.
+ */
+export const setPrinterRelayToken = (token: string): void => {
+  native?.setPrinterRelayToken?.(token);
 };
 
 /**
