@@ -7,6 +7,9 @@ import { modelsRoute } from "./catalog";
 
 const UPSTREAM_PORT = 6100 + Math.floor(Math.random() * 100);
 const asked: Array<string> = [];
+/** How many times the upstream answers a folder with no providers before it
+ * is "loaded"; set by a test, counted down per `/api/provider` ask. */
+let coldAnswersLeft = 0;
 
 const model = (providerID: string, id: string, name: string, enabled = true) => ({ id, modelID: id, providerID, name, enabled, settings: { apiKey: "sk-secret" } });
 
@@ -14,6 +17,12 @@ const model = (providerID: string, id: string, name: string, enabled = true) => 
 const upstream = createServer((request: IncomingMessage, response: ServerResponse) => {
   asked.push(request.url ?? "");
   const path = new URL(request.url ?? "/", "http://localhost").pathname;
+  if (path === "/api/provider" && coldAnswersLeft > 0) {
+    coldAnswersLeft -= 1;
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ location: { directory: "/repo a" }, data: [] }));
+    return;
+  }
   const body =
     path === "/api/provider"
       ? { data: [{ id: "deepseek", name: "DeepSeek", settings: { apiKey: "sk-secret" } }, { id: "opencode", name: "OpenCode" }, { id: "idle", name: "No models" }] }
@@ -63,4 +72,34 @@ describe("GET /models", () => {
       await dispose();
     }
   });
+
+  it("asks again while opencode has not loaded the folder, then answers", async () => {
+    const { handler, dispose } = HttpRouter.toWebHandler(modelsRoute, { disableLogger: true });
+    const context = await Effect.runPromise(Layer.build(FetchHttpClient.layer).pipe(Effect.scoped));
+    try {
+      coldAnswersLeft = 2;
+      const before = asked.filter((url) => url.startsWith("/api/provider")).length;
+      const response = await handler(new Request(`http://localhost${Models.path}?directory=${encodeURIComponent("/cold")}`), context);
+      expect(response.status).toBe(200);
+      const text = await response.text();
+      expect(text).toContain('"_tag":"Provider"');
+      expect(asked.filter((url) => url.startsWith("/api/provider")).length - before).toBe(3);
+    } finally {
+      await dispose();
+    }
+  });
+
+  it("answers 503, not an empty catalog, when the folder never loads", async () => {
+    const { handler, dispose } = HttpRouter.toWebHandler(modelsRoute, { disableLogger: true });
+    const context = await Effect.runPromise(Layer.build(FetchHttpClient.layer).pipe(Effect.scoped));
+    try {
+      coldAnswersLeft = 100;
+      const response = await handler(new Request(`http://localhost${Models.path}?directory=${encodeURIComponent("/never")}`), context);
+      expect(response.status).toBe(503);
+      expect(response.headers.get("retry-after")).toBe("2");
+    } finally {
+      coldAnswersLeft = 0;
+      await dispose();
+    }
+  }, 15_000);
 });

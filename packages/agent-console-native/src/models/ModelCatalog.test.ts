@@ -90,4 +90,30 @@ describe("ModelCatalog", () => {
     );
     expect([...asked].sort()).toEqual([`http://server${Models.path}`, `http://server${Models.path}?directory=%2Fa`]);
   });
+
+  it("does not keep an empty answer (the folder not loaded yet); asks again and keeps the full one", async () => {
+    const asked: Array<string> = [];
+    let answers = 0;
+    // The first ask: no provider at all (only the defaults line). The next: the folder loaded.
+    const fetch = (input: RequestInfo | URL): Promise<Response> => {
+      answers += 1;
+      return answers === 1 ? fakeServer([], asked)(input) : fakeServer([provider("deepseek")], asked)(input);
+    };
+    const result = await Effect.runPromise(
+      Effect.gen(function* () {
+        const seen = yield* watching("/cold", ModelCatalog.pipe(Effect.flatMap((catalog) => catalog.refresh("http://server", "/cold")))).pipe(Effect.provide(catalogOver(fetch)));
+        const kept = yield* Effect.gen(function* () {
+          const catalog = yield* ModelCatalog;
+          yield* catalog.readBack;
+          return (yield* catalog.changes.pipe(Stream.take(1), Stream.runCollect))[0]?.["/cold"];
+        }).pipe(Effect.provide(catalogOver(fetch)));
+        return { seen, kept };
+      }).pipe(Effect.provide(KeyValueStore.layerMemory)),
+    );
+    const shown = result.seen.flatMap((catalog) => (catalog === undefined ? [] : [`${catalog.providers.length}${catalog.complete ? "✓" : ""}`]));
+    // Never an empty complete catalog on screen; the retry's full one, then kept.
+    expect(shown).toEqual(["1", "1✓"]);
+    expect(result.kept?.providers.map((each) => each.id)).toEqual(["deepseek"]);
+    expect(asked.length).toBe(2);
+  }, 10_000);
 });

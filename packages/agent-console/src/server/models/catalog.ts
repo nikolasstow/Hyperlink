@@ -8,7 +8,7 @@
  *
  * @internal
  */
-import { Effect, Schema, Stream } from "effect";
+import { Data, Effect, Schedule, Schema, Stream } from "effect";
 import { Ndjson } from "effect/encoding";
 import { Headers, HttpClient, HttpClientResponse, HttpRouter, HttpServerResponse } from "effect/http";
 import { Models } from "agent-console-protocol";
@@ -50,6 +50,16 @@ const linesOf = (
   { _tag: "Defaults", defaults: fallback.data === undefined ? {} : { [fallback.data.providerID]: fallback.data.id } },
 ];
 
+/** opencode answered for a folder it had not finished loading: no provider
+ * had a model yet. Not a catalog — a client that kept it would show an empty
+ * picker until something refreshed it. */
+class CatalogNotReady extends Data.TaggedError("CatalogNotReady") {}
+
+/** How often, and how many times, a not-ready folder is asked again before
+ * the route gives up for this request. A cold folder is ready well inside a
+ * second; a folder with no providers at all costs the caller this long once. */
+const notReadyRetry = Schedule.spaced("300 millis").pipe(Schedule.upTo({ times: 5 }));
+
 export const modelsRoute = HttpRouter.add("GET", Models.path, (request) =>
   Effect.gen(function* () {
     const directory = new URL(request.originalUrl, "http://localhost").searchParams.get("directory");
@@ -62,11 +72,26 @@ export const modelsRoute = HttpRouter.add("GET", Models.path, (request) =>
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
       );
-    const [providers, models, fallback] = yield* Effect.all(
+    const readAll = Effect.all(
       [read("/api/provider", OpencodeProviders), read("/api/model", OpencodeModels), read("/api/model/default", OpencodeDefault)],
       { concurrency: "unbounded" },
+    ).pipe(
+      Effect.map(([providers, models, fallback]) => linesOf(providers, models, fallback)),
+      Effect.filterOrFail(
+        (lines) => lines.some((line) => line._tag === "Provider"),
+        () => new CatalogNotReady(),
+      ),
     );
-    const body = Stream.fromIterable(linesOf(providers, models, fallback)).pipe(Stream.pipeThroughChannel(Ndjson.encodeSchemaString(Models.Line)()), Stream.encodeText);
+    const lines = yield* readAll.pipe(
+      Effect.retry({
+        while: (error) => error._tag === "CatalogNotReady",
+        schedule: notReadyRetry,
+      }),
+    );
+    const body = Stream.fromIterable(lines).pipe(
+      Stream.pipeThroughChannel(Ndjson.encodeSchemaString(Models.Line)()),
+      Stream.encodeText,
+    );
     return HttpServerResponse.stream(body, {
       contentType: "application/x-ndjson",
       headers: {
@@ -74,6 +99,12 @@ export const modelsRoute = HttpRouter.add("GET", Models.path, (request) =>
       },
     });
   }).pipe(
+    // Not ready is 503, never an empty 200: a client must not keep it.
+    Effect.catchTag("CatalogNotReady", () =>
+      Effect.logWarning("models: opencode has no providers for this folder yet").pipe(
+        Effect.as(HttpServerResponse.jsonUnsafe({ error: "opencode has no providers for this folder yet" }, { status: 503, headers: { "retry-after": "2" } })),
+      ),
+    ),
     Effect.catch((error) =>
       Effect.logWarning("models: the catalog could not be read from opencode", error).pipe(
         Effect.as(HttpServerResponse.jsonUnsafe({ error: "opencode unreachable" }, { status: 502 })),

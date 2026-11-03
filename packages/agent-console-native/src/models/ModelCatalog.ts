@@ -11,7 +11,7 @@
  *
  * @internal
  */
-import { Context, Effect, Layer, Option, Schema, Stream, SubscriptionRef } from "effect";
+import { Context, Data, Effect, Layer, Option, Schedule, Schema, Stream, SubscriptionRef } from "effect";
 import { Ndjson } from "effect/encoding";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
@@ -34,6 +34,14 @@ type Catalogs = typeof Catalogs.Type;
 
 /** The key a folder's catalog is kept under. */
 export const folderKey = (directory: string | undefined): string => directory ?? "";
+
+/** The server answered with no provider at all: opencode had not loaded the
+ * folder yet. Not a catalog to show or keep. */
+class CatalogEmpty extends Data.TaggedError("CatalogEmpty") {}
+
+/** A refresh that failed (the server not ready, or unreachable for a moment)
+ * is tried again shortly, a few times, before it is given up for this round. */
+const refreshRetry = Schedule.spaced("2 seconds").pipe(Schedule.upTo({ times: 2 }));
 
 const make = Effect.gen(function* () {
   const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, Catalogs);
@@ -72,9 +80,13 @@ const make = Effect.gen(function* () {
           },
         ),
       );
+      if (fresh.providers.length === 0) return yield* new CatalogEmpty();
       yield* put(key, { ...fresh, complete: true });
       yield* keep(yield* SubscriptionRef.get(catalogs));
-    }).pipe(Effect.catch((error) => Effect.logWarning(`[models] the catalog of ${directory ?? "the server"} could not be loaded`, error)));
+    }).pipe(
+      Effect.retry(refreshRetry),
+      Effect.catch((error) => Effect.logWarning(`[models] the catalog of ${directory ?? "the server"} could not be loaded`, error)),
+    );
 
   return {
     /** Every folder's catalog, as it changes. */
