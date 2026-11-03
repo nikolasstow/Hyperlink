@@ -16,8 +16,9 @@
  *   pnpm --filter agent-console da tasks printing
  *   pnpm --filter agent-console da seed
  *
- * The server base is `DA_API` (default `http://127.0.0.1:5199`). The token is
- * `DA_TOKEN`, else the admin token in the server's state folder.
+ * The server base is `DA_API`; without it, the loopback address on the port
+ * the server itself reads (`AGENT_CONSOLE_API_PORT`, default 5199). The token
+ * is `DA_TOKEN`, else the admin token in the server's state folder.
  *
  * @internal
  */
@@ -35,7 +36,8 @@ class DaError extends Data.TaggedError("DaError")<{
   readonly message: string;
 }> {}
 
-const apiBase = (): string => process.env.DA_API ?? "http://127.0.0.1:5199";
+/** The API server: `DA_API`, else loopback on the server's own port setting. */
+const apiBase = (): string => process.env.DA_API ?? `http://127.0.0.1:${process.env.AGENT_CONSOLE_API_PORT ?? 5199}`;
 
 /** The token to send: `DA_TOKEN`, else the admin token on disk, else none. */
 const token: Effect.Effect<string | undefined, never, FileSystem.FileSystem | Path.Path> = Effect.gen(function* () {
