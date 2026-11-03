@@ -50,6 +50,8 @@ import { ThemeTokenRuleScreen } from "./ThemeTokenRuleScreen";
 import { ThemeTokensScreen } from "./ThemeTokensScreen";
 import { FilesScreen } from "./files/FilesScreen";
 import { ArchivedScreen } from "./ArchivedScreen";
+import { ProjectPageScreen } from "./ProjectPageScreen";
+import { ProjectsScreen } from "./ProjectsScreen";
 import { CollectionScreen, type CollectionView } from "./CollectionScreen";
 import { ExtensionViewScreen } from "./ExtensionViewScreen";
 import { PluginPageScreen } from "./PluginPageScreen";
@@ -116,6 +118,10 @@ export type RootStackParamList = {
   ProcessOutput: { id: string; title: string; commandLine: string };
   // Archived sessions (tasks to come), all of them or one repo's.
   Archived: { repo?: string };
+  // The owner's projects and their pages (agent-console-protocol Projects).
+  Projects: undefined;
+  // One project page, rendered by the server with the page SDK injected.
+  ProjectPage: { project: string; slug: string; title: string };
   // The plugin manager, and one installed plugin (`name` is the nav title).
   Plugins: undefined;
   PluginDetail: { id: string; name: string };
@@ -358,6 +364,7 @@ export const RootNavigator = (): React.ReactElement => {
               onSettings: () => navigation.navigate("Settings"),
               onSearch: () => {},
               onArchived: () => navigation.navigate("Archived", {}),
+              onProjects: () => navigation.navigate("Projects"),
             })
           }
         />
@@ -481,6 +488,19 @@ export const RootNavigator = (): React.ReactElement => {
             ...pageHeader,
             headerTitle: () => <HeaderTitlePill title="Archived" />,
           }}
+        />
+        <Stack.Screen
+          name="Projects"
+          component={ProjectsScreen}
+          options={{
+            ...pageHeader,
+            headerTitle: () => <HeaderTitlePill title="Projects" />,
+          }}
+        />
+        <Stack.Screen
+          name="ProjectPage"
+          component={ProjectPageScreen}
+          options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={route.params.title} /> })}
         />
         <Stack.Screen
           name="PluginPage"

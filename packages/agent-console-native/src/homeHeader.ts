@@ -28,6 +28,7 @@ export type HomeHeaderHandlers = {
   readonly onSettings: () => void;
   readonly onSearch: () => void;
   readonly onArchived: () => void;
+  readonly onProjects: () => void;
 };
 
 export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavigationOptions => ({
@@ -57,7 +58,7 @@ export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavi
     // A spacing item breaks the shared capsule so each button gets its own
     // circle, matching the single left-hand button.
     { type: "spacing", spacing: 24 },
-    // The 3-dot menu: Archived (sessions, and tasks to come); in development
+    // The 3-dot menu: Projects, Archived (sessions, and tasks to come); in development
     // builds, Reload too, so the Expo dev menu's button can stay hidden.
     {
       type: "menu",
@@ -65,6 +66,12 @@ export const homeHeaderOptions = (handlers: HomeHeaderHandlers): NativeStackNavi
       icon: { type: "sfSymbol", name: "ellipsis" },
       menu: {
         items: [
+          {
+            type: "action",
+            label: "Projects",
+            icon: { type: "sfSymbol", name: "folder.badge.gearshape" },
+            onPress: handlers.onProjects,
+          },
           {
             type: "action",
             label: "Archived",
