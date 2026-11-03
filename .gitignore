@@ -75,4 +75,7 @@ test-results/
 
 # Local server data (device push tokens) and the APNs auth key — never commit
 **/.agent-console/
+# The same folder when it is a symlink to another checkout's state (one shared state, many worktrees).
+**/.agent-console
+**/.agent-console.*-old/
 *.p8
