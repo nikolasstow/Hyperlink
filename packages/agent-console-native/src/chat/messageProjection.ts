@@ -90,9 +90,37 @@ const deliveredMessage = (id: SessionMessage.ID, item: SessionInbox.Item, create
   }
 };
 
+/** Whether a "started" event is already in its assistant message, so applying
+ * it again would add the block twice. The connection subscribes to events
+ * before it loads the messages (v2Transcript.ts), so an event from that gap
+ * is in the snapshot and then comes again from the queue; the updater's
+ * started handlers push unconditionally. A tool is known by its id; a text
+ * or reasoning block by its ordinal, which a new block is never below. */
+const alreadyApplied = (projection: Projection, event: SessionEvent.DurableEvent): boolean => {
+  switch (event.type) {
+    case "session.tool.input.started": {
+      const assistant = assistantOf(projection, event.data.assistantMessageID);
+      return assistant !== undefined && assistant.content.some((item) => item.type === "tool" && item.id === event.data.id);
+    }
+    case "session.text.started":
+    case "session.reasoning.started": {
+      const assistant = assistantOf(projection, event.data.assistantMessageID);
+      if (assistant === undefined) return false;
+      const kind = event.type === "session.text.started" ? "text" : "reasoning";
+      return assistant.content.filter((item) => item.type === kind).length > event.data.ordinal;
+    }
+    default:
+      return false;
+  }
+};
+
+const assistantOf = (projection: Projection, messageID: string): SessionMessage.Assistant | undefined =>
+  projection.messages.find((message): message is SessionMessage.Assistant => message.type === "assistant" && message.id === messageID);
+
 /** Applies a durable event: what the server does with it. */
 export const applyDurable = (projection: Projection, event: SessionEvent.DurableEvent): Effect.Effect<void> =>
   Effect.suspend(() => {
+    if (alreadyApplied(projection, event)) return Effect.void;
     switch (event.type) {
       case "session.inbox.enqueued":
         projection.inbox.set(event.data.inboxID, event.data.item);
