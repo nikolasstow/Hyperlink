@@ -28,6 +28,10 @@ import { modelsRoute } from "./models/catalog";
 import { opencodeProxyRoute } from "./opencodeProxy";
 import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
+import { ProjectsStore } from "./projects/store";
+import { reposListOf, sessionsList } from "./projects/context";
+import { tasksOf } from "./projects/tasks";
+import { renderPage } from "./projects/render";
 import { SessionArchive } from "./sessions/archive";
 import { Workspaces } from "./workspaces";
 import { importFont, inspectFont, readFontFile } from "./fonts";
@@ -104,6 +108,25 @@ const processesHandlers = HttpApiBuilder.group(api, "processes", (handlers) =>
   ),
 );
 
+const projectsHandlers = HttpApiBuilder.group(api, "projects", (handlers) =>
+  Effect.all([ProjectsStore, Workspaces]).pipe(
+    Effect.map(([store, workspaces]) =>
+      handlers
+        .handle("projectsList", () => store.listProjects)
+        .handle("projectGet", ({ params }) => store.getProject(params.slug))
+        .handle("projectPut", ({ params, payload }) => store.putProject(params.slug, payload))
+        .handle("projectDelete", ({ params }) => store.deleteProject(params.slug).pipe(Effect.as({ ok: true })))
+        .handle("pagesList", ({ params }) => store.listPages(params.slug))
+        .handle("pageGet", ({ params }) => store.getPage(params.slug, params.page))
+        .handle("pagePut", ({ params, payload }) => store.putPage(params.slug, params.page, payload))
+        .handle("pageDelete", ({ params }) => store.deletePage(params.slug, params.page).pipe(Effect.as({ ok: true })))
+        .handle("tasksList", ({ params }) => store.getProject(params.slug).pipe(Effect.flatMap(tasksOf)))
+        .handle("reposList", () => reposListOf(workspaces))
+        .handle("sessionsList", () => sessionsList),
+    ),
+  ),
+);
+
 const pluginsHandlers = HttpApiBuilder.group(api, "plugins", (handlers) =>
   PluginRegistry.pipe(Effect.map((registry) => handlers.handle("list", () => registry.list))),
 );
@@ -144,6 +167,32 @@ const processStreamRoute = HttpRouter.add("GET", "/processes/stream", (request) 
   }),
 );
 
+// A page as a full HTML document with the SDK injected: `?project=<slug>&
+// slug=<page>&env=app|browser`. The browser opens this directly; the app's
+// WebView loads it and adds the auth token. Raw HTML, so it is a router route,
+// not an HttpApi endpoint. Served behind the same gate as everything else.
+const projectsViewRoute = HttpRouter.add("GET", "/projects/view", (request) =>
+  Effect.gen(function* () {
+    const url = new URL(request.url, "http://localhost");
+    const project = url.searchParams.get("project");
+    const slug = url.searchParams.get("slug");
+    if (project === null || slug === null) return HttpServerResponse.text("Expected ?project=<slug>&slug=<page>", { status: 400 });
+    const env = url.searchParams.get("env") === "app" ? "app" : "browser";
+    const store = yield* ProjectsStore;
+    return yield* store.getPage(project, slug).pipe(
+      Effect.map((page) =>
+        HttpServerResponse.text(renderPage(page, { env, apiBase: "" }), {
+          contentType: "text/html; charset=utf-8",
+          headers: { "cache-control": "no-store" },
+        }),
+      ),
+      Effect.catchTag("ProjectsInvalidSlug", (error) => Effect.succeed(HttpServerResponse.text(error.message, { status: 400 }))),
+      Effect.catchTag("ProjectsNotFound", (error) => Effect.succeed(HttpServerResponse.text(error.message, { status: 404 }))),
+      Effect.catchTag("ProjectsError", (error) => Effect.succeed(HttpServerResponse.text(error.message, { status: 500 }))),
+    );
+  }),
+);
+
 // A raw route to serve stored (converted) font bytes — binary, so it's an
 // HttpRouter route rather than an HttpApi endpoint. `?id=<fileId>`.
 const fontFileRoute = HttpRouter.add("GET", "/fonts/file", (request) =>
@@ -168,6 +217,9 @@ const statesLive = CollectionStates.layer.pipe(Layer.provide(registryLive));
 const runnerLive = ProcessRunner.layer.pipe(Layer.provide([workspacesLive, NodeServices.layer]));
 // One DeviceAuth for the gate (every request) and the auth endpoints.
 const authLive = DeviceAuth.layer;
+// The projects/pages store (a file tree), shared by the API and the render
+// route.
+const projectsLive = ProjectsStore.layer;
 
 const apiLive = HttpApiBuilder.layer(api).pipe(
   Layer.provide([
@@ -177,6 +229,7 @@ const apiLive = HttpApiBuilder.layer(api).pipe(
     viewsHandlers.pipe(Layer.provide(viewsLive)),
     pagesHandlers.pipe(Layer.provide([viewsLive, statesLive])),
     processesHandlers.pipe(Layer.provide(runnerLive)),
+    projectsHandlers.pipe(Layer.provide([projectsLive, workspacesLive])),
     pluginsHandlers.pipe(Layer.provide(registryLive)),
     sessionsHandlers.pipe(Layer.provide(SessionArchive.layer)),
     authHandlers.pipe(Layer.provide(authLive)),
@@ -190,10 +243,11 @@ const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 // Every route is behind the gate (auth/http.ts); `/health` and redeeming a
 // pairing code are open.
 const serverLive = HttpRouter.serve(
-  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, fileSyncLayer, opencodeProxyRoute, modelsRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
+  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, projectsViewRoute, fileSyncLayer, opencodeProxyRoute, modelsRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
 ).pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),
+  Layer.provide(projectsLive),
   Layer.provide(NodeHttpServer.layer(createServer, { port })),
 );
 
