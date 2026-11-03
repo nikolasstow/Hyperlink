@@ -11,7 +11,7 @@
  *
  * @internal
  */
-import { ArrowUp, ChevronRight, Folder, FolderPlus, Plus, Search, Settings as SettingsIcon } from "lucide-react";
+import { ArrowUp, ChevronRight, Folder, FolderKanban, FolderPlus, Plus, Search, Settings as SettingsIcon } from "lucide-react";
 import * as React from "react";
 import type { Session } from "@opencode-ai/sdk";
 import * as Router from "last-ts/Router";
@@ -131,6 +131,14 @@ export const Home = (): React.ReactElement => {
           <SettingsIcon size={20} strokeWidth={1.8} aria-hidden="true" />
         </button>
         <div className="topbar-actions">
+          <button
+            type="button"
+            className="topbar-icon-button"
+            aria-label="Projects"
+            onClick={() => navigateWithTransition(() => router.go(urls.projects()))}
+          >
+            <FolderKanban size={19} strokeWidth={1.8} aria-hidden="true" />
+          </button>
           {/* Not wired yet — no search feature exists. Placeholder to match the layout. */}
           <button type="button" className="topbar-icon-button" aria-label="Search">
             <Search size={19} strokeWidth={1.8} aria-hidden="true" />
