@@ -16,12 +16,13 @@ import { reloadMenuItems } from "./reload";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { DubzContext } from "./dubzSuggestions";
 import * as React from "react";
-import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, Vibration, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import Animated, { scrollTo, useAnimatedProps, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ScrollViewMarker } from "react-native-screens/src/components/gamma/scroll-view-marker";
 import { useAppContext } from "./AppContext";
+import { tapLight } from "./haptics";
 import { chatMessageOfQueued, pendingMessages, sameMessages } from "./chat/fromOutbox";
 import { answering, answerStartedAt, type ChatMessage } from "./chat/model";
 import { useV2Transcript } from "./chat/useV2Transcript";
@@ -342,9 +343,8 @@ export const SessionChatScreen = (props: Props): React.ReactElement => {
         action: "Working…",
       });
     }
-    if (wasBusy.current && !busy) {
-      Vibration.vibrate();
-    }
+    // The turn finished: a light tap, not the full vibration.
+    if (wasBusy.current && !busy) tapLight();
     wasBusy.current = busy;
   }, [busy, sessionID, title]);
 
