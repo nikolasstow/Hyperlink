@@ -20,7 +20,10 @@
  *   page tells the assistant what it is about. A no-op in the browser.
  *
  * The SDK reads its config from `window.__DA__`, which the render route seeds
- * (env, apiBase, project, slug) and the app WebView adds the auth token to.
+ * (env, project, slug) and the app WebView adds the auth token and `apiBase`
+ * to. With no `apiBase` seeded, the SDK takes the API root from its own URL:
+ * a page served at `/da/projects/view` (the web app's proxy) calls `/da/...`,
+ * one served at `/projects/view` calls the origin root.
  *
  * This file is a plain string on purpose: the server inlines it into every
  * page. It runs in the page, not in Node, so it uses only browser globals.
@@ -32,7 +35,9 @@
 export const DA_SDK_JS = `(() => {
   const cfg = window.__DA__ || (window.__DA__ = {});
   const env = cfg.env === "app" ? "app" : "browser";
-  const apiBase = cfg.apiBase || "";
+  const apiBase = typeof cfg.apiBase === "string"
+    ? cfg.apiBase
+    : window.location.pathname.replace(new RegExp("/projects/view/?$"), "");
   const post = (msg) => {
     try {
       if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg));
@@ -50,10 +55,11 @@ export const DA_SDK_JS = `(() => {
   const link = {
     session: (id) => (env === "app" ? "da:session:" + id : "/session/" + enc(id)),
     file: (repo, p) => (env === "app" ? "da:file:" + repo + ":" + p : "/repo/" + enc(repo) + "#" + enc(p)),
-    page: (project, slug) => (env === "app" ? "da:page:" + project + ":" + slug : "/projects/view?project=" + enc(project) + "&slug=" + enc(slug)),
+    page: (project, slug) => (env === "app" ? "da:page:" + project + ":" + slug : apiBase + "/projects/view?project=" + enc(project) + "&slug=" + enc(slug)),
   };
   window.da = {
     env,
+    apiBase,
     projects: { list: () => get("/projects") },
     pages: {
       list: (project) => get("/projects/" + enc(project) + "/pages"),

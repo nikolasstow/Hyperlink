@@ -4,6 +4,7 @@ import { FetchHttpClient, HttpClient } from "effect/http";
 import { describe, expect, it } from "vitest";
 import { Page, PageInput, Project, ProjectInput } from "./model";
 import { renderPage } from "./render";
+import { DA_SDK_JS } from "./sdk";
 import { ProjectsStore } from "./store";
 import { tasksOf } from "./tasks";
 
@@ -147,17 +148,77 @@ describe("render", () => {
   };
 
   it("injects the SDK into an HTML page, before </head>", () => {
-    const html = renderPage(page, { env: "app", apiBase: "" });
+    const html = renderPage(page, { env: "app" });
     expect(html).toContain("window.da");
     expect(html).toContain('"env":"app"');
+    // No apiBase seeded: the SDK derives it from its own URL.
+    expect(html).not.toContain("apiBase\":");
     // The SDK goes in before the author's head closes, so it loads first.
     expect(html.indexOf("window.da")).toBeLessThan(html.indexOf("</head>"));
   });
 
   it("wraps a Markdown page and carries the SDK and the source", () => {
-    const html = renderPage({ ...page, kind: "md", content: "# Title\n\ntext" }, { env: "browser", apiBase: "" });
+    const html = renderPage({ ...page, kind: "md", content: "# Title\n\ntext" }, { env: "browser", apiBase: "/da" });
+    expect(html).toContain('"apiBase":"/da"');
     expect(html).toContain("marked");
     expect(html).toContain("window.da");
     expect(html).toContain("# Title");
+  });
+});
+
+describe("page SDK", () => {
+  /** What the tests read off `window.da`. The SDK is a plain script, so the
+   * test runs it against a fake `window` and decodes what it defined. */
+  const Sdk = Schema.Struct({
+    env: Schema.Literals(["app", "browser"]),
+    apiBase: Schema.String,
+    link: Schema.Struct({
+      page: Schema.Unknown,
+    }),
+    projects: Schema.Struct({
+      list: Schema.Unknown,
+    }),
+  });
+
+  const call = (fn: unknown, ...args: ReadonlyArray<unknown>): unknown => (typeof fn === "function" ? fn(...args) : undefined);
+
+  /** Run the SDK with `window.__DA__ = seed` at `pathname`. Returns the
+   * decoded `window.da` and the URLs its `fetch` asked for. */
+  const runSdk = (seed: Record<string, unknown>, pathname: string) => {
+    const fetched: Array<string> = [];
+    const fetch = (url: string) => {
+      fetched.push(url);
+      return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+    };
+    const window: Record<string, unknown> = {
+      __DA__: seed,
+      location: { pathname },
+    };
+    const document = { addEventListener: () => undefined };
+    // The SDK reads `window`, `document` and `fetch` as globals; bind them.
+    new Function("window", "document", "fetch", DA_SDK_JS)(window, document, fetch);
+    return { da: Schema.decodeUnknownSync(Sdk)(window.da), fetched };
+  };
+
+  it("takes the API root from its own URL when none is seeded", async () => {
+    const { da, fetched } = runSdk({ env: "browser", project: "p", slug: "s" }, "/da/projects/view");
+    expect(da.apiBase).toBe("/da");
+    await call(da.projects.list);
+    expect(fetched).toEqual(["/da/projects"]);
+    expect(call(da.link.page, "p", "s")).toBe("/da/projects/view?project=p&slug=s");
+  });
+
+  it("keeps a seeded apiBase", async () => {
+    const { da, fetched } = runSdk({ env: "browser", apiBase: "http://mac:5199" }, "/anything");
+    expect(da.apiBase).toBe("http://mac:5199");
+    await call(da.projects.list);
+    expect(fetched).toEqual(["http://mac:5199/projects"]);
+  });
+
+  it("is at the origin root when served unproxied, and links natively in the app", () => {
+    const { da } = runSdk({ env: "app" }, "/projects/view");
+    expect(da.apiBase).toBe("");
+    expect(da.env).toBe("app");
+    expect(call(da.link.page, "p", "s")).toBe("da:page:p:s");
   });
 });

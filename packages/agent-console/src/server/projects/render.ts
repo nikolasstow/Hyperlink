@@ -11,9 +11,9 @@
  *   prototype accepts that (Decisions, in the handoff doc).
  * - A **tsx** page is not rendered yet; the document says so.
  *
- * The render route (serve.ts) seeds `window.__DA__` with `env`, `apiBase`,
- * `project` and `slug`; the app WebView adds the auth token before the page
- * loads.
+ * The render route (serve.ts) seeds `window.__DA__` with `env`, `project` and
+ * `slug` (and `apiBase` when the caller gives one); the app WebView adds the
+ * auth token before the page loads.
  *
  * @internal
  */
@@ -21,8 +21,13 @@ import { Page } from "./model";
 import { DA_SDK_JS } from "./sdk";
 
 /** The `window.__DA__` seed and the SDK, as one script block. */
-const sdkBlock = (env: "app" | "browser", apiBase: string, project: string, slug: string): string => {
-  const config = JSON.stringify({ env, apiBase, project, slug });
+const sdkBlock = (env: "app" | "browser", apiBase: string | undefined, project: string, slug: string): string => {
+  const config = JSON.stringify({
+    env,
+    project,
+    slug,
+    ...(apiBase === undefined ? {} : { apiBase }),
+  });
   return `<script>window.__DA__=Object.assign(${config},window.__DA__||{});</script><script>${DA_SDK_JS}</script>`;
 };
 
@@ -77,7 +82,7 @@ const unsupportedDocument = (page: Page, block: string): string =>
   `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(page.title)}</title>${block}</head><body style="font:16px/1.6 system-ui,sans-serif;padding:24px"><h1>${escapeHtml(page.title)}</h1><p>This page is a <code>${escapeHtml(page.kind)}</code> page. The prototype renders <code>html</code> and <code>md</code> pages only.</p></body></html>`;
 
 /** The full HTML document for a page. */
-export const renderPage = (page: Page, options: { env: "app" | "browser"; apiBase: string }): string => {
+export const renderPage = (page: Page, options: { env: "app" | "browser"; apiBase?: string }): string => {
   const block = sdkBlock(options.env, options.apiBase, page.project, page.slug);
   if (page.kind === "html") return injectIntoHtml(page.content, block);
   if (page.kind === "md") return markdownDocument(page.title, page.content, block);

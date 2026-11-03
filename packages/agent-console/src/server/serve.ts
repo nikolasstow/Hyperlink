@@ -181,7 +181,7 @@ const projectsViewRoute = HttpRouter.add("GET", "/projects/view", (request) =>
     const store = yield* ProjectsStore;
     return yield* store.getPage(project, slug).pipe(
       Effect.map((page) =>
-        HttpServerResponse.text(renderPage(page, { env, apiBase: "" }), {
+        HttpServerResponse.text(renderPage(page, { env }), {
           contentType: "text/html; charset=utf-8",
           headers: { "cache-control": "no-store" },
         }),
