@@ -15,6 +15,8 @@ const make = Effect.gen(function* () {
   return {
     /** Record workspaces, as resolved real paths. */
     register: (paths: ReadonlyArray<string>) => Ref.update(known, (current) => new Set([...current, ...paths])),
+    /** The known workspaces, as a sorted list (the projects API lists them). */
+    list: Ref.get(known).pipe(Effect.map((all) => [...all].sort())),
     /** Whether a resolved real path is one of the workspaces or inside one. */
     contains: (path: string) => Ref.get(known).pipe(Effect.map((all) => [...all].some((workspace) => path === workspace || path.startsWith(`${workspace}/`)))),
   };

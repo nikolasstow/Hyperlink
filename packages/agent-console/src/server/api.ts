@@ -14,6 +14,8 @@ import { DeviceAuthError, DeviceInfo, NotAllowed, PairedToken, PairingCode, Pair
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
 import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";
+import { Page, PageInput, PageMeta, Project, ProjectInput, Repo, Session, Task } from "agent-console-protocol/Projects";
+import { ProjectsError, ProjectsInvalidSlug, ProjectsNotFound } from "./projects/store";
 import { ProcessRequestError, ProcessStartError, processSpec } from "./processes/runner";
 import { ArchivedSessions, SessionArchiveError, sessionIdPayload } from "./sessions/archive";
 import { CollectionState, CollectionStateIoError, CollectionStateRequestError, collectionChangePayload, collectionStatePayload } from "./collections/state";
@@ -272,6 +274,80 @@ const sessionsGroup = HttpApiGroup.make("sessions").add(
   }),
 );
 
+/** A bad slug is the caller's to fix (400); a missing project or page is 404;
+ * a read or write that failed is the server's (500). */
+const projectsErrors = [
+  ProjectsInvalidSlug.pipe(HttpApiSchema.status(400)),
+  ProjectsNotFound.pipe(HttpApiSchema.status(404)),
+  ProjectsError.pipe(HttpApiSchema.status(500)),
+];
+const projectSlugPath = { slug: Schema.String };
+const pageSlugPath = { slug: Schema.String, page: Schema.String };
+
+/**
+ * Projects and their pages (the Projects + Pages prototype). A project groups
+ * work; a page is an artifact that belongs to a project. The store is a plain
+ * file tree (projects/store.ts), so any agent can write it without this API.
+ * `tasks` reads a project's GitHub issues; `repos` and `sessions` give a page
+ * the rest of its context.
+ */
+const projectsGroup = HttpApiGroup.make("projects").add(
+  HttpApiEndpoint.get("projectsList", "/projects", {
+    success: Schema.Array(Project),
+    error: ProjectsError.pipe(HttpApiSchema.status(500)),
+  }),
+  HttpApiEndpoint.get("projectGet", "/projects/:slug", {
+    params: projectSlugPath,
+    success: Project,
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.post("projectPut", "/projects/:slug", {
+    params: projectSlugPath,
+    payload: ProjectInput,
+    success: Project,
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.delete("projectDelete", "/projects/:slug", {
+    params: projectSlugPath,
+    success: Schema.Struct({ ok: Schema.Boolean }),
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.get("pagesList", "/projects/:slug/pages", {
+    params: projectSlugPath,
+    success: Schema.Array(PageMeta),
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.get("pageGet", "/projects/:slug/pages/:page", {
+    params: pageSlugPath,
+    success: Page,
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.put("pagePut", "/projects/:slug/pages/:page", {
+    params: pageSlugPath,
+    payload: PageInput,
+    success: Page,
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.delete("pageDelete", "/projects/:slug/pages/:page", {
+    params: pageSlugPath,
+    success: Schema.Struct({ ok: Schema.Boolean }),
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.get("tasksList", "/projects/:slug/tasks", {
+    params: projectSlugPath,
+    success: Schema.Array(Task),
+    error: projectsErrors,
+  }),
+  HttpApiEndpoint.get("reposList", "/projects-repos", {
+    success: Schema.Array(Repo),
+    error: ProjectsError.pipe(HttpApiSchema.status(500)),
+  }),
+  HttpApiEndpoint.get("sessionsList", "/projects-sessions", {
+    success: Schema.Array(Session),
+    error: ProjectsError.pipe(HttpApiSchema.status(500)),
+  }),
+);
+
 /** The installed plugins, for the plugin manager. */
 const pluginsGroup = HttpApiGroup.make("plugins").add(
   HttpApiEndpoint.get("list", "/plugins", {
@@ -315,6 +391,7 @@ export const api = HttpApi.make("agent-console")
   .add(viewsGroup)
   .add(pagesGroup)
   .add(processesGroup)
+  .add(projectsGroup)
   .add(pluginsGroup)
   .add(sessionsGroup)
   .add(authGroup);

@@ -16,6 +16,10 @@
     "./Models": {
       "types": "./src/Models.ts",
       "default": "./src/Models.ts"
+    },
+    "./Projects": {
+      "types": "./src/Projects.ts",
+      "default": "./src/Projects.ts"
     }
   },
   "scripts": {
