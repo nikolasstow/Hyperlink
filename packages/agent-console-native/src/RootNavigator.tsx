@@ -58,6 +58,8 @@ import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
 import { GooViewerScreen } from "./printer/GooViewerScreen";
 import { PrinterFilesScreen, PrinterHealthScreen, PrinterSettingsScreen } from "./printer/PrinterPages";
+import { PrinterNetworkScreen } from "./printer/PrinterNetworkScreen";
+import { SupportJobScreen, SupportJobsScreen } from "./printer/SupportJobsScreen";
 import { PrinterScreen } from "./PrinterScreen";
 import { serverById } from "./servers";
 import { ProcessOutputScreen } from "./ProcessOutputScreen";
@@ -130,7 +132,11 @@ export type RootStackParamList = {
   // The printer page's own pages: real pages, back to the printer page.
   ServerPrinterFiles: { serverName: string; serverAddress: string };
   ServerPrinterHealth: { serverName: string; serverAddress: string };
+  ServerPrinterNetwork: { serverName: string; serverAddress: string };
   ServerPrinterSettings: { serverName: string; serverAddress: string };
+  // Support jobs: the relay-owned job list and one job's live progress + review (SupportJobsScreen).
+  ServerSupportJobs: { serverName: string; serverAddress: string };
+  ServerSupportJob: { serverName: string; serverAddress: string; jobId: string };
   // The printer plugin's `.goo` viewer: the current print (taskId) or a file (path), on the relay at relayBase.
   GooViewer: { relayBase: string; name: string; taskId?: string; path?: string };
 };
@@ -398,7 +404,10 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
         <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Files" /> }} />
         <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Health" /> }} />
+        <Stack.Screen name="ServerPrinterNetwork" component={PrinterNetworkScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Network" /> }} />
         <Stack.Screen name="ServerPrinterSettings" component={PrinterSettingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Settings" /> }} />
+        <Stack.Screen name="ServerSupportJobs" component={SupportJobsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Support" /> }} />
+        <Stack.Screen name="ServerSupportJob" component={SupportJobScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Support Job" /> }} />
         <Stack.Screen
           name="GooViewer"
           component={GooViewerScreen}

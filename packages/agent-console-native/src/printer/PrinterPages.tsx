@@ -19,6 +19,7 @@ import { Backdrop } from "./Backdrop";
 import { PrinterFiles } from "./PrinterFiles";
 import { fmtBytes, healthItems } from "./printerFormat";
 import { useMeasure, usePrinterPageLink } from "./printerPageLink";
+import { type CameraLockState, fetchCameraLock, setCameraLock } from "./relayApi";
 import { saveRelayToken, useRelayToken } from "./relayToken";
 import { isPrinting } from "./sdcp";
 import { Card, Dot, Row, usePalette } from "./ui";
@@ -163,6 +164,46 @@ const RelayTokenCard = (props: { readonly relayBase: string }): React.ReactEleme
   );
 };
 
+/** The camera lock for every device: read it on open, and turn it on or off here. */
+const CameraLockCard = (props: { readonly relayBase: string }): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  const [lock, setLock] = React.useState<CameraLockState | undefined>(undefined);
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    fetchCameraLock(props.relayBase)
+      .then((next) => {
+        if (alive) setLock(next);
+      })
+      .catch((cause: unknown) => console.error("[printer] reading the camera lock failed", cause));
+    return () => {
+      alive = false;
+    };
+  }, [props.relayBase]);
+  const toggle = React.useCallback(
+    (next: boolean) => {
+      setBusy(true);
+      setCameraLock(props.relayBase, next)
+        .then((state) => setLock(state))
+        .catch((cause: unknown) => console.error("[printer] changing the camera lock failed", cause))
+        .finally(() => setBusy(false));
+    },
+    [props.relayBase],
+  );
+  return (
+    <Card title="Camera">
+      <View style={styles.switchRow}>
+        <View style={styles.switchText}>
+          <Text style={[styles.switchLabel, { color: text.label }]}>Lock the camera</Text>
+          <Text style={[styles.switchNote, { color: text.tertiaryLabel }]}>Stops the camera on every device and turns its stream off. Turn it off here to watch again.</Text>
+        </View>
+        <Switch value={lock?.locked ?? false} onValueChange={toggle} disabled={lock === undefined || busy} trackColor={{ true: palette.accent, false: "rgba(127,127,127,0.3)" }} />
+      </View>
+    </Card>
+  );
+};
+
 export const PrinterSettingsScreen = (props: PageProps<"ServerPrinterSettings">): React.ReactElement => {
   const link = usePrinterPageLink(props.route.params.serverAddress);
   const text = useTextColors();
@@ -194,6 +235,7 @@ export const PrinterSettingsScreen = (props: PageProps<"ServerPrinterSettings">)
               <Row label="Relay" value={printer.relayReachable ? printer.relayBase.replace(/^https?:\/\//, "") : "Not reachable"} />
               <Row label="Camera" value={printer.secureUrl !== undefined ? "H.264, 30 fps" : "MJPEG, 10 fps"} last />
             </Card>
+            <CameraLockCard relayBase={printer.relayBase} />
             <RelayTokenCard relayBase={printer.relayBase} />
           </>
         );

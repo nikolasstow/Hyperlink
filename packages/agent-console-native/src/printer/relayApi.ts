@@ -83,6 +83,76 @@ export const fetchPrintHeader = async (relayBase: string, taskId: string): Promi
 /** The relay's camera as H.264 over a WebSocket: one access unit per message. */
 export const cameraSocketUrl = (relayBase: string): string => `${relayBase.replace(/^http/, "ws")}/api/camera.h264`;
 
+/** The relay's camera lock: while it is on, the relay serves no camera to any device and turns the stream off. */
+export const CameraLockState = Schema.Struct({
+  locked: Schema.Boolean,
+  since: Schema.NullOr(Schema.Number),
+  byLabel: Schema.NullOr(Schema.String),
+});
+export type CameraLockState = typeof CameraLockState.Type;
+
+/** The camera lock now. */
+export const fetchCameraLock = async (relayBase: string): Promise<CameraLockState> =>
+  readJson(await authedFetch(`${relayBase}/api/camera/lock`, { cache: "no-store" }), CameraLockState);
+
+/** Locks or unlocks the camera for every device. Locking stops any live stream at once. */
+export const setCameraLock = async (relayBase: string, locked: boolean): Promise<CameraLockState> =>
+  readJson(await authedFetch(`${relayBase}/api/camera/${locked ? "lock" : "unlock"}`, { method: "POST" }), CameraLockState);
+
+/** The last burn of a support job: did the self-check pass, and where the released file went. */
+export const SupportBurn = Schema.Struct({
+  passed: Schema.Boolean,
+  savedPath: Schema.optional(Schema.NullOr(Schema.String)),
+  sha256: Schema.optional(Schema.NullOr(Schema.String)),
+  report: Schema.optional(Schema.Unknown),
+  at: Schema.optional(Schema.NullOr(Schema.Number)),
+});
+
+/** A support job the relay owns (saturn-uploader SupportJobs). Both apps render it from the relay by id. */
+export const SupportJob = Schema.Struct({
+  id: Schema.String,
+  gooPath: Schema.String,
+  stlPath: Schema.String,
+  /** "waiting" | "analyzing" | "ready" | "burning" | "burned" | "failed". */
+  stage: Schema.String,
+  next: Schema.optional(Schema.NullOr(Schema.String)),
+  waitingFor: Schema.optional(Schema.NullOr(Schema.String)),
+  /** The CLI's last progress stage ("read", "plan", "areas", …). */
+  step: Schema.optional(Schema.NullOr(Schema.String)),
+  seconds: Schema.optional(Schema.NullOr(Schema.Number)),
+  deletions: Schema.optional(Schema.Unknown),
+  summary: Schema.optional(Schema.Unknown),
+  burn: Schema.optional(Schema.NullOr(SupportBurn)),
+  error: Schema.optional(Schema.NullOr(Schema.String)),
+  createdAt: Schema.Number,
+  updatedAt: Schema.optional(Schema.NullOr(Schema.Number)),
+});
+export type SupportJob = typeof SupportJob.Type;
+
+/** The relay is still working on this job: ask again soon. */
+export const supportJobBusy = (job: SupportJob): boolean =>
+  job.stage === "waiting" || job.stage === "analyzing" || job.stage === "burning";
+
+/** Every support job the relay keeps, newest first. */
+export const fetchSupportJobs = async (relayBase: string): Promise<ReadonlyArray<SupportJob>> =>
+  (await readJson(await authedFetch(`${relayBase}/api/support/jobs`, { cache: "no-store" }), Schema.Struct({ jobs: Schema.Array(SupportJob) }))).jobs;
+
+/** One support job by id. The relay answers 202 while it still works and 200 once it is ready/burned/failed. */
+export const fetchSupportJob = async (relayBase: string, id: string): Promise<SupportJob> =>
+  readJson(await authedFetch(`${relayBase}/api/support/jobs/${encodeURIComponent(id)}`, { cache: "no-store" }), SupportJob);
+
+/** Burns the supports into a new file, held for approval. The job goes to "burning", then "burned" or "ready". */
+export const burnSupportJob = async (relayBase: string, id: string): Promise<SupportJob> =>
+  readJson(await authedFetch(`${relayBase}/api/support/jobs/${encodeURIComponent(id)}/burn`, { method: "POST" }), SupportJob);
+
+/**
+ * The relay-served review/approve page for a job, for a WebView. A web view cannot send a header, so with a token
+ * the address carries it, as the camera page does. NOTE: this needs the relay to sign a view in from `?token=` on
+ * the page path (a small RelayAuth change on the approval-page branch), and the page route itself (feat/approval-page).
+ */
+export const approvalPageUrl = (base: string, id: string, token: string | undefined): string =>
+  `${base}/api/support/jobs/${encodeURIComponent(id)}/page${token === undefined ? "" : `?token=${encodeURIComponent(token)}`}`;
+
 export const printPreviewUrl = (relayBase: string, taskId: string): string => `${relayBase}/api/prints/${encodeURIComponent(taskId)}/preview.png`;
 
 export const fetchFileInfo = async (relayBase: string, path: string): Promise<PrintHeader> =>

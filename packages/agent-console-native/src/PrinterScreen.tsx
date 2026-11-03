@@ -110,9 +110,11 @@ const usePrintHeader = (relayBase: string, taskId: string | undefined, reachable
 };
 
 /** The pages this page opens, as buttons at the top right, in order. */
-const PAGES: ReadonlyArray<{ readonly route: "ServerPrinterFiles" | "ServerPrinterHealth" | "ServerPrinterSettings"; readonly label: string; readonly icon: SFSymbol }> = [
+const PAGES: ReadonlyArray<{ readonly route: "ServerPrinterFiles" | "ServerPrinterHealth" | "ServerPrinterNetwork" | "ServerPrinterSettings" | "ServerSupportJobs"; readonly label: string; readonly icon: SFSymbol }> = [
+  { route: "ServerSupportJobs", label: "Support", icon: "square.stack.3d.up.fill" },
   { route: "ServerPrinterFiles", label: "Files", icon: "folder" },
   { route: "ServerPrinterHealth", label: "Health", icon: "heart.text.square" },
+  { route: "ServerPrinterNetwork", label: "Network", icon: "wifi" },
   { route: "ServerPrinterSettings", label: "Settings", icon: "gearshape" },
 ];
 
