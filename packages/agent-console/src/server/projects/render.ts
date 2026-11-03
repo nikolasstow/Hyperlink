@@ -41,7 +41,15 @@ const injectIntoHtml = (html: string, block: string): string => {
     return `${html.slice(0, at)}${block}${html.slice(at)}`;
   }
   // A fragment, not a document: wrap it.
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${block}</head><body>${html}</body></html>`;
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+${block}
+</head>
+<body>${html}</body>
+</html>`;
 };
 
 /** A minimal styled document for a Markdown page, rendered with `marked`. */
@@ -78,8 +86,19 @@ ${block}
 const escapeHtml = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-const unsupportedDocument = (page: Page, block: string): string =>
-  `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(page.title)}</title>${block}</head><body style="font:16px/1.6 system-ui,sans-serif;padding:24px"><h1>${escapeHtml(page.title)}</h1><p>This page is a <code>${escapeHtml(page.kind)}</code> page. The prototype renders <code>html</code> and <code>md</code> pages only.</p></body></html>`;
+const unsupportedDocument = (page: Page, block: string): string => `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(page.title)}</title>
+${block}
+</head>
+<body style="font:16px/1.6 system-ui,sans-serif;padding:24px">
+<h1>${escapeHtml(page.title)}</h1>
+<p>This page is a <code>${escapeHtml(page.kind)}</code> page. The prototype renders <code>html</code> and <code>md</code> pages only.</p>
+</body>
+</html>`;
 
 /** The full HTML document for a page. */
 export const renderPage = (page: Page, options: { env: "app" | "browser"; apiBase?: string }): string => {

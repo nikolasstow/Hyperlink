@@ -70,8 +70,13 @@ const checkSlug = (slug: string): Effect.Effect<string, ProjectsInvalidSlug> =>
 const extensionOf = (kind: PageKind): string => (kind === "md" ? "md" : kind === "tsx" ? "tsx" : "html");
 
 /** The page kind a file name carries, or undefined if it is not a page body. */
-const kindOf = (fileName: string): PageKind | undefined =>
-  fileName.endsWith(".meta.json") ? undefined : fileName.endsWith(".html") ? "html" : fileName.endsWith(".md") ? "md" : fileName.endsWith(".tsx") ? "tsx" : undefined;
+const kindOf = (fileName: string): PageKind | undefined => {
+  if (fileName.endsWith(".meta.json")) return undefined;
+  if (fileName.endsWith(".html")) return "html";
+  if (fileName.endsWith(".md")) return "md";
+  if (fileName.endsWith(".tsx")) return "tsx";
+  return undefined;
+};
 
 /** The title read from a body: the HTML `<title>`, or the first Markdown
  * heading, or the slug when neither is there. */
@@ -109,8 +114,12 @@ const make = Effect.gen(function* () {
       const file = path.join(projectDir(slug), "project.json");
       const exists = yield* fs.exists(file).pipe(Effect.mapError(failed(`reading ${file}`)));
       if (!exists) return yield* Effect.fail(new ProjectsNotFound({ message: `no project: ${slug}` }));
-      const text = yield* fs.readFileString(file).pipe(Effect.mapError(failed(`reading ${file}`)));
-      return yield* Schema.decodeUnknownEffect(projectJson)(text).pipe(Effect.mapError(failed(`parsing ${file}`)));
+      const text = yield* fs.readFileString(file).pipe(
+        Effect.mapError(failed(`reading ${file}`)),
+      );
+      return yield* Schema.decodeUnknownEffect(projectJson)(text).pipe(
+        Effect.mapError(failed(`parsing ${file}`)),
+      );
     });
 
   const writeProject = (project: Project): Effect.Effect<Project, ProjectsError> =>
@@ -121,14 +130,22 @@ const make = Effect.gen(function* () {
       Effect.as(project),
     );
 
+  /** Pinned first; then by `order`; then by name. */
+  const compareProjects = (a: Project, b: Project): number => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return a.order - b.order || a.name.localeCompare(b.name);
+  };
+
+  /** A folder with no readable project.json is skipped, not an error. */
+  const readProjectIfAny = (slug: string): Effect.Effect<Project | undefined, ProjectsError> =>
+    readProject(slug).pipe(
+      Effect.catchTag("ProjectsNotFound", () => Effect.succeed(undefined)),
+    );
+
   const listProjects: Effect.Effect<ReadonlyArray<Project>, ProjectsError> = projectSlugs.pipe(
-    Effect.flatMap((slugs) =>
-      Effect.forEach(slugs, (slug) => readProject(slug).pipe(Effect.catchTag("ProjectsNotFound", () => Effect.succeed(undefined)))),
-    ),
+    Effect.flatMap((slugs) => Effect.forEach(slugs, readProjectIfAny)),
     Effect.map((projects) => projects.filter((project): project is Project => project !== undefined)),
-    Effect.map((projects) =>
-      projects.slice().sort((a, b) => (a.pinned === b.pinned ? a.order - b.order || a.name.localeCompare(b.name) : a.pinned ? -1 : 1)),
-    ),
+    Effect.map((projects) => projects.slice().sort(compareProjects)),
   );
 
   const getProject = (slug: string): Effect.Effect<Project, ProjectsError | ProjectsNotFound | ProjectsInvalidSlug> =>
@@ -141,7 +158,7 @@ const make = Effect.gen(function* () {
   const putProject = (slug: string, input: ProjectInput): Effect.Effect<Project, ProjectsError | ProjectsInvalidSlug> =>
     Effect.gen(function* () {
       yield* checkSlug(slug);
-      const current = yield* readProject(slug).pipe(Effect.catchTag("ProjectsNotFound", () => Effect.succeed(undefined)));
+      const current = yield* readProjectIfAny(slug);
       return yield* writeProject({
         slug,
         name: input.name ?? current?.name ?? slug,
@@ -157,7 +174,9 @@ const make = Effect.gen(function* () {
   const deleteProject = (slug: string): Effect.Effect<void, ProjectsError | ProjectsNotFound | ProjectsInvalidSlug> =>
     Effect.gen(function* () {
       yield* getProject(slug);
-      yield* fs.remove(projectDir(slug), { recursive: true }).pipe(Effect.mapError(failed(`removing project ${slug}`)));
+      yield* fs.remove(projectDir(slug), { recursive: true }).pipe(
+        Effect.mapError(failed(`removing project ${slug}`)),
+      );
     });
 
   /** Read a page body and its sidecar (if any) into a full page. */
@@ -168,7 +187,14 @@ const make = Effect.gen(function* () {
       content: fs.readFileString(bodyFile).pipe(Effect.mapError(failed(`reading ${bodyFile}`))),
       stat: fs.stat(bodyFile).pipe(Effect.mapError(failed(`stat ${bodyFile}`))),
       meta: fs.exists(metaFile).pipe(
-        Effect.flatMap((exists) => (exists ? fs.readFileString(metaFile).pipe(Effect.flatMap(Schema.decodeUnknownEffect(metaJson))) : Effect.succeed(undefined))),
+        Effect.flatMap((exists) =>
+          exists
+            ? fs.readFileString(metaFile).pipe(
+                Effect.flatMap(Schema.decodeUnknownEffect(metaJson)),
+              )
+            : Effect.succeed(undefined),
+        ),
+        // A sidecar that is missing or broken only costs the derived fields.
         Effect.catch(() => Effect.succeed(undefined)),
       ),
     }).pipe(
@@ -213,7 +239,10 @@ const make = Effect.gen(function* () {
       yield* getProject(projectSlug);
       const pairs = yield* pageFiles(projectSlug);
       const pages = yield* Effect.forEach(pairs, ([slug, kind]) => readPage(projectSlug, slug, kind));
-      return pages.map(({ content: _content, ...meta }) => meta).slice().sort((a, b) => a.slug.localeCompare(b.slug));
+      return pages
+        .map(({ content: _content, ...meta }) => meta)
+        .slice()
+        .sort((a, b) => a.slug.localeCompare(b.slug));
     });
 
   const getPage = (projectSlug: string, pageSlug: string): Effect.Effect<Page, ProjectsError | ProjectsNotFound | ProjectsInvalidSlug> =>
@@ -222,7 +251,9 @@ const make = Effect.gen(function* () {
       yield* checkSlug(pageSlug);
       const pairs = yield* pageFiles(projectSlug);
       const found = pairs.find(([slug]) => slug === pageSlug);
-      if (found === undefined) return yield* Effect.fail(new ProjectsNotFound({ message: `no page: ${projectSlug}/${pageSlug}` }));
+      if (found === undefined) {
+        return yield* Effect.fail(new ProjectsNotFound({ message: `no page: ${projectSlug}/${pageSlug}` }));
+      }
       return yield* readPage(projectSlug, pageSlug, found[1]);
     });
 
@@ -239,10 +270,16 @@ const make = Effect.gen(function* () {
       const dir = pagesDir(projectSlug);
       yield* fs.makeDirectory(dir, { recursive: true }).pipe(Effect.mapError(failed(`making ${dir}`)));
       // A kind change leaves the old body behind; remove it first.
+      const prior = existing === undefined
+        ? undefined
+        : yield* readPage(projectSlug, pageSlug, existing[1]).pipe(
+            Effect.catch(() => Effect.succeed(undefined)),
+          );
       if (existing !== undefined && existing[1] !== kind) {
-        yield* fs.remove(path.join(dir, `${pageSlug}.${extensionOf(existing[1])}`)).pipe(Effect.mapError(failed(`removing old body ${pageSlug}`)));
+        yield* fs.remove(path.join(dir, `${pageSlug}.${extensionOf(existing[1])}`)).pipe(
+          Effect.mapError(failed(`removing old body ${pageSlug}`)),
+        );
       }
-      const prior = existing === undefined ? undefined : yield* readPage(projectSlug, pageSlug, existing[1]).pipe(Effect.catch(() => Effect.succeed(undefined)));
       const meta: PageMeta = {
         project: projectSlug,
         slug: pageSlug,
@@ -252,7 +289,9 @@ const make = Effect.gen(function* () {
         createdAt: prior?.createdAt ?? now,
         updatedAt: now,
       };
-      yield* fs.writeFileString(path.join(dir, `${pageSlug}.${extensionOf(kind)}`), input.content).pipe(Effect.mapError(failed(`writing page ${pageSlug}`)));
+      yield* fs.writeFileString(path.join(dir, `${pageSlug}.${extensionOf(kind)}`), input.content).pipe(
+        Effect.mapError(failed(`writing page ${pageSlug}`)),
+      );
       yield* Schema.encodeEffect(metaJson)(meta).pipe(
         Effect.flatMap((text) => fs.writeFileString(path.join(dir, `${pageSlug}.meta.json`), text)),
         Effect.mapError(failed(`writing meta ${pageSlug}`)),
@@ -264,8 +303,12 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const page = yield* getPage(projectSlug, pageSlug);
       const dir = pagesDir(projectSlug);
-      yield* fs.remove(path.join(dir, `${pageSlug}.${extensionOf(page.kind)}`)).pipe(Effect.mapError(failed(`removing page ${pageSlug}`)));
-      yield* fs.remove(path.join(dir, `${pageSlug}.meta.json`)).pipe(Effect.catch(() => Effect.void));
+      yield* fs.remove(path.join(dir, `${pageSlug}.${extensionOf(page.kind)}`)).pipe(
+        Effect.mapError(failed(`removing page ${pageSlug}`)),
+      );
+      yield* fs.remove(path.join(dir, `${pageSlug}.meta.json`)).pipe(
+        Effect.catch(() => Effect.void),
+      );
     });
 
   return {

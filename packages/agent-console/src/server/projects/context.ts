@@ -18,6 +18,8 @@ import { opencodePassword, opencodeUrl, withOpencodeAuth } from "../opencodeServ
 import { Workspaces } from "../workspaces";
 import { ProjectsError } from "./store";
 
+const messageOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+
 /** opencode's session shape, read for the fields a list needs. */
 const OpencodeSession = Schema.Struct({
   id: Schema.String,
@@ -39,8 +41,12 @@ export const reposListOf = (workspaces: Workspaces["Service"]): Effect.Effect<Re
   );
 
 export const sessionsList: Effect.Effect<ReadonlyArray<Session>, ProjectsError, HttpClient.HttpClient> = Effect.gen(function* () {
-  const base = yield* opencodeUrl.pipe(Effect.mapError((cause) => new ProjectsError({ message: `opencode url config: ${String(cause)}` })));
-  const password = yield* opencodePassword.pipe(Effect.mapError((cause) => new ProjectsError({ message: `opencode password config: ${String(cause)}` })));
+  const base = yield* opencodeUrl.pipe(
+    Effect.mapError((cause) => new ProjectsError({ message: `opencode url config: ${String(cause)}` })),
+  );
+  const password = yield* opencodePassword.pipe(
+    Effect.mapError((cause) => new ProjectsError({ message: `opencode password config: ${String(cause)}` })),
+  );
   const client = yield* HttpClient.HttpClient;
   const request = HttpClientRequest.get(`${base.replace(/\/+$/, "")}/session`).pipe(
     (self) => HttpClientRequest.setHeaders(self, withOpencodeAuth(self.headers, password)),
@@ -48,7 +54,7 @@ export const sessionsList: Effect.Effect<ReadonlyArray<Session>, ProjectsError, 
   const sessions = yield* client.execute(request).pipe(
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Array(OpencodeSession))),
-    Effect.mapError((cause) => new ProjectsError({ message: `listing sessions: ${cause instanceof Error ? cause.message : String(cause)}` })),
+    Effect.mapError((cause) => new ProjectsError({ message: `listing sessions: ${messageOf(cause)}` })),
   );
   return sessions.map(
     (session): Session => ({

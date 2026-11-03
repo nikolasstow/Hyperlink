@@ -34,6 +34,8 @@ const GithubIssue = Schema.Struct({
   pull_request: Schema.optional(Schema.Unknown),
 });
 
+const messageOf = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+
 const token = (): string | undefined => {
   const fromGithub = process.env.GITHUB_TOKEN;
   if (fromGithub !== undefined && fromGithub.length > 0) return fromGithub;
@@ -58,7 +60,7 @@ const issuesOf = (repo: string): Effect.Effect<ReadonlyArray<Task>, ProjectsErro
     const issues = yield* client.execute(request).pipe(
       Effect.flatMap(HttpClientResponse.filterStatusOk),
       Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Array(GithubIssue))),
-      Effect.mapError((cause) => new ProjectsError({ message: `reading issues of ${repo}: ${cause instanceof Error ? cause.message : String(cause)}` })),
+      Effect.mapError((cause) => new ProjectsError({ message: `reading issues of ${repo}: ${messageOf(cause)}` })),
     );
     return issues
       .filter((issue) => issue.pull_request === undefined)

@@ -243,7 +243,17 @@ const port = Number(process.env.AGENT_CONSOLE_API_PORT ?? 5199);
 // Every route is behind the gate (auth/http.ts); `/health` and redeeming a
 // pairing code are open.
 const serverLive = HttpRouter.serve(
-  Layer.mergeAll(apiLive, fontFileRoute, processStreamRoute, projectsViewRoute, fileSyncLayer, opencodeProxyRoute, modelsRoute, healthRoute, authMiddleware.pipe(Layer.provide(authLive))),
+  Layer.mergeAll(
+    apiLive,
+    fontFileRoute,
+    processStreamRoute,
+    projectsViewRoute,
+    fileSyncLayer,
+    opencodeProxyRoute,
+    modelsRoute,
+    healthRoute,
+    authMiddleware.pipe(Layer.provide(authLive)),
+  ),
 ).pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),
