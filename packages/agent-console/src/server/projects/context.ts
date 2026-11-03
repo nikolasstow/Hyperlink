@@ -6,31 +6,17 @@
  * Repos come from the `Workspaces` service — the repo and worktree folders the
  * app registered. Sessions come from opencode, fetched server-side through the
  * same address and password the proxy uses, so the page never talks to
- * opencode directly. A session is trimmed to what a list shows.
+ * opencode directly. The wire shapes (`Repo`, `Session`) live in
+ * `agent-console-protocol/Projects`.
  *
  * @internal
  */
+import { Repo, Session } from "agent-console-protocol/Projects";
 import { Effect, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { opencodePassword, opencodeUrl, withOpencodeAuth } from "../opencodeServer";
 import { Workspaces } from "../workspaces";
 import { ProjectsError } from "./store";
-
-/** One repo the app knows: its folder path, and the last path segment as a
- * short name. */
-export const Repo = Schema.Struct({
-  name: Schema.String,
-  dir: Schema.String,
-});
-export type Repo = typeof Repo.Type;
-
-/** One session, trimmed from opencode's own session shape. */
-export const Session = Schema.Struct({
-  id: Schema.String,
-  title: Schema.String,
-  updatedAt: Schema.optional(Schema.Number),
-});
-export type Session = typeof Session.Type;
 
 /** opencode's session shape, read for the fields a list needs. */
 const OpencodeSession = Schema.Struct({

@@ -16,7 +16,7 @@
  */
 import { Array as Arr, Effect, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { Project, Task } from "./model";
+import { Project, Task } from "agent-console-protocol/Projects";
 import { ProjectsError } from "./store";
 
 const GITHUB_API = "https://api.github.com";

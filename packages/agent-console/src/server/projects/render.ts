@@ -17,7 +17,7 @@
  *
  * @internal
  */
-import { Page } from "./model";
+import { Page } from "agent-console-protocol/Projects";
 import { DA_SDK_JS } from "./sdk";
 
 /** The `window.__DA__` seed and the SDK, as one script block. */

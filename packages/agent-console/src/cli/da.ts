@@ -26,8 +26,7 @@ import { Console, Data, Effect, FileSystem, Option, Path, Schema } from "effect"
 import { Argument, CliError, Command, Flag } from "effect/cli";
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { adminTokenFile, stateDirectory } from "../server/sessions/files";
-import { Page, PageMeta, Project, Task } from "../server/projects/model";
-import { Repo, Session } from "../server/projects/context";
+import { Page, PageMeta, Project, Repo, Session, Task } from "agent-console-protocol/Projects";
 import { ProjectsStore } from "../server/projects/store";
 import { seedProjects } from "../server/projects/seed";
 

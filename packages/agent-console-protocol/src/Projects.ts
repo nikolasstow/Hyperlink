@@ -1,18 +1,33 @@
 /**
- * The shapes of Projects and Pages (the "Projects + Pages" prototype).
+ * Projects and their pages (the "Projects + Pages" prototype), as the API
+ * server sends them under `/projects`.
  *
- * A **project** groups work: a name, a category, a description, and links to
- * the repos and the GitHub repos the work lives in. A **page** belongs to a
- * project: a small document (HTML or Markdown) that an agent or a person
- * writes. A page is the "artifact" the owner asked for.
+ * A **project** groups work: a name, a category, a description, and the repos
+ * and GitHub repos the work lives in. A **page** belongs to a project: a
+ * small document (HTML or Markdown) that an agent or a person writes — the
+ * owner's "artifact". A **task** is one of a project's open GitHub issues.
  *
- * The shapes are plain on purpose. Any agent writes a project or a page as
- * JSON and HTML on disk (store.ts), so the shapes map one-to-one onto the
- * files. One `Schema.Struct` per shape, per the storage standard.
+ * The shapes are plain on purpose: on the server each maps one-to-one onto a
+ * file (`project.json`, `pages/<slug>.html`, `pages/<slug>.meta.json`), so
+ * any agent can write one with no server at all.
  *
- * @internal
+ * @since 0.0.1
  */
 import { Schema } from "effect";
+
+/** Where projects are served. A project is `${path}/${slug}`; its pages are
+ * `${path}/${slug}/pages`; its tasks are `${path}/${slug}/tasks`. */
+export const path = "/projects";
+
+/** Where a page is served as a full HTML document with the page SDK
+ * (`window.da`) injected: `${viewPath}?project=<slug>&slug=<page>&env=app|browser`. */
+export const viewPath = "/projects/view";
+
+/** The repos the app registered, for a page's context. */
+export const reposPath = "/projects-repos";
+
+/** The live opencode sessions, trimmed, for a page's context. */
+export const sessionsPath = "/projects-sessions";
 
 /** How a page's body is written. `tsx` is reserved for a later React runtime. */
 export const PageKind = Schema.Literals(["html", "md", "tsx"]);
@@ -60,7 +75,7 @@ export const Page = Schema.Struct({
 });
 export type Page = typeof Page.Type;
 
-/** A GitHub issue, trimmed to what a task list shows (tasks.ts). */
+/** A GitHub issue, trimmed to what a task list shows. */
 export const Task = Schema.Struct({
   id: Schema.Number,
   number: Schema.Number,
@@ -72,7 +87,7 @@ export const Task = Schema.Struct({
 export type Task = typeof Task.Type;
 
 /** The fields a caller sends to make or change a project. The slug comes from
- * the route, so it is not in the body. Optional fields keep their old value. */
+ * the route, so it is not in the body. A field left out keeps its old value. */
 export const ProjectInput = Schema.Struct({
   name: Schema.optional(Schema.String),
   category: Schema.optional(Schema.String),
@@ -85,7 +100,7 @@ export const ProjectInput = Schema.Struct({
 export type ProjectInput = typeof ProjectInput.Type;
 
 /** The fields a caller sends to write a page. `content` is required; the rest
- * fill in defaults (store.ts). */
+ * fill in defaults on the server. */
 export const PageInput = Schema.Struct({
   title: Schema.optional(Schema.String),
   kind: Schema.optional(PageKind),
@@ -93,3 +108,19 @@ export const PageInput = Schema.Struct({
   content: Schema.String,
 });
 export type PageInput = typeof PageInput.Type;
+
+/** One repo the app knows: its folder path, and the last path segment as a
+ * short name. */
+export const Repo = Schema.Struct({
+  name: Schema.String,
+  dir: Schema.String,
+});
+export type Repo = typeof Repo.Type;
+
+/** One session, trimmed from opencode's own session shape. */
+export const Session = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  updatedAt: Schema.optional(Schema.Number),
+});
+export type Session = typeof Session.Type;

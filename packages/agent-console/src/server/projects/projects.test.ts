@@ -2,7 +2,7 @@ import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, Layer, Schema } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 import { describe, expect, it } from "vitest";
-import { Page, PageInput, Project, ProjectInput } from "./model";
+import { Page, PageInput, Project, ProjectInput } from "agent-console-protocol/Projects";
 import { renderPage } from "./render";
 import { DA_SDK_JS } from "./sdk";
 import { ProjectsStore } from "./store";

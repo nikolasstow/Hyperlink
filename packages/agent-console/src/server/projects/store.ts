@@ -19,11 +19,14 @@
  * derives its title (from the HTML `<title>` or the first Markdown heading),
  * its kind (from the extension) and its timestamps (from the file).
  *
+ * The shapes are `agent-console-protocol/Projects`, the wire SSOT the apps
+ * decode with too.
+ *
  * @internal
  */
 import { Context, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { NodeServices } from "@effect/platform-node";
-import { Page, PageInput, PageKind, PageMeta, Project, ProjectInput } from "./model";
+import { Page, PageInput, PageKind, PageMeta, Project, ProjectInput } from "agent-console-protocol/Projects";
 
 /** A project or a page could not be read or written. */
 export class ProjectsError extends Schema.TaggedError<ProjectsError>()("ProjectsError", {

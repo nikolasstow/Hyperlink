@@ -13,7 +13,7 @@
  * @internal
  */
 import { Effect } from "effect";
-import { ProjectInput } from "./model";
+import { ProjectInput } from "agent-console-protocol/Projects";
 import { ProjectsStore } from "./store";
 
 type Seed = {

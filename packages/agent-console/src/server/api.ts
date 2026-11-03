@@ -14,9 +14,8 @@ import { DeviceAuthError, DeviceInfo, NotAllowed, PairedToken, PairingCode, Pair
 import { ExtensionError } from "./extensions";
 import { FontError } from "./fonts";
 import { InstalledPlugin, PluginRegistryError } from "./plugin/registry";
-import { Page, PageInput, PageMeta, Project, ProjectInput, Task } from "./projects/model";
+import { Page, PageInput, PageMeta, Project, ProjectInput, Repo, Session, Task } from "agent-console-protocol/Projects";
 import { ProjectsError, ProjectsInvalidSlug, ProjectsNotFound } from "./projects/store";
-import { Repo, Session } from "./projects/context";
 import { ProcessRequestError, ProcessStartError, processSpec } from "./processes/runner";
 import { ArchivedSessions, SessionArchiveError, sessionIdPayload } from "./sessions/archive";
 import { CollectionState, CollectionStateIoError, CollectionStateRequestError, collectionChangePayload, collectionStatePayload } from "./collections/state";

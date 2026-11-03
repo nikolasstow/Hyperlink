@@ -13,7 +13,7 @@ import { ChevronLeft, FileText, Pin } from "lucide-react";
 import * as React from "react";
 import { Schema } from "effect";
 import * as Router from "last-ts/Router";
-import { PageMeta, Project } from "../server/projects/model";
+import { PageMeta, Project } from "agent-console-protocol/Projects";
 import { urls } from "../site";
 import { navigateWithTransition } from "../viewTransition";
 
