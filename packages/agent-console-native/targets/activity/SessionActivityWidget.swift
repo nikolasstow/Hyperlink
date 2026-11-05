@@ -5,8 +5,14 @@ import WidgetKit
 
 @main
 struct DoubleAgentActivityBundle: WidgetBundle {
+  // `type: "widget"` hosts Live Activities and ordinary widgets in one
+  // extension (see expo-target.config.js), so the home-screen and lock-screen
+  // widgets join this bundle rather than needing a target and app group of
+  // their own. See SessionWidgets.swift.
   var body: some Widget {
     SessionActivityWidget()
+    ActiveRunWidget()
+    SessionsWidget()
   }
 }
 
