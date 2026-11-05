@@ -1,0 +1,108 @@
+# Compiles the iOS app.
+#
+# `verify.yml` runs on Linux, so nothing in this repository has ever compiled a
+# line of Swift: not the code surface's native host, not the widget targets, not
+# the notification service. A macOS runner is the only thing that catches an
+# API misuse, a missing availability guard or a pod that was never wired, and
+# those are exactly the mistakes a Linux gate cannot see.
+#
+# The build targets a simulator on purpose. It needs no certificate, no
+# provisioning profile and no secret, so it runs on a fork's pull request and
+# tells you the same thing about whether the code compiles.
+name: ios
+
+on:
+  push:
+    branches: ["app/double-agent/**"]
+    paths:
+      - "packages/agent-console-native/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "packages/agent-console-native/**"
+      - ".github/workflows/ios.yml"
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The generated code surface asset is committed, so it can drift from the
+  # source that produces it. Cheap to catch here rather than in a build that
+  # ships a stale editor.
+  code-surface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate the code surface
+        run: pnpm -C packages/agent-console-native gen:code-surface
+
+      - name: Fail if the committed asset is stale
+        run: |
+          if ! git diff --quiet -- packages/agent-console-native/assets/code-surface.html; then
+            echo "assets/code-surface.html does not match what the generator produces."
+            echo "Run: pnpm -C packages/agent-console-native gen:code-surface"
+            git diff --stat -- packages/agent-console-native/assets/code-surface.html
+            exit 1
+          fi
+
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # `/ios` is gitignored, so the Xcode project is generated. This also wires
+      # the apple-targets extensions, which means their Swift compiles too.
+      - name: Prebuild
+        working-directory: packages/agent-console-native
+        env:
+          EXPO_NO_TELEMETRY: "1"
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Show the toolchain
+        run: xcodebuild -version
+
+      # The workspace and scheme are derived from the app name, so they are read
+      # off disk rather than written down twice.
+      - name: Build
+        working-directory: packages/agent-console-native
+        run: |
+          set -euo pipefail
+          workspace="$(ls -d ios/*.xcworkspace | head -1)"
+          scheme="$(basename "${workspace}" .xcworkspace)"
+          echo "Building ${scheme} from ${workspace}"
+          xcodebuild \
+            -workspace "${workspace}" \
+            -scheme "${scheme}" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
