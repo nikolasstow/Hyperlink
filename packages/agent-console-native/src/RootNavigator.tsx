@@ -58,6 +58,7 @@ import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
+import { CamerasScreen } from "./CamerasScreen";
 import { GooViewerScreen } from "./printer/GooViewerScreen";
 import { PrinterFilesScreen, PrinterHealthScreen, PrinterSettingsScreen } from "./printer/PrinterPages";
 import { PrinterNetworkScreen } from "./printer/PrinterNetworkScreen";
@@ -132,6 +133,7 @@ export type RootStackParamList = {
   // A server's UPS page, rendered from that server's UPS dashboard API. The
   // server's address is threaded in (no hardcoded host) so it's multi-server.
   ServerUps: { serverName: string; serverAddress: string };
+  ServerCameras: { serverName: string; serverAddress: string };
   // A server's resin printer page: live status and the layer on the LCD, direct
   // on the LAN or through the relay on that server.
   ServerPrinter: { serverName: string; serverAddress: string };
@@ -408,6 +410,7 @@ export const RootNavigator = (): React.ReactElement => {
           options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={serverById(route.params.serverId)?.name ?? "Server"} /> })}
         />
         <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
+        <Stack.Screen name="ServerCameras" component={CamerasScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Cameras" /> }} />
         <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
         <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Files" /> }} />
         <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Health" /> }} />

@@ -49,6 +49,13 @@ const ENTRIES: ReadonlyArray<Entry> = [
     icon: "printer.fill",
     open: (navigation, server) => navigation.navigate("ServerPrinter", { serverName: server.name, serverAddress: server.address }),
   },
+  {
+    id: "cameras",
+    title: "Cameras",
+    subtitle: "Live view, Picture in Picture, and recordings",
+    icon: "video.fill",
+    open: (navigation, server) => navigation.navigate("ServerCameras", { serverName: server.name, serverAddress: server.address }),
+  },
 ];
 
 /** The little always-on server on each box (~/ups-monitor/server.js) exposes

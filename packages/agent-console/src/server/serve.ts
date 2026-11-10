@@ -26,6 +26,7 @@ import { ExtensionViews } from "./extensionHost/extensionViews";
 import { fileSyncLayer } from "./files/rpc";
 import { modelsRoute } from "./models/catalog";
 import { opencodeProxyRoute } from "./opencodeProxy";
+import { Cameras, camerasRoutes } from "./cameras";
 import { PluginRegistry } from "./plugin/registry";
 import { ProcessRunner } from "./processes/runner";
 import { ProjectsStore } from "./projects/store";
@@ -250,6 +251,7 @@ const serverLive = HttpRouter.serve(
     projectsViewRoute,
     fileSyncLayer,
     opencodeProxyRoute,
+    camerasRoutes,
     modelsRoute,
     healthRoute,
     authMiddleware.pipe(Layer.provide(authLive)),
@@ -257,6 +259,7 @@ const serverLive = HttpRouter.serve(
 ).pipe(
   Layer.provide(FetchHttpClient.layer),
   Layer.provide(runnerLive),
+  Layer.provide(Cameras.layer.pipe(Layer.provide(NodeServices.layer))),
   Layer.provide(projectsLive),
   Layer.provide(NodeHttpServer.layer(createServer, { port })),
 );
