@@ -58,6 +58,7 @@ import { PluginPageScreen } from "./PluginPageScreen";
 import { FileViewerScreen } from "./FileViewerScreen";
 import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
+import { CameraRecordingsScreen } from "./CameraRecordingsScreen";
 import { CamerasScreen } from "./CamerasScreen";
 import { GooViewerScreen } from "./printer/GooViewerScreen";
 import { PrinterFilesScreen, PrinterHealthScreen, PrinterSettingsScreen } from "./printer/PrinterPages";
@@ -134,6 +135,7 @@ export type RootStackParamList = {
   // server's address is threaded in (no hardcoded host) so it's multi-server.
   ServerUps: { serverName: string; serverAddress: string };
   ServerCameras: { serverName: string; serverAddress: string };
+  ServerCameraRecordings: { serverName: string; serverAddress: string; cameraId: string };
   // A server's resin printer page: live status and the layer on the LCD, direct
   // on the LAN or through the relay on that server.
   ServerPrinter: { serverName: string; serverAddress: string };
@@ -411,6 +413,7 @@ export const RootNavigator = (): React.ReactElement => {
         />
         <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
         <Stack.Screen name="ServerCameras" component={CamerasScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Cameras" /> }} />
+        <Stack.Screen name="ServerCameraRecordings" component={CameraRecordingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Recordings" /> }} />
         <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
         <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Files" /> }} />
         <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Health" /> }} />

@@ -2,7 +2,8 @@
  * The source of the printer's Picture in Picture: the camera or the current
  * layer, whichever page of the stage was open. iOS starts the window by
  * itself when the owner leaves the app while `enabled` is on. Its skip
- * buttons switch between the camera and the layer. iOS only;
+ * buttons switch between the camera and the layer, or, with `cameraUrls`,
+ * between the cameras. iOS only;
  * renders nothing elsewhere.
  *
  * @internal
@@ -15,6 +16,10 @@ export type PrinterPipProps = ViewProps & {
   readonly mode: "camera" | "layer";
   /** The relay's `/api/camera.h264` WebSocket. */
   readonly cameraUrl: string | undefined;
+  /** Every camera's WebSocket, in order: the window's skip buttons go to the previous and the next one. A build from before this prop ignores it. */
+  readonly cameraUrls?: ReadonlyArray<string> | undefined;
+  /** The window's skip buttons moved to the camera at `index` in `cameraUrls`. */
+  readonly onSwitchCamera?: ((event: { readonly nativeEvent: { readonly index: number } }) => void) | undefined;
   /** The relay's access token, if it asks for one: the camera socket and a relay layer image send it. A build from before this prop sends none. */
   readonly relayToken?: string | undefined;
   /** The current layer image (white or alpha pixels on transparent). */

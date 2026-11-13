@@ -50,7 +50,8 @@
       "@bacons/apple-targets",
       "expo-web-browser",
       "./plugins/withAppIntents.js",
-      "expo-background-task"
+      "expo-background-task",
+      ["expo-video", { "supportsPictureInPicture": true }]
     ],
     "experiments": {
       "autolinkingModuleResolution": true

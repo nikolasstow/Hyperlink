@@ -5,6 +5,11 @@ public class PrinterPipModule: Module {
     Name("PrinterPip")
 
     View(PrinterPipView.self) {
+      Events("onSwitchCamera")
+
+      Prop("cameraUrls") { (view: PrinterPipView, urls: [String]?) in
+        view.cameraUrls = (urls ?? []).compactMap(URL.init(string:))
+      }
       Prop("mode") { (view: PrinterPipView, mode: String) in
         view.pageMode = mode == "camera" ? .camera : .layer
       }

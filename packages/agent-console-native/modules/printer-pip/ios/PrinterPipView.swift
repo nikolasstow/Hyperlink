@@ -19,7 +19,13 @@ import UIKit
 /// timeline is the progress bar.
 ///
 /// The window's skip back and skip forward buttons switch between the camera
-/// and the layer. The app's stage page sets the view again when the owner
+/// and the layer. With `cameraUrls` (the Cameras page), they go to the previous
+/// and the next camera instead, and `onSwitchCamera` tells the app.
+///
+/// The camera socket acknowledges the bytes it receives (`ack <bytes>`), so the
+/// server sends no more than the phone can take: it skips to the next keyframe
+/// instead of queueing. A socket with no frames for a few seconds reconnects.
+/// The app's stage page sets the view again when the owner
 /// comes back. iOS shows those buttons only for a finite time range, so the
 /// range is the print's time and the window's timeline shows its progress.
 final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
@@ -29,6 +35,9 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
   var pageMode: Mode = .layer { didSet { if pageMode != oldValue { mode = pageMode } } }
   private var mode: Mode = .layer { didSet { if mode != oldValue { refresh() } } }
   var cameraUrl: URL? { didSet { if cameraUrl != oldValue { refresh() } } }
+  /// Every camera, in order, for the skip buttons. Empty on the printer stage.
+  var cameraUrls: [URL] = []
+  let onSwitchCamera = EventDispatcher()
   var layerUri: URL? { didSet { if layerUri != oldValue { loadLayer() } } }
   /// The relay's access token, if it asks for one: the camera socket and the layer image send it.
   var relayToken: String? {
@@ -69,6 +78,13 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
   private var format: CMVideoFormatDescription?
   private var sps: Data?
   private var pps: Data?
+  /// Bytes received on the open socket, for its acks.
+  private var received = 0
+  /// When the open socket last gave a frame.
+  private var lastFrameAt = Date()
+  private var stallTimer: Timer?
+  /// No frame for this long: the socket is stuck, so it reconnects.
+  private static let stallSeconds: TimeInterval = 6
 
   private var layerImage: UIImage? { didSet { tintedLayer = nil } }
   private var tintedLayer: UIImage?
@@ -105,6 +121,7 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
   deinit {
     NotificationCenter.default.removeObserver(self)
     stillTimer?.invalidate()
+    stallTimer?.invalidate()
     glowTimer?.invalidate()
     layerTask?.cancel()
     socket?.cancel(with: .goingAway, reason: nil)
@@ -180,11 +197,24 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
     let task = URLSession.shared.webSocketTask(with: authorized(url))
     socket = task
     socketUrl = url
+    received = 0
+    lastFrameAt = Date()
     task.resume()
     receive(task)
+    stallTimer?.invalidate()
+    stallTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+      guard let self, let socket = self.socket, Date().timeIntervalSince(self.lastFrameAt) > Self.stallSeconds else { return }
+      NSLog("[printer-pip] camera socket stalled: reconnecting")
+      socket.cancel(with: .goingAway, reason: nil)
+      self.socket = nil
+      self.socketUrl = nil
+      self.refresh()
+    }
   }
 
   private func disconnect() {
+    stallTimer?.invalidate()
+    stallTimer = nil
     socket?.cancel(with: .goingAway, reason: nil)
     socket = nil
     socketUrl = nil
@@ -196,6 +226,14 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
       switch result {
       case .success(.data(let unit)):
         self.queue.async { self.enqueue(accessUnit: unit) }
+        DispatchQueue.main.async {
+          guard self.socket === task else { return }
+          self.received += unit.count
+          self.lastFrameAt = Date()
+          // The server sends no more while too many bytes are not acknowledged. A server
+          // from before acks ignores them.
+          task.send(.string("ack \(self.received)")) { _ in }
+        }
         self.receive(task)
       case .success:
         self.receive(task)
@@ -428,11 +466,20 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
 
   func pictureInPictureController(_ controller: AVPictureInPictureController, didTransitionToRenderSize newRenderSize: CMVideoDimensions) {}
 
-  /// Skip back and skip forward switch the view: there are two, so both buttons go to the other one.
+  /// On the Cameras page, skip back and skip forward go to the previous and the next camera.
+  /// On the printer stage they switch the view: there are two, so both buttons go to the other one.
   func pictureInPictureController(_ controller: AVPictureInPictureController, skipByInterval skipInterval: CMTime, completion completionHandler: @escaping () -> Void) {
     DispatchQueue.main.async { [weak self] in
       defer { completionHandler() }
       guard let self else { return }
+      if self.cameraUrls.count > 1 {
+        let count = self.cameraUrls.count
+        let current = self.cameraUrl.flatMap { self.cameraUrls.firstIndex(of: $0) } ?? 0
+        let next = (current + (skipInterval.seconds < 0 ? count - 1 : 1)) % count
+        self.cameraUrl = self.cameraUrls[next]
+        self.onSwitchCamera(["index": next])
+        return
+      }
       self.mode = self.mode == .camera ? .layer : (self.cameraUrl == nil ? .layer : .camera)
     }
   }
