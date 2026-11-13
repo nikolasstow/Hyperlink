@@ -47,6 +47,8 @@ export type PrinterPipProps = ViewProps & {
   readonly remainingMs: number | undefined;
   /** True while the stage is on screen: only then does leaving the app start the window. */
   readonly enabled: boolean;
+  /** False for the extra views of a camera grid: they play, but only one view on a page may start the window. The default is true. */
+  readonly pictureInPicture?: boolean | undefined;
 };
 
 const NativeView = Platform.OS === "ios" ? requireNativeView<PrinterPipProps>("PrinterPip") : null;

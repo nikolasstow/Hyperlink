@@ -66,6 +66,9 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
   var aspect: CGFloat = 16.0 / 9.0 { didSet { if aspect != oldValue { showLayer() } } }
   /// True while the stage is on screen: only then may leaving the app start the window.
   var enabled = false { didSet { if enabled != oldValue { refresh() } } }
+  /// False for the extra views of a camera grid: they play while on screen, but only one
+  /// view on a page may start the window.
+  var pictureInPicture = true { didSet { if pictureInPicture != oldValue { refresh() } } }
 
   private let display = AVSampleBufferDisplayLayer()
   private var pip: AVPictureInPictureController?
@@ -152,8 +155,8 @@ final class PrinterPipView: ExpoView, AVPictureInPictureControllerDelegate, AVPi
   /// Shows the source the props and the app's state call for, and stops what is not needed.
   private func refresh() {
     let live = (enabled && window != nil && foreground) || pipActive
-    pip?.canStartPictureInPictureAutomaticallyFromInline = enabled && window != nil
-    if enabled { Self.preparePlayback() }
+    pip?.canStartPictureInPictureAutomaticallyFromInline = enabled && pictureInPicture && window != nil
+    if enabled && pictureInPicture { Self.preparePlayback() }
 
     if live && mode == .camera, let url = cameraUrl {
       stopStill()

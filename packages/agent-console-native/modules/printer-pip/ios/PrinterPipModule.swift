@@ -58,6 +58,9 @@ public class PrinterPipModule: Module {
       Prop("enabled") { (view: PrinterPipView, enabled: Bool) in
         view.enabled = enabled
       }
+      Prop("pictureInPicture") { (view: PrinterPipView, on: Bool?) in
+        view.pictureInPicture = on ?? true
+      }
     }
   }
 }

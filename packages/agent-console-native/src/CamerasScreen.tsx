@@ -14,6 +14,10 @@
  * The live view is never remounted: a new camera, a new quality, and full
  * screen change its props and styles only, so the window stays open.
  *
+ * "All live" plays every camera at once: the selected camera on top (it owns
+ * Picture in Picture, pan and tilt, and full screen), the others under it with
+ * `pictureInPicture={false}`. A tap on one selects it.
+ *
  * Pinch to zoom, drag to move a zoomed view, and double-tap to zoom in or out,
  * as in Photos. Full screen turns the video to landscape, as the Tapo app does.
  *
@@ -223,9 +227,11 @@ export const CamerasScreen = (props: Props): React.ReactElement => {
   const [selected, setSelected] = React.useState<string | undefined>(undefined);
   const [quality, setQuality] = React.useState<Quality>("auto");
   const [full, setFull] = React.useState(false);
+  /** True: every camera plays live at once; the selected one is on top and owns Picture in Picture. */
+  const [grid, setGrid] = React.useState(false);
   const [ptzError, setPtzError] = React.useState<string | undefined>(undefined);
   const current = list?.cameras.find((camera) => camera.id === selected) ?? list?.cameras[0];
-  const tick = useTick(FRAME_MS, focused && !full);
+  const tick = useTick(FRAME_MS, focused && !full && !grid);
   const cardW = window.width - 32;
   const liveH = Math.round((cardW * 9) / 16);
   const others = list?.cameras.filter((camera) => camera.id !== current?.id) ?? [];
@@ -324,7 +330,39 @@ export const CamerasScreen = (props: Props): React.ReactElement => {
               <SystemIcon name={full ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"} size={16} color="#ffffff" />
             </Pressable>
             {full ? <Text style={[styles.fullName, { left: insets.top + 16 }]}>{current.name}</Text> : null}
+            {grid && !full ? <Text style={styles.tileName}>{current.name}</Text> : null}
           </View>
+        </View>
+      )}
+
+      {/* The other cameras, live, under the selected one. A tap makes one the selected camera. */}
+      {full || !grid || others.length === 0 ? null : (
+        <View style={styles.liveGrid}>
+          {others.map((camera) => (
+            <Pressable key={camera.id} style={[styles.live, { width: cardW, height: liveH }]} onPress={() => setSelected(camera.id)}>
+              <PrinterPip
+                style={StyleSheet.absoluteFill}
+                mode="camera"
+                cameraUrl={socketUrl(camera.id)}
+                pictureInPicture={false}
+                relayToken={tokenFor(base)}
+                layerUri={undefined}
+                tint="#ffffff"
+                aspect={16 / 9}
+                phase={undefined}
+                exposing={false}
+                active={false}
+                glowColor="#ffffff"
+                phaseColor="#ffffff"
+                dotColor="#ffffff"
+                percent={undefined}
+                elapsedMs={undefined}
+                remainingMs={undefined}
+                enabled={focused}
+              />
+              <Text style={styles.tileName}>{camera.name}</Text>
+            </Pressable>
+          ))}
         </View>
       )}
 
@@ -343,9 +381,12 @@ export const CamerasScreen = (props: Props): React.ReactElement => {
                 </Pressable>
               ))}
             </View>
-            <Text style={styles.hintInline}>Pinch to zoom</Text>
+            <Pressable style={[styles.segment, grid && styles.segmentOn, styles.layoutButton]} disabled={others.length === 0} onPress={() => setGrid((value) => !value)}>
+              <SystemIcon name="square.grid.2x2" size={14} color={grid ? ACCENT : "#8e8e93"} />
+              <Text style={[styles.segmentText, grid && styles.segmentTextOn]}>All live</Text>
+            </Pressable>
           </View>
-          <Text style={styles.hint}>Leave the app to keep watching in Picture in Picture. Its skip buttons change the camera.</Text>
+          <Text style={styles.hint}>Pinch to zoom. Leave the app to keep watching in Picture in Picture; its skip buttons change the camera.</Text>
 
           {current.ptz === true ? (
             <View style={styles.ptzWrap}>
@@ -359,7 +400,7 @@ export const CamerasScreen = (props: Props): React.ReactElement => {
             </View>
           ) : null}
 
-          {others.length === 0 ? null : (
+          {grid || others.length === 0 ? null : (
             <>
               <Text style={styles.sectionLabel}>Other cameras</Text>
               <View style={styles.grid}>
@@ -424,7 +465,18 @@ const makeStyles = (text: TextColors) =>
     segmentOn: { backgroundColor: "rgba(10,132,255,0.18)" },
     segmentText: { color: text.secondaryLabel, fontSize: 14, fontWeight: "500" },
     segmentTextOn: { color: ACCENT, fontWeight: "600" },
-    hintInline: { color: text.secondaryLabel, fontSize: 12 },
+    layoutButton: { flexDirection: "row", alignItems: "center", gap: 6 },
+    liveGrid: { gap: 10, marginTop: 10 },
+    tileName: {
+      position: "absolute",
+      left: 10,
+      top: 8,
+      color: "#ffffff",
+      fontSize: 13,
+      fontWeight: "600",
+      textShadowColor: "rgba(0,0,0,0.6)",
+      textShadowRadius: 3,
+    },
     hint: { color: text.secondaryLabel, fontSize: 12, textAlign: "center", marginTop: 10, marginBottom: 18 },
     ptzWrap: { alignItems: "center", marginBottom: 22 },
     ptz: { width: PTZ_SIZE, height: PTZ_SIZE, borderRadius: PTZ_SIZE / 2, overflow: "hidden" },
