@@ -500,7 +500,6 @@ export const DubzPage = (props: DubzPageProps): React.ReactElement => {
 
 /** One suggestion, by its kind. */
 const Suggestion = (props: { readonly suggestion: DubzSuggestion }): React.ReactElement | null => {
-  const styles = useThemedStyles(makeStyles);
   switch (props.suggestion._tag) {
     case "Tasks":
       // The tasks block isn't built yet — render nothing rather than a

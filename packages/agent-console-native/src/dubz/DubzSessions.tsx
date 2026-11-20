@@ -37,7 +37,6 @@ import type { FileRef } from "../dubzSuggestions";
 import { repoScope, sessionTarget } from "../favorites/model";
 import { FavoriteScopeProvider, toggleFavorite, useFavoriteScope, useIsFavorited } from "../favorites/useFavorites";
 import { sessionCardHeight, summaryLines, titleLines } from "../home/homeLayout";
-import { Markdown } from "../Markdown";
 import { SessionID } from "../opencode/schema/session-id";
 import { serverAddressOf } from "../opencode/serverAddress";
 import { useLane } from "../outbox/useOutbox";
