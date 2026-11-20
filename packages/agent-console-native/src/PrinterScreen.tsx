@@ -64,6 +64,7 @@ const TINT = {
   runs: "#AF52DE",
   library: "#FF9500",
   history: "#34C759",
+  head: "#FF375F",
   jobs: "#5856D6",
 } as const;
 
@@ -116,7 +117,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
     });
   }, [navigation, name]);
 
-  const open = (route: "ServerPrinterHealth" | "ServerPrinterFiles" | "ServerPrinterCamera" | "ServerPrinterNetwork" | "ServerPrinterSettings" | "ServerResinRuns" | "ServerResinLibrary" | "ServerResinHistory" | "ServerSupportJobs" | "ServerPrint"): void => {
+  const open = (route: "ServerPrinterHealth" | "ServerPrinterFiles" | "ServerPrinterCamera" | "ServerPrinterNetwork" | "ServerPrinterSettings" | "ServerResinRuns" | "ServerResinLibrary" | "ServerResinHistory" | "ServerResinHead" | "ServerSupportJobs" | "ServerPrint"): void => {
       // Opens at once: the page reads what this page has loaded, and loads the rest itself.
       markTap(route);
       navigation.navigate(route, { serverName, serverAddress });
@@ -159,6 +160,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
         }
         live={runningNow.length > 0} value={countOf(runs, (runsValue) => runsValue.runs.length)} onPress={() => open("ServerResinRuns")} />
       <ListRow icon="books.vertical.fill" tint={TINT.library} title="Library" detail="Print files by what they are" value={countOf(library, (libraryValue) => libraryValue.files.length)} onPress={() => open("ServerResinLibrary")} />
+      <ListRow icon="person.crop.square.fill" tint={TINT.head} title="Beast head" detail="Requirements for the next print, and the history" onPress={() => open("ServerResinHead")} />
       <ListRow icon="clock.arrow.circlepath" tint={TINT.history} title="Print history" detail="Every print, its outcome, and notes" value={countOf(history, (historyValue) => historyValue.prints.length)} onPress={() => open("ServerResinHistory")} />
       <ListRow icon="cpu" tint={TINT.jobs} title="Engine & jobs" detail="Support jobs on the relay" last onPress={() => open("ServerSupportJobs")} />
       {catalogDown?.error !== undefined ? (

@@ -175,6 +175,50 @@ export type ActiveRun = typeof ActiveRun.Type;
 export const ActiveReply = Schema.Struct({ runs: Schema.Array(ActiveRun), at: Schema.Number });
 export type ActiveReply = typeof ActiveReply.Type;
 
+/** A note on the head's history: the owner's words or an agent's finding. `at` is the time as written. */
+export const HeadNote = Schema.Struct({
+  id: Schema.Number,
+  at: Schema.String,
+  author: Schema.Literals(["owner", "agent"]),
+  print: Schema.NullOr(Schema.String),
+  run: Schema.NullOr(Schema.String),
+  text: Schema.String,
+  source: Schema.NullOr(Schema.String),
+});
+export type HeadNote = typeof HeadNote.Type;
+
+export const RequirementCheck = Schema.Struct({
+  requirement: Schema.String,
+  run: Schema.String,
+  result: Schema.Literals(["met", "failed"]),
+  check_name: Schema.NullOr(Schema.String),
+  value: Schema.NullOr(Schema.String),
+  note: Schema.NullOr(Schema.String),
+  at: Schema.String,
+});
+export type RequirementCheck = typeof RequirementCheck.Type;
+
+/** A requirement for the next print, with its status, evidence, and each run's result. */
+export const Requirement = Schema.Struct({
+  id: Schema.String,
+  text: Schema.String,
+  added: Schema.String,
+  quote: Schema.NullOr(Schema.String),
+  scope: Schema.Literals(["print", "standing"]),
+  required: Schema.Boolean,
+  status: Schema.Literals(["open", "met", "failed", "waived"]),
+  verifiedRun: Schema.NullOr(Schema.String),
+  evidence: Schema.NullOr(Schema.String),
+  updated: Schema.NullOr(Schema.String),
+  checks: Schema.Array(RequirementCheck),
+});
+export type Requirement = typeof Requirement.Type;
+
+export const NotesReply = Schema.Struct({ notes: Schema.Array(HeadNote) });
+export type NotesReply = typeof NotesReply.Type;
+export const RequirementsReply = Schema.Struct({ requirements: Schema.Array(Requirement) });
+export type RequirementsReply = typeof RequirementsReply.Type;
+
 const ErrorBody = Schema.Struct({ error: Schema.String, unreachable: Schema.optional(Schema.Boolean) });
 
 /** A catalog request that failed: the relay's reason, and whether the MacBook with the run database was unreachable. */
@@ -196,6 +240,8 @@ export interface CatalogRoute<A> {
 export const runsRoute: CatalogRoute<RunsReply> = { path: "/api/resin/runs", schema: RunsReply };
 export const libraryRoute: CatalogRoute<LibraryReply> = { path: "/api/resin/library", schema: LibraryReply };
 export const historyRoute: CatalogRoute<HistoryReply> = { path: "/api/resin/history", schema: HistoryReply };
+export const notesRoute: CatalogRoute<NotesReply> = { path: "/api/resin/notes", schema: NotesReply };
+export const requirementsRoute: CatalogRoute<RequirementsReply> = { path: "/api/resin/requirements", schema: RequirementsReply };
 export const activeRoute: CatalogRoute<ActiveReply> = { path: "/api/resin/active", schema: ActiveReply };
 export const runRoute = (id: string): CatalogRoute<RunDetail> => ({ path: `/api/resin/runs/${encodeURIComponent(id)}`, schema: RunDetail });
 export const originRoute = (name: string): CatalogRoute<OriginReply> => ({ path: `/api/resin/origin?name=${encodeURIComponent(name)}`, schema: OriginReply });

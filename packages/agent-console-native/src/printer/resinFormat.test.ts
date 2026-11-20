@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PrintRecord } from "./resinApi";
-import { abDiff, activeLine, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
+import { abDiff, activeLine, headTimeline, startedMs, timeKey, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
 
 const record = (fields: Partial<PrintRecord>): PrintRecord => ({
   id: "P8",
@@ -90,5 +90,29 @@ describe("activeLine", () => {
   it("says the run, its stage, and the minutes left", () => {
     expect(activeLine({ number: 640, stage: "anti-alias", finishAt: 1_000_000 + 240_000 }, 1_000_000)).toBe("Run 640 · anti-alias · 4 min left");
     expect(activeLine({ number: 640, stage: null, finishAt: 1_000_000 }, 1_000_000)).toBe("Run 640 · starting · past the usual time");
+  });
+});
+
+describe("the head's timeline", () => {
+  it("orders prints and notes by time, and keeps a print's notes with it", () => {
+    const prints = [
+      { id: "P2", started: "2026-11-15 evening to 2026-11-16" },
+      { id: "P1", started: "2026-11-15" },
+      { id: "P6", started: "2026-11-17 19:34 (restart 20:03)" },
+    ];
+    const notes = [
+      { id: 1, at: "2026-11-17 23:55 UTC", print: "P6" },
+      { id: 2, at: "2026-11-19", print: null },
+      { id: 3, at: "2026-11-16 09:00", print: null },
+    ];
+    expect(headTimeline(prints, notes).map((event) => event.key)).toEqual(["P1", "P2", "note-3", "P6", "note-2"]);
+    const p6 = headTimeline(prints, notes).find((event) => event.key === "P6");
+    expect(p6?.kind === "Print" ? p6.notes.map((note) => note.id) : []).toEqual([1]);
+  });
+
+  it("reads start times", () => {
+    expect(timeKey("2026-11-17 19:34 (restart 20:03)")).toBe("2026-11-17 19:34");
+    expect(startedMs("2026-11-18 15:17")).toBe(new Date(2026, 10, 18, 15, 17).getTime());
+    expect(startedMs("Unknown")).toBeUndefined();
   });
 });

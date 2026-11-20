@@ -163,3 +163,33 @@ export const timeLeft = (finishAt: number | null, nowMs: number): string | undef
 /** A run in progress in a few words: "Run 640 · anti-alias · 4 min left". */
 export const activeLine = (run: { readonly number: number; readonly stage: string | null; readonly finishAt: number | null }, nowMs: number): string =>
   [`Run ${run.number}`, run.stage ?? "starting", timeLeft(run.finishAt, nowMs)].filter((part) => part !== undefined).join(" · ");
+
+/** A print record's or a note's time as a sortable key: "2026-11-18 15:17" from "2026-11-18 15:17 (restart …)". */
+export const timeKey = (text: string | null): string => /^\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?/.exec(text ?? "")?.[0] ?? "";
+
+/** A print's start as Unix ms (local time), or undefined when its text has no date. */
+export const startedMs = (started: string | null): number | undefined => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?/.exec(started ?? "");
+  if (match === null) return undefined;
+  const [, year, month, day, hour, minute] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day), Number(hour ?? "0"), Number(minute ?? "0")).getTime();
+};
+
+/** The head's timeline: each print with the notes about it, and the other notes in time order. */
+export type HeadEvent<P, N> = { readonly kind: "Print"; readonly key: string; readonly print: P; readonly notes: ReadonlyArray<N> } | { readonly kind: "Note"; readonly key: string; readonly note: N };
+
+export const headTimeline = <P extends { readonly id: string; readonly started: string | null }, N extends { readonly id: number; readonly at: string; readonly print: string | null }>(
+  prints: ReadonlyArray<P>,
+  notes: ReadonlyArray<N>,
+): ReadonlyArray<HeadEvent<P, N>> => {
+  const printIds = new Set(prints.map((print) => print.id));
+  const events: ReadonlyArray<{ readonly at: string; readonly order: number; readonly event: HeadEvent<P, N> }> = [
+    ...prints.map((print) => ({
+      at: timeKey(print.started),
+      order: Number(print.id.replace(/\D/g, "")),
+      event: { kind: "Print" as const, key: print.id, print, notes: notes.filter((note) => note.print === print.id) },
+    })),
+    ...notes.filter((note) => note.print === null || !printIds.has(note.print)).map((note) => ({ at: timeKey(note.at), order: 0, event: { kind: "Note" as const, key: `note-${note.id}`, note } })),
+  ];
+  return [...events].sort((a, b) => a.at.localeCompare(b.at) || a.order - b.order).map((entry) => entry.event);
+};

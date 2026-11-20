@@ -23,6 +23,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 4,
+    date: "2026-11-20",
+    title: "The Beast head's history",
+    commits: ["saturn-uploader 03dd60b", "rundb.py note and req"],
+    lines: [
+      "The Resin card has a Beast head page.",
+      "At the top you see the requirements for the next print, each with its status and the run that shows it.",
+      "Below them you see prints P1 to P8 with their outcomes and your notes, then the runs since the last print.",
+      "A run's page shows which requirements it meets or fails.",
+    ],
+  },
+  {
     version: 3,
     date: "2026-11-20",
     title: "Engine & Jobs, and the printer's state",

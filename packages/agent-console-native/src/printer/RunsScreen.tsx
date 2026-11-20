@@ -19,7 +19,8 @@ import type { RootStackParamList } from "../RootNavigator";
 import { SystemIcon } from "../SystemIcon";
 import { useTextColors, useScreenBackground } from "../theme";
 import { GroupedList, type Group } from "./GroupedList";
-import { activeRoute, LIVE_REFRESH_MS, renderUrl, runRoute, runsRoute, useCatalog, type ActiveRun, type RunDetail, type RunSummary } from "./resinApi";
+import { activeRoute, LIVE_REFRESH_MS, renderUrl, requirementsRoute, runRoute, runsRoute, useCatalog, type ActiveRun, type Loaded, type RequirementsReply, type RunDetail, type RunSummary } from "./resinApi";
+import { RequirementRow } from "./HeadScreen";
 import { deltaOf, flagLabel, fmtMetric, fmtShortDate, metricLabel, renderLabel } from "./resinFormat";
 import { ActiveRow, OutcomeChip, RenderTile, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
@@ -146,11 +147,14 @@ const RunBody = (props: {
   readonly tile: number;
   readonly openRun: (id: string) => void;
   readonly onRender: (name: string) => void;
+  readonly requirements: Loaded<RequirementsReply>;
 }): React.ReactElement => {
   const text = useTextColors();
   const palette = usePalette();
   const { run, relayBase, wide, columnWidth, tile, openRun } = props;
   const setViewing = props.onRender;
+  // The requirements this run meets or fails: a result for it, or its verification.
+  const forRun = (props.requirements.value?.requirements ?? []).filter((requirement) => requirement.verifiedRun === run.id || requirement.checks.some((check) => check.run === run.id));
         const summary = (
           <Card>
             <View style={styles.hero}>
@@ -204,6 +208,25 @@ const RunBody = (props: {
                   <OutcomeChip outcome={print.outcome} />
                 </View>
               ))
+            )}
+          </Card>
+        );
+        const met = (
+          <Card title="Requirements" flush>
+            {props.requirements.error !== undefined ? (
+              <View style={styles.pad}>
+                <CatalogProblem error={props.requirements.error} unreachable={props.requirements.unreachable} />
+              </View>
+            ) : props.requirements.value === undefined ? (
+              <View style={styles.pad}>
+                <Note text="Reading the requirements…" />
+              </View>
+            ) : forRun.length === 0 ? (
+              <View style={styles.pad}>
+                <Note text="No requirement names this run yet." />
+              </View>
+            ) : (
+              forRun.map((requirement, index) => <RequirementRow key={requirement.id} requirement={requirement} last={index === forRun.length - 1} onRun={openRun} forRun={run.id} />)
             )}
           </Card>
         );
@@ -283,6 +306,8 @@ const RunBody = (props: {
             <View style={{ width: columnWidth }}>
               {summary}
               {checks}
+            {met}
+              {met}
               {changes}
               {settings}
             </View>
@@ -312,6 +337,7 @@ export const RunScreen = (props: RunProps): React.ReactElement => {
   const { serverName, serverAddress, runId } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
   const detail = useCatalog(relayBase, runRoute(runId));
+  const requirements = useCatalog(relayBase, requirementsRoute);
   const [viewing, setViewing] = React.useState<string | undefined>(undefined);
   const wide = width >= 700;
   const contentWidth = Math.min(width - 32, 1100);
@@ -328,7 +354,7 @@ export const RunScreen = (props: RunProps): React.ReactElement => {
         {detail.error !== undefined ? <CatalogProblem error={detail.error} unreachable={detail.unreachable} /> : <Note text="Reading the run…" />}
       </Card>
     ) : (
-      <RunBody run={run} relayBase={relayBase} wide={wide} columnWidth={columnWidth} tile={tile} openRun={openRun} onRender={setViewing} />
+      <RunBody run={run} relayBase={relayBase} wide={wide} columnWidth={columnWidth} tile={tile} openRun={openRun} onRender={setViewing} requirements={requirements} />
     );
 
   return (
