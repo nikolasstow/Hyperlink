@@ -11,7 +11,7 @@
  */
 import { requireNativeModule, requireNativeView } from "expo";
 import * as React from "react";
-import { Platform, type ViewProps } from "react-native";
+import { Platform, type NativeSyntheticEvent, type ViewProps } from "react-native";
 
 export type ModelViewerProps = ViewProps & {
   /** A `model.mesh` file on the device, as a `file://` URI. */
@@ -21,9 +21,35 @@ export type ModelViewerProps = ViewProps & {
   /** The crop: the model shows only between these heights above the plate, in mm. Undefined: no crop on that side. */
   readonly clipLowMm?: number | undefined;
   readonly clipHighMm?: number | undefined;
+  /** A plan's supports beside the model: a `model.mesh` file in the same frame, in their own colour. */
+  readonly supportsUri?: string | undefined;
+  readonly supportsColor?: string | undefined;
+  /** Points to mark in the model's frame (mm): requirements, the selected support. */
+  readonly markers?: ReadonlyArray<ModelMarker> | undefined;
+  /** A tap on the model or the supports: the point it hit, in the model's frame (mm). */
+  readonly onPointTap?: ((point: ModelTapPoint) => void) | undefined;
 };
 
-const NativeView = Platform.OS === "ios" ? requireNativeView<ModelViewerProps>("ModelViewer") : null;
+export interface ModelMarker {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly color: string;
+  readonly radius: number;
+}
+
+export interface ModelTapPoint {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly part: "model" | "supports";
+}
+
+type NativeProps = Omit<ModelViewerProps, "onPointTap"> & {
+  readonly onPointTap?: (event: NativeSyntheticEvent<ModelTapPoint>) => void;
+};
+
+const NativeView = Platform.OS === "ios" ? requireNativeView<NativeProps>("ModelViewer") : null;
 
 interface ModelViewerNativeModule {
   readonly presentAR?: (uri: string, color: string, clipLowMm: number | null, clipHighMm: number | null, title: string) => Promise<void>;
@@ -46,4 +72,7 @@ export const presentModelAR = (options: {
     ? Promise.reject(new Error("This build cannot show AR"))
     : nativeModule.presentAR(options.uri, options.color, options.clipLowMm ?? null, options.clipHighMm ?? null, options.title);
 
-export const ModelViewer = (props: ModelViewerProps): React.ReactElement | null => (NativeView === null ? null : <NativeView {...props} />);
+export const ModelViewer = (props: ModelViewerProps): React.ReactElement | null => {
+  const { onPointTap, ...rest } = props;
+  return NativeView === null ? null : <NativeView {...rest} onPointTap={onPointTap === undefined ? undefined : (event) => onPointTap(event.nativeEvent)} />;
+};

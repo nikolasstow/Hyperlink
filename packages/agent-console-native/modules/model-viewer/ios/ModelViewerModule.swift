@@ -40,6 +40,16 @@ public class ModelViewerModule: Module {
       Prop("clipHighMm") { (view: ModelViewerView, mm: Double?) in
         view.clipHighMm = mm
       }
+      Prop("supportsUri") { (view: ModelViewerView, uri: String?) in
+        view.supportsUri = uri.flatMap(URL.init(string:))
+      }
+      Prop("supportsColor") { (view: ModelViewerView, hex: String?) in
+        view.supportsColor = ModelViewerView.color(hex: hex ?? "#ff9f0a")
+      }
+      Prop("markers") { (view: ModelViewerView, markers: [ModelMarker]?) in
+        view.markers = markers ?? []
+      }
+      Events("onPointTap")
     }
   }
 }

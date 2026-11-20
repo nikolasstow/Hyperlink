@@ -21,7 +21,7 @@ import { historyRoute, libraryRoute, notesRoute, projectsRoute, requirementsRout
 import { describeFile, fmtShortDate, headTimeline, inTask, startedMs } from "./resinFormat";
 import { OutcomeChip, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
-import { Card, CatalogProblem, Note, usePalette, type Palette } from "./ui";
+import { Card, CatalogProblem, ListRow, Note, usePalette, type Palette } from "./ui";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerResinTask">;
 
@@ -254,6 +254,28 @@ export const TaskScreen = (props: Props): React.ReactElement => {
   const required = list.filter((requirement) => requirement.required);
   const met = required.filter((requirement) => requirementStatus(requirement, requirement.latest) === "met").length;
 
+  // The next print's candidate: the run checked last against the requirements, else the task's newest run.
+  const candidate = React.useMemo(() => {
+    const checked = list.flatMap((requirement) => requirement.history).filter((check) => check.runId !== null).sort((a, b) => b.at.localeCompare(a.at))[0];
+    return checked?.runId ?? runsOfTask[0]?.id ?? null;
+  }, [list, runsOfTask]);
+  const review =
+    candidate === null ? null : (
+      <Card flush>
+        <ListRow
+          icon="cube.transparent"
+          tint="#5E5CE6"
+          title={`Review the next print · run ${candidate}`}
+          detail="3D, cuts at any height, each support, and feedback"
+          last
+          onPress={() => {
+            markTap(`plan ${candidate}`);
+            props.navigation.navigate("ServerResinPlan", { serverName, serverAddress, runId: candidate });
+          }}
+        />
+      </Card>
+    );
+
   const checklist = (
     <Card title="Next print" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{requirements.value === undefined ? "" : `${met} of ${required.length} met`}</Text>} flush>
       {requirements.error !== undefined ? (
@@ -363,7 +385,9 @@ export const TaskScreen = (props: Props): React.ReactElement => {
         {wide ? (
           <View style={styles.columns}>
             <View style={{ width: columnWidth }}>
-              {checklist}
+              {review}
+              {review}
+            {checklist}
               {checkHistory}
             </View>
             <View style={{ width: columnWidth }}>{timeline}</View>

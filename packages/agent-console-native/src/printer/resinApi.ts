@@ -185,6 +185,8 @@ export const HeadNote = Schema.Struct({
   text: Schema.String,
   source: Schema.NullOr(Schema.String),
   task: Schema.NullOr(Schema.String),
+  /** The support or point the note is about, as a position ID. */
+  position: Schema.NullOr(Schema.String),
 });
 export type HeadNote = typeof HeadNote.Type;
 
@@ -217,6 +219,9 @@ export const Requirement = Schema.Struct({
   evidence: Schema.NullOr(Schema.String),
   updated: Schema.NullOr(Schema.String),
   task: Schema.NullOr(Schema.String),
+  /** The support or point it is about, as a position ID, and the run it was written from. */
+  position: Schema.NullOr(Schema.String),
+  run: Schema.NullOr(Schema.String),
   /** The latest result for each run and head, newest first. */
   checks: Schema.Array(CheckResult),
   /** The newest result per head: the requirement's status now. */
@@ -250,6 +255,40 @@ export type NotesReply = typeof NotesReply.Type;
 export const RequirementsReply = Schema.Struct({ requirements: Schema.Array(Requirement) });
 export type RequirementsReply = typeof RequirementsReply.Type;
 
+/** One support contact of a plan: where it is, its position ID, its sizes, and its tree's load. */
+export const PlanContact = Schema.Struct({
+  id: Schema.String,
+  tree: Schema.String,
+  position: Schema.String,
+  x: Schema.Number,
+  y: Schema.Number,
+  z: Schema.Number,
+  tipRadius: Schema.NullOr(Schema.Number),
+  radius: Schema.Number,
+  neckRadius: Schema.NullOr(Schema.Number),
+  neckLength: Schema.NullOr(Schema.Number),
+  stemRadius: Schema.NullOr(Schema.Number),
+  shaftRadius: Schema.NullOr(Schema.Number),
+  loadU: Schema.NullOr(Schema.Number),
+  plateColumn: Schema.Boolean,
+});
+export type PlanContact = typeof PlanContact.Type;
+
+const Vec3 = Schema.Tuple([Schema.Number, Schema.Number, Schema.Number]);
+
+/** A plan for review: its bounds, the frame of its cut images, and its support contacts. */
+export const PlanReply = Schema.Struct({
+  run: Schema.String,
+  folder: Schema.String,
+  low: Vec3,
+  high: Vec3,
+  cut: Schema.Struct({ lowX: Schema.Number, highY: Schema.Number, pxPerMm: Schema.Number, width: Schema.Number, height: Schema.Number }),
+  triangles: Schema.Struct({ model: Schema.Number, supports: Schema.Number }),
+  contacts: Schema.Array(PlanContact),
+  hasLoads: Schema.Boolean,
+});
+export type PlanReply = typeof PlanReply.Type;
+
 const ErrorBody = Schema.Struct({ error: Schema.String, unreachable: Schema.optional(Schema.Boolean) });
 
 /** A catalog request that failed: the relay's reason, and whether the MacBook with the run database was unreachable. */
@@ -271,6 +310,30 @@ export interface CatalogRoute<A> {
 export const runsRoute: CatalogRoute<RunsReply> = { path: "/api/resin/runs", schema: RunsReply };
 export const libraryRoute: CatalogRoute<LibraryReply> = { path: "/api/resin/library", schema: LibraryReply };
 export const historyRoute: CatalogRoute<HistoryReply> = { path: "/api/resin/history", schema: HistoryReply };
+export const planRoute = (runId: string): CatalogRoute<PlanReply> => ({ path: `/api/resin/runs/${encodeURIComponent(runId)}/plan`, schema: PlanReply });
+
+/** The plan's cut at height z, seen from above: the model grey, the supports orange. */
+export const sectionUrl = (relayBase: string, runId: string, z: number): string => `${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/section.png?z=${z.toFixed(2)}`;
+
+/** A plan's model or supports as a `model.mesh` file. */
+export const planMeshUrl = (relayBase: string, runId: string, part: "model" | "supports"): string => `${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/mesh/${part}`;
+
+const FeedbackReply = Schema.Struct({ kind: Schema.Literals(["note", "requirement"]), id: Schema.String });
+
+/** Writes a note or a requirement about a position of a run (the catalog's one write). Resolves with its id. */
+export const sendFeedback = async (
+  relayBase: string,
+  body: { readonly kind: "note" | "requirement"; readonly text: string; readonly run: string; readonly position: string | null },
+): Promise<string> => {
+  const response = await authedFetch(`${relayBase}/api/resin/feedback`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const reply: unknown = await response.json();
+  if (!response.ok) {
+    const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(reply));
+    throw new CatalogError(error?.error ?? `The relay answered HTTP ${response.status}`, error?.unreachable === true);
+  }
+  return (await Schema.decodeUnknownPromise(FeedbackReply)(reply)).id;
+};
+
 export const projectsRoute: CatalogRoute<ProjectsReply> = { path: "/api/resin/projects", schema: ProjectsReply };
 export const notesRoute: CatalogRoute<NotesReply> = { path: "/api/resin/notes", schema: NotesReply };
 export const requirementsRoute: CatalogRoute<RequirementsReply> = { path: "/api/resin/requirements", schema: RequirementsReply };

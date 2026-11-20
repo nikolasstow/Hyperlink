@@ -202,3 +202,38 @@ export const globMatches = (pattern: string, path: string): boolean => {
 
 /** Whether a library file belongs to a task, by the task's patterns. */
 export const inTask = (task: { readonly patterns: ReadonlyArray<string> }, path: string): boolean => task.patterns.some((pattern) => globMatches(pattern, path));
+
+// Position IDs (support-guide tools/posid.py): the same ID for a point in every run.
+const POS_GRID = 0.25;
+const POS_ORIGIN = [-64, -64, -2] as const;
+const POS_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/** A position ID's cell centre (mm), or undefined when the text is not a full ID. */
+export const decodePosition = (id: string): readonly [number, number, number] | undefined => {
+  const code = (id.split("-").at(-1) ?? "").split("/")[0]?.toUpperCase() ?? "";
+  if (!/^[0-9A-HJKMNP-TV-Z]{6}$/.test(code)) return undefined;
+  let n = 0;
+  for (const char of code) n = n * 32 + POS_ALPHABET.indexOf(char);
+  const k = n % 512;
+  n = Math.floor(n / 512);
+  const j = n % 512;
+  const i = Math.floor(n / 512);
+  return [POS_ORIGIN[0] + (i + 0.5) * POS_GRID, POS_ORIGIN[1] + (j + 0.5) * POS_GRID, POS_ORIGIN[2] + (k + 0.5) * POS_GRID];
+};
+
+/** The position IDs a text names, such as "W34-19BZK1". */
+export const positionsIn = (text: string): ReadonlyArray<string> => Array.from(text.matchAll(/\b(?:N|NE|E|SE|S|SW|W|NW)\d{2}-[0-9A-HJKMNP-TV-Z]{6}\b/g), (match) => match[0]);
+
+/** The contact nearest a point, by distance, or undefined when none is within `withinMm`. */
+export const nearestContact = <C extends { readonly x: number; readonly y: number; readonly z: number }>(contacts: ReadonlyArray<C>, point: readonly [number, number, number], withinMm: number): C | undefined => {
+  let best: C | undefined;
+  let bestDistance = withinMm;
+  for (const contact of contacts) {
+    const distance = Math.hypot(contact.x - point[0], contact.y - point[1], contact.z - point[2]);
+    if (distance <= bestDistance) {
+      best = contact;
+      bestDistance = distance;
+    }
+  }
+  return best;
+};

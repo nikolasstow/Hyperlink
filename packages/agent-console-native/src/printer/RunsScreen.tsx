@@ -148,6 +148,7 @@ const RunBody = (props: {
   readonly openRun: (id: string) => void;
   readonly onRender: (name: string) => void;
   readonly requirements: Loaded<RequirementsReply>;
+  readonly openPlan: (id: string) => void;
 }): React.ReactElement => {
   const text = useTextColors();
   const palette = usePalette();
@@ -155,6 +156,11 @@ const RunBody = (props: {
   const setViewing = props.onRender;
   // The requirements this run meets or fails: a result for it, or its verification.
   const forRun = (props.requirements.value?.requirements ?? []).filter((requirement) => requirement.verifiedRun === run.id || requirement.checks.some((check) => check.runId === run.id || check.folder === run.folder));
+        const review = (
+          <Card flush>
+            <ListRow icon="cube.transparent" tint="#5E5CE6" title="Review the plan" detail="3D, cuts at any height, each support, and feedback" last onPress={() => props.openPlan(run.id)} />
+          </Card>
+        );
         const summary = (
           <Card>
             <View style={styles.hero}>
@@ -305,6 +311,8 @@ const RunBody = (props: {
           <View style={styles.columns}>
             <View style={{ width: columnWidth }}>
               {summary}
+            {review}
+              {review}
               {checks}
             {met}
               {met}
@@ -354,7 +362,10 @@ export const RunScreen = (props: RunProps): React.ReactElement => {
         {detail.error !== undefined ? <CatalogProblem error={detail.error} unreachable={detail.unreachable} /> : <Note text="Reading the run…" />}
       </Card>
     ) : (
-      <RunBody run={run} relayBase={relayBase} wide={wide} columnWidth={columnWidth} tile={tile} openRun={openRun} onRender={setViewing} requirements={requirements} />
+      <RunBody run={run} relayBase={relayBase} wide={wide} columnWidth={columnWidth} tile={tile} openRun={openRun} onRender={setViewing} requirements={requirements} openPlan={(id) => {
+        markTap(`plan ${id}`);
+        props.navigation.navigate("ServerResinPlan", { serverName, serverAddress, runId: id });
+      }} />
     );
 
   return (

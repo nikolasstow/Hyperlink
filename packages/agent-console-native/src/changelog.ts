@@ -23,6 +23,21 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 7,
+    date: "2026-11-20",
+    title: "Plan review",
+    commits: ["saturn-uploader d5d380d"],
+    lines: [
+      "A run's page and the task page open the plan review: \"Review the plan\".",
+      "You see the model and the plan's supports in 3D, with every triangle.",
+      "The slider cuts the plan at any height: the model grey, the supports orange.",
+      "Tap a support on the cut or in 3D to see its position ID, tree, tip, neck, stem, and load.",
+      "Under it you can add a note or a requirement for that support. It is saved with the position ID and the run.",
+      "Requirements and notes that name a position show as red rings on the cut and as marks in 3D.",
+      "The 3D supports, the marks, and taps in 3D need the next app build. The cut works now.",
+    ],
+  },
+  {
     version: 6,
     date: "2026-11-20",
     title: "Requirement checks for each head",

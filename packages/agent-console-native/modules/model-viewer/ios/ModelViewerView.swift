@@ -18,8 +18,26 @@ import simd
 /// the old one's place and keeps the view. A crop (`clipLowMm`,
 /// `clipHighMm`, heights above the plate) hides the model outside the range,
 /// so the inside shows: its inner walls are drawn darker.
+///
+/// A plan's supports can show beside the model (`supportsUri`, in their own
+/// colour, the same file format and frame), with markers at points in the
+/// model's frame (requirements, the selected support). A tap on the model or
+/// the supports sends the point it hit, in mm (`onPointTap`).
+struct ModelMarker: Record {
+  @Field var x: Double = 0
+  @Field var y: Double = 0
+  @Field var z: Double = 0
+  @Field var color: String = "#ff3b30"
+  /// The marker's radius in mm.
+  @Field var radius: Double = 0.6
+}
+
 final class ModelViewerView: ExpoView {
   var uri: URL? { didSet { if uri != oldValue { load() } } }
+  var supportsUri: URL? { didSet { if supportsUri != oldValue { loadSupports() } } }
+  var supportsColor: UIColor = UIColor(red: 1, green: 0.62, blue: 0.04, alpha: 1) { didSet { supportsMaterial.diffuse.contents = supportsColor } }
+  var markers: [ModelMarker] = [] { didSet { showMarkers() } }
+  let onPointTap = EventDispatcher()
   var modelColor: UIColor = UIColor(white: 0.85, alpha: 1) { didSet { material.diffuse.contents = modelColor } }
   var clipLowMm: Double? { didSet { if clipLowMm != oldValue { applyClip() } } }
   var clipHighMm: Double? { didSet { if clipHighMm != oldValue { applyClip() } } }
@@ -42,8 +60,14 @@ final class ModelViewerView: ExpoView {
   private let scnView = SCNView()
   private let scene = SCNScene()
   private let material = SCNMaterial()
+  private let supportsMaterial = SCNMaterial()
   private let cameraNode = SCNNode()
+  /// The model's frame: Z up from the plate, turned so SceneKit's Y is up. The model, the supports, and the markers sit in it.
+  private let frameNode = SCNNode()
+  private let markersNode = SCNNode()
   private var modelNode: SCNNode?
+  private var supportsNode: SCNNode?
+  private var supportsGeneration = 0
   /// Each load has a number, so a slow parse of an old file never replaces a newer one.
   private var generation = 0
 
@@ -54,6 +78,12 @@ final class ModelViewerView: ExpoView {
     material.lightingModel = .blinn
     material.specular.contents = UIColor(white: 0.25, alpha: 1)
     material.shininess = 0.35
+    supportsMaterial.diffuse.contents = supportsColor
+    supportsMaterial.lightingModel = .blinn
+    supportsMaterial.specular.contents = UIColor(white: 0.2, alpha: 1)
+    frameNode.eulerAngles.x = -.pi / 2
+    frameNode.addChildNode(markersNode)
+    scene.rootNode.addChildNode(frameNode)
 
     let camera = SCNCamera()
     camera.fieldOfView = 40
@@ -75,6 +105,60 @@ final class ModelViewerView: ExpoView {
     scnView.defaultCameraController.inertiaEnabled = true
     scnView.pointOfView = cameraNode
     addSubview(scnView)
+    let tap = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+    scnView.addGestureRecognizer(tap)
+  }
+
+  /// Sends the point a tap hit on the model or the supports, in the model's frame (mm).
+  @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
+    let location = recognizer.location(in: scnView)
+    let hits = scnView.hitTest(location, options: [.searchMode: SCNHitTestSearchMode.closest.rawValue])
+    guard let hit = hits.first(where: { $0.node === modelNode || $0.node === supportsNode }) else { return }
+    let point = hit.node.convertPosition(hit.localCoordinates, to: frameNode)
+    onPointTap([
+      "x": Double(point.x),
+      "y": Double(point.y),
+      "z": Double(point.z),
+      "part": hit.node === supportsNode ? "supports" : "model",
+    ])
+  }
+
+  private func loadSupports() {
+    supportsGeneration += 1
+    let current = supportsGeneration
+    guard let supportsUri else {
+      supportsNode?.removeFromParentNode()
+      supportsNode = nil
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      let geometry = (try? Data(contentsOf: supportsUri, options: .mappedIfSafe)).flatMap(ModelViewerView.geometry(from:))
+      DispatchQueue.main.async {
+        guard let self, current == self.supportsGeneration, let geometry else { return }
+        geometry.materials = [self.supportsMaterial]
+        self.supportsNode?.removeFromParentNode()
+        let node = SCNNode(geometry: geometry)
+        self.frameNode.addChildNode(node)
+        self.supportsNode = node
+      }
+    }
+  }
+
+  private func showMarkers() {
+    markersNode.childNodes.forEach { $0.removeFromParentNode() }
+    for marker in markers {
+      let sphere = SCNSphere(radius: CGFloat(marker.radius))
+      let paint = SCNMaterial()
+      paint.diffuse.contents = ModelViewerView.color(hex: marker.color)
+      paint.lightingModel = .constant
+      // Markers show through the model, so a point inside it is still seen.
+      paint.readsFromDepthBuffer = false
+      sphere.materials = [paint]
+      let node = SCNNode(geometry: sphere)
+      node.position = SCNVector3(Float(marker.x), Float(marker.y), Float(marker.z))
+      node.renderingOrder = 10
+      markersNode.addChildNode(node)
+    }
   }
 
   override func layoutSubviews() {
@@ -116,8 +200,7 @@ final class ModelViewerView: ExpoView {
     let previous = modelNode?.geometry?.boundingBox
     modelNode?.removeFromParentNode()
     let node = SCNNode(geometry: geometry)
-    node.eulerAngles.x = -.pi / 2
-    scene.rootNode.addChildNode(node)
+    frameNode.addChildNode(node)
     modelNode = node
 
     // A finer level of the same model has the same bounds: keep the owner's view.

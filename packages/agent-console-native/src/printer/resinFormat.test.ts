@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PrintRecord } from "./resinApi";
-import { abDiff, globMatches, inTask, activeLine, headTimeline, startedMs, timeKey, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
+import { abDiff, decodePosition, nearestContact, positionsIn, globMatches, inTask, activeLine, headTimeline, startedMs, timeKey, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
 
 const record = (fields: Partial<PrintRecord>): PrintRecord => ({
   id: "P8",
@@ -124,5 +124,19 @@ describe("task patterns", () => {
     expect(globMatches("Drop/Head *", "Drop/Gambit Base 1 + 2.ctp")).toBe(false);
     expect(globMatches("Library/goo/Bodies/*", "Library/goo/Bases/x.goo")).toBe(false);
     expect(inTask({ patterns: ["Library/Beast/Bases/*"] }, "Library/Beast/Bases/goo/b.goo")).toBe(true);
+  });
+});
+
+describe("position IDs", () => {
+  it("decode as tools/posid.py does, and are found in text", () => {
+    expect(decodePosition("W34-19BZK1")).toEqual([-22.625, -0.125, 22.375]);
+    expect(decodePosition("S51-524")).toBeUndefined();
+    expect(positionsIn("A beefed ear support at W34-19BZK1 (pad r 0.3), not S51-524.")).toEqual(["W34-19BZK1"]);
+  });
+
+  it("find the nearest contact within a distance", () => {
+    const contacts = [{ id: "a", x: 0, y: 0, z: 0 }, { id: "b", x: 5, y: 0, z: 0 }];
+    expect(nearestContact(contacts, [4, 0, 0], 2)?.id).toBe("b");
+    expect(nearestContact(contacts, [20, 0, 0], 2)).toBeUndefined();
   });
 });
