@@ -34,6 +34,7 @@ import { usePublishPrinterLink } from "./printer/printerPageLink";
 import { useLoadedUri } from "./printer/PrinterStage";
 import { usePrintHeader } from "./printer/printHeader";
 import { linkChip, statusOf } from "./printer/printStatus";
+import { requirementStatus } from "./printer/TaskScreen";
 import { activeRoute, historyRoute, libraryRoute, LIVE_REFRESH_MS, originRoute, projectsRoute, requirementsRoute, runsRoute, useCatalog } from "./printer/resinApi";
 import { activeLine, describeFile, fmtShortDate, OUTCOME_LABEL, outcomeKindOf } from "./printer/resinFormat";
 import { isPrinting, layerIndexOf, PHASE_EXPOSING, PHASE_PAUSED } from "./printer/sdcp";
@@ -116,7 +117,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const currentLine = ((): string => {
     if (current === undefined) return projects.error !== undefined ? (projects.unreachable ? "MacBook unreachable" : "The catalog did not answer") : projects.value === undefined ? "…" : "No current task";
     const list = (requirements.value?.requirements ?? []).filter((requirement) => requirement.task === current.task.id && requirement.required);
-    const met = list.filter((requirement) => requirement.status === "met").length;
+    const met = list.filter((requirement) => requirementStatus(requirement, requirement.latest) === "met").length;
     const running = runningNow.find((run) => run.id === null || current.task.runs.includes(run.id));
     const lastPrint = history.value?.prints.find((print) => current.task.prints.includes(print.id));
     const latest = running !== undefined ? activeLine(running, Date.now()) : lastPrint !== undefined ? `${lastPrint.id} · ${OUTCOME_LABEL[outcomeKindOf(lastPrint.outcome)]}` : undefined;

@@ -17,7 +17,7 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import { markTap, useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScreenBackground, useTextColors, withAlpha } from "../theme";
-import { historyRoute, libraryRoute, notesRoute, projectsRoute, requirementsRoute, runsRoute, useCatalog, type HeadNote, type LibraryFile, type PrintRecord, type Requirement } from "./resinApi";
+import { historyRoute, libraryRoute, notesRoute, projectsRoute, requirementsRoute, runsRoute, useCatalog, type CheckResult, type HeadNote, type LibraryFile, type PrintRecord, type Requirement } from "./resinApi";
 import { describeFile, fmtShortDate, headTimeline, inTask, startedMs } from "./resinFormat";
 import { OutcomeChip, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
@@ -33,16 +33,46 @@ const STATUS_LABEL: Readonly<Record<Requirement["status"], string>> = { open: "O
 const statusColor = (palette: Palette, status: Requirement["status"], plain: string): string =>
   status === "met" ? palette.ok : status === "failed" ? palette.bad : status === "waived" ? plain : palette.warn;
 
-/** One requirement: its status, its words, and the run and check that show it. */
-export const RequirementRow = (props: { readonly requirement: Requirement; readonly last: boolean; readonly onRun: (id: string) => void; readonly forRun?: string }): React.ReactElement => {
+/** A requirement's status: waived by hand, else from its newest checks (failed if any head failed), else as set by hand. */
+export const requirementStatus = (requirement: Requirement, checks: ReadonlyArray<CheckResult>): Requirement["status"] =>
+  requirement.status === "waived" ? "waived" : checks.length === 0 ? requirement.status : checks.some((check) => check.result === "failed") ? "failed" : "met";
+
+/** One check in a line: the head, the run, and what it measured. */
+const CheckLine = (props: { readonly check: CheckResult; readonly onRun: (id: string) => void }): React.ReactElement => {
   const text = useTextColors();
   const palette = usePalette();
-  const { requirement } = props;
-  const runCheck = props.forRun === undefined ? undefined : requirement.checks.find((check) => check.run === props.forRun);
-  const status = runCheck !== undefined ? runCheck.result : requirement.status;
+  const { check } = props;
+  const runId = check.runId;
+  return (
+    <Pressable disabled={runId === null} onPress={() => (runId === null ? undefined : props.onRun(runId))} hitSlop={4}>
+      <Text style={[styles.evidence, { color: text.secondaryLabel }]} numberOfLines={3}>
+        <Text style={{ color: check.result === "met" ? palette.ok : palette.bad }}>{check.result === "met" ? "✓" : "✕"} </Text>
+        <Text style={{ color: runId === null ? text.secondaryLabel : palette.accentInk }}>
+          {check.head !== null ? `${check.head} · ` : ""}
+          {runId ?? check.folder ?? check.ref}
+        </Text>
+        {check.evidence !== null && check.evidence !== "" ? ` · ${check.evidence}` : ""}
+      </Text>
+    </Pressable>
+  );
+};
+
+/**
+ * One requirement: its status, its words, and the newest check per head
+ * with its evidence. With `forRun`, only that run's checks count.
+ */
+export const RequirementRow = (props: {
+  readonly requirement: Requirement;
+  readonly last: boolean;
+  readonly onRun: (id: string) => void;
+  readonly forRun?: { readonly id: string; readonly folder: string };
+}): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  const { requirement, forRun } = props;
+  const shown = forRun === undefined ? requirement.latest : requirement.checks.filter((check) => check.runId === forRun.id || check.folder === forRun.folder);
+  const status = requirementStatus(requirement, shown);
   const color = statusColor(palette, status, "#8E8E93");
-  const evidence = runCheck !== undefined ? [runCheck.check_name, runCheck.value].filter((part) => part !== null).join(" = ") : requirement.evidence;
-  const run = runCheck?.run ?? requirement.verifiedRun;
   return (
     <View style={[styles.requirement, props.last ? null : styles.line]}>
       <View style={[styles.status, { backgroundColor: withAlpha(color, 0.16) }]}>
@@ -57,22 +87,45 @@ export const RequirementRow = (props: { readonly requirement: Requirement; reado
           {requirement.scope === "print" ? "This print" : "Standing"}
           {requirement.required ? "" : " · not required"}
           {requirement.quote !== null ? ` · “${requirement.quote}”` : ""}
+          {forRun === undefined && requirement.history.length > 0 ? ` · ${requirement.history.length} checks` : ""}
         </Text>
-        {run !== null || (evidence !== null && evidence !== "") ? (
-          <Pressable disabled={run === null} onPress={() => (run === null ? undefined : props.onRun(run))} hitSlop={6}>
-            <Text style={[styles.evidence, { color: run === null ? text.secondaryLabel : palette.accentInk }]}>
-              {run !== null ? `Run ${run}` : ""}
-              {run !== null && evidence !== null && evidence !== "" ? " · " : ""}
-              {evidence ?? ""}
-            </Text>
-          </Pressable>
+        {shown.length > 0 ? (
+          shown.map((check) => <CheckLine key={`${check.ref}-${check.at}`} check={check} onRun={props.onRun} />)
+        ) : requirement.evidence !== null ? (
+          <Text style={[styles.evidence, { color: text.secondaryLabel }]}>
+            {requirement.verifiedRun !== null ? `${requirement.verifiedRun} · ` : ""}
+            {requirement.evidence}
+          </Text>
         ) : (
-          <Text style={[styles.evidence, { color: text.tertiaryLabel }]}>No run shows it yet.</Text>
+          <Text style={[styles.evidence, { color: text.tertiaryLabel }]}>No check yet.</Text>
         )}
       </View>
     </View>
   );
 };
+
+/** Every check of the task's requirements, newest first, up to `MAX_CHECKS`. */
+const CheckHistory = (props: { readonly requirements: ReadonlyArray<Requirement>; readonly onRun: (id: string) => void }): React.ReactElement | null => {
+  const text = useTextColors();
+  const all = props.requirements.flatMap((requirement) => requirement.history).sort((a, b) => b.at.localeCompare(a.at));
+  if (all.length === 0) return null;
+  return (
+    <Card title="Check history" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{all.length} checks</Text>}>
+      {all.slice(0, MAX_CHECKS).map((check, index) => (
+        <View key={`${check.requirement}-${check.ref}-${check.at}-${index}`} style={styles.historyRow}>
+          <Text style={[styles.historyMeta, { color: text.tertiaryLabel }]}>
+            {check.at.replace("T", " ").slice(0, 16)} · {check.requirement}
+          </Text>
+          <CheckLine check={check} onRun={props.onRun} />
+        </View>
+      ))}
+      {all.length > MAX_CHECKS ? <Note text={`${all.length - MAX_CHECKS} older checks are in runs.db.`} /> : null}
+    </Card>
+  );
+};
+
+/** How many checks the history card lists. */
+const MAX_CHECKS = 200;
 
 /** How many files the task page lists; Library has the rest. */
 const MAX_FILES = 12;
@@ -199,7 +252,7 @@ export const TaskScreen = (props: Props): React.ReactElement => {
 
   const list = requirements.value?.requirements ?? [];
   const required = list.filter((requirement) => requirement.required);
-  const met = required.filter((requirement) => requirement.status === "met").length;
+  const met = required.filter((requirement) => requirementStatus(requirement, requirement.latest) === "met").length;
 
   const checklist = (
     <Card title="Next print" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{requirements.value === undefined ? "" : `${met} of ${required.length} met`}</Text>} flush>
@@ -220,6 +273,7 @@ export const TaskScreen = (props: Props): React.ReactElement => {
       )}
     </Card>
   );
+  const checkHistory = <CheckHistory requirements={list} onRun={openRun} />;
 
   const timeline = (
     <>
@@ -308,13 +362,17 @@ export const TaskScreen = (props: Props): React.ReactElement => {
       <View style={{ width: contentWidth, alignSelf: "center" }}>
         {wide ? (
           <View style={styles.columns}>
-            <View style={{ width: columnWidth }}>{checklist}</View>
+            <View style={{ width: columnWidth }}>
+              {checklist}
+              {checkHistory}
+            </View>
             <View style={{ width: columnWidth }}>{timeline}</View>
           </View>
         ) : (
           <>
             {checklist}
             {timeline}
+            {checkHistory}
           </>
         )}
       </View>
@@ -334,6 +392,8 @@ const styles = StyleSheet.create({
   requirementMain: { flex: 1, gap: 3 },
   requirementText: { fontSize: 14.5, lineHeight: 20 },
   requirementMeta: { fontSize: 12 },
+  historyRow: { paddingVertical: 6, gap: 1 },
+  historyMeta: { fontSize: 11, fontVariant: ["tabular-nums"] },
   evidence: { fontSize: 12.5, fontWeight: "600", fontVariant: ["tabular-nums"] },
   historyHead: { height: 6 },
   printTop: { flexDirection: "row", alignItems: "center", gap: 8 },

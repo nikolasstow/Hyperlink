@@ -23,6 +23,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 6,
+    date: "2026-11-20",
+    title: "Requirement checks for each head",
+    commits: ["saturn-uploader 1bd2e33"],
+    lines: [
+      "Each requirement shows its newest check for head A and for head B, with what the check measured.",
+      "A requirement's status follows its checks: failed when a head fails it, met when every head meets it.",
+      "The task page lists every check ever made, newest first.",
+      "A run's page shows the requirements that run met or failed, for each head.",
+    ],
+  },
+  {
     version: 5,
     date: "2026-11-20",
     title: "Projects and tasks",

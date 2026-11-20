@@ -188,16 +188,21 @@ export const HeadNote = Schema.Struct({
 });
 export type HeadNote = typeof HeadNote.Type;
 
-export const RequirementCheck = Schema.Struct({
+/** One check of a requirement on one run and head (tools/requirements.py or rundb.py req). */
+export const CheckResult = Schema.Struct({
   requirement: Schema.String,
-  run: Schema.String,
+  /** The run as stored: "6-33a/A", "cones-run644/A", or "2-4". */
+  ref: Schema.String,
+  runId: Schema.NullOr(Schema.String),
+  folder: Schema.NullOr(Schema.String),
+  head: Schema.NullOr(Schema.Literals(["A", "B"])),
   result: Schema.Literals(["met", "failed"]),
-  check_name: Schema.NullOr(Schema.String),
-  value: Schema.NullOr(Schema.String),
-  note: Schema.NullOr(Schema.String),
+  checkName: Schema.NullOr(Schema.String),
+  evidence: Schema.NullOr(Schema.String),
+  text: Schema.NullOr(Schema.String),
   at: Schema.String,
 });
-export type RequirementCheck = typeof RequirementCheck.Type;
+export type CheckResult = typeof CheckResult.Type;
 
 /** A requirement for the next print, with its status, evidence, and each run's result. */
 export const Requirement = Schema.Struct({
@@ -212,7 +217,12 @@ export const Requirement = Schema.Struct({
   evidence: Schema.NullOr(Schema.String),
   updated: Schema.NullOr(Schema.String),
   task: Schema.NullOr(Schema.String),
-  checks: Schema.Array(RequirementCheck),
+  /** The latest result for each run and head, newest first. */
+  checks: Schema.Array(CheckResult),
+  /** The newest result per head: the requirement's status now. */
+  latest: Schema.Array(CheckResult),
+  /** Every check ever made, newest first. */
+  history: Schema.Array(CheckResult),
 });
 
 /** One part being printed, such as the Beast's head. */

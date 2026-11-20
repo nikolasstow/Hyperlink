@@ -154,7 +154,7 @@ const RunBody = (props: {
   const { run, relayBase, wide, columnWidth, tile, openRun } = props;
   const setViewing = props.onRender;
   // The requirements this run meets or fails: a result for it, or its verification.
-  const forRun = (props.requirements.value?.requirements ?? []).filter((requirement) => requirement.verifiedRun === run.id || requirement.checks.some((check) => check.run === run.id));
+  const forRun = (props.requirements.value?.requirements ?? []).filter((requirement) => requirement.verifiedRun === run.id || requirement.checks.some((check) => check.runId === run.id || check.folder === run.folder));
         const summary = (
           <Card>
             <View style={styles.hero}>
@@ -226,7 +226,7 @@ const RunBody = (props: {
                 <Note text="No requirement names this run yet." />
               </View>
             ) : (
-              forRun.map((requirement, index) => <RequirementRow key={requirement.id} requirement={requirement} last={index === forRun.length - 1} onRun={openRun} forRun={run.id} />)
+              forRun.map((requirement, index) => <RequirementRow key={requirement.id} requirement={requirement} last={index === forRun.length - 1} onRun={openRun} forRun={{ id: run.id, folder: run.folder }} />)
             )}
           </Card>
         );
