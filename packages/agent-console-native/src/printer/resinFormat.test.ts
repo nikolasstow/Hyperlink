@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PrintRecord } from "./resinApi";
-import { abDiff, activeLine, headTimeline, startedMs, timeKey, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
+import { abDiff, globMatches, inTask, activeLine, headTimeline, startedMs, timeKey, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
 
 const record = (fields: Partial<PrintRecord>): PrintRecord => ({
   id: "P8",
@@ -114,5 +114,15 @@ describe("the head's timeline", () => {
     expect(timeKey("2026-11-17 19:34 (restart 20:03)")).toBe("2026-11-17 19:34");
     expect(startedMs("2026-11-18 15:17")).toBe(new Date(2026, 10, 18, 15, 17).getTime());
     expect(startedMs("Unknown")).toBeUndefined();
+  });
+});
+
+describe("task patterns", () => {
+  it("match library paths as globs", () => {
+    expect(globMatches("Library/Beast/Heads/*", "Library/Beast/Heads/goo/Head — 2026-11-01 00.47 (18).goo")).toBe(true);
+    expect(globMatches("Drop/Head *", "Drop/Head 171 A + 168 B.goo")).toBe(true);
+    expect(globMatches("Drop/Head *", "Drop/Gambit Base 1 + 2.ctp")).toBe(false);
+    expect(globMatches("Library/goo/Bodies/*", "Library/goo/Bases/x.goo")).toBe(false);
+    expect(inTask({ patterns: ["Library/Beast/Bases/*"] }, "Library/Beast/Bases/goo/b.goo")).toBe(true);
   });
 });

@@ -20,7 +20,7 @@ import { SystemIcon } from "../SystemIcon";
 import { useTextColors, useScreenBackground } from "../theme";
 import { GroupedList, type Group } from "./GroupedList";
 import { activeRoute, LIVE_REFRESH_MS, renderUrl, requirementsRoute, runRoute, runsRoute, useCatalog, type ActiveRun, type Loaded, type RequirementsReply, type RunDetail, type RunSummary } from "./resinApi";
-import { RequirementRow } from "./HeadScreen";
+import { RequirementRow } from "./TaskScreen";
 import { deltaOf, flagLabel, fmtMetric, fmtShortDate, metricLabel, renderLabel } from "./resinFormat";
 import { ActiveRow, OutcomeChip, RenderTile, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
 import { relayBaseOf } from "./sdcp";

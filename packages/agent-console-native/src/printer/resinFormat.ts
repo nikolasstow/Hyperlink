@@ -193,3 +193,12 @@ export const headTimeline = <P extends { readonly id: string; readonly started: 
   ];
   return [...events].sort((a, b) => a.at.localeCompare(b.at) || a.order - b.order).map((entry) => entry.event);
 };
+
+/** A glob as runs.db's task patterns write it (`*` any text, `?` one character) as a whole-path test. */
+export const globMatches = (pattern: string, path: string): boolean => {
+  const source = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*").replaceAll("?", ".");
+  return new RegExp(`^${source}$`).test(path);
+};
+
+/** Whether a library file belongs to a task, by the task's patterns. */
+export const inTask = (task: { readonly patterns: ReadonlyArray<string> }, path: string): boolean => task.patterns.some((pattern) => globMatches(pattern, path));

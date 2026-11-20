@@ -1,11 +1,13 @@
 /**
- * The Beast head's history, from the relay's Resin catalog: at the top, the
- * requirements for the next print with their status and evidence; then the
- * timeline of prints P1 to P8 with their outcomes and the owner's notes in
- * place, and the runs since the last print.
+ * One task of a project (one part being printed, such as the Beast's head),
+ * from the relay's Resin catalog: at the top, the requirements for the next
+ * print with their status and evidence; then the timeline of the task's
+ * prints with their outcomes and the notes in place, the runs since the last
+ * print, and the task's library files.
  *
- * The requirements and notes live in runs.db (`rundb.py req` and `rundb.py
- * note`). A wide screen puts the requirements beside the timeline.
+ * Projects, tasks, requirements, and notes live in runs.db (`rundb.py
+ * project`, `task`, `req`, and `note`). A wide screen puts the requirements
+ * beside the timeline.
  *
  * @internal
  */
@@ -15,13 +17,13 @@ import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } fr
 import { markTap, useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
 import { useScreenBackground, useTextColors, withAlpha } from "../theme";
-import { historyRoute, notesRoute, requirementsRoute, runsRoute, useCatalog, type HeadNote, type PrintRecord, type Requirement } from "./resinApi";
-import { describeFile, headTimeline, startedMs } from "./resinFormat";
+import { historyRoute, libraryRoute, notesRoute, projectsRoute, requirementsRoute, runsRoute, useCatalog, type HeadNote, type LibraryFile, type PrintRecord, type Requirement } from "./resinApi";
+import { describeFile, fmtShortDate, headTimeline, inTask, startedMs } from "./resinFormat";
 import { OutcomeChip, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
 import { Card, CatalogProblem, Note, usePalette, type Palette } from "./ui";
 
-type Props = NativeStackScreenProps<RootStackParamList, "ServerResinHead">;
+type Props = NativeStackScreenProps<RootStackParamList, "ServerResinTask">;
 
 /** How many runs since the last print the page lists. */
 const LATEST_RUNS = 5;
@@ -68,6 +70,29 @@ export const RequirementRow = (props: { readonly requirement: Requirement; reado
           <Text style={[styles.evidence, { color: text.tertiaryLabel }]}>No run shows it yet.</Text>
         )}
       </View>
+    </View>
+  );
+};
+
+/** How many files the task page lists; Library has the rest. */
+const MAX_FILES = 12;
+
+/** A library file of the task: what it is, its print, and its date. The file name goes small. */
+const FileLine = (props: { readonly file: LibraryFile; readonly last: boolean }): React.ReactElement => {
+  const text = useTextColors();
+  const identity = describeFile(props.file.name, props.file.print);
+  return (
+    <View style={[styles.file, props.last ? null : styles.line]}>
+      <View style={styles.fileTop}>
+        <Text style={[styles.fileTitle, { color: text.label }]} numberOfLines={1}>
+          {identity.title}
+        </Text>
+        {props.file.print !== null ? <OutcomeChip outcome={props.file.print.outcome} /> : <Text style={[styles.fileDate, { color: text.tertiaryLabel }]}>{fmtShortDate(props.file.modified)}</Text>}
+      </View>
+      {identity.detail !== undefined ? <Text style={[styles.fileDetail, { color: text.secondaryLabel }]}>{identity.detail}</Text> : null}
+      <Text style={[styles.fileName, { color: text.tertiaryLabel }]} numberOfLines={1}>
+        {props.file.path}
+      </Text>
     </View>
   );
 };
@@ -133,17 +158,29 @@ const PrintEvent = (props: { readonly print: PrintRecord; readonly notes: Readon
   );
 };
 
-export const HeadScreen = (props: Props): React.ReactElement => {
-  useOpenTiming("ServerResinHead");
+export const TaskScreen = (props: Props): React.ReactElement => {
+  useOpenTiming("ServerResinTask");
   const background = useScreenBackground("grouped");
   const text = useTextColors();
   const { width } = useWindowDimensions();
-  const { serverName, serverAddress } = props.route.params;
+  const { serverName, serverAddress, taskId } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
-  const requirements = useCatalog(relayBase, requirementsRoute);
-  const notes = useCatalog(relayBase, notesRoute);
+  const projects = useCatalog(relayBase, projectsRoute);
+  const allRequirements = useCatalog(relayBase, requirementsRoute);
+  const allNotes = useCatalog(relayBase, notesRoute);
   const history = useCatalog(relayBase, historyRoute);
-  const runs = useCatalog(relayBase, runsRoute);
+  const allRuns = useCatalog(relayBase, runsRoute);
+  const library = useCatalog(relayBase, libraryRoute);
+  const task = React.useMemo(() => projects.value?.projects.flatMap((project) => project.tasks).find((each) => each.id === taskId), [projects.value, taskId]);
+  // Only this task's prints, runs, notes, requirements, and files.
+  const prints = React.useMemo(() => (history.value?.prints ?? []).filter((print) => task?.prints.includes(print.id) === true), [history.value, task]);
+  const runIds = React.useMemo(() => new Set(task?.runs ?? []), [task]);
+  const runsOfTask = React.useMemo(() => (allRuns.value?.runs ?? []).filter((run) => runIds.has(run.id)), [allRuns.value, runIds]);
+  const notesOfTask = React.useMemo(() => (allNotes.value?.notes ?? []).filter((note) => note.task === taskId), [allNotes.value, taskId]);
+  const files = React.useMemo(() => (task === undefined ? [] : (library.value?.files ?? []).filter((file) => inTask(task, file.path))), [library.value, task]);
+  const requirements = { ...allRequirements, value: allRequirements.value === undefined ? undefined : { requirements: allRequirements.value.requirements.filter((requirement) => requirement.task === taskId) } };
+  const notes = { ...allNotes, value: allNotes.value === undefined ? undefined : { notes: notesOfTask } };
+  const runs = { ...allRuns, value: allRuns.value === undefined ? undefined : { runs: runsOfTask } };
   const openRun = (id: string): void => {
     markTap(`run ${id}`);
     props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId: id });
@@ -152,13 +189,13 @@ export const HeadScreen = (props: Props): React.ReactElement => {
   const contentWidth = Math.min(width - 32, 1100);
   const columnWidth = wide ? Math.floor((contentWidth - 14) / 2) : contentWidth;
 
-  const events = React.useMemo(() => headTimeline(history.value?.prints ?? [], notes.value?.notes ?? []), [history.value, notes.value]);
+  const events = React.useMemo(() => headTimeline(prints, notesOfTask), [prints, notesOfTask]);
   // The runs since the last print started: what the next print is being made from.
   const lastPrint = React.useMemo(() => {
-    const started = (history.value?.prints ?? []).map((print) => ({ print, at: startedMs(print.started) ?? 0 }));
+    const started = prints.map((print) => ({ print, at: startedMs(print.started) ?? 0 }));
     return started.reduce<{ readonly print: PrintRecord; readonly at: number } | undefined>((best, each) => (best === undefined || each.at > best.at ? each : best), undefined);
-  }, [history.value]);
-  const since = React.useMemo(() => (lastPrint === undefined ? [] : (runs.value?.runs ?? []).filter((run) => run.created !== null && run.created > lastPrint.at)), [runs.value, lastPrint]);
+  }, [prints]);
+  const since = React.useMemo(() => (lastPrint === undefined ? runsOfTask : runsOfTask.filter((run) => run.created !== null && run.created > lastPrint.at)), [runsOfTask, lastPrint]);
 
   const list = requirements.value?.requirements ?? [];
   const required = list.filter((requirement) => requirement.required);
@@ -207,8 +244,17 @@ export const HeadScreen = (props: Props): React.ReactElement => {
           </View>
         ),
       )}
-      {lastPrint !== undefined ? (
-        <Card title={`Runs since ${lastPrint.print.id}`} right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{runs.value === undefined ? "…" : `${since.length} runs`}</Text>} flush>
+      {projects.error !== undefined ? (
+        <Card title="Task">
+          <CatalogProblem error={projects.error} unreachable={projects.unreachable} />
+        </Card>
+      ) : projects.value !== undefined && task === undefined ? (
+        <Card title="Task">
+          <Note text={`The catalog has no task ${taskId}.`} tone="bad" />
+        </Card>
+      ) : null}
+      {runsOfTask.length > 0 ? (
+        <Card title={lastPrint === undefined ? "Runs" : `Runs since ${lastPrint.print.id}`} right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{runs.value === undefined ? "…" : `${since.length} runs`}</Text>} flush>
           {runs.error !== undefined ? (
             <View style={styles.pad}>
               <CatalogProblem error={runs.error} unreachable={runs.unreachable} />
@@ -228,6 +274,30 @@ export const HeadScreen = (props: Props): React.ReactElement => {
               ))}
             </View>
           )}
+        </Card>
+      ) : null}
+      {task !== undefined && task.patterns.length > 0 ? (
+        <Card title="Files" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{library.value === undefined ? "…" : `${files.length}`}</Text>} flush>
+          {library.error !== undefined ? (
+            <View style={styles.pad}>
+              <CatalogProblem error={library.error} unreachable={library.unreachable} />
+            </View>
+          ) : library.value === undefined ? (
+            <View style={styles.pad}>
+              <Note text="Reading the library…" />
+            </View>
+          ) : files.length === 0 ? (
+            <View style={styles.pad}>
+              <Note text="No library file matches this task." />
+            </View>
+          ) : (
+            files.slice(0, MAX_FILES).map((file, index, shown) => <FileLine key={file.path} file={file} last={index === shown.length - 1} />)
+          )}
+          {files.length > MAX_FILES ? (
+            <View style={styles.pad}>
+              <Note text={`${files.length - MAX_FILES} more in Library.`} />
+            </View>
+          ) : null}
         </Card>
       ) : null}
     </>
@@ -278,4 +348,10 @@ const styles = StyleSheet.create({
   noteMeta: { fontSize: 11.5 },
   noteText: { fontSize: 13.5, lineHeight: 19 },
   looseNote: { paddingHorizontal: 4, marginBottom: 14 },
+  file: { paddingHorizontal: 16, paddingVertical: 10, gap: 2 },
+  fileTop: { flexDirection: "row", alignItems: "center", gap: 8 },
+  fileTitle: { flex: 1, fontSize: 15, fontWeight: "600" },
+  fileDate: { fontSize: 12, fontVariant: ["tabular-nums"] },
+  fileDetail: { fontSize: 12.5 },
+  fileName: { fontSize: 10.5 },
 });

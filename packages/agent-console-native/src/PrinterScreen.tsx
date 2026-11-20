@@ -34,8 +34,8 @@ import { usePublishPrinterLink } from "./printer/printerPageLink";
 import { useLoadedUri } from "./printer/PrinterStage";
 import { usePrintHeader } from "./printer/printHeader";
 import { linkChip, statusOf } from "./printer/printStatus";
-import { activeRoute, historyRoute, libraryRoute, LIVE_REFRESH_MS, originRoute, runsRoute, useCatalog } from "./printer/resinApi";
-import { activeLine, describeFile } from "./printer/resinFormat";
+import { activeRoute, historyRoute, libraryRoute, LIVE_REFRESH_MS, originRoute, projectsRoute, requirementsRoute, runsRoute, useCatalog } from "./printer/resinApi";
+import { activeLine, describeFile, fmtShortDate, OUTCOME_LABEL, outcomeKindOf } from "./printer/resinFormat";
 import { isPrinting, layerIndexOf, PHASE_EXPOSING, PHASE_PAUSED } from "./printer/sdcp";
 import { CatalogProblem, Card, Chip, Dot, LCD, ListRow, toneColor, usePalette } from "./printer/ui";
 import { usePrinterLink, type PrinterLink } from "./printer/usePrinterLink";
@@ -54,6 +54,8 @@ const THUMB_HEIGHT = 74;
 const countOf = <A,>(loaded: { readonly value: A | undefined; readonly error: string | undefined }, count: (value: A) => number): string =>
   loaded.value !== undefined ? count(loaded.value).toLocaleString() : loaded.error !== undefined ? "!" : "…";
 
+const STATUS_WORD: Readonly<Record<"active" | "paused" | "done", string>> = { active: "Active", paused: "Paused", done: "Done" };
+
 /** The row tints, as in iOS Settings. */
 const TINT = {
   health: "#FF2D55",
@@ -65,6 +67,7 @@ const TINT = {
   library: "#FF9500",
   history: "#34C759",
   head: "#FF375F",
+  task: "#8E8E93",
   jobs: "#5856D6",
 } as const;
 
@@ -105,6 +108,29 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const history = useCatalog(printer.relayBase, historyRoute);
   const active = useCatalog(printer.relayBase, activeRoute, LIVE_REFRESH_MS);
   const runningNow = active.value?.runs.filter((run) => run.running) ?? [];
+  const projects = useCatalog(printer.relayBase, projectsRoute);
+  const requirements = useCatalog(printer.relayBase, requirementsRoute);
+  const tasks = projects.value?.projects.flatMap((project) => project.tasks.map((task) => ({ project, task }))) ?? [];
+  const current = tasks.find((entry) => entry.task.current);
+  // The current task in a line: its requirements met, then its run in progress or its newest print.
+  const currentLine = ((): string => {
+    if (current === undefined) return projects.error !== undefined ? (projects.unreachable ? "MacBook unreachable" : "The catalog did not answer") : projects.value === undefined ? "…" : "No current task";
+    const list = (requirements.value?.requirements ?? []).filter((requirement) => requirement.task === current.task.id && requirement.required);
+    const met = list.filter((requirement) => requirement.status === "met").length;
+    const running = runningNow.find((run) => run.id === null || current.task.runs.includes(run.id));
+    const lastPrint = history.value?.prints.find((print) => current.task.prints.includes(print.id));
+    const latest = running !== undefined ? activeLine(running, Date.now()) : lastPrint !== undefined ? `${lastPrint.id} · ${OUTCOME_LABEL[outcomeKindOf(lastPrint.outcome)]}` : undefined;
+    return [requirements.value === undefined ? undefined : `${met} of ${list.length} met`, latest].filter((part) => part !== undefined).join(" · ");
+  })();
+  // The other tasks, newest activity first, by project.
+  const recent = (projects.value?.projects ?? []).map((project) => ({
+    project,
+    tasks: [...project.tasks].filter((task) => !task.current).sort((a, b) => (b.lastActivity ?? 0) - (a.lastActivity ?? 0)),
+  }));
+  const openTask = (taskId: string, title: string): void => {
+    markTap(`task ${taskId}`);
+    navigation.navigate("ServerResinTask", { serverName, serverAddress, taskId, title });
+  };
   useCatalog(printer.relayBase, hasJob && info?.Filename !== undefined ? originRoute(info.Filename) : undefined);
 
   const health = healthItems(printer.attributes?.DevicesStatus);
@@ -117,7 +143,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
     });
   }, [navigation, name]);
 
-  const open = (route: "ServerPrinterHealth" | "ServerPrinterFiles" | "ServerPrinterCamera" | "ServerPrinterNetwork" | "ServerPrinterSettings" | "ServerResinRuns" | "ServerResinLibrary" | "ServerResinHistory" | "ServerResinHead" | "ServerSupportJobs" | "ServerPrint"): void => {
+  const open = (route: "ServerPrinterHealth" | "ServerPrinterFiles" | "ServerPrinterCamera" | "ServerPrinterNetwork" | "ServerPrinterSettings" | "ServerResinRuns" | "ServerResinLibrary" | "ServerResinHistory" | "ServerSupportJobs" | "ServerPrint"): void => {
       // Opens at once: the page reads what this page has loaded, and loads the rest itself.
       markTap(route);
       navigation.navigate(route, { serverName, serverAddress });
@@ -145,6 +171,24 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
     </Card>
   );
 
+  const taskCards = recent.map(({ project, tasks: list }) =>
+    list.length === 0 ? null : (
+      <Card key={project.id} title={`${project.name} · recent tasks`} flush>
+        {list.map((task, index) => (
+          <ListRow
+            key={task.id}
+            icon="square.stack.3d.up"
+            tint={TINT.task}
+            title={task.name}
+            detail={[STATUS_WORD[task.status], task.prints.length > 0 ? `${task.prints.length} prints` : undefined, task.runs.length > 0 ? `${task.runs.length} runs` : undefined, task.lastActivity !== null ? fmtShortDate(task.lastActivity) : undefined].filter((part) => part !== undefined).join(" · ")}
+            last={index === list.length - 1}
+            onPress={() => openTask(task.id, `${project.name} · ${task.name}`)}
+          />
+        ))}
+      </Card>
+    ),
+  );
+
   const resinCard = (
     <Card title="Resin" flush>
       <ListRow
@@ -160,7 +204,14 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
         }
         live={runningNow.length > 0} value={countOf(runs, (runsValue) => runsValue.runs.length)} onPress={() => open("ServerResinRuns")} />
       <ListRow icon="books.vertical.fill" tint={TINT.library} title="Library" detail="Print files by what they are" value={countOf(library, (libraryValue) => libraryValue.files.length)} onPress={() => open("ServerResinLibrary")} />
-      <ListRow icon="person.crop.square.fill" tint={TINT.head} title="Beast head" detail="Requirements for the next print, and the history" onPress={() => open("ServerResinHead")} />
+      <ListRow
+        icon="target"
+        tint={TINT.head}
+        title={current === undefined ? "Current task" : `${current.project.name} · ${current.task.name}`}
+        detail={currentLine}
+        live={runningNow.length > 0}
+        onPress={() => (current === undefined ? undefined : openTask(current.task.id, `${current.project.name} · ${current.task.name}`))}
+      />
       <ListRow icon="clock.arrow.circlepath" tint={TINT.history} title="Print history" detail="Every print, its outcome, and notes" value={countOf(history, (historyValue) => historyValue.prints.length)} onPress={() => open("ServerResinHistory")} />
       <ListRow icon="cpu" tint={TINT.jobs} title="Engine & jobs" detail="Support jobs on the relay" last onPress={() => open("ServerSupportJobs")} />
       {catalogDown?.error !== undefined ? (
@@ -181,12 +232,16 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
             {wide ? (
               <View style={styles.columns}>
                 <View style={styles.column}>{printerCard}</View>
-                <View style={styles.column}>{resinCard}</View>
+                <View style={styles.column}>
+                  {resinCard}
+                  {taskCards}
+                </View>
               </View>
             ) : (
               <>
                 {printerCard}
                 {resinCard}
+                {taskCards}
               </>
             )}
             {printer.notice !== undefined ? <Text style={[styles.foot, { color: text.tertiaryLabel }]}>{printer.notice}</Text> : null}

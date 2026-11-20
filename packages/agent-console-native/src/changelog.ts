@@ -23,6 +23,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 5,
+    date: "2026-11-20",
+    title: "Projects and tasks",
+    commits: ["saturn-uploader f2b7880", "rundb.py project and task"],
+    lines: [
+      "Prints are now organized as projects and tasks. Beast is a project, and the Head is its current task.",
+      "The Resin card shows the current task, how many of its requirements are met, and its run in progress or last print.",
+      "Below it you see Beast's other tasks: Torso, Legs and feet, Arms and hands, and Bases.",
+      "A task's page shows its requirements, prints, notes, runs, and library files.",
+    ],
+  },
+  {
     version: 4,
     date: "2026-11-20",
     title: "The Beast head's history",

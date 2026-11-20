@@ -62,7 +62,7 @@ import { CameraRecordingsScreen } from "./CameraRecordingsScreen";
 import { ChangelogScreen, ChangelogSheet } from "./ChangelogScreen";
 import { CamerasScreen } from "./CamerasScreen";
 import { GooViewerScreen } from "./printer/GooViewerScreen";
-import { HeadScreen } from "./printer/HeadScreen";
+import { TaskScreen } from "./printer/TaskScreen";
 import { HistoryScreen } from "./printer/HistoryScreen";
 import { LibraryScreen } from "./printer/LibraryScreen";
 import { PrinterCameraScreen } from "./printer/PrinterCameraScreen";
@@ -156,7 +156,8 @@ export type RootStackParamList = {
   ServerResinRun: { serverName: string; serverAddress: string; runId: string };
   ServerResinLibrary: { serverName: string; serverAddress: string };
   ServerResinHistory: { serverName: string; serverAddress: string };
-  ServerResinHead: { serverName: string; serverAddress: string };
+  // One task of a project, such as the Beast's head (printer/TaskScreen.tsx); `title` is its name for the bar.
+  ServerResinTask: { serverName: string; serverAddress: string; taskId: string; title: string };
   ServerPrinterFiles: { serverName: string; serverAddress: string };
   ServerPrinterHealth: { serverName: string; serverAddress: string };
   ServerPrinterNetwork: { serverName: string; serverAddress: string };
@@ -450,7 +451,7 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="ServerResinRun" component={RunScreen} options={({ route }) => ({ ...largeTitleHeader, title: `Run ${route.params.runId}` })} />
         <Stack.Screen name="ServerResinLibrary" component={LibraryScreen} options={{ ...largeTitleHeader, title: "Library" }} />
         <Stack.Screen name="ServerResinHistory" component={HistoryScreen} options={{ ...largeTitleHeader, title: "Print History" }} />
-        <Stack.Screen name="ServerResinHead" component={HeadScreen} options={{ ...largeTitleHeader, title: "Beast Head" }} />
+        <Stack.Screen name="ServerResinTask" component={TaskScreen} options={({ route }) => ({ ...largeTitleHeader, title: route.params.title })} />
         <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Local Files" /> }} />
         <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Details & Health" /> }} />
         <Stack.Screen name="ServerPrinterNetwork" component={PrinterNetworkScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Network" /> }} />

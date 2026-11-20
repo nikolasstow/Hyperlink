@@ -184,6 +184,7 @@ export const HeadNote = Schema.Struct({
   run: Schema.NullOr(Schema.String),
   text: Schema.String,
   source: Schema.NullOr(Schema.String),
+  task: Schema.NullOr(Schema.String),
 });
 export type HeadNote = typeof HeadNote.Type;
 
@@ -210,8 +211,28 @@ export const Requirement = Schema.Struct({
   verifiedRun: Schema.NullOr(Schema.String),
   evidence: Schema.NullOr(Schema.String),
   updated: Schema.NullOr(Schema.String),
+  task: Schema.NullOr(Schema.String),
   checks: Schema.Array(RequirementCheck),
 });
+
+/** One part being printed, such as the Beast's head. */
+export const Task = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  status: Schema.Literals(["active", "paused", "done"]),
+  current: Schema.Boolean,
+  /** Globs on library paths, such as `Library/Beast/Heads/*`. */
+  patterns: Schema.Array(Schema.String),
+  runs: Schema.Array(Schema.String),
+  prints: Schema.Array(Schema.String),
+  lastActivity: Schema.NullOr(Schema.Number),
+});
+export type Task = typeof Task.Type;
+
+export const Project = Schema.Struct({ id: Schema.String, name: Schema.String, tasks: Schema.Array(Task) });
+export type Project = typeof Project.Type;
+export const ProjectsReply = Schema.Struct({ projects: Schema.Array(Project) });
+export type ProjectsReply = typeof ProjectsReply.Type;
 export type Requirement = typeof Requirement.Type;
 
 export const NotesReply = Schema.Struct({ notes: Schema.Array(HeadNote) });
@@ -240,6 +261,7 @@ export interface CatalogRoute<A> {
 export const runsRoute: CatalogRoute<RunsReply> = { path: "/api/resin/runs", schema: RunsReply };
 export const libraryRoute: CatalogRoute<LibraryReply> = { path: "/api/resin/library", schema: LibraryReply };
 export const historyRoute: CatalogRoute<HistoryReply> = { path: "/api/resin/history", schema: HistoryReply };
+export const projectsRoute: CatalogRoute<ProjectsReply> = { path: "/api/resin/projects", schema: ProjectsReply };
 export const notesRoute: CatalogRoute<NotesReply> = { path: "/api/resin/notes", schema: NotesReply };
 export const requirementsRoute: CatalogRoute<RequirementsReply> = { path: "/api/resin/requirements", schema: RequirementsReply };
 export const activeRoute: CatalogRoute<ActiveReply> = { path: "/api/resin/active", schema: ActiveReply };
