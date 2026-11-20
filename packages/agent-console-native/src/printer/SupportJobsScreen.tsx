@@ -22,12 +22,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import type { RootStackParamList } from "../RootNavigator";
 import { SystemIcon } from "../SystemIcon";
-import { useTextColors } from "../theme";
+import { useScreenBackground, useTextColors } from "../theme";
+import { markTap, useOpenTiming } from "../perfMonitor";
+import { useIsFocused } from "@react-navigation/native";
 import { Backdrop } from "./Backdrop";
 import { approvalPageUrl, burnSupportJob, fetchSupportJob, fetchSupportJobs, type SupportJob, supportJobBusy } from "./relayApi";
 import { useRelayToken } from "./relayToken";
 import { relayBaseOf } from "./sdcp";
-import { Card, Chip, type Tone, usePalette } from "./ui";
+import { CatalogProblem, Card, Chip, Note, type Tone, usePalette } from "./ui";
+import { activeRoute, LIVE_REFRESH_MS, useCatalog } from "./resinApi";
+import { ActiveRow } from "./RunParts";
 
 /** The base name of a library path, for the job's title. */
 const baseName = (path: string): string => path.split("/").pop() ?? path;
@@ -55,17 +59,25 @@ const stageOf = (job: SupportJob): { readonly label: string; readonly tone: Tone
   }
 };
 
-/** Polls the relay for every job while the screen is open. */
-const useSupportJobs = (relayBase: string): ReadonlyArray<SupportJob> | undefined => {
+/** Polls the relay for every job while the screen is on screen. A failed read gives its reason. */
+const useSupportJobs = (relayBase: string): { readonly jobs: ReadonlyArray<SupportJob> | undefined; readonly error: string | undefined } => {
+  const focused = useIsFocused();
   const [jobs, setJobs] = React.useState<ReadonlyArray<SupportJob> | undefined>(undefined);
+  const [error, setError] = React.useState<string | undefined>(undefined);
   React.useEffect(() => {
+    if (!focused) return;
     let alive = true;
     const tick = (): void => {
       fetchSupportJobs(relayBase)
         .then((next) => {
-          if (alive) setJobs(next);
+          if (!alive) return;
+          setJobs(next);
+          setError(undefined);
         })
-        .catch((cause: unknown) => console.error("[support] reading the jobs failed", cause));
+        .catch((cause: unknown) => {
+          console.error("[support] reading the jobs failed", cause);
+          if (alive) setError(cause instanceof Error ? cause.message : String(cause));
+        });
     };
     tick();
     const id = setInterval(tick, 3000);
@@ -73,8 +85,8 @@ const useSupportJobs = (relayBase: string): ReadonlyArray<SupportJob> | undefine
       alive = false;
       clearInterval(id);
     };
-  }, [relayBase]);
-  return jobs;
+  }, [relayBase, focused]);
+  return { jobs, error };
 };
 
 /** Polls one job while the screen is open; faster while the relay still works on it. */
@@ -101,41 +113,96 @@ const useSupportJob = (relayBase: string, jobId: string): SupportJob | undefined
 
 type ListProps = NativeStackScreenProps<RootStackParamList, "ServerSupportJobs">;
 
+/** How many ended engine runs the page keeps under the running ones. */
+const RECENT_RUNS = 5;
+
+/**
+ * Engine & Jobs: the planner runs in progress on the MacBook (stage, time
+ * left, results), the runs that ended last, and the relay's support jobs.
+ */
 export const SupportJobsScreen = (props: ListProps): React.ReactElement => {
+  useOpenTiming("ServerSupportJobs");
   const { serverAddress, serverName } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
+  const background = useScreenBackground("grouped");
   const text = useTextColors();
-  const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
-  const jobs = useSupportJobs(relayBase);
+  const { jobs, error } = useSupportJobs(relayBase);
+  const active = useCatalog(relayBase, activeRoute, LIVE_REFRESH_MS);
+  const [now, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const running = active.value?.runs.filter((run) => run.running) ?? [];
+  const ended = active.value?.runs.filter((run) => !run.running).slice(0, RECENT_RUNS) ?? [];
+  const openRun = (id: string | null): (() => void) | undefined =>
+    id === null
+      ? undefined
+      : () => {
+          markTap(`run ${id}`);
+          props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId: id });
+        };
   return (
-    <View style={styles.root}>
-      <Backdrop uri={undefined} glow={0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
-        <View style={styles.narrow}>
-          {jobs === undefined
-            ? <Text style={[styles.foot, { color: text.tertiaryLabel }]}>Loading the jobs…</Text>
-            : jobs.length === 0
-            ? <Text style={[styles.foot, { color: text.tertiaryLabel }]}>No support jobs yet. Start one from the Mac.</Text>
-            : jobs.map((job) => {
+    <ScrollView style={[styles.root, { backgroundColor: background }]} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
+      <View style={styles.narrow}>
+        <Card title="Running now" flush right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{active.value === undefined ? "" : `${running.length} running`}</Text>}>
+          {active.error !== undefined ? (
+            <View style={styles.pad}>
+              <CatalogProblem error={active.error} unreachable={active.unreachable} />
+            </View>
+          ) : active.value === undefined ? (
+            <View style={styles.pad}>
+              <Note text="Asking the MacBook what runs…" />
+            </View>
+          ) : running.length === 0 ? (
+            <View style={styles.pad}>
+              <Note text="No engine run in progress." />
+            </View>
+          ) : (
+            running.map((run, index) => <ActiveRow key={run.number} run={run} now={now} last={index === running.length - 1} onPress={openRun(run.id)} />)
+          )}
+        </Card>
+        {ended.length > 0 ? (
+          <Card title="Ended last" flush>
+            {ended.map((run, index) => (
+              <ActiveRow key={run.number} run={run} now={now} last={index === ended.length - 1} onPress={openRun(run.id)} />
+            ))}
+          </Card>
+        ) : null}
+        <Card title="Support jobs" flush>
+          {error !== undefined ? (
+            <View style={styles.pad}>
+              <Note text={`The relay did not give the jobs: ${error}`} tone="bad" />
+            </View>
+          ) : jobs === undefined ? (
+            <View style={styles.pad}>
+              <Note text="Reading the jobs…" />
+            </View>
+          ) : jobs.length === 0 ? (
+            <View style={styles.pad}>
+              <Note text="No support jobs yet. Start one from the Mac." />
+            </View>
+          ) : (
+            jobs.map((job, index) => {
               const stage = stageOf(job);
               return (
-                <Pressable key={job.id} onPress={() => props.navigation.navigate("ServerSupportJob", { serverName, serverAddress, jobId: job.id })}>
-                  <Card title={undefined}>
-                    <View style={styles.jobRow}>
-                      <View style={styles.jobText}>
-                        <Text style={[styles.jobTitle, { color: text.label }]} numberOfLines={1}>{baseName(job.gooPath)}</Text>
-                        <Text style={[styles.jobNote, { color: text.tertiaryLabel }]} numberOfLines={1}>{stage.label}</Text>
-                      </View>
-                      <Chip tone={stage.tone} label={job.stage} />
-                    </View>
-                  </Card>
+                <Pressable key={job.id} onPress={() => props.navigation.navigate("ServerSupportJob", { serverName, serverAddress, jobId: job.id })} style={({ pressed }) => [styles.jobRow, index === jobs.length - 1 ? null : styles.line, pressed && styles.pressed]}>
+                  <View style={styles.jobText}>
+                    <Text style={[styles.jobTitle, { color: text.label }]} numberOfLines={1}>
+                      {baseName(job.gooPath)}
+                    </Text>
+                    <Text style={[styles.jobNote, { color: text.tertiaryLabel }]} numberOfLines={1}>
+                      {stage.label}
+                    </Text>
+                  </View>
+                  <Chip tone={stage.tone} label={job.stage} />
                 </Pressable>
               );
-            })}
-        </View>
-      </ScrollView>
-    </View>
+            })
+          )}
+        </Card>
+      </View>
+    </ScrollView>
   );
 };
 
@@ -211,9 +278,13 @@ export const SupportJobScreen = (props: JobProps): React.ReactElement => {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  narrow: { width: "100%", maxWidth: 700, alignSelf: "center", gap: 12 },
+  narrow: { width: "100%", maxWidth: 700, alignSelf: "center" },
+  count: { fontSize: 12 },
+  pad: { paddingHorizontal: 16, paddingVertical: 12 },
+  line: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(127,127,127,0.3)" },
+  pressed: { backgroundColor: "rgba(127,127,127,0.12)" },
   foot: { fontSize: 13, textAlign: "center", marginTop: 40 },
-  jobRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  jobRow: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 64, paddingHorizontal: 16 },
   jobText: { flex: 1, gap: 2 },
   jobTitle: { fontSize: 16, fontWeight: "600" },
   jobNote: { fontSize: 13 },

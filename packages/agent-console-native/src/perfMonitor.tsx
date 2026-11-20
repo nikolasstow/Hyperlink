@@ -6,6 +6,7 @@
  * @internal
  */
 import * as React from "react";
+import { AppState } from "react-native";
 import { runOnJS, useFrameCallback } from "react-native-reanimated";
 
 let screen = "?";
@@ -44,15 +45,24 @@ const logFrames = (count: number, worst: number): void => console.log("[perf] ui
 
 export const PerfMonitor = (): null => {
   // JS thread: a timer that should tick every 100ms; a late tick is a stall.
+  // A gap while the app was not active is the app paused, not a stall: it is logged apart.
   React.useEffect(() => {
     let last = Date.now();
+    let leftActive = AppState.currentState !== "active";
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") leftActive = true;
+    });
     const timer = setInterval(() => {
       const now = Date.now();
       const late = now - last - JS_TICK_MS;
-      if (late > JS_STALL_MS) console.log("[perf] js stall", JSON.stringify({ screen, ms: late }));
+      if (late > JS_STALL_MS) console.log(leftActive ? "[perf] paused (app not active)" : "[perf] js stall", JSON.stringify({ screen, ms: late }));
+      leftActive = AppState.currentState !== "active";
       last = now;
     }, JS_TICK_MS);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
   }, []);
 
   // UI thread: frames slower than 40ms, batched per second.

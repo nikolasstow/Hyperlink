@@ -449,7 +449,7 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Details & Health" /> }} />
         <Stack.Screen name="ServerPrinterNetwork" component={PrinterNetworkScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Network" /> }} />
         <Stack.Screen name="ServerPrinterSettings" component={PrinterSettingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Settings" /> }} />
-        <Stack.Screen name="ServerSupportJobs" component={SupportJobsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Engine & Jobs" /> }} />
+        <Stack.Screen name="ServerSupportJobs" component={SupportJobsScreen} options={{ ...largeTitleHeader, title: "Engine & Jobs" }} />
         <Stack.Screen name="ServerSupportJob" component={SupportJobScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Support Job" /> }} />
         <Stack.Screen
           name="GooViewer"

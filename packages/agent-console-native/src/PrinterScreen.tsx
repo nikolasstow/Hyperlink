@@ -37,7 +37,7 @@ import { linkChip, statusOf } from "./printer/printStatus";
 import { activeRoute, historyRoute, libraryRoute, LIVE_REFRESH_MS, originRoute, runsRoute, useCatalog } from "./printer/resinApi";
 import { activeLine, describeFile } from "./printer/resinFormat";
 import { isPrinting, layerIndexOf, PHASE_EXPOSING, PHASE_PAUSED } from "./printer/sdcp";
-import { CatalogProblem, Card, Chip, LCD, ListRow, usePalette } from "./printer/ui";
+import { CatalogProblem, Card, Chip, Dot, LCD, ListRow, toneColor, usePalette } from "./printer/ui";
 import { usePrinterLink, type PrinterLink } from "./printer/usePrinterLink";
 import { authedSource } from "./auth/serverTokens";
 import type { RootStackParamList } from "./RootNavigator";
@@ -49,6 +49,10 @@ type Props = NativeStackScreenProps<RootStackParamList, "ServerPrinter">;
 /** The summary card's thumbnail: the LCD's shape (about 16:9), at a fixed size. */
 const THUMB_WIDTH = 132;
 const THUMB_HEIGHT = 74;
+
+/** A count for a row: the number once loaded, "…" while it loads, "!" when it failed (the card says why). */
+const countOf = <A,>(loaded: { readonly value: A | undefined; readonly error: string | undefined }, count: (value: A) => number): string =>
+  loaded.value !== undefined ? count(loaded.value).toLocaleString() : loaded.error !== undefined ? "!" : "…";
 
 /** The row tints, as in iOS Settings. */
 const TINT = {
@@ -153,9 +157,9 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
               ? "MacBook unreachable"
               : "What each run changed, and its checks"
         }
-        live={runningNow.length > 0} value={runs.value === undefined ? undefined : runs.value.runs.length.toLocaleString()} onPress={() => open("ServerResinRuns")} />
-      <ListRow icon="books.vertical.fill" tint={TINT.library} title="Library" detail="Print files by what they are" value={library.value === undefined ? undefined : library.value.files.length.toLocaleString()} onPress={() => open("ServerResinLibrary")} />
-      <ListRow icon="clock.arrow.circlepath" tint={TINT.history} title="Print history" detail="Every print, its outcome, and notes" value={history.value === undefined ? undefined : history.value.prints.length.toLocaleString()} onPress={() => open("ServerResinHistory")} />
+        live={runningNow.length > 0} value={countOf(runs, (runsValue) => runsValue.runs.length)} onPress={() => open("ServerResinRuns")} />
+      <ListRow icon="books.vertical.fill" tint={TINT.library} title="Library" detail="Print files by what they are" value={countOf(library, (libraryValue) => libraryValue.files.length)} onPress={() => open("ServerResinLibrary")} />
+      <ListRow icon="clock.arrow.circlepath" tint={TINT.history} title="Print history" detail="Every print, its outcome, and notes" value={countOf(history, (historyValue) => historyValue.prints.length)} onPress={() => open("ServerResinHistory")} />
       <ListRow icon="cpu" tint={TINT.jobs} title="Engine & jobs" detail="Support jobs on the relay" last onPress={() => open("ServerSupportJobs")} />
       {catalogDown?.error !== undefined ? (
         <View style={styles.cardNote}>
@@ -249,7 +253,13 @@ const PrintSummary = (props: { readonly printer: PrinterLink; readonly onPress: 
           </View>
           <View style={styles.details}>
             <View style={styles.statusRow}>
-              <Chip tone={state.tone} label={active && !paused ? `${state.label} ${Math.floor(percent)}%` : state.label} />
+              <Dot tone={state.tone} size={9} />
+              <Text style={[styles.status, { color: toneColor(palette, state.tone, text.label) }]} numberOfLines={1}>
+                {active && !paused ? `${state.label} · ${Math.floor(percent)}%` : state.label}
+              </Text>
+              <Text style={[styles.via, { color: text.tertiaryLabel }]} numberOfLines={1}>
+                {printer.link.kind === "Open" ? `via ${printer.link.via === "Direct" ? "LAN" : "relay"}` : printer.link.kind === "Connecting" ? "connecting" : "no link"}
+              </Text>
             </View>
             <Text style={[styles.title, { color: text.label }]} numberOfLines={1}>
               {identity?.title ?? (online ? "Ready for a print" : status === undefined ? "Connecting…" : "Printer not reachable")}
@@ -313,7 +323,9 @@ const styles = StyleSheet.create({
   thumbImage: { width: THUMB_WIDTH, height: THUMB_HEIGHT, borderRadius: 12 },
   thumbNote: { color: "rgba(244,245,249,0.5)", fontSize: 11 },
   details: { flex: 1 },
-  statusRow: { flexDirection: "row", marginBottom: 4 },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  status: { fontSize: 15, fontWeight: "700" },
+  via: { fontSize: 12 },
   title: { fontSize: 16, fontWeight: "700", letterSpacing: -0.2, marginTop: 1 },
   detail: { fontSize: 12.5, fontWeight: "600", marginTop: 1 },
   line: { fontSize: 12.5, marginTop: 2, fontVariant: ["tabular-nums"] },
