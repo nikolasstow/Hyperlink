@@ -142,18 +142,91 @@ export const Row = (props: { readonly label: string; readonly value: string; rea
 };
 
 /** A two-column grid of small labelled values. */
-export const Cells = (props: { readonly cells: ReadonlyArray<{ readonly label: string; readonly value: string; readonly wide?: boolean }> }): React.ReactElement => {
+export const Cells = (props: { readonly cells: ReadonlyArray<{ readonly label: string; readonly value: string; readonly wide?: boolean }>; readonly compact?: boolean }): React.ReactElement => {
   const text = useTextColors();
+  const compact = props.compact === true;
   return (
-    <View style={styles.cells}>
+    <View style={[styles.cells, compact ? styles.cellsCompact : null]}>
       {props.cells.map((cell) => (
-        <View key={cell.label} style={[styles.cell, cell.wide === true ? styles.cellWide : null]}>
-          <Text style={[styles.cellLabel, { color: text.tertiaryLabel }]}>{cell.label.toUpperCase()}</Text>
-          <Text style={[styles.cellValue, { color: text.label }]}>{cell.value}</Text>
+        <View key={cell.label} style={[styles.cell, compact ? styles.cellCompact : null, cell.wide === true ? styles.cellWide : null]}>
+          <Text style={[styles.cellLabel, compact ? styles.cellLabelCompact : null, { color: text.tertiaryLabel }]}>{cell.label.toUpperCase()}</Text>
+          <Text style={[styles.cellValue, compact ? styles.cellValueCompact : null, { color: text.label }]}>{cell.value}</Text>
         </View>
       ))}
     </View>
   );
+};
+
+/** The height of a list row in a card, fixed so a list never measures. */
+export const LIST_ROW_HEIGHT = 56;
+
+/**
+ * A row of a card's list, as in iOS Settings: an SF Symbol in a tinted
+ * square, a title, a detail line, an optional value or badge, and a chevron.
+ * The hairline sits under the text, not under the icon.
+ */
+export const ListRow = (props: {
+  readonly icon: SFSymbol;
+  readonly tint: string;
+  readonly title: string;
+  readonly detail?: string;
+  readonly value?: string;
+  readonly badge?: number;
+  readonly last?: boolean;
+  readonly onPress: () => void;
+}): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  return (
+    <Pressable onPress={props.onPress} accessibilityRole="button" accessibilityLabel={props.title} style={({ pressed }) => [styles.listRow, pressed && styles.listPressed]}>
+      <View style={[styles.listIcon, { backgroundColor: props.tint }]}>
+        <SystemIcon name={props.icon} size={15} color="#ffffff" weight="semibold" />
+      </View>
+      <View style={[styles.listMain, props.last === true ? null : styles.rowLine]}>
+        <View style={styles.listText}>
+          <Text style={[styles.listTitle, { color: text.label }]} numberOfLines={1}>
+            {props.title}
+          </Text>
+          {props.detail !== undefined ? (
+            <Text style={[styles.listDetail, { color: text.secondaryLabel }]} numberOfLines={1}>
+              {props.detail}
+            </Text>
+          ) : null}
+        </View>
+        {props.value !== undefined ? (
+          <Text style={[styles.listValue, { color: text.secondaryLabel }]} numberOfLines={1}>
+            {props.value}
+          </Text>
+        ) : null}
+        {props.badge !== undefined && props.badge > 0 ? (
+          <View style={[styles.listBadge, { backgroundColor: palette.bad }]}>
+            <Text style={styles.listBadgeText}>{props.badge}</Text>
+          </View>
+        ) : null}
+        <SystemIcon name="chevron.right" size={13} color={text.tertiaryLabel} weight="semibold" />
+      </View>
+    </Pressable>
+  );
+};
+
+/** A small pass or fail capsule; `passed` null shows the check as not run. */
+export const CheckBadge = (props: { readonly label: string; readonly passed: boolean | null }): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  const color = props.passed === null ? text.tertiaryLabel : props.passed ? palette.ok : palette.bad;
+  return (
+    <View style={[styles.checkBadge, { backgroundColor: props.passed === null ? "rgba(127,127,127,0.14)" : withAlpha(props.passed ? palette.ok : palette.bad, 0.15) }]}>
+      <SystemIcon name={props.passed === null ? "minus" : props.passed ? "checkmark" : "xmark"} size={9} color={color} weight="bold" />
+      <Text style={[styles.checkText, { color }]}>{props.label}</Text>
+    </View>
+  );
+};
+
+/** A note in a card: an error the relay gave, or why a list is empty. Errors are never hidden. */
+export const Note = (props: { readonly text: string; readonly tone?: Tone }): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  return <Text style={[styles.note, { color: props.tone === undefined ? text.secondaryLabel : toneColor(palette, props.tone, text.secondaryLabel) }]}>{props.text}</Text>;
 };
 
 export const styles = StyleSheet.create({
@@ -179,4 +252,21 @@ export const styles = StyleSheet.create({
   cellWide: { width: "100%" },
   cellLabel: { fontSize: 10.5, fontWeight: "700", letterSpacing: 0.5 },
   cellValue: { fontSize: 15, fontWeight: "600", marginTop: 2, fontVariant: ["tabular-nums"] },
+  cellsCompact: { gap: 6 },
+  cellCompact: { width: "31%", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10 },
+  cellLabelCompact: { fontSize: 9.5 },
+  cellValueCompact: { fontSize: 13 },
+  listRow: { flexDirection: "row", alignItems: "center", height: LIST_ROW_HEIGHT, paddingLeft: 16 },
+  listPressed: { backgroundColor: "rgba(127,127,127,0.12)" },
+  listIcon: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  listMain: { flex: 1, height: LIST_ROW_HEIGHT, flexDirection: "row", alignItems: "center", gap: 8, paddingRight: 16 },
+  listText: { flex: 1 },
+  listTitle: { fontSize: 16 },
+  listDetail: { fontSize: 12.5, marginTop: 1 },
+  listValue: { fontSize: 15, fontVariant: ["tabular-nums"], maxWidth: 140 },
+  listBadge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: "center", justifyContent: "center" },
+  listBadgeText: { color: "#ffffff", fontSize: 12, fontWeight: "700" },
+  checkBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, height: 20, borderRadius: 10 },
+  checkText: { fontSize: 11, fontWeight: "600" },
+  note: { fontSize: 13, lineHeight: 18 },
 });
