@@ -10,7 +10,7 @@
  * @internal
  */
 import * as React from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { FlatList, StyleSheet, View, type ColorValue } from "react-native";
 import { colors } from "../colors";
 import { CARD_RADIUS } from "../CardGlass";
 import { SectionHeader } from "./ui";
@@ -37,7 +37,8 @@ export const GroupedList = <T,>(props: {
   readonly top?: React.ReactNode;
   readonly topHeight: number;
   readonly width: number;
-  readonly bottomInset: number;
+  /** The page's background: the list is the page's root view. */
+  readonly background: ColorValue;
 }): React.ReactElement => {
   const { groups, rowKey } = props;
   const items = React.useMemo(
@@ -58,6 +59,7 @@ export const GroupedList = <T,>(props: {
   }, [items, props.rowHeight, props.topHeight]);
   return (
     <FlatList
+      style={{ flex: 1, backgroundColor: props.background }}
       data={items}
       keyExtractor={(item) => item.key}
       getItemLayout={(_, index) => ({ length: items[index]?.kind === "Header" ? HEADER_HEIGHT : props.rowHeight, offset: offsets[index] ?? 0, index })}
@@ -65,7 +67,7 @@ export const GroupedList = <T,>(props: {
       maxToRenderPerBatch={12}
       windowSize={7}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{ width: props.width, alignSelf: "center", paddingBottom: props.bottomInset + 40 }}
+      contentContainerStyle={{ width: props.width, alignSelf: "center", paddingBottom: 40 }}
       ListHeaderComponent={<View style={{ height: props.topHeight }}>{props.top}</View>}
       renderItem={({ item }) =>
         item.kind === "Header" ? (

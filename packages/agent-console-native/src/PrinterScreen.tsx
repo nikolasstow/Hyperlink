@@ -25,7 +25,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { mark } from "./diagnostics/launchTrail";
 import { markTap } from "./perfMonitor";
 import { useLayerPack } from "./printer/layerPack";
@@ -67,7 +66,6 @@ const TINT = {
 export const PrinterScreen = (props: Props): React.ReactElement => {
   const background = useScreenBackground("grouped");
   const text = useTextColors();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { navigation } = props;
   // `?.` guards a nav state restored before this screen took params.
@@ -168,8 +166,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: background }]}>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
+    <ScrollView style={[styles.root, { backgroundColor: background }]} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
         {status === undefined && !tried ? (
           <ActivityIndicator style={styles.loading} />
         ) : (
@@ -197,7 +194,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
           </View>
         )}
       </ScrollView>
-    </View>
   );
 };
 

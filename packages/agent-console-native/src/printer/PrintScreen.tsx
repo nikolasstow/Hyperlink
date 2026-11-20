@@ -18,7 +18,6 @@ import { useIsFocused, useNavigation, type NavigationProp } from "@react-navigat
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PrinterPip } from "../../modules/printer-pip";
 import { authedSource } from "../auth/serverTokens";
 import { useOpenTiming } from "../perfMonitor";
@@ -57,28 +56,23 @@ export const PrintScreen = (props: Props): React.ReactElement => {
   useOpenTiming("ServerPrint");
   const background = useScreenBackground("grouped");
   const text = useTextColors();
-  const insets = useSafeAreaInsets();
   const link = usePrinterPageLink(props.route.params.serverAddress);
-  return (
-    <View style={[styles.root, { backgroundColor: background }]}>
-      {link === undefined ? (
-        <>
-          <Text style={[styles.gone, { color: text.tertiaryLabel, marginTop: 40, marginBottom: insets.bottom }]}>Open the printer page first.</Text>
-        </>
-      ) : (
-        <PrintView printer={link} serverName={props.route.params.serverName} serverAddress={props.route.params.serverAddress} />
-      )}
-    </View>
+  return link === undefined ? (
+    <ScrollView style={[styles.root, { backgroundColor: background }]} contentInsetAdjustmentBehavior="automatic">
+      <Text style={[styles.gone, { color: text.tertiaryLabel }]}>Open the printer page first.</Text>
+    </ScrollView>
+  ) : (
+    <PrintView printer={link} serverName={props.route.params.serverName} serverAddress={props.route.params.serverAddress} />
   );
 };
 
 const PrintView = (props: { readonly printer: PrinterLink; readonly serverName: string; readonly serverAddress: string }): React.ReactElement => {
+  const background = useScreenBackground("grouped");
   const { printer } = props;
   const text = useTextColors();
   const palette = usePalette();
   const focused = useIsFocused();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const relayToken = useRelayToken(printer.relayBase);
   const [measure] = useMeasure();
@@ -324,7 +318,7 @@ const PrintView = (props: { readonly printer: PrinterLink; readonly serverName: 
 
   return (
     <>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView style={[styles.root, { backgroundColor: background }]} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
         {wide ? (
           <View style={styles.columns}>
             <View style={{ width: mainWidth }}>
@@ -352,7 +346,7 @@ const PrintView = (props: { readonly printer: PrinterLink; readonly serverName: 
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  gone: { fontSize: 13, textAlign: "center" },
+  gone: { fontSize: 13, textAlign: "center", marginTop: 40 },
   fileTop: { flexDirection: "row", gap: 12, marginBottom: 12 },
   preview: { width: PREVIEW, height: PREVIEW, borderRadius: 14, overflow: "hidden", backgroundColor: LCD },
   previewImage: { width: PREVIEW, height: PREVIEW },

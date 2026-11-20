@@ -13,7 +13,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authedSource } from "../auth/serverTokens";
 import { previewUrl } from "../explorer/httpFileSource";
 import { markTap, useOpenTiming } from "../perfMonitor";
@@ -107,7 +106,6 @@ export const LibraryScreen = (props: Props): React.ReactElement => {
   useOpenTiming("ServerResinLibrary");
   const background = useScreenBackground("grouped");
   const text = useTextColors();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
@@ -133,13 +131,12 @@ export const LibraryScreen = (props: Props): React.ReactElement => {
   ];
 
   return (
-    <View style={[styles.root, { backgroundColor: background }]}>
-      <GroupedList
+    <GroupedList
+        background={background}
         groups={groups}
         rowKey={fileKey}
         rowHeight={ROW_HEIGHT}
         width={Math.min(width - 32, 760)}
-        bottomInset={insets.bottom}
         topHeight={notes.length * NOTE_HEIGHT}
         top={notes.map((note) => (
           <View key={note.key} style={styles.note}>
@@ -165,7 +162,6 @@ export const LibraryScreen = (props: Props): React.ReactElement => {
           );
         }}
       />
-    </View>
   );
 };
 

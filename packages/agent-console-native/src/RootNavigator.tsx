@@ -181,17 +181,14 @@ const pageHeader: NativeStackNavigationOptions = {
 };
 
 /**
- * The standard iOS bar with a large title that collapses into the bar as
- * the page scrolls (the printer home and its new pages). The page's first
- * view must be its scroll view, with automatic insets.
+ * The native iOS bar with a large title that collapses into the bar as the
+ * page scrolls (the printer home and its new pages). Only system options:
+ * iOS gives the bar its own look. The page's root is its scroll view, with
+ * automatic insets, so UIKit places the content under the bar.
  */
 const largeTitleHeader: NativeStackNavigationOptions = {
   headerShown: true,
   headerLargeTitle: true,
-  headerTransparent: true,
-  headerShadowVisible: false,
-  headerLargeTitleShadowVisible: false,
-  scrollEdgeEffects: { top: "soft", bottom: "soft" },
 };
 
 /** react-navigation's `Theme` type requires plain string colors (it can't

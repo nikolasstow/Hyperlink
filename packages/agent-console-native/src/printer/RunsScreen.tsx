@@ -52,7 +52,6 @@ export const RunsScreen = (props: ListProps): React.ReactElement => {
   const background = useScreenBackground("grouped");
   useOpenTiming("ServerResinRuns");
   const text = useTextColors();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
@@ -95,13 +94,12 @@ export const RunsScreen = (props: ListProps): React.ReactElement => {
   };
   const showTop = runs.value === undefined || runs.error !== undefined || active.error !== undefined;
   return (
-    <View style={[styles.root, { backgroundColor: background }]}>
-      <GroupedList
+    <GroupedList
+        background={background}
         groups={groups}
         rowKey={rowKey}
         rowHeight={RUN_ROW_HEIGHT}
         width={Math.min(width - 32, 760)}
-        bottomInset={insets.bottom}
         topHeight={showTop ? TOP_NOTE_HEIGHT : 0}
         top={
           showTop ? (
@@ -120,7 +118,6 @@ export const RunsScreen = (props: ListProps): React.ReactElement => {
           return <ActiveRow run={row.run} now={now} last={last} onPress={id === null ? undefined : () => openRun(id)} />;
         }}
       />
-    </View>
   );
 };
 
@@ -311,7 +308,6 @@ const RunBody = (props: {
 export const RunScreen = (props: RunProps): React.ReactElement => {
   useOpenTiming("ServerResinRun");
   const background = useScreenBackground("grouped");
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress, runId } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
@@ -336,12 +332,10 @@ export const RunScreen = (props: RunProps): React.ReactElement => {
     );
 
   return (
-    <View style={[styles.root, { backgroundColor: background }]}>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
+    <ScrollView style={[styles.root, { backgroundColor: background }]} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}>
         <View style={{ width: contentWidth, alignSelf: "center" }}>{body}</View>
-      </ScrollView>
       <RenderViewer relayBase={relayBase} runId={runId} name={viewing} onClose={() => setViewing(undefined)} />
-    </View>
+    </ScrollView>
   );
 };
 

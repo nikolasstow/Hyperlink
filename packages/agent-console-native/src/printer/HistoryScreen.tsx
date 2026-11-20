@@ -12,7 +12,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { markTap, useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
 import { useTextColors, useScreenBackground } from "../theme";
@@ -119,7 +118,6 @@ export const HistoryScreen = (props: Props): React.ReactElement => {
   useOpenTiming("ServerResinHistory");
   const background = useScreenBackground("grouped");
   const text = useTextColors();
-  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
@@ -140,13 +138,13 @@ export const HistoryScreen = (props: Props): React.ReactElement => {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: background }]}>
-      <FlatList
+    <FlatList
+        style={[styles.root, { backgroundColor: background }]}
         data={items}
         keyExtractor={(item) => item.key}
         initialNumToRender={6}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 40, width: contentWidth, alignSelf: "center" }}
+        contentContainerStyle={{ paddingBottom: 40, width: contentWidth, alignSelf: "center" }}
         ListHeaderComponent={
           history.error !== undefined ? (
             <CatalogProblem error={history.error} unreachable={history.unreachable} />
@@ -164,7 +162,6 @@ export const HistoryScreen = (props: Props): React.ReactElement => {
           )
         }
       />
-    </View>
   );
 };
 

@@ -9,8 +9,7 @@
 import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ScrollView, StyleSheet, Text, useWindowDimensions } from "react-native";
 import { useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
 import { useTextColors, useScreenBackground } from "../theme";
@@ -27,15 +26,13 @@ export const PrinterCameraScreen = (props: Props): React.ReactElement => {
   useOpenTiming("ServerPrinterCamera");
   const background = useScreenBackground("grouped");
   const text = useTextColors();
-  const insets = useSafeAreaInsets();
   const focused = useIsFocused();
   const { width } = useWindowDimensions();
   const link = usePrinterPageLink(props.route.params.serverAddress);
   const cardWidth = Math.min(width - 32, 900);
   const paneWidth = cardWidth - 32;
   return (
-    <View style={[styles.root, { backgroundColor: background }]}>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40, alignItems: "center" }}>
+    <ScrollView style={[styles.root, { backgroundColor: background }]} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, alignItems: "center" }}>
         {link === undefined ? (
           <Text style={[styles.foot, { color: text.tertiaryLabel }]}>Open the printer page first.</Text>
         ) : (
@@ -44,7 +41,6 @@ export const PrinterCameraScreen = (props: Props): React.ReactElement => {
           </Card>
         )}
       </ScrollView>
-    </View>
   );
 };
 
