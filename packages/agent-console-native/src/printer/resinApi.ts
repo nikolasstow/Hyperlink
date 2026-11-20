@@ -182,7 +182,12 @@ export const renderUrl = (relayBase: string, runId: string, name: string, thumb:
 
 const readCatalog = async <A>(relayBase: string, route: CatalogRoute<A>): Promise<A> => {
   const response = await authedFetch(`${relayBase}${route.path}`, { cache: "no-store" });
-  const body: unknown = await response.json();
+  const text = await response.text();
+  // A relay without the catalog answers 404 with no JSON: say that, not the parse error.
+  if (!response.ok && !(response.headers.get("content-type") ?? "").includes("json")) {
+    throw new CatalogError(response.status === 404 ? "This relay has no Resin catalog yet (HTTP 404). It needs a relay update." : `The relay answered HTTP ${response.status}`, false);
+  }
+  const body = await Schema.decodeUnknownPromise(Schema.fromJsonString(Schema.Unknown))(text);
   if (!response.ok) {
     const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(body));
     throw new CatalogError(error?.error ?? `The relay answered HTTP ${response.status}`, error?.unreachable === true);
