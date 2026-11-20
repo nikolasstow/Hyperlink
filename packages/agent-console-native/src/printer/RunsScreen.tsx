@@ -23,7 +23,7 @@ import { renderUrl, runRoute, runsRoute, useCatalog, type RunDetail, type RunSum
 import { deltaOf, flagLabel, fmtMetric, fmtShortDate, metricLabel, renderLabel } from "./resinFormat";
 import { OutcomeChip, RenderTile, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
-import { Card, CheckBadge, LCD, ListRow, Note, Row, usePalette } from "./ui";
+import { Card, CheckBadge, LCD, ListRow, CatalogProblem, Note, Row, usePalette } from "./ui";
 
 type ListProps = NativeStackScreenProps<RootStackParamList, "ServerResinRuns">;
 type RunProps = NativeStackScreenProps<RootStackParamList, "ServerResinRun">;
@@ -54,7 +54,7 @@ export const RunsScreen = (props: ListProps): React.ReactElement => {
       <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40, width: listWidth, alignSelf: "center" }}>
         {runs.value === undefined || runs.error !== undefined ? (
           <View style={styles.headNote}>
-            <Note text={runs.error !== undefined ? `The catalog did not answer: ${runs.error}` : "Reading the runs…"} tone={runs.error !== undefined ? "bad" : undefined} />
+            {runs.error !== undefined ? <CatalogProblem error={runs.error} unreachable={runs.unreachable} /> : <Note text="Reading the runs…" />}
           </View>
         ) : null}
         {groups.map((group) => (
@@ -279,7 +279,7 @@ export const RunScreen = (props: RunProps): React.ReactElement => {
   const body =
     run === undefined ? (
       <Card>
-        <Note text={detail.error !== undefined ? `The catalog did not answer: ${detail.error}` : "Reading the run…"} tone={detail.error !== undefined ? "bad" : undefined} />
+        {detail.error !== undefined ? <CatalogProblem error={detail.error} unreachable={detail.unreachable} /> : <Note text="Reading the run…" />}
       </Card>
     ) : (
       <RunBody run={run} relayBase={relayBase} wide={wide} columnWidth={columnWidth} tile={tile} openRun={openRun} onRender={setViewing} />

@@ -229,6 +229,25 @@ export const Note = (props: { readonly text: string; readonly tone?: Tone }): Re
   return <Text style={[styles.note, { color: props.tone === undefined ? text.secondaryLabel : toneColor(palette, props.tone, text.secondaryLabel) }]}>{props.text}</Text>;
 };
 
+/**
+ * Why a catalog page has no data: the relay's error, with an explicit
+ * "MacBook unreachable" state when the run database's computer did not
+ * answer. A page shows this, never an empty list in its place.
+ */
+export const CatalogProblem = (props: { readonly error: string; readonly unreachable: boolean }): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  return (
+    <View style={styles.problem}>
+      <SystemIcon name={props.unreachable ? "laptopcomputer.slash" : "exclamationmark.triangle.fill"} size={18} color={palette.bad} />
+      <View style={styles.problemText}>
+        <Text style={[styles.problemTitle, { color: text.label }]}>{props.unreachable ? "MacBook unreachable" : "The catalog did not answer"}</Text>
+        <Text style={[styles.note, { color: text.secondaryLabel }]}>{props.error}</Text>
+      </View>
+    </View>
+  );
+};
+
 export const styles = StyleSheet.create({
   card: { borderRadius: CARD_RADIUS, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.separator, marginBottom: 14 },
   head: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 14, minHeight: 40 },
@@ -269,4 +288,7 @@ export const styles = StyleSheet.create({
   checkBadge: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 7, height: 20, borderRadius: 10 },
   checkText: { fontSize: 11, fontWeight: "600" },
   note: { fontSize: 13, lineHeight: 18 },
+  problem: { flexDirection: "row", gap: 10, alignItems: "flex-start", paddingVertical: 4 },
+  problemText: { flex: 1, gap: 2 },
+  problemTitle: { fontSize: 15, fontWeight: "600" },
 });

@@ -26,7 +26,7 @@ import { libraryRoute, useCatalog, type LibraryFile } from "./resinApi";
 import { describeFile, fmtShortDate } from "./resinFormat";
 import { OutcomeChip } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
-import { Card, LCD, Note } from "./ui";
+import { Card, LCD, CatalogProblem, Note } from "./ui";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerResinLibrary">;
 
@@ -139,11 +139,18 @@ export const LibraryScreen = (props: Props): React.ReactElement => {
     <View style={styles.root}>
       <Backdrop uri={undefined} glow={0} />
       <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40, width: contentWidth, alignSelf: "center" }}>
-        {library.value === undefined || library.error !== undefined ? (
-          <Note text={library.error !== undefined ? `The catalog did not answer: ${library.error}` : "Reading the library…"} tone={library.error !== undefined ? "bad" : undefined} />
-        ) : library.value.hashing > 0 ? (
-          <Note text={`Hashing ${library.value.hashing} files on the server. Their print records show once they have a SHA-256.`} />
+        {library.error !== undefined ? (
+          <CatalogProblem error={library.error} unreachable={library.unreachable} />
+        ) : library.value === undefined ? (
+          <Note text="Reading the library…" />
         ) : null}
+        {library.value?.runs !== null && library.value?.runs !== undefined ? (
+          <CatalogProblem error={`${library.value.runs.error} The files show without their print records.`} unreachable={library.value.runs.unreachable} />
+        ) : null}
+        {library.value !== undefined && library.value.hashing.done < library.value.hashing.total ? (
+          <Note text={`Hashing ${library.value.hashing.done}/${library.value.hashing.total} on the server${library.value.hashing.current !== null ? `: ${library.value.hashing.current}` : ""}. A file shows its print record once it has a SHA-256.`} />
+        ) : null}
+        {library.value?.problems.map((problem) => <Note key={problem} text={problem} tone="bad" />)}
         {wide ? <View style={styles.columns}>{cards}</View> : cards}
       </ScrollView>
     </View>

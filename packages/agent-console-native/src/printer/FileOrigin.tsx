@@ -18,7 +18,7 @@ import { useTextColors } from "../theme";
 import { originRoute, useCatalog, type RunDetail } from "./resinApi";
 import { abDiff, deltaOf, flagLabel, fmtMetric, metricLabel } from "./resinFormat";
 import { OutcomeChip, RenderTile, RunRow } from "./RunParts";
-import { Card, Note, Row, usePalette } from "./ui";
+import { Card, CatalogProblem, Note, Row, usePalette } from "./ui";
 
 /** The key metrics a plate compares, in this order. */
 const COMPARE: ReadonlyArray<string> = ["placed", "failed", "burn_unsupported_islands", "burn_still_floating", "body_p99", "trees_gt1"];
@@ -35,7 +35,7 @@ export const FileOrigin = (props: { readonly relayBase: string; readonly filenam
   if (origin.value === undefined) {
     return (
       <Card title="How this file was made">
-        <Note text={origin.error !== undefined ? `The catalog did not answer: ${origin.error}` : "Asking the catalog…"} tone={origin.error !== undefined ? "bad" : undefined} />
+        {origin.error !== undefined ? <CatalogProblem error={origin.error} unreachable={origin.unreachable} /> : <Note text="Asking the catalog…" />}
       </Card>
     );
   }

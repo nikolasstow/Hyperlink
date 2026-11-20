@@ -122,7 +122,25 @@ export type LibraryFile = typeof LibraryFile.Type;
 
 export const RunsReply = Schema.Struct({ runs: Schema.Array(RunSummary) });
 export type RunsReply = typeof RunsReply.Type;
-export const LibraryReply = Schema.Struct({ files: Schema.Array(LibraryFile), hashing: Schema.Number });
+/** The relay's background hashing: files done of this pass, and the file it reads now. */
+export const HashState = Schema.Struct({
+  done: Schema.Number,
+  total: Schema.Number,
+  current: Schema.NullOr(Schema.String),
+});
+
+/** Why the run database gave nothing, and whether the runs computer (the MacBook) was unreachable. */
+export const RunsProblem = Schema.Struct({
+  error: Schema.String,
+  unreachable: Schema.Boolean,
+});
+
+export const LibraryReply = Schema.Struct({
+  files: Schema.Array(LibraryFile),
+  hashing: HashState,
+  problems: Schema.Array(Schema.String),
+  runs: Schema.NullOr(RunsProblem),
+});
 export type LibraryReply = typeof LibraryReply.Type;
 export const HistoryReply = Schema.Struct({ prints: Schema.Array(PrintRecord) });
 export type HistoryReply = typeof HistoryReply.Type;
@@ -134,7 +152,17 @@ export const OriginReply = Schema.Struct({
 });
 export type OriginReply = typeof OriginReply.Type;
 
-const ErrorBody = Schema.Struct({ error: Schema.String });
+const ErrorBody = Schema.Struct({ error: Schema.String, unreachable: Schema.optional(Schema.Boolean) });
+
+/** A catalog request that failed: the relay's reason, and whether the MacBook with the run database was unreachable. */
+export class CatalogError extends Error {
+  constructor(
+    message: string,
+    readonly unreachable: boolean,
+  ) {
+    super(message);
+  }
+}
 
 /** One catalog route: its path under the relay, and the shape of its reply. */
 export interface CatalogRoute<A> {
@@ -157,7 +185,7 @@ const readCatalog = async <A>(relayBase: string, route: CatalogRoute<A>): Promis
   const body: unknown = await response.json();
   if (!response.ok) {
     const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(body));
-    throw new Error(error?.error ?? `The relay answered HTTP ${response.status}`);
+    throw new CatalogError(error?.error ?? `The relay answered HTTP ${response.status}`, error?.unreachable === true);
   }
   return Schema.decodeUnknownPromise(route.schema)(body);
 };
@@ -173,11 +201,14 @@ export const REFRESH_MS = 30_000;
 export interface Loaded<A> {
   readonly value: A | undefined;
   readonly error: string | undefined;
+  /** The last request failed because the MacBook with the run database did not answer. */
+  readonly unreachable: boolean;
 }
 
 interface Entry {
   value: unknown;
   error: string | undefined;
+  unreachable: boolean;
   loading: boolean;
   snapshot: Loaded<unknown>;
 }
@@ -192,14 +223,14 @@ const subscribe = (listener: () => void): (() => void) => {
   };
 };
 
-const EMPTY: Loaded<never> = { value: undefined, error: undefined };
+const EMPTY: Loaded<never> = { value: undefined, error: undefined, unreachable: false };
 
 const keyOf = (relayBase: string, route: CatalogRoute<unknown>): string => `${relayBase}${route.path}`;
 
 /** Asks the relay for a route, unless a request for it runs now. The answer goes to the store. */
 export const loadCatalog = <A>(relayBase: string, route: CatalogRoute<A>): void => {
   const key = keyOf(relayBase, route);
-  const entry = entries.get(key) ?? { value: undefined, error: undefined, loading: false, snapshot: EMPTY };
+  const entry = entries.get(key) ?? { value: undefined, error: undefined, unreachable: false, loading: false, snapshot: EMPTY };
   entries.set(key, entry);
   if (entry.loading) return;
   entry.loading = true;
@@ -207,14 +238,16 @@ export const loadCatalog = <A>(relayBase: string, route: CatalogRoute<A>): void 
     .then((value) => {
       entry.value = value;
       entry.error = undefined;
+      entry.unreachable = false;
     })
     .catch((cause: unknown) => {
       console.error(`[resin] reading ${route.path} failed`, cause);
       entry.error = cause instanceof Error ? cause.message : String(cause);
+      entry.unreachable = cause instanceof CatalogError && cause.unreachable;
     })
     .finally(() => {
       entry.loading = false;
-      entry.snapshot = { value: entry.value, error: entry.error };
+      entry.snapshot = { value: entry.value, error: entry.error, unreachable: entry.unreachable };
       notify();
     });
 };
@@ -238,6 +271,6 @@ export const useCatalog = <A>(relayBase: string, route: CatalogRoute<A> | undefi
     if (schema === undefined) return EMPTY;
     // The store holds every route's reply; the route's own schema says which this one is.
     const value = snapshot.value !== undefined && Schema.is(schema)(snapshot.value) ? snapshot.value : undefined;
-    return { value, error: snapshot.error };
+    return { value, error: snapshot.error, unreachable: snapshot.unreachable };
   }, [schema, snapshot]);
 };

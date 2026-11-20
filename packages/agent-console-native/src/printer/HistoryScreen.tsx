@@ -21,7 +21,7 @@ import { historyRoute, useCatalog, type PrintRecord } from "./resinApi";
 import { dayOf, describeFile, fmtDay, outcomeKindOf, timeOf } from "./resinFormat";
 import { OutcomeChip, outcomeTone } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
-import { Card, Note, toneColor, usePalette } from "./ui";
+import { Card, CatalogProblem, Note, toneColor, usePalette } from "./ui";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerResinHistory">;
 
@@ -131,8 +131,10 @@ export const HistoryScreen = (props: Props): React.ReactElement => {
     <View style={styles.root}>
       <Backdrop uri={undefined} glow={0} />
       <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40, width: contentWidth, alignSelf: "center" }}>
-        {history.value === undefined || history.error !== undefined ? (
-          <Note text={history.error !== undefined ? `The catalog did not answer: ${history.error}` : "Reading the history…"} tone={history.error !== undefined ? "bad" : undefined} />
+        {history.error !== undefined ? (
+          <CatalogProblem error={history.error} unreachable={history.unreachable} />
+        ) : history.value === undefined ? (
+          <Note text="Reading the history…" />
         ) : history.value.prints.length === 0 ? (
           <Note text="The run database has no prints yet." />
         ) : null}

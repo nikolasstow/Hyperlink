@@ -42,7 +42,7 @@ import { printPreviewUrl } from "./printer/relayApi";
 import { historyRoute, libraryRoute, originRoute, runsRoute, useCatalog } from "./printer/resinApi";
 import { describeFile } from "./printer/resinFormat";
 import { isPrinting, layerIndexOf, PHASE_EXPOSING, PHASE_PAUSED } from "./printer/sdcp";
-import { Card, Chip, LCD, ListRow, Note, usePalette } from "./printer/ui";
+import { CatalogProblem, Card, Chip, LCD, ListRow, usePalette } from "./printer/ui";
 import { usePrinterLink, type PrinterLink } from "./printer/usePrinterLink";
 import { authedSource } from "./auth/serverTokens";
 import type { RootStackParamList } from "./RootNavigator";
@@ -130,7 +130,7 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const link = linkChip(printer.link);
   const connection = online ? (printer.link.kind === "Open" && printer.link.via === "Direct" ? `Direct to the printer at ${printer.printerIp ?? "its address"}` : `Through the relay on ${serverName || "the server"}`) : "Not connected";
   const wide = width >= 700;
-  const catalogDown = runs.error ?? library.error ?? history.error;
+  const catalogDown = [runs, library, history].find((loaded) => loaded.error !== undefined);
 
   const printerCard = (
     <Card title="Printer" flush>
@@ -155,9 +155,9 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
       <ListRow icon="books.vertical.fill" tint={TINT.library} title="Library" detail="Print files by what they are" value={library.value === undefined ? undefined : library.value.files.length.toLocaleString()} onPress={() => open("ServerResinLibrary")} />
       <ListRow icon="clock.arrow.circlepath" tint={TINT.history} title="Print history" detail="Every print, its outcome, and notes" value={history.value === undefined ? undefined : history.value.prints.length.toLocaleString()} onPress={() => open("ServerResinHistory")} />
       <ListRow icon="cpu" tint={TINT.jobs} title="Engine & jobs" detail="Support jobs on the relay" last onPress={() => open("ServerSupportJobs")} />
-      {catalogDown !== undefined ? (
+      {catalogDown?.error !== undefined ? (
         <View style={styles.cardNote}>
-          <Note text={`The catalog did not answer: ${catalogDown}`} tone="bad" />
+          <CatalogProblem error={catalogDown.error} unreachable={catalogDown.unreachable} />
         </View>
       ) : null}
     </Card>
