@@ -59,6 +59,7 @@ import { FileViewerScreen } from "./FileViewerScreen";
 import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
 import { CameraRecordingsScreen } from "./CameraRecordingsScreen";
+import { ChangelogScreen, ChangelogSheet } from "./ChangelogScreen";
 import { CamerasScreen } from "./CamerasScreen";
 import { GooViewerScreen } from "./printer/GooViewerScreen";
 import { HistoryScreen } from "./printer/HistoryScreen";
@@ -83,6 +84,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Extensions: undefined;
   Appearance: undefined;
+  Changelog: undefined;
   AgentButtonSettings: undefined;
   FontImport: undefined;
   // Create a VS Code colour theme, or edit one created here. No id means a new
@@ -367,6 +369,7 @@ export const RootNavigator = (): React.ReactElement => {
       }}
     >
       <PerfMonitor />
+      <ChangelogSheet />
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: background } }}>
         {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
          * applies it via `useScrollEdgeEffects` after mount instead. See
@@ -456,6 +459,7 @@ export const RootNavigator = (): React.ReactElement => {
           component={GooViewerScreen}
           options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={route.params.name.replace(/\.goo$/i, "")} /> })}
         />
+        <Stack.Screen name="Changelog" component={ChangelogScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Changelog" }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native
