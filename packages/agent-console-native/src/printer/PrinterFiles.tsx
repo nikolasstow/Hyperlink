@@ -1,7 +1,7 @@
 /**
  * The printer's files on the printer page: the shared explorer's home over
- * the relay (explorer/httpFileSource.ts). It shows the storage areas as tabs
- * (the printer, its USB drive, the home server), then the recent prints, then
+ * the relay (explorer/httpFileSource.ts). It shows the printer's storage
+ * areas as tabs (the printer and its USB drive), then the recent prints, then
  * the files, with previews. A file that a plugin viewer takes opens in it
  * (viewers/fileViewers.ts: a `.goo` opens its 3D model and details); any
  * other file opens its details, and a printer or USB file can print from
@@ -17,11 +17,13 @@
  */
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
+import { Effect } from "effect";
 import * as React from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { showToast } from "../AppToast";
 import { colors } from "../colors";
 import { ExplorerHome } from "../explorer/ExplorerHome";
+import type { FileSource } from "../explorer/FileSource";
 import { httpFileSource, previewUrl } from "../explorer/httpFileSource";
 import type { SourceRow } from "../explorer/sourceRows";
 import type { RootStackParamList } from "../RootNavigator";
@@ -32,6 +34,9 @@ import { cancelUpload, fetchFileInfo, fetchUploads, printFile, startUpload, Uplo
 import { Button, Card, Cells, LCD, usePalette } from "./ui";
 import { viewerFor } from "../viewers/fileViewers";
 import { authedSource } from "../auth/serverTokens";
+
+/** The relay's root for its own computer's files. */
+const SERVER_ROOT = "/server/";
 
 /** An upload as the page shows it: the phone's leg, then the relay's job. */
 interface Upload {
@@ -201,7 +206,18 @@ export const PrinterFiles = (props: {
   const { relayBase, reachable } = props;
   const text = useTextColors();
   const palette = usePalette();
-  const source = React.useMemo(() => httpFileSource(relayBase), [relayBase]);
+  // The printer's own storage only: the home server's files get their own page.
+  const source = React.useMemo((): FileSource => {
+    const all = httpFileSource(relayBase);
+    return all.roots === undefined
+      ? all
+      : {
+          ...all,
+          roots: all.roots.pipe(
+            Effect.map((roots) => roots.filter((root) => !root.path.startsWith(SERVER_ROOT))),
+          ),
+        };
+  }, [relayBase]);
   const [reloadKey, setReloadKey] = React.useState(0);
   const uploads = React.useSyncExternalStore(uploadStore.subscribe, uploadStore.rows);
   const [open, setOpen] = React.useState<OpenFile | undefined>(undefined);

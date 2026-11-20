@@ -1,6 +1,6 @@
 /**
- * The printer page's live link, shared with the pages it opens (Files,
- * Health, Settings: printer/PrinterPages.tsx). The printer takes only a few
+ * The printer page's live link, shared with the pages it opens (the print
+ * page, local files, details and health, camera, network, and settings). The printer takes only a few
  * connections, so those pages never open their own: the printer page holds
  * the one link (usePrinterLink.ts) and stays mounted under them on the
  * stack. It publishes each new state here, by server address.

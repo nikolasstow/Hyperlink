@@ -220,3 +220,15 @@ Next steps for Cmd 135: check whether V1.5.6 (on the printer) accepts it over th
 3. A mid-print upload test on a print that can fail.
 4. Printer as the first user of the planned page and widget registries.
 5. Live Activity on the base build.
+
+## 9. The printer home (2026-11-20)
+
+The printer page is now a home with three cards. The header shows the printer's name and its state in a glass pill.
+
+| Card | Opens |
+|---|---|
+| Print summary | The print page (`printer/PrintScreen.tsx`): the File card, the stage, the controls, the 3D model, and how the file was made (`printer/FileOrigin.tsx`). |
+| Printer | Details & health, Local files (the printer and its USB drive only), Camera, Network, Settings. |
+| Resin | Runs (`printer/RunsScreen.tsx`), Library (`printer/LibraryScreen.tsx`), Print history (`printer/HistoryScreen.tsx`), Engine & jobs (the support jobs). |
+
+The Resin pages read the relay's read-only catalog (`GET /api/resin/*`, saturn-uploader `src/Catalog.ts`, branch `feat/resin-catalog`). The relay reads the run database on the MacBook over SSH with `sqlite3 -readonly`. It knows library files by SHA-256, so a renamed file keeps its print record. Until the production relay has the catalog, these pages show the relay's error.

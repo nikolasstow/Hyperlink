@@ -61,7 +61,12 @@ import { ServerUpsScreen } from "./ServerUpsScreen";
 import { CameraRecordingsScreen } from "./CameraRecordingsScreen";
 import { CamerasScreen } from "./CamerasScreen";
 import { GooViewerScreen } from "./printer/GooViewerScreen";
+import { HistoryScreen } from "./printer/HistoryScreen";
+import { LibraryScreen } from "./printer/LibraryScreen";
+import { PrinterCameraScreen } from "./printer/PrinterCameraScreen";
 import { PrinterFilesScreen, PrinterHealthScreen, PrinterSettingsScreen } from "./printer/PrinterPages";
+import { PrintScreen } from "./printer/PrintScreen";
+import { RunScreen, RunsScreen } from "./printer/RunsScreen";
 import { PrinterNetworkScreen } from "./printer/PrinterNetworkScreen";
 import { SupportJobScreen, SupportJobsScreen } from "./printer/SupportJobsScreen";
 import { PrinterScreen } from "./PrinterScreen";
@@ -140,6 +145,14 @@ export type RootStackParamList = {
   // on the LAN or through the relay on that server.
   ServerPrinter: { serverName: string; serverAddress: string };
   // The printer page's own pages: real pages, back to the printer page.
+  // The print page: the stage, the controls, the file, and how the file was made (printer/PrintScreen.tsx).
+  ServerPrint: { serverName: string; serverAddress: string };
+  ServerPrinterCamera: { serverName: string; serverAddress: string };
+  // The Resin catalog: runs, the library, and the print history (printer/RunsScreen.tsx, LibraryScreen.tsx, HistoryScreen.tsx).
+  ServerResinRuns: { serverName: string; serverAddress: string };
+  ServerResinRun: { serverName: string; serverAddress: string; runId: string };
+  ServerResinLibrary: { serverName: string; serverAddress: string };
+  ServerResinHistory: { serverName: string; serverAddress: string };
   ServerPrinterFiles: { serverName: string; serverAddress: string };
   ServerPrinterHealth: { serverName: string; serverAddress: string };
   ServerPrinterNetwork: { serverName: string; serverAddress: string };
@@ -415,11 +428,17 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="ServerCameras" component={CamerasScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Cameras" /> }} />
         <Stack.Screen name="ServerCameraRecordings" component={CameraRecordingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Recordings" /> }} />
         <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
-        <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Files" /> }} />
-        <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Health" /> }} />
+        <Stack.Screen name="ServerPrint" component={PrintScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Print" /> }} />
+        <Stack.Screen name="ServerPrinterCamera" component={PrinterCameraScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Camera" /> }} />
+        <Stack.Screen name="ServerResinRuns" component={RunsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Runs" /> }} />
+        <Stack.Screen name="ServerResinRun" component={RunScreen} options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={`Run ${route.params.runId}`} /> })} />
+        <Stack.Screen name="ServerResinLibrary" component={LibraryScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Library" /> }} />
+        <Stack.Screen name="ServerResinHistory" component={HistoryScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Print History" /> }} />
+        <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Local Files" /> }} />
+        <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Details & Health" /> }} />
         <Stack.Screen name="ServerPrinterNetwork" component={PrinterNetworkScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Network" /> }} />
         <Stack.Screen name="ServerPrinterSettings" component={PrinterSettingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Settings" /> }} />
-        <Stack.Screen name="ServerSupportJobs" component={SupportJobsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Support" /> }} />
+        <Stack.Screen name="ServerSupportJobs" component={SupportJobsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Engine & Jobs" /> }} />
         <Stack.Screen name="ServerSupportJob" component={SupportJobScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Support Job" /> }} />
         <Stack.Screen
           name="GooViewer"
