@@ -18,10 +18,10 @@ import { markTap, useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
 import { SystemIcon } from "../SystemIcon";
 import { useTextColors, useScreenBackground } from "../theme";
-import { GroupedList } from "./GroupedList";
-import { renderUrl, runRoute, runsRoute, useCatalog, type RunDetail, type RunSummary } from "./resinApi";
+import { GroupedList, type Group } from "./GroupedList";
+import { activeRoute, LIVE_REFRESH_MS, renderUrl, runRoute, runsRoute, useCatalog, type ActiveRun, type RunDetail, type RunSummary } from "./resinApi";
 import { deltaOf, flagLabel, fmtMetric, fmtShortDate, metricLabel, renderLabel } from "./resinFormat";
-import { OutcomeChip, RenderTile, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
+import { ActiveRow, OutcomeChip, RenderTile, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
 import { Card, CheckBadge, LCD, ListRow, CatalogProblem, Note, Row, usePalette } from "./ui";
 
@@ -40,7 +40,13 @@ const seriesOf = (runs: ReadonlyArray<RunSummary>): ReadonlyArray<{ readonly ser
     .map(([series, list]) => ({ series, runs: [...list].sort((a, b) => b.step - a.step) }));
 };
 
-const runKey = (run: RunSummary): string => run.id;
+/** A row of the runs list: a run in progress (or just ended), or a run of the database. */
+type ListRow = { readonly kind: "Active"; readonly run: ActiveRun } | { readonly kind: "Run"; readonly run: RunSummary };
+
+const rowKey = (row: ListRow): string => (row.kind === "Active" ? `active-${row.run.number}` : row.run.id);
+
+/** How many ended runs "Running now" keeps under the running ones. */
+const RECENT = 3;
 
 export const RunsScreen = (props: ListProps): React.ReactElement => {
   const background = useScreenBackground("grouped");
@@ -51,38 +57,68 @@ export const RunsScreen = (props: ListProps): React.ReactElement => {
   const { serverName, serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
   const runs = useCatalog(relayBase, runsRoute);
-  const groups = React.useMemo(
-    () =>
-      seriesOf(runs.value?.runs ?? []).map((group) => ({
+  const active = useCatalog(relayBase, activeRoute, LIVE_REFRESH_MS);
+  // The rows count on between the relay's answers.
+  const [now, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const groups = React.useMemo((): ReadonlyArray<Group<ListRow>> => {
+    const live = active.value?.runs ?? [];
+    const running = live.filter((run) => run.running);
+    const recent = live.filter((run) => !run.running).slice(0, RECENT);
+    const liveGroup: ReadonlyArray<Group<ListRow>> =
+      running.length + recent.length === 0
+        ? []
+        : [
+            {
+              key: "now",
+              title: running.length > 0 ? "Running now" : "Ended recently",
+              right: <Text style={[styles.seriesCount, { color: text.tertiaryLabel }]}>{running.length} running</Text>,
+              rows: [...running, ...recent].map((run): ListRow => ({ kind: "Active", run })),
+            },
+          ];
+    return [
+      ...liveGroup,
+      ...seriesOf(runs.value?.runs ?? []).map((group) => ({
         key: String(group.series),
         title: `Series ${group.series}`,
         right: <Text style={[styles.seriesCount, { color: text.tertiaryLabel }]}>{group.runs.length} runs</Text>,
-        rows: group.runs,
+        rows: group.runs.map((run): ListRow => ({ kind: "Run", run })),
       })),
-    [runs.value, text.tertiaryLabel],
-  );
-  const showTop = runs.value === undefined || runs.error !== undefined;
+    ];
+  }, [runs.value, active.value, text.tertiaryLabel]);
+  const openRun = (id: string): void => {
+    markTap(`run ${id}`);
+    props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId: id });
+  };
+  const showTop = runs.value === undefined || runs.error !== undefined || active.error !== undefined;
   return (
     <View style={[styles.root, { backgroundColor: background }]}>
       <GroupedList
         groups={groups}
-        rowKey={runKey}
+        rowKey={rowKey}
         rowHeight={RUN_ROW_HEIGHT}
         width={Math.min(width - 32, 760)}
         bottomInset={insets.bottom}
         topHeight={showTop ? TOP_NOTE_HEIGHT : 0}
-        top={showTop ? runs.error !== undefined ? <CatalogProblem error={runs.error} unreachable={runs.unreachable} /> : <Note text="Reading the runs…" /> : null}
-        renderRow={(run, last) => (
-          <RunRow
-            relayBase={relayBase}
-            run={run}
-            last={last}
-            onPress={() => {
-              markTap(`run ${run.id}`);
-              props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId: run.id });
-            }}
-          />
-        )}
+        top={
+          showTop ? (
+            runs.error !== undefined ? (
+              <CatalogProblem error={runs.error} unreachable={runs.unreachable} />
+            ) : (
+              <Note text="Reading the runs…" />
+            )
+          ) : active.error !== undefined ? (
+            <CatalogProblem error={`Runs in progress: ${active.error}`} unreachable={active.unreachable} />
+          ) : null
+        }
+        renderRow={(row, last) => {
+          if (row.kind === "Run") return <RunRow relayBase={relayBase} run={row.run} last={last} onPress={() => openRun(row.run.id)} />;
+          const id = row.run.id;
+          return <ActiveRow run={row.run} now={now} last={last} onPress={id === null ? undefined : () => openRun(id)} />;
+        }}
       />
     </View>
   );

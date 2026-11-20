@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PrintRecord } from "./resinApi";
-import { abDiff, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
+import { abDiff, activeLine, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
 
 const record = (fields: Partial<PrintRecord>): PrintRecord => ({
   id: "P8",
@@ -83,5 +83,12 @@ describe("abDiff", () => {
       { flag: "--buttresses", a: "on", b: null },
       { flag: "--pair-braces", a: null, b: "on" },
     ]);
+  });
+});
+
+describe("activeLine", () => {
+  it("says the run, its stage, and the minutes left", () => {
+    expect(activeLine({ number: 640, stage: "anti-alias", finishAt: 1_000_000 + 240_000 }, 1_000_000)).toBe("Run 640 · anti-alias · 4 min left");
+    expect(activeLine({ number: 640, stage: null, finishAt: 1_000_000 }, 1_000_000)).toBe("Run 640 · starting · past the usual time");
   });
 });

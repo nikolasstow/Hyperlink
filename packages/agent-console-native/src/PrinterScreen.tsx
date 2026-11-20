@@ -35,8 +35,8 @@ import { usePublishPrinterLink } from "./printer/printerPageLink";
 import { useLoadedUri } from "./printer/PrinterStage";
 import { usePrintHeader } from "./printer/printHeader";
 import { linkChip, statusOf } from "./printer/printStatus";
-import { historyRoute, libraryRoute, originRoute, runsRoute, useCatalog } from "./printer/resinApi";
-import { describeFile } from "./printer/resinFormat";
+import { activeRoute, historyRoute, libraryRoute, LIVE_REFRESH_MS, originRoute, runsRoute, useCatalog } from "./printer/resinApi";
+import { activeLine, describeFile } from "./printer/resinFormat";
 import { isPrinting, layerIndexOf, PHASE_EXPOSING, PHASE_PAUSED } from "./printer/sdcp";
 import { CatalogProblem, Card, Chip, LCD, ListRow, usePalette } from "./printer/ui";
 import { usePrinterLink, type PrinterLink } from "./printer/usePrinterLink";
@@ -100,6 +100,8 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const runs = useCatalog(printer.relayBase, runsRoute);
   const library = useCatalog(printer.relayBase, libraryRoute);
   const history = useCatalog(printer.relayBase, historyRoute);
+  const active = useCatalog(printer.relayBase, activeRoute, LIVE_REFRESH_MS);
+  const runningNow = active.value?.runs.filter((run) => run.running) ?? [];
   useCatalog(printer.relayBase, hasJob && info?.Filename !== undefined ? originRoute(info.Filename) : undefined);
 
   const health = healthItems(printer.attributes?.DevicesStatus);
@@ -142,7 +144,18 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
 
   const resinCard = (
     <Card title="Resin" flush>
-      <ListRow icon="flask.fill" tint={TINT.runs} title="Runs" detail="What each run changed, and its checks" value={runs.value === undefined ? undefined : runs.value.runs.length.toLocaleString()} onPress={() => open("ServerResinRuns")} />
+      <ListRow
+        icon="flask.fill"
+        tint={TINT.runs}
+        title="Runs"
+        detail={
+          runningNow[0] !== undefined
+            ? `${activeLine(runningNow[0], Date.now())}${runningNow.length > 1 ? ` · +${runningNow.length - 1}` : ""}`
+            : active.unreachable
+              ? "MacBook unreachable"
+              : "What each run changed, and its checks"
+        }
+        live={runningNow.length > 0} value={runs.value === undefined ? undefined : runs.value.runs.length.toLocaleString()} onPress={() => open("ServerResinRuns")} />
       <ListRow icon="books.vertical.fill" tint={TINT.library} title="Library" detail="Print files by what they are" value={library.value === undefined ? undefined : library.value.files.length.toLocaleString()} onPress={() => open("ServerResinLibrary")} />
       <ListRow icon="clock.arrow.circlepath" tint={TINT.history} title="Print history" detail="Every print, its outcome, and notes" value={history.value === undefined ? undefined : history.value.prints.length.toLocaleString()} onPress={() => open("ServerResinHistory")} />
       <ListRow icon="cpu" tint={TINT.jobs} title="Engine & jobs" detail="Support jobs on the relay" last onPress={() => open("ServerSupportJobs")} />

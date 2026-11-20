@@ -186,6 +186,8 @@ export const ListRow = (props: {
   readonly detail?: string;
   readonly value?: string;
   readonly badge?: number;
+  /** The detail line is live (a run in progress): it shows in the accent colour. */
+  readonly live?: boolean;
   readonly last?: boolean;
   readonly onPress: () => void;
 }): React.ReactElement => {
@@ -202,7 +204,7 @@ export const ListRow = (props: {
             {props.title}
           </Text>
           {props.detail !== undefined ? (
-            <Text style={[styles.listDetail, { color: text.secondaryLabel }]} numberOfLines={1}>
+            <Text style={[styles.listDetail, { color: props.live === true ? palette.accentInk : text.secondaryLabel }]} numberOfLines={1}>
               {props.detail}
             </Text>
           ) : null}

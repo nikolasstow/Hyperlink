@@ -13,6 +13,7 @@
  * @internal
  */
 import { Option, Schema } from "effect";
+import { useIsFocused } from "@react-navigation/native";
 import * as React from "react";
 import { authedFetch } from "../auth/serverTokens";
 
@@ -152,6 +153,28 @@ export const OriginReply = Schema.Struct({
 });
 export type OriginReply = typeof OriginReply.Type;
 
+/** A planner run in progress, or one that ended in the last 24 hours (the relay's `GET /api/resin/active`). */
+export const ActiveRun = Schema.Struct({
+  number: Schema.Number,
+  folder: Schema.String,
+  id: Schema.NullOr(Schema.String),
+  running: Schema.Boolean,
+  startedAt: Schema.Number,
+  updatedAt: Schema.Number,
+  elapsedSeconds: Schema.Number,
+  estimateSeconds: Schema.Number,
+  finishAt: Schema.NullOr(Schema.Number),
+  stage: Schema.NullOr(Schema.String),
+  stageSeconds: Schema.NullOr(Schema.Number),
+  burn: Schema.NullOr(Schema.Struct({ passed: Schema.Boolean, line: Schema.String })),
+  gate: Schema.NullOr(Schema.Struct({ passed: Schema.Boolean, checks: Schema.Array(Schema.Struct({ key: Schema.String, passed: Schema.Boolean })) })),
+  treesOver1: Schema.NullOr(Schema.Number),
+  unattachedContacts: Schema.NullOr(Schema.Number),
+});
+export type ActiveRun = typeof ActiveRun.Type;
+export const ActiveReply = Schema.Struct({ runs: Schema.Array(ActiveRun), at: Schema.Number });
+export type ActiveReply = typeof ActiveReply.Type;
+
 const ErrorBody = Schema.Struct({ error: Schema.String, unreachable: Schema.optional(Schema.Boolean) });
 
 /** A catalog request that failed: the relay's reason, and whether the MacBook with the run database was unreachable. */
@@ -173,6 +196,7 @@ export interface CatalogRoute<A> {
 export const runsRoute: CatalogRoute<RunsReply> = { path: "/api/resin/runs", schema: RunsReply };
 export const libraryRoute: CatalogRoute<LibraryReply> = { path: "/api/resin/library", schema: LibraryReply };
 export const historyRoute: CatalogRoute<HistoryReply> = { path: "/api/resin/history", schema: HistoryReply };
+export const activeRoute: CatalogRoute<ActiveReply> = { path: "/api/resin/active", schema: ActiveReply };
 export const runRoute = (id: string): CatalogRoute<RunDetail> => ({ path: `/api/resin/runs/${encodeURIComponent(id)}`, schema: RunDetail });
 export const originRoute = (name: string): CatalogRoute<OriginReply> => ({ path: `/api/resin/origin?name=${encodeURIComponent(name)}`, schema: OriginReply });
 
@@ -201,6 +225,9 @@ const readCatalog = async <A>(relayBase: string, route: CatalogRoute<A>): Promis
 
 /** How often an open page asks the relay again. */
 export const REFRESH_MS = 30_000;
+
+/** How often a page that shows runs in progress asks again. */
+export const LIVE_REFRESH_MS = 5_000;
 
 /** A reply as a page sees it. The last value stays while a new request runs or fails. */
 export interface Loaded<A> {
@@ -257,19 +284,23 @@ export const loadCatalog = <A>(relayBase: string, route: CatalogRoute<A>): void 
     });
 };
 
-/** A route's reply from the store. It loads at once when the store has none, then every `REFRESH_MS` while mounted. */
-export const useCatalog = <A>(relayBase: string, route: CatalogRoute<A> | undefined): Loaded<A> => {
+/**
+ * A route's reply from the store. It loads at once, then every `refreshMs`
+ * while the page is on screen; a page under another one does not ask.
+ */
+export const useCatalog = <A>(relayBase: string, route: CatalogRoute<A> | undefined, refreshMs: number = REFRESH_MS): Loaded<A> => {
+  const focused = useIsFocused();
   const key = route === undefined ? undefined : keyOf(relayBase, route);
   // The key names the route: a new route object with the same key asks for nothing new.
   const routeRef = React.useRef(route);
   routeRef.current = route;
   React.useEffect(() => {
     const current = routeRef.current;
-    if (key === undefined || current === undefined) return;
+    if (key === undefined || current === undefined || !focused) return;
     loadCatalog(relayBase, current);
-    const id = setInterval(() => loadCatalog(relayBase, current), REFRESH_MS);
+    const id = setInterval(() => loadCatalog(relayBase, current), refreshMs);
     return () => clearInterval(id);
-  }, [relayBase, key]);
+  }, [relayBase, key, focused, refreshMs]);
   const snapshot = React.useSyncExternalStore(subscribe, () => (key === undefined ? EMPTY : (entries.get(key)?.snapshot ?? EMPTY)));
   const schema = route?.schema;
   return React.useMemo((): Loaded<A> => {

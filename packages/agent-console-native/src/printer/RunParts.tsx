@@ -9,9 +9,9 @@ import * as React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { authedSource } from "../auth/serverTokens";
 import { useTextColors } from "../theme";
-import { renderUrl, type RunSummary } from "./resinApi";
-import { fmtShortDate, OUTCOME_LABEL, outcomeKindOf, renderLabel, type OutcomeKind } from "./resinFormat";
-import { CheckBadge, Chevron, Chip, LCD, type Tone } from "./ui";
+import { renderUrl, type ActiveRun, type RunSummary } from "./resinApi";
+import { fmtShortDate, OUTCOME_LABEL, outcomeKindOf, renderLabel, timeLeft, type OutcomeKind } from "./resinFormat";
+import { CheckBadge, Chevron, Chip, LCD, usePalette, type Tone } from "./ui";
 
 /** A run row's height. */
 export const RUN_ROW_HEIGHT = 78;
@@ -72,6 +72,56 @@ export const RunRow = (props: {
   );
 };
 
+/**
+ * A run in progress or just ended: its number, stage, and progress against
+ * a typical run, or its burn and gate results once it has ended.
+ */
+export const ActiveRow = (props: { readonly run: ActiveRun; readonly now: number; readonly last?: boolean; readonly onPress: (() => void) | undefined }): React.ReactElement => {
+  const text = useTextColors();
+  const palette = usePalette();
+  const { run } = props;
+  const elapsed = run.running ? (props.now - run.startedAt) / 1000 : run.elapsedSeconds;
+  const fraction = Math.min(1, elapsed / run.estimateSeconds);
+  const body = (
+    <View style={[styles.row, styles.activeRow]}>
+      <View style={[styles.activeMain, props.last === true ? null : styles.line]}>
+        <View style={styles.top}>
+          <Text style={[styles.id, { color: text.label }]}>
+            Run {run.number}
+            {run.id !== null ? <Text style={[styles.date, { color: text.tertiaryLabel }]}>{`  ${run.id}`}</Text> : null}
+          </Text>
+          <Text style={[styles.date, { color: run.running ? palette.accentInk : text.tertiaryLabel }]}>
+            {run.running ? (timeLeft(run.finishAt, props.now) ?? "running") : `ended ${fmtShortDate(run.updatedAt)}`}
+          </Text>
+        </View>
+        <Text style={[styles.purpose, { color: text.secondaryLabel }]} numberOfLines={1}>
+          {run.stage ?? "starting"} · {Math.round(elapsed / 60)} min
+        </Text>
+        {run.running ? (
+          <View style={styles.track}>
+            <View style={[styles.fill, { width: `${Math.round(fraction * 100)}%`, backgroundColor: palette.accent }]} />
+          </View>
+        ) : (
+          <View style={styles.badges}>
+            <CheckBadge label="Burn" passed={run.burn?.passed ?? null} />
+            <CheckBadge label="Gate" passed={run.gate?.passed ?? null} />
+            {run.gate !== null ? <Text style={[styles.contacts, { color: text.tertiaryLabel }]}>{run.gate.checks.filter((check) => check.passed).length}/{run.gate.checks.length} checks</Text> : null}
+            {run.treesOver1 !== null ? <Text style={[styles.contacts, { color: text.tertiaryLabel }]}>· {run.treesOver1} trees over 1</Text> : null}
+          </View>
+        )}
+      </View>
+      {props.onPress !== undefined ? <Chevron color={text.tertiaryLabel} /> : null}
+    </View>
+  );
+  return props.onPress === undefined ? (
+    body
+  ) : (
+    <Pressable onPress={props.onPress} accessibilityRole="button" accessibilityLabel={`Run ${run.number}`} style={({ pressed }) => [pressed && styles.pressed]}>
+      {body}
+    </Pressable>
+  );
+};
+
 /** One render at a fixed size, with its caption. */
 export const RenderTile = (props: { readonly relayBase: string; readonly runId: string; readonly name: string; readonly size: number; readonly onPress: () => void }): React.ReactElement => {
   const text = useTextColors();
@@ -100,6 +150,11 @@ const styles = StyleSheet.create({
   purpose: { fontSize: 13 },
   badges: { flexDirection: "row", alignItems: "center", gap: 6 },
   contacts: { fontSize: 11.5, fontVariant: ["tabular-nums"] },
+  activeRow: { paddingLeft: 16 },
+  activeMain: { flex: 1, height: RUN_ROW_HEIGHT, justifyContent: "center", gap: 4 },
+  line: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(127,127,127,0.3)" },
+  track: { height: 4, borderRadius: 2, overflow: "hidden", backgroundColor: "rgba(127,127,127,0.2)" },
+  fill: { height: 4, borderRadius: 2 },
   tile: { borderRadius: 12, backgroundColor: LCD },
   caption: { fontSize: 11.5, marginTop: 4 },
 });

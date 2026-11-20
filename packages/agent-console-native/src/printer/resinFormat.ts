@@ -152,3 +152,14 @@ export const timeOf = (started: string | null): string | undefined => {
   const rest = (started ?? "").replace(/^\d{4}-\d{2}-\d{2}\s*/, "").trim();
   return rest === "" ? undefined : rest;
 };
+
+/** The time a run in progress has left against a typical run: "4 min left". */
+export const timeLeft = (finishAt: number | null, nowMs: number): string | undefined => {
+  if (finishAt === null) return undefined;
+  const left = Math.ceil((finishAt - nowMs) / 60_000);
+  return left > 0 ? `${left} min left` : "past the usual time";
+};
+
+/** A run in progress in a few words: "Run 640 · anti-alias · 4 min left". */
+export const activeLine = (run: { readonly number: number; readonly stage: string | null; readonly finishAt: number | null }, nowMs: number): string =>
+  [`Run ${run.number}`, run.stage ?? "starting", timeLeft(run.finishAt, nowMs)].filter((part) => part !== undefined).join(" · ");
