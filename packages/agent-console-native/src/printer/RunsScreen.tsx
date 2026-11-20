@@ -9,16 +9,16 @@
  *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authedSource } from "../auth/serverTokens";
+import { markTap, useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
 import { SystemIcon } from "../SystemIcon";
-import { useTextColors } from "../theme";
-import { Backdrop } from "./Backdrop";
+import { useTextColors, useScreenBackground } from "../theme";
+import { GroupedList } from "./GroupedList";
 import { renderUrl, runRoute, runsRoute, useCatalog, type RunDetail, type RunSummary } from "./resinApi";
 import { deltaOf, flagLabel, fmtMetric, fmtShortDate, metricLabel, renderLabel } from "./resinFormat";
 import { OutcomeChip, RenderTile, RUN_ROW_HEIGHT, RunRow } from "./RunParts";
@@ -27,6 +27,9 @@ import { Card, CheckBadge, LCD, ListRow, CatalogProblem, Note, Row, usePalette }
 
 type ListProps = NativeStackScreenProps<RootStackParamList, "ServerResinRuns">;
 type RunProps = NativeStackScreenProps<RootStackParamList, "ServerResinRun">;
+
+/** The note above a list while it loads or fails, at a fixed height. */
+const TOP_NOTE_HEIGHT = 96;
 
 /** The runs grouped by series, newest series first, each newest step first. */
 const seriesOf = (runs: ReadonlyArray<RunSummary>): ReadonlyArray<{ readonly series: number; readonly runs: ReadonlyArray<RunSummary> }> => {
@@ -37,40 +40,50 @@ const seriesOf = (runs: ReadonlyArray<RunSummary>): ReadonlyArray<{ readonly ser
     .map(([series, list]) => ({ series, runs: [...list].sort((a, b) => b.step - a.step) }));
 };
 
+const runKey = (run: RunSummary): string => run.id;
+
 export const RunsScreen = (props: ListProps): React.ReactElement => {
+  const background = useScreenBackground("grouped");
+  useOpenTiming("ServerResinRuns");
   const text = useTextColors();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
   const runs = useCatalog(relayBase, runsRoute);
-  const groups = React.useMemo(() => seriesOf(runs.value?.runs ?? []), [runs.value]);
-  const listWidth = Math.min(width - 32, 760);
-
+  const groups = React.useMemo(
+    () =>
+      seriesOf(runs.value?.runs ?? []).map((group) => ({
+        key: String(group.series),
+        title: `Series ${group.series}`,
+        right: <Text style={[styles.seriesCount, { color: text.tertiaryLabel }]}>{group.runs.length} runs</Text>,
+        rows: group.runs,
+      })),
+    [runs.value, text.tertiaryLabel],
+  );
+  const showTop = runs.value === undefined || runs.error !== undefined;
   return (
-    <View style={styles.root}>
-      <Backdrop uri={undefined} glow={0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40, width: listWidth, alignSelf: "center" }}>
-        {runs.value === undefined || runs.error !== undefined ? (
-          <View style={styles.headNote}>
-            {runs.error !== undefined ? <CatalogProblem error={runs.error} unreachable={runs.unreachable} /> : <Note text="Reading the runs…" />}
-          </View>
-        ) : null}
-        {groups.map((group) => (
-          <View key={group.series}>
-            <View style={styles.series}>
-              <Text style={[styles.seriesText, { color: text.secondaryLabel }]}>SERIES {group.series}</Text>
-              <Text style={[styles.seriesCount, { color: text.tertiaryLabel }]}>{group.runs.length} runs</Text>
-            </View>
-            <Card flush style={{ height: group.runs.length * RUN_ROW_HEIGHT }}>
-              {group.runs.map((run, index) => (
-                <RunRow key={run.id} relayBase={relayBase} run={run} last={index === group.runs.length - 1} onPress={() => props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId: run.id })} />
-              ))}
-            </Card>
-          </View>
-        ))}
-      </ScrollView>
+    <View style={[styles.root, { backgroundColor: background }]}>
+      <GroupedList
+        groups={groups}
+        rowKey={runKey}
+        rowHeight={RUN_ROW_HEIGHT}
+        width={Math.min(width - 32, 760)}
+        bottomInset={insets.bottom}
+        topHeight={showTop ? TOP_NOTE_HEIGHT : 0}
+        top={showTop ? runs.error !== undefined ? <CatalogProblem error={runs.error} unreachable={runs.unreachable} /> : <Note text="Reading the runs…" /> : null}
+        renderRow={(run, last) => (
+          <RunRow
+            relayBase={relayBase}
+            run={run}
+            last={last}
+            onPress={() => {
+              markTap(`run ${run.id}`);
+              props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId: run.id });
+            }}
+          />
+        )}
+      />
     </View>
   );
 };
@@ -260,8 +273,9 @@ const RunBody = (props: {
 };
 
 export const RunScreen = (props: RunProps): React.ReactElement => {
+  useOpenTiming("ServerResinRun");
+  const background = useScreenBackground("grouped");
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress, runId } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
@@ -286,9 +300,8 @@ export const RunScreen = (props: RunProps): React.ReactElement => {
     );
 
   return (
-    <View style={styles.root}>
-      <Backdrop uri={undefined} glow={0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
+    <View style={[styles.root, { backgroundColor: background }]}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
         <View style={{ width: contentWidth, alignSelf: "center" }}>{body}</View>
       </ScrollView>
       <RenderViewer relayBase={relayBase} runId={runId} name={viewing} onClose={() => setViewing(undefined)} />

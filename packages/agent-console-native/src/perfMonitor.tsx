@@ -14,6 +14,28 @@ export const setPerfScreen = (name: string): void => {
   console.log("[perf] screen", name);
 };
 
+/** When the owner last tapped something that opens a page (`markTap`). */
+let tapAt: { readonly label: string; readonly at: number } | undefined;
+
+/** Marks a tap that opens a page, for `useOpenTiming`. */
+export const markTap = (label: string): void => {
+  tapAt = { label, at: Date.now() };
+};
+
+/**
+ * Logs the time from the last `markTap` to this page's first frame: the
+ * effect runs after the first commit, and the frame after it is on screen.
+ */
+export const useOpenTiming = (page: string): void => {
+  React.useEffect(() => {
+    const tap = tapAt;
+    tapAt = undefined;
+    if (tap === undefined) return;
+    const id = requestAnimationFrame(() => console.log("[perf] open", JSON.stringify({ page, from: tap.label, ms: Date.now() - tap.at })));
+    return () => cancelAnimationFrame(id);
+  }, [page]);
+};
+
 const JS_TICK_MS = 100;
 const JS_STALL_MS = 200;
 const UI_SLOW_FRAME_MS = 40;

@@ -10,23 +10,22 @@
  *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authedSource } from "../auth/serverTokens";
 import { previewUrl } from "../explorer/httpFileSource";
+import { markTap, useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
-import { SystemIcon } from "../SystemIcon";
-import { useTextColors } from "../theme";
-import { Backdrop } from "./Backdrop";
+import { useTextColors, useScreenBackground } from "../theme";
 import { fmtBytes, fmtDuration } from "./printerFormat";
 import { libraryRoute, useCatalog, type LibraryFile } from "./resinApi";
 import { describeFile, fmtShortDate } from "./resinFormat";
+import { GroupedList } from "./GroupedList";
 import { OutcomeChip } from "./RunParts";
 import { relayBaseOf } from "./sdcp";
-import { Card, LCD, CatalogProblem, Note } from "./ui";
+import { CatalogProblem, Chevron, LCD, Note } from "./ui";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerResinLibrary">;
 
@@ -63,7 +62,7 @@ const FileRow = (props: { readonly relayBase: string; readonly file: LibraryFile
         {file.browserPath !== null && file.size > 0 && file.name.toLowerCase().endsWith(".goo") ? (
           <Image source={authedSource(previewUrl(props.relayBase, file.browserPath, false))} style={styles.thumbImage} resizeMode="cover" />
         ) : (
-          <SystemIcon name="doc" size={20} color="rgba(244,245,249,0.5)" />
+          <Text style={styles.noPreview}>{file.name.split(".").at(-1)?.toUpperCase()}</Text>
         )}
       </View>
       <View style={[styles.main, props.last ? null : styles.line]}>
@@ -87,7 +86,7 @@ const FileRow = (props: { readonly relayBase: string; readonly file: LibraryFile
           {file.sha256 !== null ? ` · ${file.sha256.slice(0, 8)}` : ""}
         </Text>
       </View>
-      {props.onPress !== undefined ? <SystemIcon name="chevron.right" size={13} color={text.tertiaryLabel} weight="semibold" /> : null}
+      {props.onPress !== undefined ? <Chevron color={text.tertiaryLabel} /> : null}
     </View>
   );
   return props.onPress === undefined ? (
@@ -99,60 +98,73 @@ const FileRow = (props: { readonly relayBase: string; readonly file: LibraryFile
   );
 };
 
+const fileKey = (file: LibraryFile): string => file.path;
+
+/** One note above the list: a fixed height, so the list's rows keep their places. */
+const NOTE_HEIGHT = 76;
+
 export const LibraryScreen = (props: Props): React.ReactElement => {
+  useOpenTiming("ServerResinLibrary");
+  const background = useScreenBackground("grouped");
   const text = useTextColors();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
   const library = useCatalog(relayBase, libraryRoute);
-  const sections = React.useMemo(() => sectionsOf(library.value?.files ?? []), [library.value]);
-  const wide = width >= 700;
-  const contentWidth = Math.min(width - 32, 1100);
-  const columnWidth = wide ? Math.floor((contentWidth - 14) / 2) : contentWidth;
+  const groups = React.useMemo(
+    () =>
+      sectionsOf(library.value?.files ?? []).map((section) => ({
+        key: section.title,
+        title: section.title,
+        right: <Text style={[styles.sectionCount, { color: text.tertiaryLabel }]}>{section.files.length}</Text>,
+        rows: section.files,
+      })),
+    [library.value, text.tertiaryLabel],
+  );
+  const value = library.value;
+  const notes: ReadonlyArray<React.ReactElement> = [
+    ...(library.error !== undefined ? [<CatalogProblem key="error" error={library.error} unreachable={library.unreachable} />] : value === undefined ? [<Note key="reading" text="Reading the library…" />] : []),
+    ...(value?.runs !== null && value?.runs !== undefined ? [<CatalogProblem key="runs" error={`${value.runs.error} The files show without their print records.`} unreachable={value.runs.unreachable} />] : []),
+    ...(value !== undefined && value.hashing.done < value.hashing.total
+      ? [<Note key="hashing" text={`Hashing ${value.hashing.done}/${value.hashing.total} on the server${value.hashing.current !== null ? `: ${value.hashing.current}` : ""}. A file shows its print record once it has a SHA-256.`} />]
+      : []),
+    ...(value?.problems ?? []).map((problem) => <Note key={problem} text={problem} tone="bad" />),
+  ];
 
-  const cards = sections.map((section) => (
-    <View key={section.title} style={{ width: columnWidth }}>
-      <View style={styles.section}>
-        <Text style={[styles.sectionText, { color: text.secondaryLabel }]}>{section.title.toUpperCase()}</Text>
-        <Text style={[styles.sectionCount, { color: text.tertiaryLabel }]}>{section.files.length}</Text>
-      </View>
-      <Card flush style={{ height: section.files.length * ROW_HEIGHT }}>
-        {section.files.map((file, index) => {
+  return (
+    <View style={[styles.root, { backgroundColor: background }]}>
+      <GroupedList
+        groups={groups}
+        rowKey={fileKey}
+        rowHeight={ROW_HEIGHT}
+        width={Math.min(width - 32, 760)}
+        bottomInset={insets.bottom}
+        topHeight={notes.length * NOTE_HEIGHT}
+        top={notes.map((note) => (
+          <View key={note.key} style={styles.note}>
+            {note}
+          </View>
+        ))}
+        renderRow={(file, last) => {
           const runId = file.print?.runA ?? file.print?.runB ?? null;
           return (
             <FileRow
-              key={file.path}
               relayBase={relayBase}
               file={file}
-              last={index === section.files.length - 1}
-              onPress={runId === null ? undefined : () => props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId })}
+              last={last}
+              onPress={
+                runId === null
+                  ? undefined
+                  : () => {
+                      markTap(`file ${file.name}`);
+                      props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId });
+                    }
+              }
             />
           );
-        })}
-      </Card>
-    </View>
-  ));
-
-  return (
-    <View style={styles.root}>
-      <Backdrop uri={undefined} glow={0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40, width: contentWidth, alignSelf: "center" }}>
-        {library.error !== undefined ? (
-          <CatalogProblem error={library.error} unreachable={library.unreachable} />
-        ) : library.value === undefined ? (
-          <Note text="Reading the library…" />
-        ) : null}
-        {library.value?.runs !== null && library.value?.runs !== undefined ? (
-          <CatalogProblem error={`${library.value.runs.error} The files show without their print records.`} unreachable={library.value.runs.unreachable} />
-        ) : null}
-        {library.value !== undefined && library.value.hashing.done < library.value.hashing.total ? (
-          <Note text={`Hashing ${library.value.hashing.done}/${library.value.hashing.total} on the server${library.value.hashing.current !== null ? `: ${library.value.hashing.current}` : ""}. A file shows its print record once it has a SHA-256.`} />
-        ) : null}
-        {library.value?.problems.map((problem) => <Note key={problem} text={problem} tone="bad" />)}
-        {wide ? <View style={styles.columns}>{cards}</View> : cards}
-      </ScrollView>
+        }}
+      />
     </View>
   );
 };
@@ -163,6 +175,8 @@ const styles = StyleSheet.create({
   section: { height: 34, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingHorizontal: 4, paddingBottom: 6 },
   sectionText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.6 },
   sectionCount: { fontSize: 12 },
+  noPreview: { color: "rgba(244,245,249,0.5)", fontSize: 10, fontWeight: "700" },
+  note: { height: NOTE_HEIGHT, overflow: "hidden", justifyContent: "center" },
   pressed: { backgroundColor: "rgba(127,127,127,0.12)" },
   row: { flexDirection: "row", alignItems: "center", height: ROW_HEIGHT, paddingLeft: 16, paddingRight: 14, gap: 12 },
   thumb: { width: THUMB, height: THUMB, borderRadius: 12, overflow: "hidden", backgroundColor: LCD, alignItems: "center", justifyContent: "center" },

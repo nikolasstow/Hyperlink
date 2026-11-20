@@ -56,23 +56,37 @@ export const toneColor = (palette: Palette, tone: Tone, plain: ColorValue): Colo
 
 const toneHex = (palette: Palette, tone: Exclude<Tone, "plain">): string => (tone === "uv" ? palette.accentInk : palette[tone]);
 
-/** A glass card with an optional title row. */
-export const Card = (props: { readonly title?: string; readonly right?: React.ReactNode; readonly children: React.ReactNode; readonly style?: StyleProp<ViewStyle>; readonly flush?: boolean }): React.ReactElement => {
+/** A grouped-list section header, as in iOS Settings: small capitals above a card, with an optional item at the right. */
+export const SectionHeader = (props: { readonly title: string; readonly right?: React.ReactNode }): React.ReactElement => {
   const text = useTextColors();
   return (
-    <View style={[styles.card, props.style]}>
-      <CardGlass />
-      {props.title !== undefined ? (
-        <View style={styles.head}>
-          <Text style={[styles.title, { color: text.label }]}>{props.title}</Text>
-          <View style={styles.spacer} />
-          {props.right}
-        </View>
-      ) : null}
-      <View style={props.flush === true ? undefined : styles.body}>{props.children}</View>
+    <View style={styles.head}>
+      <Text style={[styles.title, { color: text.secondaryLabel }]} numberOfLines={1}>
+        {props.title.toUpperCase()}
+      </Text>
+      <View style={styles.spacer} />
+      {props.right}
     </View>
   );
 };
+
+/** A glass card. Its title is a section header above it, outside the card. */
+export const Card = (props: { readonly title?: string; readonly right?: React.ReactNode; readonly children: React.ReactNode; readonly style?: StyleProp<ViewStyle>; readonly flush?: boolean }): React.ReactElement => (
+  <>
+    {props.title !== undefined ? <SectionHeader title={props.title} right={props.right} /> : null}
+    <View style={[styles.card, props.style]}>
+      <CardGlass />
+      <View style={props.flush === true ? undefined : styles.body}>{props.children}</View>
+    </View>
+  </>
+);
+
+/**
+ * A list chevron drawn with two borders. Rows use it in place of an SF
+ * Symbol: each SystemIcon is its own SwiftUI host, and a list of them is
+ * slow to mount.
+ */
+export const Chevron = (props: { readonly color: ColorValue }): React.ReactElement => <View style={[styles.chevron, { borderColor: props.color }]} />;
 
 export const Dot = (props: { readonly tone: Tone; readonly size?: number }): React.ReactElement => {
   const palette = usePalette();
@@ -203,7 +217,7 @@ export const ListRow = (props: {
             <Text style={styles.listBadgeText}>{props.badge}</Text>
           </View>
         ) : null}
-        <SystemIcon name="chevron.right" size={13} color={text.tertiaryLabel} weight="semibold" />
+        <Chevron color={text.tertiaryLabel} />
       </View>
     </Pressable>
   );
@@ -216,8 +230,9 @@ export const CheckBadge = (props: { readonly label: string; readonly passed: boo
   const color = props.passed === null ? text.tertiaryLabel : props.passed ? palette.ok : palette.bad;
   return (
     <View style={[styles.checkBadge, { backgroundColor: props.passed === null ? "rgba(127,127,127,0.14)" : withAlpha(props.passed ? palette.ok : palette.bad, 0.15) }]}>
-      <SystemIcon name={props.passed === null ? "minus" : props.passed ? "checkmark" : "xmark"} size={9} color={color} weight="bold" />
-      <Text style={[styles.checkText, { color }]}>{props.label}</Text>
+      <Text style={[styles.checkText, { color }]}>
+        {props.passed === null ? "–" : props.passed ? "✓" : "✕"} {props.label}
+      </Text>
     </View>
   );
 };
@@ -250,10 +265,11 @@ export const CatalogProblem = (props: { readonly error: string; readonly unreach
 
 export const styles = StyleSheet.create({
   card: { borderRadius: CARD_RADIUS, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.separator, marginBottom: 14 },
-  head: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 14, minHeight: 40 },
-  title: { fontSize: 16, fontWeight: "600", letterSpacing: -0.2 },
+  head: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 7, minHeight: 34 },
+  title: { fontSize: 13, letterSpacing: -0.08 },
+  chevron: { width: 8, height: 8, borderTopWidth: 2, borderRightWidth: 2, borderRadius: 1, transform: [{ rotate: "45deg" }], marginLeft: 2, marginRight: 4 },
   spacer: { flex: 1 },
-  body: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
+  body: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, height: 26, borderRadius: 13 },
   chipText: { fontSize: 13, fontWeight: "600" },
   button: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, height: 46, paddingHorizontal: 16, borderRadius: 14 },

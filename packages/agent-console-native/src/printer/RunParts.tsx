@@ -8,11 +8,10 @@
 import * as React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { authedSource } from "../auth/serverTokens";
-import { SystemIcon } from "../SystemIcon";
 import { useTextColors } from "../theme";
 import { renderUrl, type RunSummary } from "./resinApi";
 import { fmtShortDate, OUTCOME_LABEL, outcomeKindOf, renderLabel, type OutcomeKind } from "./resinFormat";
-import { CheckBadge, Chip, LCD, type Tone } from "./ui";
+import { CheckBadge, Chevron, Chip, LCD, type Tone } from "./ui";
 
 /** A run row's height. */
 export const RUN_ROW_HEIGHT = 78;
@@ -45,7 +44,7 @@ export const RunRow = (props: {
   return (
     <Pressable onPress={props.onPress} accessibilityRole="button" accessibilityLabel={`Run ${run.id}`} style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
       <View style={styles.thumb}>
-        {run.render !== null ? <Image source={authedSource(renderUrl(props.relayBase, run.id, run.render, true))} style={styles.thumbImage} resizeMode="cover" /> : <SystemIcon name="cube.transparent" size={20} color="rgba(244,245,249,0.5)" />}
+        {run.render !== null ? <Image source={authedSource(renderUrl(props.relayBase, run.id, run.render, true))} style={styles.thumbImage} resizeMode="cover" /> : <Text style={styles.noRender}>No render</Text>}
         {props.head !== undefined ? (
           <View style={styles.head}>
             <Text style={styles.headText}>{props.head}</Text>
@@ -65,10 +64,10 @@ export const RunRow = (props: {
             <CheckBadge key={check.key} label={check.label} passed={check.passed} />
           ))}
           {run.failed !== null ? <Text style={[styles.contacts, { color: text.tertiaryLabel }]}>{run.failed.toLocaleString()} failed</Text> : null}
-          {run.prints.length > 0 ? <SystemIcon name="printer.fill" size={11} color={text.tertiaryLabel} /> : null}
+          {run.prints.length > 0 ? <Text style={[styles.contacts, { color: text.tertiaryLabel }]}>· printed {run.prints.map((print) => print.id).join(", ")}</Text> : null}
         </View>
       </View>
-      <SystemIcon name="chevron.right" size={13} color={text.tertiaryLabel} weight="semibold" />
+      <Chevron color={text.tertiaryLabel} />
     </Pressable>
   );
 };
@@ -92,6 +91,7 @@ const styles = StyleSheet.create({
   thumb: { width: THUMB, height: THUMB, borderRadius: 12, backgroundColor: LCD, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   thumbImage: { width: THUMB, height: THUMB },
   head: { position: "absolute", left: 4, top: 4, width: 18, height: 18, borderRadius: 9, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
+  noRender: { color: "rgba(244,245,249,0.5)", fontSize: 9 },
   headText: { color: "#ffffff", fontSize: 11, fontWeight: "700" },
   main: { flex: 1, height: RUN_ROW_HEIGHT, justifyContent: "center", gap: 3 },
   top: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 8 },

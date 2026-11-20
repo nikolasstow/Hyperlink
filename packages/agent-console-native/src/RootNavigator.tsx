@@ -180,6 +180,20 @@ const pageHeader: NativeStackNavigationOptions = {
   scrollEdgeEffects: { top: "soft", bottom: "soft" },
 };
 
+/**
+ * The standard iOS bar with a large title that collapses into the bar as
+ * the page scrolls (the printer home and its new pages). The page's first
+ * view must be its scroll view, with automatic insets.
+ */
+const largeTitleHeader: NativeStackNavigationOptions = {
+  headerShown: true,
+  headerLargeTitle: true,
+  headerTransparent: true,
+  headerShadowVisible: false,
+  headerLargeTitleShadowVisible: false,
+  scrollEdgeEffects: { top: "soft", bottom: "soft" },
+};
+
 /** react-navigation's `Theme` type requires plain string colors (it can't
  * accept `PlatformColor`, unlike a real RN `ViewStyle`), so this can't just
  * reuse colors.ts — these are Apple's own documented systemGroupedBackground/
@@ -427,13 +441,13 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="ServerUps" component={ServerUpsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="UPS" /> }} />
         <Stack.Screen name="ServerCameras" component={CamerasScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Cameras" /> }} />
         <Stack.Screen name="ServerCameraRecordings" component={CameraRecordingsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Recordings" /> }} />
-        <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Printer" /> }} />
-        <Stack.Screen name="ServerPrint" component={PrintScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Print" /> }} />
-        <Stack.Screen name="ServerPrinterCamera" component={PrinterCameraScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Camera" /> }} />
-        <Stack.Screen name="ServerResinRuns" component={RunsScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Runs" /> }} />
-        <Stack.Screen name="ServerResinRun" component={RunScreen} options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={`Run ${route.params.runId}`} /> })} />
-        <Stack.Screen name="ServerResinLibrary" component={LibraryScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Library" /> }} />
-        <Stack.Screen name="ServerResinHistory" component={HistoryScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Print History" /> }} />
+        <Stack.Screen name="ServerPrinter" component={PrinterScreen} options={{ ...largeTitleHeader, title: "Printer" }} />
+        <Stack.Screen name="ServerPrint" component={PrintScreen} options={{ ...largeTitleHeader, title: "Print" }} />
+        <Stack.Screen name="ServerPrinterCamera" component={PrinterCameraScreen} options={{ ...largeTitleHeader, title: "Camera" }} />
+        <Stack.Screen name="ServerResinRuns" component={RunsScreen} options={{ ...largeTitleHeader, title: "Runs" }} />
+        <Stack.Screen name="ServerResinRun" component={RunScreen} options={({ route }) => ({ ...largeTitleHeader, title: `Run ${route.params.runId}` })} />
+        <Stack.Screen name="ServerResinLibrary" component={LibraryScreen} options={{ ...largeTitleHeader, title: "Library" }} />
+        <Stack.Screen name="ServerResinHistory" component={HistoryScreen} options={{ ...largeTitleHeader, title: "Print History" }} />
         <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Local Files" /> }} />
         <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Details & Health" /> }} />
         <Stack.Screen name="ServerPrinterNetwork" component={PrinterNetworkScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Network" /> }} />

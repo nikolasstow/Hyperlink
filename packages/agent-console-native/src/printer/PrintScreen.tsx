@@ -14,7 +14,6 @@
  *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useIsFocused, useNavigation, type NavigationProp } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
@@ -22,9 +21,9 @@ import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PrinterPip } from "../../modules/printer-pip";
 import { authedSource } from "../auth/serverTokens";
+import { useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
-import { towardWhite, useTextColors } from "../theme";
-import { Backdrop } from "./Backdrop";
+import { towardWhite, useTextColors, useScreenBackground } from "../theme";
 import { useDirectLayer } from "./directLayers";
 import { FileOrigin } from "./FileOrigin";
 import { useLayerPack } from "./layerPack";
@@ -55,16 +54,16 @@ const SWEEP_MS_PER_LAYER = 0.25;
 const PREVIEW = 76;
 
 export const PrintScreen = (props: Props): React.ReactElement => {
+  useOpenTiming("ServerPrint");
+  const background = useScreenBackground("grouped");
   const text = useTextColors();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const link = usePrinterPageLink(props.route.params.serverAddress);
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: background }]}>
       {link === undefined ? (
         <>
-          <Backdrop uri={undefined} glow={0} />
-          <Text style={[styles.gone, { color: text.tertiaryLabel, marginTop: headerHeight + 40, marginBottom: insets.bottom }]}>Open the printer page first.</Text>
+          <Text style={[styles.gone, { color: text.tertiaryLabel, marginTop: 40, marginBottom: insets.bottom }]}>Open the printer page first.</Text>
         </>
       ) : (
         <PrintView printer={link} serverName={props.route.params.serverName} serverAddress={props.route.params.serverAddress} />
@@ -80,7 +79,6 @@ const PrintView = (props: { readonly printer: PrinterLink; readonly serverName: 
   const focused = useIsFocused();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const relayToken = useRelayToken(printer.relayBase);
   const [measure] = useMeasure();
@@ -326,8 +324,7 @@ const PrintView = (props: { readonly printer: PrinterLink; readonly serverName: 
 
   return (
     <>
-      <Backdrop uri={previewUri} glow={exposing ? 1 : active ? 0.45 : 0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
         {wide ? (
           <View style={styles.columns}>
             <View style={{ width: mainWidth }}>

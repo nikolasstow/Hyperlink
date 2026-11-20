@@ -9,14 +9,13 @@
  *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { markTap, useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
-import { useTextColors } from "../theme";
-import { Backdrop } from "./Backdrop";
+import { useTextColors, useScreenBackground } from "../theme";
 import { historyRoute, useCatalog, type PrintRecord } from "./resinApi";
 import { dayOf, describeFile, fmtDay, outcomeKindOf, timeOf } from "./resinFormat";
 import { OutcomeChip, outcomeTone } from "./RunParts";
@@ -114,39 +113,57 @@ const PrintEntry = (props: { readonly print: PrintRecord; readonly wide: boolean
   );
 };
 
+type TimelineItem = { readonly kind: "Day"; readonly key: string; readonly day: string | undefined } | { readonly kind: "Print"; readonly key: string; readonly print: PrintRecord };
+
 export const HistoryScreen = (props: Props): React.ReactElement => {
+  useOpenTiming("ServerResinHistory");
+  const background = useScreenBackground("grouped");
   const text = useTextColors();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const { serverName, serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
   const history = useCatalog(relayBase, historyRoute);
-  const days = React.useMemo(() => daysOf(history.value?.prints ?? []), [history.value]);
+  const items = React.useMemo(
+    (): ReadonlyArray<TimelineItem> =>
+      daysOf(history.value?.prints ?? []).flatMap((group): ReadonlyArray<TimelineItem> => [
+        { kind: "Day", key: `day-${group.day ?? "undated"}`, day: group.day },
+        ...group.prints.map((print): TimelineItem => ({ kind: "Print", key: print.id, print })),
+      ]),
+    [history.value],
+  );
   const wide = width >= 700;
   const contentWidth = Math.min(width - 32, 1100);
-  const openRun = (runId: string): void => props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId });
+  const openRun = (runId: string): void => {
+    markTap(`run ${runId}`);
+    props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId });
+  };
 
   return (
-    <View style={styles.root}>
-      <Backdrop uri={undefined} glow={0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40, width: contentWidth, alignSelf: "center" }}>
-        {history.error !== undefined ? (
-          <CatalogProblem error={history.error} unreachable={history.unreachable} />
-        ) : history.value === undefined ? (
-          <Note text="Reading the history…" />
-        ) : history.value.prints.length === 0 ? (
-          <Note text="The run database has no prints yet." />
-        ) : null}
-        {days.map((group) => (
-          <View key={group.day ?? "undated"}>
-            <Text style={[styles.day, { color: text.secondaryLabel }]}>{group.day === undefined ? "NO DATE" : fmtDay(group.day).toUpperCase()}</Text>
-            {group.prints.map((print) => (
-              <PrintEntry key={print.id} print={print} wide={wide} openRun={openRun} />
-            ))}
-          </View>
-        ))}
-      </ScrollView>
+    <View style={[styles.root, { backgroundColor: background }]}>
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.key}
+        initialNumToRender={6}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 40, width: contentWidth, alignSelf: "center" }}
+        ListHeaderComponent={
+          history.error !== undefined ? (
+            <CatalogProblem error={history.error} unreachable={history.unreachable} />
+          ) : history.value === undefined ? (
+            <Note text="Reading the history…" />
+          ) : history.value.prints.length === 0 ? (
+            <Note text="The run database has no prints yet." />
+          ) : null
+        }
+        renderItem={({ item }) =>
+          item.kind === "Day" ? (
+            <Text style={[styles.day, { color: text.secondaryLabel }]}>{item.day === undefined ? "NO DATE" : fmtDay(item.day).toUpperCase()}</Text>
+          ) : (
+            <PrintEntry print={item.print} wide={wide} openRun={openRun} />
+          )
+        }
+      />
     </View>
   );
 };

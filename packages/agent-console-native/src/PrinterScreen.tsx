@@ -22,15 +22,12 @@
  *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { mark } from "./diagnostics/launchTrail";
-import { HeaderTitlePill } from "./HeaderTitlePill";
-import { Backdrop } from "./printer/Backdrop";
-import { HeaderStatusPill } from "./printer/HeaderStatusPill";
+import { markTap } from "./perfMonitor";
 import { useLayerPack } from "./printer/layerPack";
 import { useRunningUploads, useUploadWatch } from "./printer/PrinterFiles";
 import { fmtDuration, healthItems } from "./printer/printerFormat";
@@ -38,7 +35,6 @@ import { usePublishPrinterLink } from "./printer/printerPageLink";
 import { useLoadedUri } from "./printer/PrinterStage";
 import { usePrintHeader } from "./printer/printHeader";
 import { linkChip, statusOf } from "./printer/printStatus";
-import { printPreviewUrl } from "./printer/relayApi";
 import { historyRoute, libraryRoute, originRoute, runsRoute, useCatalog } from "./printer/resinApi";
 import { describeFile } from "./printer/resinFormat";
 import { isPrinting, layerIndexOf, PHASE_EXPOSING, PHASE_PAUSED } from "./printer/sdcp";
@@ -47,7 +43,7 @@ import { usePrinterLink, type PrinterLink } from "./printer/usePrinterLink";
 import { authedSource } from "./auth/serverTokens";
 import type { RootStackParamList } from "./RootNavigator";
 import { SystemIcon } from "./SystemIcon";
-import { useTextColors, withAlpha } from "./theme";
+import { useTextColors, withAlpha, useScreenBackground } from "./theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerPrinter">;
 
@@ -69,10 +65,9 @@ const TINT = {
 } as const;
 
 export const PrinterScreen = (props: Props): React.ReactElement => {
+  const background = useScreenBackground("grouped");
   const text = useTextColors();
-  const palette = usePalette();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const { navigation } = props;
   // `?.` guards a nav state restored before this screen took params.
@@ -99,9 +94,6 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const info = status?.PrintInfo;
   const online = printer.link.kind === "Open";
   const hasJob = info?.TaskId !== undefined && info.TaskId !== "" && info.Filename !== undefined && info.Filename !== "";
-  const active = hasJob && isPrinting(status);
-  const total = info?.TotalLayer ?? 0;
-  const percent = total > 0 ? ((info?.CurrentLayer ?? 0) / total) * 100 : 0;
 
   // Loaded now, so the pages this one opens have it when the owner taps.
   usePrintHeader(printer.relayBase, hasJob ? info?.TaskId : undefined, printer.relayReachable);
@@ -110,22 +102,21 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   const history = useCatalog(printer.relayBase, historyRoute);
   useCatalog(printer.relayBase, hasJob && info?.Filename !== undefined ? originRoute(info.Filename) : undefined);
 
-  const state = statusOf(status, online);
-  const pillLabel = active && info?.Status !== PHASE_PAUSED ? `${state.label} ${Math.floor(percent)}%` : state.label;
-  const pillColor = state.tone === "plain" ? "#8E8E93" : state.tone === "uv" ? palette.accent : palette[state.tone];
   const health = healthItems(printer.attributes?.DevicesStatus);
   const healthBad = health.filter((item) => !item.ok).length;
   const name = printer.attributes?.Name ?? "Printer";
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
-      headerTitle: () => <HeaderTitlePill title={name} rightButtons={1} />,
-      headerRight: () => <HeaderStatusPill label={pillLabel} color={pillColor} />,
+      title: name,
     });
-  }, [navigation, name, pillLabel, pillColor]);
+  }, [navigation, name]);
 
-  const open = (route: "ServerPrinterHealth" | "ServerPrinterFiles" | "ServerPrinterCamera" | "ServerPrinterNetwork" | "ServerPrinterSettings" | "ServerResinRuns" | "ServerResinLibrary" | "ServerResinHistory" | "ServerSupportJobs" | "ServerPrint"): void =>
-    navigation.navigate(route, { serverName, serverAddress });
+  const open = (route: "ServerPrinterHealth" | "ServerPrinterFiles" | "ServerPrinterCamera" | "ServerPrinterNetwork" | "ServerPrinterSettings" | "ServerResinRuns" | "ServerResinLibrary" | "ServerResinHistory" | "ServerSupportJobs" | "ServerPrint"): void => {
+      // Opens at once: the page reads what this page has loaded, and loads the rest itself.
+      markTap(route);
+      navigation.navigate(route, { serverName, serverAddress });
+    };
 
   const link = linkChip(printer.link);
   const connection = online ? (printer.link.kind === "Open" && printer.link.via === "Direct" ? `Direct to the printer at ${printer.printerIp ?? "its address"}` : `Through the relay on ${serverName || "the server"}`) : "Not connected";
@@ -164,9 +155,8 @@ export const PrinterScreen = (props: Props): React.ReactElement => {
   );
 
   return (
-    <View style={styles.root}>
-      <Backdrop uri={hasJob && printer.relayReachable && info?.TaskId !== undefined ? printPreviewUrl(printer.relayBase, info.TaskId) : undefined} glow={active && info?.Status === PHASE_EXPOSING ? 1 : active ? 0.45 : 0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
+    <View style={[styles.root, { backgroundColor: background }]}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40 }}>
         {status === undefined && !tried ? (
           <ActivityIndicator style={styles.loading} />
         ) : (
@@ -233,6 +223,7 @@ const PrintSummary = (props: { readonly printer: PrinterLink; readonly onPress: 
   const loaded = useLoadedUri(relayLayer);
   const layerUri = pack.uriOf(index) ?? loaded;
   const identity = hasJob && info?.Filename !== undefined ? describeFile(info.Filename, origin.value?.print) : undefined;
+  const state = statusOf(status, online);
   const endsAt = active && !paused && remaining !== undefined ? new Date(now + remaining) : undefined;
   const settings = header === undefined ? undefined : [`${header.exposureSeconds} s`, `${Math.round(header.layerHeightMm * 1000)} µm`, `${header.volumeMl.toFixed(1)} ml`].join(" · ");
 
@@ -248,7 +239,9 @@ const PrintSummary = (props: { readonly printer: PrinterLink; readonly onPress: 
             )}
           </View>
           <View style={styles.details}>
-            <Text style={[styles.eyebrow, { color: text.tertiaryLabel }]}>{hasJob ? (paused ? "PAUSED" : active ? "NOW PRINTING" : "LAST PRINT") : "NO PRINT"}</Text>
+            <View style={styles.statusRow}>
+              <Chip tone={state.tone} label={active && !paused ? `${state.label} ${Math.floor(percent)}%` : state.label} />
+            </View>
             <Text style={[styles.title, { color: text.label }]} numberOfLines={1}>
               {identity?.title ?? (online ? "Ready for a print" : status === undefined ? "Connecting…" : "Printer not reachable")}
             </Text>
@@ -311,7 +304,7 @@ const styles = StyleSheet.create({
   thumbImage: { width: THUMB_WIDTH, height: THUMB_HEIGHT, borderRadius: 12 },
   thumbNote: { color: "rgba(244,245,249,0.5)", fontSize: 11 },
   details: { flex: 1 },
-  eyebrow: { fontSize: 10, fontWeight: "700", letterSpacing: 0.8 },
+  statusRow: { flexDirection: "row", marginBottom: 4 },
   title: { fontSize: 16, fontWeight: "700", letterSpacing: -0.2, marginTop: 1 },
   detail: { fontSize: 12.5, fontWeight: "600", marginTop: 1 },
   line: { fontSize: 12.5, marginTop: 2, fontVariant: ["tabular-nums"] },

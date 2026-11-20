@@ -6,15 +6,14 @@
  *
  * @internal
  */
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useIsFocused } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
-import { useTextColors } from "../theme";
-import { Backdrop } from "./Backdrop";
+import { useTextColors, useScreenBackground } from "../theme";
 import { CameraPane } from "./PrinterCamera";
 import { usePrinterPageLink } from "./printerPageLink";
 import { Card } from "./ui";
@@ -25,18 +24,18 @@ type Props = NativeStackScreenProps<RootStackParamList, "ServerPrinterCamera">;
 const ASPECT = 9 / 16;
 
 export const PrinterCameraScreen = (props: Props): React.ReactElement => {
+  useOpenTiming("ServerPrinterCamera");
+  const background = useScreenBackground("grouped");
   const text = useTextColors();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
   const focused = useIsFocused();
   const { width } = useWindowDimensions();
   const link = usePrinterPageLink(props.route.params.serverAddress);
   const cardWidth = Math.min(width - 32, 900);
   const paneWidth = cardWidth - 32;
   return (
-    <View style={styles.root}>
-      <Backdrop uri={undefined} glow={0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40, alignItems: "center" }}>
+    <View style={[styles.root, { backgroundColor: background }]}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 40, alignItems: "center" }}>
         {link === undefined ? (
           <Text style={[styles.foot, { color: text.tertiaryLabel }]}>Open the printer page first.</Text>
         ) : (

@@ -13,6 +13,7 @@
 import { useNavigation, type NavigationProp } from "@react-navigation/native";
 import * as React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { markTap } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
 import { useTextColors } from "../theme";
 import { originRoute, useCatalog, type RunDetail } from "./resinApi";
@@ -30,7 +31,10 @@ export const FileOrigin = (props: { readonly relayBase: string; readonly filenam
   const palette = usePalette();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const origin = useCatalog(props.relayBase, originRoute(props.filename));
-  const openRun = (runId: string): void => navigation.navigate("ServerResinRun", { serverName: props.serverName, serverAddress: props.serverAddress, runId });
+  const openRun = (runId: string): void => {
+    markTap(`run ${runId}`);
+    navigation.navigate("ServerResinRun", { serverName: props.serverName, serverAddress: props.serverAddress, runId });
+  };
 
   if (origin.value === undefined) {
     return (
