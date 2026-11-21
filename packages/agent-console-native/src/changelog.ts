@@ -23,6 +23,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 12,
+    date: "2026-11-20",
+    title: "Library files open",
+    commits: ["feat/elegoo-printer-plugin: library rows open"],
+    lines: [
+      "Every file in the Library opens. A file from a recorded run opens the run; any other file opens its 3D model and details.",
+    ],
+  },
+  {
     version: 11,
     date: "2026-11-20",
     title: "Pick supports behind others and from inside the head",
