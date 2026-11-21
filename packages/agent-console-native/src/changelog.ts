@@ -23,6 +23,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 11,
+    date: "2026-11-20",
+    title: "Pick supports behind others and from inside the head",
+    commits: ["saturn-uploader 4f132b3"],
+    lines: [
+      "A tap in 3D now goes through the whole plan. You can pick a support behind another support, and from inside the head.",
+      "The head never blocks a tap.",
+      "When the tap passes several supports, the list shows them nearest first, with their depth.",
+      "Tap a row to see that support whole in blue.",
+    ],
+  },
+  {
     version: 10,
     date: "2026-11-20",
     title: "Select any support in plan review",

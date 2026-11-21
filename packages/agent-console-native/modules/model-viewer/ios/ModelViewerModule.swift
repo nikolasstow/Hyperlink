@@ -55,7 +55,7 @@ public class ModelViewerModule: Module {
       Prop("highlightColor") { (view: ModelViewerView, hex: String?) in
         view.highlightColor = ModelViewerView.color(hex: hex ?? "#3399ff")
       }
-      Events("onPointTap")
+      Events("onRayTap")
     }
   }
 }

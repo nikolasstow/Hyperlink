@@ -326,6 +326,8 @@ export const PlanPick = Schema.Struct({
   partPosition: Schema.String,
   /** How far the point is outside the part, in mm (0: on or in it). */
   distance: Schema.Number,
+  /** For a 3D tap: how far along the ray from the camera, in mm. */
+  depth: Schema.optional(Schema.Number),
 });
 export type PlanPick = typeof PlanPick.Type;
 
@@ -335,6 +337,18 @@ const PicksReply = Schema.Struct({ picks: Schema.Array(PlanPick) });
 export const fetchPicks = async (relayBase: string, runId: string, point: readonly [number, number, number], reachMm: number): Promise<ReadonlyArray<PlanPick>> => {
   const [x, y, z] = point;
   const response = await authedFetch(`${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/pick?x=${x}&y=${y}&z=${z}&r=${reachMm}`, { cache: "no-store" });
+  const reply: unknown = await response.json();
+  if (!response.ok) {
+    const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(reply));
+    throw new CatalogError(error?.error ?? `The relay answered HTTP ${response.status}`, error?.unreachable === true);
+  }
+  return (await Schema.decodeUnknownPromise(PicksReply)(reply)).picks;
+};
+
+/** Every support along a 3D tap's ray, at any depth, nearest first (the model never blocks it). */
+export const fetchRayPicks = async (relayBase: string, runId: string, ray: { readonly ox: number; readonly oy: number; readonly oz: number; readonly dx: number; readonly dy: number; readonly dz: number; readonly spread: number }): Promise<ReadonlyArray<PlanPick>> => {
+  const query = (["ox", "oy", "oz", "dx", "dy", "dz", "spread"] as const).map((key) => `${key}=${ray[key]}`).join("&");
+  const response = await authedFetch(`${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/pick?${query}`, { cache: "no-store" });
   const reply: unknown = await response.json();
   if (!response.ok) {
     const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(reply));

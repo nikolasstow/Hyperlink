@@ -29,8 +29,8 @@ export type ModelViewerProps = ViewProps & {
   /** One support tree's triangles (a `model.mesh` file), drawn over everything: the selected support, whole. */
   readonly highlightUri?: string | undefined;
   readonly highlightColor?: string | undefined;
-  /** A tap on the model or the supports: the point it hit, in the model's frame (mm). */
-  readonly onPointTap?: ((point: ModelTapPoint) => void) | undefined;
+  /** A tap, as a ray in the model's frame (mm): it passes through the model and every support. */
+  readonly onRayTap?: ((ray: ModelTapRay) => void) | undefined;
 };
 
 export interface ModelMarker {
@@ -41,15 +41,19 @@ export interface ModelMarker {
   readonly radius: number;
 }
 
-export interface ModelTapPoint {
-  readonly x: number;
-  readonly y: number;
-  readonly z: number;
-  readonly part: "model" | "supports";
+/** A tap as a ray: the camera's position, the unit direction through the finger, and the finger's spread in radians. */
+export interface ModelTapRay {
+  readonly ox: number;
+  readonly oy: number;
+  readonly oz: number;
+  readonly dx: number;
+  readonly dy: number;
+  readonly dz: number;
+  readonly spread: number;
 }
 
-type NativeProps = Omit<ModelViewerProps, "onPointTap"> & {
-  readonly onPointTap?: (event: NativeSyntheticEvent<ModelTapPoint>) => void;
+type NativeProps = Omit<ModelViewerProps, "onRayTap"> & {
+  readonly onRayTap?: (event: NativeSyntheticEvent<ModelTapRay>) => void;
 };
 
 const NativeView = Platform.OS === "ios" ? requireNativeView<NativeProps>("ModelViewer") : null;
@@ -76,6 +80,6 @@ export const presentModelAR = (options: {
     : nativeModule.presentAR(options.uri, options.color, options.clipLowMm ?? null, options.clipHighMm ?? null, options.title);
 
 export const ModelViewer = (props: ModelViewerProps): React.ReactElement | null => {
-  const { onPointTap, ...rest } = props;
-  return NativeView === null ? null : <NativeView {...rest} onPointTap={onPointTap === undefined ? undefined : (event) => onPointTap(event.nativeEvent)} />;
+  const { onRayTap, ...rest } = props;
+  return NativeView === null ? null : <NativeView {...rest} onRayTap={onRayTap === undefined ? undefined : (event) => onRayTap(event.nativeEvent)} />;
 };

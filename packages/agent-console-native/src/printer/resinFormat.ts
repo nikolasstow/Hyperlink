@@ -242,9 +242,11 @@ export const nearestContact = <C extends { readonly x: number; readonly y: numbe
  * What a tap selects: the one support the point is on, else the one within
  * reach. Several: the owner chooses from a list. None: nothing.
  */
-export const choose = <P extends { readonly distance: number }>(picks: ReadonlyArray<P>): { readonly kind: "One"; readonly pick: P } | { readonly kind: "Several"; readonly picks: ReadonlyArray<P> } | { readonly kind: "None" } => {
+export const choose = <P extends { readonly distance: number; readonly depth?: number | undefined }>(picks: ReadonlyArray<P>): { readonly kind: "One"; readonly pick: P } | { readonly kind: "Several"; readonly picks: ReadonlyArray<P> } | { readonly kind: "None" } => {
+  // A ray's picks are all along it: every one counts, nearest first. A point's: the ones it is on, else those in reach.
+  const along = picks.some((pick) => pick.depth !== undefined);
   const on = picks.filter((pick) => pick.distance === 0);
-  const candidates = on.length > 0 ? on : picks;
+  const candidates = along || on.length === 0 ? picks : on;
   const [first] = candidates;
   return first === undefined ? { kind: "None" } : candidates.length === 1 ? { kind: "One", pick: first } : { kind: "Several", picks: candidates };
 

@@ -2,8 +2,9 @@
  * The plan review page: one run's support plan, to review before a print.
  *
  * - 3D: the model and the plan's supports (ModelViewer, every triangle).
- *   A tap on any part of a support (contact, cone, neck, stem, shaft, leg,
- *   brace, base) selects its tree; the whole tree is marked.
+ *   A tap is a ray through the whole scene: every support along it, at any
+ *   depth, behind the model and behind other supports, can be picked. The
+ *   model never blocks a pick. The selected tree is marked whole.
  * - The cut: a top view of the plane at any height, the model grey and the
  *   supports orange, from the relay (`section.png`). The slider moves the
  *   height; a tap on a support's section selects its tree.
@@ -34,15 +35,13 @@ import { useScreenBackground, useTextColors, withAlpha } from "../theme";
 import { useLoadedUri } from "./PrinterStage";
 import { openModel, type PrintModel } from "./printModel";
 import { makeDownloads, type DownloadState } from "./relayDownload";
-import { fetchPicks, loadCatalog, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
+import { fetchPicks, fetchRayPicks, loadCatalog, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
 import { choose, decodePosition, positionsIn } from "./resinFormat";
 import { relayBaseOf } from "./sdcp";
 import { Button, Card, CatalogProblem, ListRow, Note, Row, usePalette } from "./ui";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerResinPlan">;
 
-/** A 3D tap hits a surface point: supports within this distance of it count (mm). */
-const TAP_3D_REACH_MM = 0.15;
 /** A finger's reach on the cut, in points; it becomes mm at the cut's scale, up to `CUT_REACH_MAX_MM`. */
 const FINGER_PT = 14;
 const CUT_REACH_MAX_MM = 1.5;
@@ -195,12 +194,12 @@ export const PlanScreen = (props: Props): React.ReactElement => {
     [positioned, palette],
   );
 
-  /** Asks the relay what is under the point, then selects it, or asks the owner which one. */
-  const select = (point: readonly [number, number, number], reachMm: number): void => {
+  /** Asks the relay what is under the tap, then selects it, or asks the owner which one. */
+  const select = (ask: () => Promise<ReadonlyArray<PlanPick>>): void => {
     if (value === undefined) return;
     tapAt.current = Date.now();
     setSent(undefined);
-    fetchPicks(relayBase, runId, point, reachMm)
+    ask()
       .then((picks) => {
         const chosen = choose(picks);
         if (chosen.kind === "One") {
@@ -209,6 +208,8 @@ export const PlanScreen = (props: Props): React.ReactElement => {
           setPickNote(undefined);
         } else if (chosen.kind === "Several") {
           setChoices(chosen.picks);
+          // The nearest one shows whole in 3D at once; a row of the list selects another.
+          setSelected(chosen.picks[0]);
           setPickNote(undefined);
         } else {
           setChoices(undefined);
@@ -225,7 +226,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
     if (value === undefined) return;
     const x = value.cut.lowX + event.nativeEvent.locationX / scale / value.cut.pxPerMm;
     const y = value.cut.highY - event.nativeEvent.locationY / scale / value.cut.pxPerMm;
-    select([x, y, height], Math.min(CUT_REACH_MAX_MM, FINGER_PT / scale / value.cut.pxPerMm));
+    select(() => fetchPicks(relayBase, runId, [x, y, height], Math.min(CUT_REACH_MAX_MM, FINGER_PT / scale / value.cut.pxPerMm)));
   };
 
   const treePositions = new Set([...treeContacts.map((contact) => contact.position), ...(selected === undefined ? [] : [selected.partPosition])]);
@@ -271,7 +272,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   supportsUri={supports.uri}
                   supportsColor="#ff9f0a"
                   markers={markers}
-                  onPointTap={(point) => select([point.x, point.y, point.z], TAP_3D_REACH_MM)}
+                  onRayTap={(ray) => select(() => fetchRayPicks(relayBase, runId, ray))}
                   highlightUri={highlightUri}
                   highlightColor="#3399ff"
                   clipHighMm={z}
@@ -303,19 +304,18 @@ export const PlanScreen = (props: Props): React.ReactElement => {
             </Card>
 
             {choices !== undefined ? (
-              <Card title="Which support?" flush>
+              <Card title="Which support?" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>nearest first</Text>} flush>
                 {choices.map((pick, index) => (
                   <ListRow
                     key={pick.tree}
-                    icon="cone"
-                    tint="#5E5CE6"
+                    icon={selected?.tree === pick.tree ? "checkmark.circle.fill" : "cone"}
+                    tint={selected?.tree === pick.tree ? "#3399ff" : "#8E8E93"}
                     title={`Tree ${pick.tree} · ${pick.part}`}
-                    detail={`${pick.partPosition}${pick.treePosition !== null ? ` · tip ${pick.treePosition}` : ""}${pick.distance > 0 ? ` · ${pick.distance.toFixed(2)} mm away` : ""}`}
+                    detail={[pick.partPosition, pick.depth !== undefined ? `${pick.depth.toFixed(1)} mm deep` : undefined, pick.distance > 0 ? `${pick.distance.toFixed(2)} mm away` : undefined].filter((part) => part !== undefined).join(" · ")}
                     last={index === choices.length - 1}
                     onPress={() => {
                       tapAt.current = Date.now();
                       setSelected(pick);
-                      setChoices(undefined);
                     }}
                   />
                 ))}

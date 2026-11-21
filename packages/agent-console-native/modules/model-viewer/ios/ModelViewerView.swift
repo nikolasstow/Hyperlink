@@ -21,8 +21,8 @@ import simd
 ///
 /// A plan's supports can show beside the model (`supportsUri`, in their own
 /// colour, the same file format and frame), with markers at points in the
-/// model's frame (requirements, the selected support). A tap on the model or
-/// the supports sends the point it hit, in mm (`onPointTap`).
+/// model's frame (requirements, the selected support). A tap sends a ray in
+/// the model's frame, in mm (`onRayTap`): the app finds the supports along it.
 struct ModelMarker: Record {
   @Field var x: Double = 0
   @Field var y: Double = 0
@@ -40,7 +40,7 @@ final class ModelViewerView: ExpoView {
   /// One support tree's triangles, drawn over everything in its own colour: the selected support, whole.
   var highlightUri: URL? { didSet { if highlightUri != oldValue { loadHighlight() } } }
   var highlightColor: UIColor = UIColor(red: 0.2, green: 0.6, blue: 1, alpha: 1) { didSet { highlightMaterial.diffuse.contents = highlightColor } }
-  let onPointTap = EventDispatcher()
+  let onRayTap = EventDispatcher()
   var modelColor: UIColor = UIColor(white: 0.85, alpha: 1) { didSet { material.diffuse.contents = modelColor } }
   var clipLowMm: Double? { didSet { if clipLowMm != oldValue { applyClip() } } }
   var clipHighMm: Double? { didSet { if clipHighMm != oldValue { applyClip() } } }
@@ -119,18 +119,32 @@ final class ModelViewerView: ExpoView {
     scnView.addGestureRecognizer(tap)
   }
 
-  /// Sends the point a tap hit on the model or the supports, in the model's frame (mm).
+  /// The finger's reach on screen, in points: the ray's spread is the angle it covers.
+  private static let fingerPoints: CGFloat = 14
+
+  /// Sends the tap as a ray in the model's frame (mm): where the camera is, the direction
+  /// through the finger, and the spread of the finger's reach (radians). The ray goes on
+  /// through the model and every support, so a support behind another one, or seen from
+  /// inside the model, can still be picked. Nothing is hit-tested here.
   @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
     let location = recognizer.location(in: scnView)
-    // Every hit, nearest first: the highlight lies on the supports and is not a target itself.
-    let hits = scnView.hitTest(location, options: [.searchMode: SCNHitTestSearchMode.all.rawValue])
-    guard let hit = hits.first(where: { $0.node === modelNode || $0.node === supportsNode }) else { return }
-    let point = hit.node.convertPosition(hit.localCoordinates, to: frameNode)
-    onPointTap([
-      "x": Double(point.x),
-      "y": Double(point.y),
-      "z": Double(point.z),
-      "part": hit.node === supportsNode ? "supports" : "model",
+    func world(_ x: CGFloat, _ y: CGFloat, _ depth: Float) -> SCNVector3 {
+      scnView.unprojectPoint(SCNVector3(Float(x), Float(y), depth))
+    }
+    let near = frameNode.convertPosition(world(location.x, location.y, 0), from: nil)
+    let far = frameNode.convertPosition(world(location.x, location.y, 1), from: nil)
+    let edge = frameNode.convertPosition(world(location.x + ModelViewerView.fingerPoints, location.y, 1), from: nil)
+    let direction = simd_normalize(SIMD3<Float>(far.x - near.x, far.y - near.y, far.z - near.z))
+    let toEdge = simd_normalize(SIMD3<Float>(edge.x - near.x, edge.y - near.y, edge.z - near.z))
+    let spread = acos(max(-1, min(1, simd_dot(direction, toEdge))))
+    onRayTap([
+      "ox": Double(near.x),
+      "oy": Double(near.y),
+      "oz": Double(near.z),
+      "dx": Double(direction.x),
+      "dy": Double(direction.y),
+      "dz": Double(direction.z),
+      "spread": Double(spread),
     ])
   }
 

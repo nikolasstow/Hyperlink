@@ -151,3 +151,11 @@ describe("choose", () => {
     expect(choose([])).toEqual({ kind: "None" });
   });
 });
+
+describe("choose along a ray", () => {
+  it("lists every support the ray passes, nearest first, also the hidden ones", () => {
+    const pick = (tree: string, depth: number) => ({ tree, distance: 0, depth });
+    expect(choose([pick("Front", 20), pick("Back", 25)])).toEqual({ kind: "Several", picks: [pick("Front", 20), pick("Back", 25)] });
+    expect(choose([pick("Back", 25)])).toEqual({ kind: "One", pick: pick("Back", 25) });
+  });
+});
