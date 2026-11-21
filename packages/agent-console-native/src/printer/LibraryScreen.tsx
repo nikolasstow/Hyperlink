@@ -107,7 +107,7 @@ export const LibraryScreen = (props: Props): React.ReactElement => {
   const background = useScreenBackground("grouped");
   const text = useTextColors();
   const { width } = useWindowDimensions();
-  const { serverName, serverAddress } = props.route.params;
+  const { serverAddress } = props.route.params;
   const relayBase = relayBaseOf(serverAddress);
   const library = useCatalog(relayBase, libraryRoute);
   const groups = React.useMemo(
