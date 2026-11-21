@@ -23,6 +23,15 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 8,
+    date: "2026-11-20",
+    title: "Plan review on the phone",
+    commits: ["feat/elegoo-printer-plugin: the run page fix"],
+    lines: [
+      "A run's page on the phone now shows \"Review the plan\" and the requirements the run meets.",
+    ],
+  },
+  {
     version: 7,
     date: "2026-11-20",
     title: "Plan review",

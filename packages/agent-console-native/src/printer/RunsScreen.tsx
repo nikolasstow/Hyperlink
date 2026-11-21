@@ -311,10 +311,8 @@ const RunBody = (props: {
           <View style={styles.columns}>
             <View style={{ width: columnWidth }}>
               {summary}
-            {review}
               {review}
               {checks}
-            {met}
               {met}
               {changes}
               {settings}
@@ -328,7 +326,9 @@ const RunBody = (props: {
         ) : (
           <>
             {summary}
+            {review}
             {checks}
+            {met}
             {changes}
             {outputs}
             {printed}
