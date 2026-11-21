@@ -23,7 +23,7 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
-    version: 8,
+    version: 10,
     date: "2026-11-20",
     title: "Select any support in plan review",
     commits: ["saturn-uploader 17e1f38"],
