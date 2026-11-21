@@ -2,10 +2,13 @@
  * The plan review page: one run's support plan, to review before a print.
  *
  * - 3D: the model and the plan's supports (ModelViewer, every triangle).
- *   A tap on either selects the support nearest the point it hit.
+ *   A tap on any part of a support (contact, cone, neck, stem, shaft, leg,
+ *   brace, base) selects its tree; the whole tree is marked.
  * - The cut: a top view of the plane at any height, the model grey and the
  *   supports orange, from the relay (`section.png`). The slider moves the
- *   height; a tap on the cut selects the nearest support.
+ *   height; a tap on a support's section selects its tree.
+ * - When more than one support is under the finger, a short list asks
+ *   which one: the page never guesses.
  * - The selected support: its position ID, tree, tip and contact radius,
  *   neck, stem, and shaft, its tree's load U, and the requirements and
  *   notes about its position.
@@ -31,15 +34,18 @@ import { useScreenBackground, useTextColors, withAlpha } from "../theme";
 import { useLoadedUri } from "./PrinterStage";
 import { openModel, type PrintModel } from "./printModel";
 import { makeDownloads, type DownloadState } from "./relayDownload";
-import { loadCatalog, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, useCatalog, type PlanContact, type PlanReply } from "./resinApi";
-import { decodePosition, nearestContact, positionsIn } from "./resinFormat";
+import { fetchPicks, loadCatalog, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
+import { choose, decodePosition, positionsIn } from "./resinFormat";
 import { relayBaseOf } from "./sdcp";
-import { Button, Card, CatalogProblem, Note, Row, usePalette } from "./ui";
+import { Button, Card, CatalogProblem, ListRow, Note, Row, usePalette } from "./ui";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ServerResinPlan">;
 
-/** A tap selects the nearest support within this distance of the point (mm). */
-const SELECT_WITHIN_MM = 4;
+/** A 3D tap hits a surface point: supports within this distance of it count (mm). */
+const TAP_3D_REACH_MM = 0.15;
+/** A finger's reach on the cut, in points; it becomes mm at the cut's scale, up to `CUT_REACH_MAX_MM`. */
+const FINGER_PT = 14;
+const CUT_REACH_MAX_MM = 1.5;
 /** A requirement's mark shows on a cut within this height of its position (mm). */
 const MARK_WITHIN_MM = 1;
 const VIEWER_HEIGHT = 380;
@@ -56,6 +62,29 @@ const meshStore = (part: "model" | "supports") =>
   });
 
 const meshes = { model: meshStore("model"), supports: meshStore("supports") };
+
+/** The selected tree's own triangles, by `<run>~<tree>`. */
+const treeMeshes = makeDownloads<PrintModel>({
+  folder: "plan-meshes",
+  urlOf: (relayBase, key) => {
+    const [runId = "", tree = ""] = key.split("~");
+    return treeMeshUrl(relayBase, runId, tree);
+  },
+  extension: ".tree.mesh",
+  keep: 40,
+  open: (file: File) => openModel(file),
+});
+
+/** The selected tree's mesh file on the device, once it is there. */
+const useTreeMesh = (relayBase: string, key: string | undefined): string | undefined => {
+  const [, setVersion] = React.useState(0);
+  React.useEffect(() => treeMeshes.subscribe(() => setVersion((n) => n + 1)), []);
+  React.useEffect(() => {
+    if (key !== undefined) treeMeshes.ensure(relayBase, key);
+  }, [relayBase, key]);
+  return key === undefined ? undefined : treeMeshes.opened(key)?.uri;
+};
+
 
 /** A plan's mesh on the device: its state, and its file once it is there. */
 const useMesh = (part: "model" | "supports", relayBase: string, runId: string, ready: boolean): { readonly state: DownloadState | undefined; readonly uri: string | undefined } => {
@@ -112,7 +141,12 @@ export const PlanScreen = (props: Props): React.ReactElement => {
 
   const [z, setZ] = React.useState<number | undefined>(undefined);
   const height = z ?? (value === undefined ? 0 : (value.low[2] + value.high[2]) / 2);
-  const [selected, setSelected] = React.useState<PlanContact | undefined>(undefined);
+  const [selected, setSelected] = React.useState<PlanPick | undefined>(undefined);
+  const [choices, setChoices] = React.useState<ReadonlyArray<PlanPick> | undefined>(undefined);
+  const [pickNote, setPickNote] = React.useState<{ readonly text: string; readonly bad: boolean } | undefined>(undefined);
+  const highlightUri = useTreeMesh(relayBase, selected === undefined ? undefined : `${runId}~${selected.tree}`);
+  // The selected tree's contacts, from the plan: their sizes and position IDs.
+  const treeContacts = React.useMemo(() => (selected === undefined || value === undefined ? [] : value.contacts.filter((contact) => contact.tree === selected.tree)), [selected, value]);
   const tapAt = React.useRef<number | undefined>(undefined);
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
@@ -132,7 +166,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
     if (selected === undefined || tapAt.current === undefined) return;
     const started = tapAt.current;
     tapAt.current = undefined;
-    const id = requestAnimationFrame(() => console.log("[perf] select", JSON.stringify({ support: selected.position, ms: Date.now() - started })));
+    const id = requestAnimationFrame(() => console.log("[perf] select", JSON.stringify({ tree: selected.tree, part: selected.part, ms: Date.now() - started })));
     return () => cancelAnimationFrame(id);
   }, [selected]);
 
@@ -157,35 +191,53 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   }, [requirements.value, notes.value]);
 
   const markers = React.useMemo(
-    (): ReadonlyArray<ModelMarker> => [
-      ...positioned.map((mark) => ({ x: mark.point[0], y: mark.point[1], z: mark.point[2], color: mark.kind === "requirement" ? palette.bad : palette.warn, radius: 0.7 })),
-      ...(selected === undefined ? [] : [{ x: selected.x, y: selected.y, z: selected.z, color: palette.accent, radius: 0.9 }]),
-    ],
-    [positioned, selected, palette],
+    (): ReadonlyArray<ModelMarker> => positioned.map((mark) => ({ x: mark.point[0], y: mark.point[1], z: mark.point[2], color: mark.kind === "requirement" ? palette.bad : palette.warn, radius: 0.7 })),
+    [positioned, palette],
   );
 
-  const select = (point: readonly [number, number, number]): void => {
+  /** Asks the relay what is under the point, then selects it, or asks the owner which one. */
+  const select = (point: readonly [number, number, number], reachMm: number): void => {
     if (value === undefined) return;
     tapAt.current = Date.now();
-    setSelected(nearestContact(value.contacts, point, SELECT_WITHIN_MM));
     setSent(undefined);
+    fetchPicks(relayBase, runId, point, reachMm)
+      .then((picks) => {
+        const chosen = choose(picks);
+        if (chosen.kind === "One") {
+          setSelected(chosen.pick);
+          setChoices(undefined);
+          setPickNote(undefined);
+        } else if (chosen.kind === "Several") {
+          setChoices(chosen.picks);
+          setPickNote(undefined);
+        } else {
+          setChoices(undefined);
+          setPickNote({ text: "No support under the finger there.", bad: false });
+        }
+      })
+      .catch((cause: unknown) => {
+        console.error("[plan] picking a support failed", cause);
+        setPickNote({ text: `Could not find the support: ${cause instanceof Error ? cause.message : String(cause)}`, bad: true });
+      });
   };
 
   const onCutPress = (event: GestureResponderEvent): void => {
     if (value === undefined) return;
     const x = value.cut.lowX + event.nativeEvent.locationX / scale / value.cut.pxPerMm;
     const y = value.cut.highY - event.nativeEvent.locationY / scale / value.cut.pxPerMm;
-    select([x, y, height]);
+    select([x, y, height], Math.min(CUT_REACH_MAX_MM, FINGER_PT / scale / value.cut.pxPerMm));
   };
 
-  const about = selected === undefined ? [] : positioned.filter((mark) => mark.position === selected.position);
+  const treePositions = new Set([...treeContacts.map((contact) => contact.position), ...(selected === undefined ? [] : [selected.partPosition])]);
+  const about = positioned.filter((mark) => treePositions.has(mark.position));
+  const first = treeContacts[0];
 
   const send = (kind: "note" | "requirement"): void => {
     if (selected === undefined || draft.trim() === "") return;
     setSending(true);
-    sendFeedback(relayBase, { kind, text: draft.trim(), run: runId, position: selected.position })
+    sendFeedback(relayBase, { kind, text: draft.trim(), run: runId, position: selected.partPosition })
       .then((id) => {
-        setSent({ ok: true, text: `${kind === "note" ? "Note" : "Requirement"} ${id} saved for ${selected.position}.` });
+        setSent({ ok: true, text: `${kind === "note" ? "Note" : "Requirement"} ${id} saved for ${selected.partPosition} (tree ${selected.tree}).` });
         setDraft("");
         if (kind === "note") loadCatalog(relayBase, notesRoute);
         else loadCatalog(relayBase, requirementsRoute);
@@ -219,7 +271,9 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   supportsUri={supports.uri}
                   supportsColor="#ff9f0a"
                   markers={markers}
-                  onPointTap={(point) => select([point.x, point.y, point.z])}
+                  onPointTap={(point) => select([point.x, point.y, point.z], TAP_3D_REACH_MM)}
+                  highlightUri={highlightUri}
+                  highlightColor="#3399ff"
                   clipHighMm={z}
                 />
               </View>
@@ -242,29 +296,51 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                       style={[styles.mark, { left: (mark.point[0] - value.cut.lowX) * value.cut.pxPerMm * scale - 6, top: (value.cut.highY - mark.point[1]) * value.cut.pxPerMm * scale - 6, borderColor: mark.kind === "requirement" ? palette.bad : palette.warn }]}
                     />
                   ))}
-                {selected !== undefined && Math.abs(selected.z - height) <= SELECT_WITHIN_MM ? (
-                  <View pointerEvents="none" style={[styles.selected, { left: (selected.x - value.cut.lowX) * value.cut.pxPerMm * scale - 8, top: (value.cut.highY - selected.y) * value.cut.pxPerMm * scale - 8, borderColor: palette.accent }]} />
-                ) : null}
+
               </Pressable>
               <HeightSlider width={cutWidth} low={value.low[2]} high={value.high[2]} value={height} onChange={(next) => setZ(Math.round(next / LAYER_MM) * LAYER_MM)} />
-              <Text style={[styles.legend, { color: text.tertiaryLabel }]}>Grey: the model. Orange: the supports. Red rings: requirements. Tap a support to select it.</Text>
+              <Text style={[styles.legend, { color: text.tertiaryLabel }]}>Grey: the model. Orange: the supports. Red rings: requirements. Tap any part of a support to select it.</Text>
             </Card>
 
-            <Card title={selected === undefined ? "Support" : `Support ${selected.position}`}>
+            {choices !== undefined ? (
+              <Card title="Which support?" flush>
+                {choices.map((pick, index) => (
+                  <ListRow
+                    key={pick.tree}
+                    icon="cone"
+                    tint="#5E5CE6"
+                    title={`Tree ${pick.tree} · ${pick.part}`}
+                    detail={`${pick.partPosition}${pick.treePosition !== null ? ` · tip ${pick.treePosition}` : ""}${pick.distance > 0 ? ` · ${pick.distance.toFixed(2)} mm away` : ""}`}
+                    last={index === choices.length - 1}
+                    onPress={() => {
+                      tapAt.current = Date.now();
+                      setSelected(pick);
+                      setChoices(undefined);
+                    }}
+                  />
+                ))}
+              </Card>
+            ) : null}
+
+            <Card title={selected === undefined ? "Support" : `Support ${selected.treePosition ?? selected.tree}`}>
+              {pickNote !== undefined ? <Note text={pickNote.text} tone={pickNote.bad ? "bad" : undefined} /> : null}
               {selected === undefined ? (
-                <Note text="Tap a support in 3D or on the cut." />
+                <Note text="Tap any part of a support in 3D or on the cut." />
               ) : (
                 <>
-                  <Row label="Position ID" value={selected.position} />
-                  <Row label="Tree" value={`${selected.tree} · contact ${selected.id.split(":")[1] ?? ""}`} />
-                  <Row label="Contact point" value={`${selected.x.toFixed(2)}, ${selected.y.toFixed(2)}, ${selected.z.toFixed(2)}`} />
-                  <Row label="Tip radius" value={fmt(selected.tipRadius, 3)} />
-                  <Row label="Contact radius" value={fmt(selected.radius, 3)} />
-                  <Row label="Neck" value={selected.neckRadius === null ? "—" : `r ${selected.neckRadius.toFixed(3)} · ${fmt(selected.neckLength)}`} />
-                  <Row label="Stem radius" value={fmt(selected.stemRadius, 3)} />
-                  <Row label="Shaft radius" value={fmt(selected.shaftRadius, 3)} />
-                  <Row label="Load U (tree)" value={selected.loadU === null ? (value.hasLoads ? "—" : "No loads for this run") : selected.loadU.toPrecision(3)} tone={selected.loadU !== null && selected.loadU > 1 ? "bad" : undefined} />
-                  <Row label="Plate column" value={selected.plateColumn ? "Yes" : "No"} last={about.length === 0} />
+                  <Row label="Tree" value={selected.tree} />
+                  <Row label="Tree position ID" value={selected.treePosition ?? "—"} />
+                  <Row label="Part tapped" value={selected.part} />
+                  <Row label="Part position ID" value={selected.partPosition} />
+                  <Row label="Contacts" value={`${treeContacts.length}`} />
+                  <Row label="Tip radius" value={fmt(first?.tipRadius ?? null, 3)} />
+                  <Row label="Contact radius" value={fmt(first?.radius ?? null, 3)} />
+                  <Row label="Neck" value={first === undefined || first.neckRadius === null ? "—" : `r ${first.neckRadius.toFixed(3)} · ${fmt(first.neckLength)}`} />
+                  <Row label="Stem radius" value={fmt(first?.stemRadius ?? null, 3)} />
+                  <Row label="Shaft radius" value={fmt(first?.shaftRadius ?? null, 3)} />
+                  <Row label="Load U (tree)" value={first === undefined || first.loadU === null ? (value.hasLoads ? "—" : "No loads for this run") : first.loadU.toPrecision(3)} tone={first !== undefined && first.loadU !== null && first.loadU > 1 ? "bad" : undefined} />
+                  <Row label="Plate column" value={first?.plateColumn === true ? "Yes" : "No"} last={treeContacts.length <= 1 && about.length === 0} />
+                  {treeContacts.length > 1 ? <Text style={[styles.about, { color: text.secondaryLabel }]}>Contacts: {treeContacts.map((contact) => contact.position).join(", ")}</Text> : null}
                   {about.map((mark) => (
                     <Text key={mark.key} style={[styles.about, { color: text.label }]}>
                       <Text style={{ color: mark.kind === "requirement" ? palette.bad : palette.warn }}>{mark.label} </Text>
@@ -276,7 +352,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
             </Card>
 
             {selected !== undefined ? (
-              <Card title={`Feedback on ${selected.position}`}>
+              <Card title={`Feedback on ${selected.partPosition}`}>
                 <TextInput
                   value={draft}
                   onChangeText={setDraft}
@@ -289,7 +365,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   <Button label="Add note" icon="note.text" disabled={draft.trim() === ""} busy={sending} onPress={() => send("note")} style={styles.button} />
                   <Button label="Add requirement" icon="checklist" kind="primary" disabled={draft.trim() === ""} busy={sending} onPress={() => send("requirement")} style={styles.button} />
                 </View>
-                {sent !== undefined ? <Note text={sent.text} tone={sent.ok ? "ok" : "bad"} /> : <Note text={`Saved in runs.db with ${selected.position} and run ${runId}.`} />}
+                {sent !== undefined ? <Note text={sent.text} tone={sent.ok ? "ok" : "bad"} /> : <Note text={`Saved in runs.db with ${selected.partPosition} (the part tapped) and run ${runId}.`} />}
               </Card>
             ) : null}
           </>

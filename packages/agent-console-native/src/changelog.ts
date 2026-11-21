@@ -23,6 +23,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 8,
+    date: "2026-11-20",
+    title: "Select any support in plan review",
+    commits: ["saturn-uploader 17e1f38"],
+    lines: [
+      "Tap any part of a support (tip, cone, neck, stem, leg, brace, column, or base) to select it, in 3D or on the cut.",
+      "The support card shows the tree, its position ID, the part you tapped, and that part's position ID.",
+      "When more than one support is under your finger, a short list asks which one.",
+      "In 3D the whole selected support shows in blue, through the model.",
+      "A note or a requirement is saved with the position ID of the part you tapped.",
+    ],
+  },
+  {
     version: 9,
     date: "2026-11-20",
     title: "Typing in the plan review",

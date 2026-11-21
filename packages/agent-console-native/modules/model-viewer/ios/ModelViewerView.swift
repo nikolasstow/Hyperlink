@@ -37,6 +37,9 @@ final class ModelViewerView: ExpoView {
   var supportsUri: URL? { didSet { if supportsUri != oldValue { loadSupports() } } }
   var supportsColor: UIColor = UIColor(red: 1, green: 0.62, blue: 0.04, alpha: 1) { didSet { supportsMaterial.diffuse.contents = supportsColor } }
   var markers: [ModelMarker] = [] { didSet { showMarkers() } }
+  /// One support tree's triangles, drawn over everything in its own colour: the selected support, whole.
+  var highlightUri: URL? { didSet { if highlightUri != oldValue { loadHighlight() } } }
+  var highlightColor: UIColor = UIColor(red: 0.2, green: 0.6, blue: 1, alpha: 1) { didSet { highlightMaterial.diffuse.contents = highlightColor } }
   let onPointTap = EventDispatcher()
   var modelColor: UIColor = UIColor(white: 0.85, alpha: 1) { didSet { material.diffuse.contents = modelColor } }
   var clipLowMm: Double? { didSet { if clipLowMm != oldValue { applyClip() } } }
@@ -61,6 +64,9 @@ final class ModelViewerView: ExpoView {
   private let scene = SCNScene()
   private let material = SCNMaterial()
   private let supportsMaterial = SCNMaterial()
+  private let highlightMaterial = SCNMaterial()
+  private var highlightNode: SCNNode?
+  private var highlightGeneration = 0
   private let cameraNode = SCNNode()
   /// The model's frame: Z up from the plate, turned so SceneKit's Y is up. The model, the supports, and the markers sit in it.
   private let frameNode = SCNNode()
@@ -81,6 +87,10 @@ final class ModelViewerView: ExpoView {
     supportsMaterial.diffuse.contents = supportsColor
     supportsMaterial.lightingModel = .blinn
     supportsMaterial.specular.contents = UIColor(white: 0.2, alpha: 1)
+    highlightMaterial.diffuse.contents = highlightColor
+    highlightMaterial.lightingModel = .lambert
+    // The selected tree shows through the model and the other supports.
+    highlightMaterial.readsFromDepthBuffer = false
     frameNode.eulerAngles.x = -.pi / 2
     frameNode.addChildNode(markersNode)
     scene.rootNode.addChildNode(frameNode)
@@ -112,7 +122,8 @@ final class ModelViewerView: ExpoView {
   /// Sends the point a tap hit on the model or the supports, in the model's frame (mm).
   @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
     let location = recognizer.location(in: scnView)
-    let hits = scnView.hitTest(location, options: [.searchMode: SCNHitTestSearchMode.closest.rawValue])
+    // Every hit, nearest first: the highlight lies on the supports and is not a target itself.
+    let hits = scnView.hitTest(location, options: [.searchMode: SCNHitTestSearchMode.all.rawValue])
     guard let hit = hits.first(where: { $0.node === modelNode || $0.node === supportsNode }) else { return }
     let point = hit.node.convertPosition(hit.localCoordinates, to: frameNode)
     onPointTap([
@@ -140,6 +151,30 @@ final class ModelViewerView: ExpoView {
         let node = SCNNode(geometry: geometry)
         self.frameNode.addChildNode(node)
         self.supportsNode = node
+      }
+    }
+  }
+
+  private func loadHighlight() {
+    highlightGeneration += 1
+    let current = highlightGeneration
+    guard let highlightUri else {
+      highlightNode?.removeFromParentNode()
+      highlightNode = nil
+      return
+    }
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      let geometry = (try? Data(contentsOf: highlightUri, options: .mappedIfSafe)).flatMap(ModelViewerView.geometry(from:))
+      DispatchQueue.main.async {
+        guard let self, current == self.highlightGeneration else { return }
+        self.highlightNode?.removeFromParentNode()
+        self.highlightNode = nil
+        guard let geometry else { return }
+        geometry.materials = [self.highlightMaterial]
+        let node = SCNNode(geometry: geometry)
+        node.renderingOrder = 5
+        self.frameNode.addChildNode(node)
+        self.highlightNode = node
       }
     }
   }

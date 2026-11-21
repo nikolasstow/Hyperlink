@@ -49,6 +49,12 @@ public class ModelViewerModule: Module {
       Prop("markers") { (view: ModelViewerView, markers: [ModelMarker]?) in
         view.markers = markers ?? []
       }
+      Prop("highlightUri") { (view: ModelViewerView, uri: String?) in
+        view.highlightUri = uri.flatMap(URL.init(string:))
+      }
+      Prop("highlightColor") { (view: ModelViewerView, hex: String?) in
+        view.highlightColor = ModelViewerView.color(hex: hex ?? "#3399ff")
+      }
       Events("onPointTap")
     }
   }

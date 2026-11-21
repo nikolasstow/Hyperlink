@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PrintRecord } from "./resinApi";
-import { abDiff, decodePosition, nearestContact, positionsIn, globMatches, inTask, activeLine, headTimeline, startedMs, timeKey, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
+import { abDiff, choose, decodePosition, nearestContact, positionsIn, globMatches, inTask, activeLine, headTimeline, startedMs, timeKey, dayOf, deltaOf, describeFile, flagLabel, fmtMetric, outcomeKindOf, renderLabel, timeOf } from "./resinFormat";
 
 const record = (fields: Partial<PrintRecord>): PrintRecord => ({
   id: "P8",
@@ -138,5 +138,16 @@ describe("position IDs", () => {
     const contacts = [{ id: "a", x: 0, y: 0, z: 0 }, { id: "b", x: 5, y: 0, z: 0 }];
     expect(nearestContact(contacts, [4, 0, 0], 2)?.id).toBe("b");
     expect(nearestContact(contacts, [20, 0, 0], 2)).toBeUndefined();
+  });
+});
+
+describe("choose", () => {
+  it("selects the one support the point is on, lists several, and never guesses", () => {
+    const pick = (tree: string, distance: number) => ({ tree, distance });
+    expect(choose([pick("A", 0), pick("B", 0.3)])).toEqual({ kind: "One", pick: pick("A", 0) });
+    expect(choose([pick("A", 0), pick("B", 0)])).toEqual({ kind: "Several", picks: [pick("A", 0), pick("B", 0)] });
+    expect(choose([pick("A", 0.2), pick("B", 0.4)])).toEqual({ kind: "Several", picks: [pick("A", 0.2), pick("B", 0.4)] });
+    expect(choose([pick("A", 0.2)])).toEqual({ kind: "One", pick: pick("A", 0.2) });
+    expect(choose([])).toEqual({ kind: "None" });
   });
 });

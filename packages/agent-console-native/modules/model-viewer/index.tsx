@@ -26,6 +26,9 @@ export type ModelViewerProps = ViewProps & {
   readonly supportsColor?: string | undefined;
   /** Points to mark in the model's frame (mm): requirements, the selected support. */
   readonly markers?: ReadonlyArray<ModelMarker> | undefined;
+  /** One support tree's triangles (a `model.mesh` file), drawn over everything: the selected support, whole. */
+  readonly highlightUri?: string | undefined;
+  readonly highlightColor?: string | undefined;
   /** A tap on the model or the supports: the point it hit, in the model's frame (mm). */
   readonly onPointTap?: ((point: ModelTapPoint) => void) | undefined;
 };

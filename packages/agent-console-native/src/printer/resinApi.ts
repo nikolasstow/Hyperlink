@@ -318,6 +318,34 @@ export const sectionUrl = (relayBase: string, runId: string, z: number): string 
 /** A plan's model or supports as a `model.mesh` file. */
 export const planMeshUrl = (relayBase: string, runId: string, part: "model" | "supports"): string => `${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/mesh/${part}`;
 
+/** One support under a point: its tree, the part hit, and their position IDs. */
+export const PlanPick = Schema.Struct({
+  tree: Schema.String,
+  treePosition: Schema.NullOr(Schema.String),
+  part: Schema.String,
+  partPosition: Schema.String,
+  /** How far the point is outside the part, in mm (0: on or in it). */
+  distance: Schema.Number,
+});
+export type PlanPick = typeof PlanPick.Type;
+
+const PicksReply = Schema.Struct({ picks: Schema.Array(PlanPick) });
+
+/** The supports under a point of a plan (mm), one per tree, nearest first. `reachMm` is the finger's reach. */
+export const fetchPicks = async (relayBase: string, runId: string, point: readonly [number, number, number], reachMm: number): Promise<ReadonlyArray<PlanPick>> => {
+  const [x, y, z] = point;
+  const response = await authedFetch(`${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/pick?x=${x}&y=${y}&z=${z}&r=${reachMm}`, { cache: "no-store" });
+  const reply: unknown = await response.json();
+  if (!response.ok) {
+    const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(reply));
+    throw new CatalogError(error?.error ?? `The relay answered HTTP ${response.status}`, error?.unreachable === true);
+  }
+  return (await Schema.decodeUnknownPromise(PicksReply)(reply)).picks;
+};
+
+/** One tree's triangles of a plan's supports, as a `model.mesh` file: to mark the whole support. */
+export const treeMeshUrl = (relayBase: string, runId: string, tree: string): string => `${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/trees/${encodeURIComponent(tree)}/mesh`;
+
 const FeedbackReply = Schema.Struct({ kind: Schema.Literals(["note", "requirement"]), id: Schema.String });
 
 /** Writes a note or a requirement about a position of a run (the catalog's one write). Resolves with its id. */
