@@ -36,7 +36,7 @@ const Page = (props: { readonly link: PrinterLink | undefined; readonly children
   return (
     <View style={styles.root}>
       <Backdrop uri={undefined} glow={0} />
-      <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentInsetAdjustmentBehavior="never" automaticallyAdjustKeyboardInsets keyboardDismissMode="interactive" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: headerHeight + 10, paddingBottom: insets.bottom + 40 }}>
         <View style={styles.narrow}>{link === undefined ? <Text style={[styles.foot, { color: text.tertiaryLabel }]}>Open the printer page first.</Text> : props.children(link)}</View>
       </ScrollView>
     </View>

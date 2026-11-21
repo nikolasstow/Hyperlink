@@ -23,6 +23,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 9,
+    date: "2026-11-20",
+    title: "Typing in the plan review",
+    commits: ["feat/elegoo-printer-plugin: the keyboard fix"],
+    lines: [
+      "The plan review and the printer pages scroll the text you type above the keyboard.",
+      "Drag the page down to close the keyboard.",
+    ],
+  },
+  {
     version: 8,
     date: "2026-11-20",
     title: "Plan review on the phone",
