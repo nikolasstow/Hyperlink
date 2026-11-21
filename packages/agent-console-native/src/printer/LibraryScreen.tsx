@@ -144,21 +144,15 @@ export const LibraryScreen = (props: Props): React.ReactElement => {
           </View>
         ))}
         renderRow={(file, last) => {
-          const runId = file.print?.runA ?? file.print?.runB ?? null;
           const browserPath = file.browserPath;
-          // A file from a recorded run opens the run; any other file opens its 3D model.
+          // A library row opens the file itself: its 3D model and details.
           const onPress =
-            runId !== null
+            browserPath !== null
               ? () => {
                   markTap(`file ${file.name}`);
-                  props.navigation.navigate("ServerResinRun", { serverName, serverAddress, runId });
+                  props.navigation.navigate("GooViewer", { relayBase, path: browserPath, name: file.name });
                 }
-              : browserPath !== null
-                ? () => {
-                    markTap(`file ${file.name}`);
-                    props.navigation.navigate("GooViewer", { relayBase, path: browserPath, name: file.name });
-                  }
-                : undefined;
+              : undefined;
           return (
             <FileRow
               relayBase={relayBase}

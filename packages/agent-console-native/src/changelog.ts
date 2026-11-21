@@ -28,7 +28,7 @@ export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
     title: "Library files open",
     commits: ["feat/elegoo-printer-plugin: library rows open"],
     lines: [
-      "Every file in the Library opens. A file from a recorded run opens the run; any other file opens its 3D model and details.",
+      "Every file in the Library opens: its 3D model and details.",
     ],
   },
   {
