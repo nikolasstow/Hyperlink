@@ -83,13 +83,22 @@ export const makeDownloads = <T>(kind: DownloadKind<T>): Downloads<T> => {
     listeners.forEach((listener) => listener());
   };
 
-  /** Deletes all but the newest `keep` files. */
+  /** Deletes all but the newest `keep` files, and forgets what was read from them: their uri no longer opens. */
   const prune = (): void => {
     const files = folder()
       .list()
       .filter((entry): entry is File => entry instanceof File && entry.name.endsWith(kind.extension))
       .sort((a, b) => (b.modificationTime ?? 0) - (a.modificationTime ?? 0));
-    files.slice(kind.keep).forEach((old) => old.delete());
+    files.slice(kind.keep).forEach((old) => {
+      old.delete();
+      Array.from(openedFiles.keys())
+        .filter((id) => fileOf(id).name === old.name)
+        .forEach((id) => {
+          openedFiles.delete(id);
+          states.delete(id);
+        });
+    });
+    listeners.forEach((listener) => listener());
   };
 
   const ensure = (relayBase: string, taskId: string): void => {
@@ -135,7 +144,8 @@ export const makeDownloads = <T>(kind: DownloadKind<T>): Downloads<T> => {
           return;
         }
         if (target.exists) target.delete();
-        downloaded.move(target);
+        // moveSync: `move` is asynchronous, and the file must be in place before it is opened below.
+        downloaded.moveSync(target);
         const ready = kind.open(target);
         if (ready === undefined) {
           setState(taskId, { kind: "Failed", reason: "The file did not read back after the download" });

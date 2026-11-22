@@ -23,6 +23,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 13,
+    date: "2026-11-21",
+    title: "Plan review opens its 3D at once",
+    commits: ["feat/elegoo-printer-plugin: the plan mesh fix"],
+    lines: [
+      "The plan review no longer says the model or the supports file does not exist the first time you open a plan.",
+      "The 3D shows as soon as the files are on the phone.",
+    ],
+  },
+  {
     version: 12,
     date: "2026-11-20",
     title: "Library files open",
