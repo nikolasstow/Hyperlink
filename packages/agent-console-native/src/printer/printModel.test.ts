@@ -40,10 +40,14 @@ vi.mock("expo-file-system", () => {
     delete(): void {
       disk.delete(this.name);
     }
-    move(to: File): void {
+    /** As in expo-file-system 57: `move` is asynchronous, `moveSync` is not. */
+    moveSync(to: File): void {
       const bytes = disk.get(this.name);
       if (bytes !== undefined) disk.set(to.name, bytes);
       disk.delete(this.name);
+    }
+    move(to: File): Promise<void> {
+      return Promise.resolve().then(() => this.moveSync(to));
     }
     textSync(): string {
       return new TextDecoder().decode(disk.get(this.name));
