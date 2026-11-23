@@ -31,6 +31,16 @@
       "ios": {
         "simulator": true
       }
+    },
+    "simulator-dev": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "RNS_GAMMA_ENABLED": "1"
+      }
     }
   },
   "submit": {
