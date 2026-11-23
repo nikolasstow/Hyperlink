@@ -50,6 +50,8 @@ const MARK_WITHIN_MM = 1;
 const VIEWER_HEIGHT = 380;
 const SLIDER_HEIGHT = 44;
 const LAYER_MM = 0.02;
+/** A position ID is a 0.25 mm cell: a pick this close to the box's edge still counts as inside it (mm). */
+const PICK_SLACK_MM = 0.5;
 /** The cut box is never smaller than this on a side (mm). */
 const MIN_BOX_MM = 1;
 
@@ -157,7 +159,7 @@ const RangeSlider = (props: { readonly width: number; readonly low: number; read
 };
 
 const MARK_KINDS: ReadonlyArray<MarkKind> = ["break", "separation", "fusing", "other"];
-const MARK_COLOR: Readonly<Record<MarkKind, string>> = { break: "#ff3b30", separation: "#af52de", fusing: "#ff2d55", other: "#8e8e93" };
+const MARK_COLOR: Readonly<Record<MarkKind, string>> = { break: "#ff3b30", separation: "#af52de", fusing: "#ff2d55", other: "#30b0c7" };
 
 const fmt = (value: number | null, digits = 2, unit = " mm"): string => (value === null ? "—" : `${value.toFixed(digits)}${unit}`);
 
@@ -284,7 +286,12 @@ export const PlanScreen = (props: Props): React.ReactElement => {
     tapAt.current = Date.now();
     setSent(undefined);
     ask()
-      .then((picks) => {
+      .then((all) => {
+        // Only what the cut box and the height show can be picked: a clipped support is not on screen.
+        const picks = all.filter((pick) => {
+          const point = decodePosition(pick.partPosition);
+          return point === undefined || ((box === undefined || (point[0] >= box.x0 - PICK_SLACK_MM && point[0] <= box.x1 + PICK_SLACK_MM && point[1] >= box.y0 - PICK_SLACK_MM && point[1] <= box.y1 + PICK_SLACK_MM)) && (z === undefined || point[2] <= z + PICK_SLACK_MM));
+        });
         const chosen = choose(picks);
         if (chosen.kind === "One") {
           setSelected(chosen.pick);
