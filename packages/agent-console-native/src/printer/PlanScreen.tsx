@@ -35,7 +35,7 @@ import { useScreenBackground, useTextColors, withAlpha } from "../theme";
 import { useLoadedUri } from "./PrinterStage";
 import { openModel, type PrintModel } from "./printModel";
 import { makeDownloads, type DownloadState } from "./relayDownload";
-import { fetchPicks, fetchRayPicks, loadCatalog, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
+import { boxFrame, fetchPicks, fetchRayPicks, loadCatalog, marksRoute, sendMark, type CutBox, type MarkKind, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
 import { choose, decodePosition, positionsIn } from "./resinFormat";
 import { relayBaseOf } from "./sdcp";
 import { Button, Card, CatalogProblem, ListRow, Note, Row, usePalette } from "./ui";
@@ -50,6 +50,8 @@ const MARK_WITHIN_MM = 1;
 const VIEWER_HEIGHT = 380;
 const SLIDER_HEIGHT = 44;
 const LAYER_MM = 0.02;
+/** The cut box is never smaller than this on a side (mm). */
+const MIN_BOX_MM = 1;
 
 const meshStore = (part: "model" | "supports") =>
   makeDownloads<PrintModel>({
@@ -120,6 +122,43 @@ const HeightSlider = (props: { readonly width: number; readonly low: number; rea
   );
 };
 
+/** Two thumbs on one track: a range in mm. A touch moves the thumb nearer to it; the thumbs never cross. */
+const RangeSlider = (props: { readonly width: number; readonly low: number; readonly high: number; readonly from: number; readonly to: number; readonly onChange: (from: number, to: number) => void }): React.ReactElement => {
+  const palette = usePalette();
+  const span = Math.max(0.001, props.high - props.low);
+  const valueAt = (x: number): number => props.low + Math.min(1, Math.max(0, x / props.width)) * span;
+  const moving = React.useRef<"from" | "to">("from");
+  const pan = Gesture.Pan()
+    .runOnJS(true)
+    .minDistance(0)
+    .onBegin((event) => {
+      const value = valueAt(event.x);
+      moving.current = Math.abs(value - props.from) <= Math.abs(value - props.to) ? "from" : "to";
+      if (moving.current === "from") props.onChange(Math.min(value, props.to - MIN_BOX_MM), props.to);
+      else props.onChange(props.from, Math.max(value, props.from + MIN_BOX_MM));
+    })
+    .onUpdate((event) => {
+      const value = valueAt(event.x);
+      if (moving.current === "from") props.onChange(Math.min(value, props.to - MIN_BOX_MM), props.to);
+      else props.onChange(props.from, Math.max(value, props.from + MIN_BOX_MM));
+    });
+  const left = ((props.from - props.low) / span) * props.width;
+  const right = ((props.to - props.low) / span) * props.width;
+  return (
+    <GestureDetector gesture={pan}>
+      <View style={[styles.slider, { width: props.width }]}>
+        <View style={styles.sliderTrack} />
+        <View style={[styles.sliderFill, { left, width: Math.max(0, right - left), backgroundColor: palette.accent }]} />
+        <View style={[styles.sliderThumb, { left: left - 11, borderColor: palette.accent }]} />
+        <View style={[styles.sliderThumb, { left: right - 11, borderColor: palette.accent }]} />
+      </View>
+    </GestureDetector>
+  );
+};
+
+const MARK_KINDS: ReadonlyArray<MarkKind> = ["break", "separation", "fusing", "other"];
+const MARK_COLOR: Readonly<Record<MarkKind, string>> = { break: "#ff3b30", separation: "#af52de", fusing: "#ff2d55", other: "#8e8e93" };
+
 const fmt = (value: number | null, digits = 2, unit = " mm"): string => (value === null ? "—" : `${value.toFixed(digits)}${unit}`);
 
 export const PlanScreen = (props: Props): React.ReactElement => {
@@ -147,12 +186,25 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   // The selected tree's contacts, from the plan: their sizes and position IDs.
   const treeContacts = React.useMemo(() => (selected === undefined || value === undefined ? [] : value.contacts.filter((contact) => contact.tree === selected.tree)), [selected, value]);
   const tapAt = React.useRef<number | undefined>(undefined);
+  // The cut box (x and y ranges, mm); undefined: the whole plan.
+  const [box, setBox] = React.useState<CutBox | undefined>(undefined);
+  const [modelOpacity, setModelOpacity] = React.useState(1);
+  const [supportsOpacity, setSupportsOpacity] = React.useState(1);
+  // Painting a failure: on the selected support, or on the model.
+  const [paintOn, setPaintOn] = React.useState<"support" | "model" | undefined>(undefined);
+  const [painting, setPainting] = React.useState(false);
+  const [strokes, setStrokes] = React.useState<ReadonlyArray<ReadonlyArray<readonly [number, number, number]>>>([]);
+  const [markKind, setMarkKind] = React.useState<MarkKind>("break");
+  const [markText, setMarkText] = React.useState("");
+  const [markNote, setMarkNote] = React.useState<{ readonly ok: boolean; readonly text: string } | undefined>(undefined);
+  const [markSaving, setMarkSaving] = React.useState(false);
+  const marks = useCatalog(relayBase, marksRoute(runId));
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState<{ readonly ok: boolean; readonly text: string } | undefined>(undefined);
 
   // The cut on screen is the newest that has loaded; each logs the time from the slider to its image.
-  const wantedCut = value === undefined ? undefined : sectionUrl(relayBase, runId, height);
+  const wantedCut = value === undefined ? undefined : sectionUrl(relayBase, runId, height, box);
   const cutAsked = React.useRef<{ readonly uri: string; readonly z: number; readonly at: number } | undefined>(undefined);
   if (wantedCut !== undefined && cutAsked.current?.uri !== wantedCut) cutAsked.current = { uri: wantedCut, z: height, at: Date.now() };
   const cutUri = useLoadedUri(wantedCut);
@@ -171,8 +223,13 @@ export const PlanScreen = (props: Props): React.ReactElement => {
 
   const contentWidth = Math.min(width - 32, 900);
   const cutWidth = contentWidth - 32;
-  const cutHeight = value === undefined ? cutWidth : Math.round((cutWidth * value.cut.height) / value.cut.width);
-  const scale = value === undefined ? 1 : cutWidth / value.cut.width;
+  // The sliders under the 3D: two half-width ones side by side, then the full-width ranges.
+  const fullWidth = contentWidth - 32 - 22;
+  const halfWidth = Math.floor((fullWidth - 16) / 2);
+  // The cut image's frame: the whole plan, or the box at a finer scale.
+  const frame = value === undefined ? undefined : box === undefined ? value.cut : boxFrame(box);
+  const cutHeight = frame === undefined ? cutWidth : Math.round((cutWidth * frame.height) / frame.width);
+  const scale = frame === undefined ? 1 : cutWidth / frame.width;
 
   // Requirements and notes that name a position: marked in 3D and on the cut.
   const positioned = React.useMemo(() => {
@@ -190,9 +247,36 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   }, [requirements.value, notes.value]);
 
   const markers = React.useMemo(
-    (): ReadonlyArray<ModelMarker> => positioned.map((mark) => ({ x: mark.point[0], y: mark.point[1], z: mark.point[2], color: mark.kind === "requirement" ? palette.bad : palette.warn, radius: 0.7 })),
-    [positioned, palette],
+    (): ReadonlyArray<ModelMarker> => [
+      ...positioned.map((mark) => ({ x: mark.point[0], y: mark.point[1], z: mark.point[2], color: mark.kind === "requirement" ? palette.bad : palette.warn, radius: 0.7 })),
+      // Saved failures: each painted point, in its kind's colour.
+      ...(marks.value?.marks ?? []).flatMap((mark) => mark.points.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[mark.kind], radius: 0.18 }))),
+      // The strokes not saved yet.
+      ...strokes.flatMap((stroke) => stroke.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.18 }))),
+    ],
+    [positioned, palette, marks.value, strokes, markKind],
   );
+
+  const paintTarget = paintOn === "model" ? { kind: "model" as const } : paintOn === "support" && selected !== undefined ? { kind: "support" as const, tree: selected.tree, part: selected.part } : undefined;
+
+  const saveMark = (): void => {
+    if (paintTarget === undefined || strokes.length === 0) return;
+    setMarkSaving(true);
+    sendMark(relayBase, { run: runId, target: paintTarget, kind: markKind, text: markText.trim() === "" ? null : markText.trim(), points: strokes.flat() })
+      .then((saved) => {
+        setMarkNote({ ok: true, text: `Mark ${saved.id} saved: ${markKind} on ${paintTarget.kind === "model" ? "the model" : `tree ${paintTarget.tree} (${paintTarget.part})`}, ${saved.positions.length} position${saved.positions.length === 1 ? "" : "s"} (${saved.positions.slice(0, 3).join(", ")}${saved.positions.length > 3 ? ", …" : ""}).` });
+        setStrokes([]);
+        setMarkText("");
+        setPainting(false);
+        loadCatalog(relayBase, marksRoute(runId));
+        loadCatalog(relayBase, notesRoute);
+      })
+      .catch((cause: unknown) => {
+        console.error("[plan] saving the mark failed", cause);
+        setMarkNote({ ok: false, text: `Not saved: ${cause instanceof Error ? cause.message : String(cause)}` });
+      })
+      .finally(() => setMarkSaving(false));
+  };
 
   /** Asks the relay what is under the tap, then selects it, or asks the owner which one. */
   const select = (ask: () => Promise<ReadonlyArray<PlanPick>>): void => {
@@ -223,10 +307,10 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   };
 
   const onCutPress = (event: GestureResponderEvent): void => {
-    if (value === undefined) return;
-    const x = value.cut.lowX + event.nativeEvent.locationX / scale / value.cut.pxPerMm;
-    const y = value.cut.highY - event.nativeEvent.locationY / scale / value.cut.pxPerMm;
-    select(() => fetchPicks(relayBase, runId, [x, y, height], Math.min(CUT_REACH_MAX_MM, FINGER_PT / scale / value.cut.pxPerMm)));
+    if (frame === undefined) return;
+    const x = frame.lowX + event.nativeEvent.locationX / scale / frame.pxPerMm;
+    const y = frame.highY - event.nativeEvent.locationY / scale / frame.pxPerMm;
+    select(() => fetchPicks(relayBase, runId, [x, y, height], Math.min(CUT_REACH_MAX_MM, FINGER_PT / scale / frame.pxPerMm)));
   };
 
   const treePositions = new Set([...treeContacts.map((contact) => contact.position), ...(selected === undefined ? [] : [selected.partPosition])]);
@@ -276,7 +360,55 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   highlightUri={highlightUri}
                   highlightColor="#3399ff"
                   clipHighMm={z}
+                  clipMinX={box?.x0}
+                  clipMaxX={box?.x1}
+                  clipMinY={box?.y0}
+                  clipMaxY={box?.y1}
+                  modelOpacity={modelOpacity}
+                  supportsOpacity={supportsOpacity}
+                  paintMode={painting && paintTarget !== undefined ? paintTarget.kind : "off"}
+                  paintColor={MARK_COLOR[markKind]}
+                  onPaintStroke={(flat) => {
+                    const points: Array<readonly [number, number, number]> = [];
+                    for (let i = 0; i + 2 < flat.length; i += 3) points.push([flat[i] ?? 0, flat[i + 1] ?? 0, flat[i + 2] ?? 0]);
+                    if (points.length > 0) setStrokes((all) => [...all, points]);
+                  }}
                 />
+              </View>
+              <View style={styles.pad}>
+                <View style={styles.opacityRow}>
+                  <View style={styles.opacityHalf}>
+                    <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>Model {Math.round(modelOpacity * 100)}%</Text>
+                    <HeightSlider width={halfWidth} low={0} high={1} value={modelOpacity} onChange={setModelOpacity} />
+                  </View>
+                  <View style={styles.opacityHalf}>
+                    <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>Supports {Math.round(supportsOpacity * 100)}%</Text>
+                    <HeightSlider width={halfWidth} low={0} high={1} value={supportsOpacity} onChange={setSupportsOpacity} />
+                  </View>
+                </View>
+                <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>
+                  X {(box?.x0 ?? value.low[0]).toFixed(1)} to {(box?.x1 ?? value.high[0]).toFixed(1)} mm
+                </Text>
+                <RangeSlider
+                  width={fullWidth}
+                  low={value.low[0]}
+                  high={value.high[0]}
+                  from={box?.x0 ?? value.low[0]}
+                  to={box?.x1 ?? value.high[0]}
+                  onChange={(x0, x1) => setBox({ x0, x1, y0: box?.y0 ?? value.low[1], y1: box?.y1 ?? value.high[1] })}
+                />
+                <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>
+                  Y {(box?.y0 ?? value.low[1]).toFixed(1)} to {(box?.y1 ?? value.high[1]).toFixed(1)} mm
+                </Text>
+                <RangeSlider
+                  width={fullWidth}
+                  low={value.low[1]}
+                  high={value.high[1]}
+                  from={box?.y0 ?? value.low[1]}
+                  to={box?.y1 ?? value.high[1]}
+                  onChange={(y0, y1) => setBox({ x0: box?.x0 ?? value.low[0], x1: box?.x1 ?? value.high[0], y0, y1 })}
+                />
+                {box !== undefined ? <Button label="Whole plan" icon="arrow.up.left.and.arrow.down.right" onPress={() => setBox(undefined)} style={styles.wholeButton} /> : null}
               </View>
               {[meshNote("model", model.state), meshNote("supports", supports.state)].filter((note): note is string => note !== undefined).map((note) => (
                 <View key={note} style={styles.pad}>
@@ -294,7 +426,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                     <View
                       key={mark.key}
                       pointerEvents="none"
-                      style={[styles.mark, { left: (mark.point[0] - value.cut.lowX) * value.cut.pxPerMm * scale - 6, top: (value.cut.highY - mark.point[1]) * value.cut.pxPerMm * scale - 6, borderColor: mark.kind === "requirement" ? palette.bad : palette.warn }]}
+                      style={[styles.mark, { left: (mark.point[0] - (frame?.lowX ?? 0)) * (frame?.pxPerMm ?? 1) * scale - 6, top: ((frame?.highY ?? 0) - mark.point[1]) * (frame?.pxPerMm ?? 1) * scale - 6, borderColor: mark.kind === "requirement" ? palette.bad : palette.warn }]}
                     />
                   ))}
 
@@ -351,6 +483,78 @@ export const PlanScreen = (props: Props): React.ReactElement => {
               )}
             </Card>
 
+            <Card title="Paint a failure">
+              <View style={styles.buttons}>
+                <Button
+                  label={selected === undefined ? "Select a support first" : `Support ${selected.tree}`}
+                  icon="cone"
+                  kind={paintOn === "support" ? "primary" : "default"}
+                  disabled={selected === undefined}
+                  onPress={() => {
+                    setPaintOn("support");
+                    setStrokes([]);
+                    setMarkNote(undefined);
+                  }}
+                  style={styles.button}
+                />
+                <Button
+                  label="The model"
+                  icon="person.crop.square"
+                  kind={paintOn === "model" ? "primary" : "default"}
+                  onPress={() => {
+                    setPaintOn("model");
+                    setStrokes([]);
+                    setMarkNote(undefined);
+                  }}
+                  style={styles.button}
+                />
+              </View>
+              {paintTarget === undefined ? (
+                <Note text="Choose what to paint on: the selected support, or the model." />
+              ) : (
+                <>
+                  <Button
+                    label={painting ? "Stop painting" : `Paint on ${paintTarget.kind === "model" ? "the model" : `tree ${paintTarget.tree}`}`}
+                    icon="paintbrush.pointed"
+                    kind={painting ? "destructive" : "primary"}
+                    onPress={() => setPainting((on) => !on)}
+                  />
+                  <Note text={painting ? "One finger paints in 3D; two fingers turn the view; a pinch zooms." : `${strokes.length} stroke${strokes.length === 1 ? "" : "s"}, ${strokes.flat().length} points.`} />
+                  <View style={styles.kinds}>
+                    {MARK_KINDS.map((kind) => (
+                      <Pressable key={kind} onPress={() => setMarkKind(kind)} style={[styles.kind, { borderColor: MARK_COLOR[kind], backgroundColor: markKind === kind ? withAlpha(MARK_COLOR[kind], 0.25) : "transparent" }]} accessibilityRole="button" accessibilityState={{ selected: markKind === kind }}>
+                        <Text style={[styles.kindText, { color: text.label }]}>{kind}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <TextInput value={markText} onChangeText={setMarkText} placeholder="What failed here (optional)" placeholderTextColor={text.tertiaryLabel} style={[styles.input, styles.markInput, { color: text.label, borderColor: withAlpha(palette.accent, 0.4) }]} />
+                  <View style={styles.buttons}>
+                    <Button label="Undo stroke" icon="arrow.uturn.backward" disabled={strokes.length === 0} onPress={() => setStrokes((all) => all.slice(0, -1))} style={styles.button} />
+                    <Button label="Save mark" icon="checkmark" kind="primary" disabled={strokes.length === 0} busy={markSaving} onPress={saveMark} style={styles.button} />
+                  </View>
+                </>
+              )}
+              {markNote !== undefined ? <Note text={markNote.text} tone={markNote.ok ? "ok" : "bad"} /> : null}
+            </Card>
+
+            <Card title="Marks on this run" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{marks.value === undefined ? "…" : `${marks.value.marks.length}`}</Text>}>
+              {marks.error !== undefined ? (
+                <CatalogProblem error={marks.error} unreachable={marks.unreachable} />
+              ) : marks.value === undefined ? (
+                <Note text="Reading the marks…" />
+              ) : marks.value.marks.length === 0 ? (
+                <Note text="No failure painted on this run yet." />
+              ) : (
+                marks.value.marks.map((mark) => (
+                  <Text key={mark.id} style={[styles.about, { color: text.label }]}>
+                    <Text style={{ color: MARK_COLOR[mark.kind] }}>{mark.kind} </Text>
+                    {mark.target === "model" ? "on the model" : `on tree ${mark.tree ?? ""} (${mark.part ?? ""})`} · {mark.positions.length} positions ({mark.positions.slice(0, 2).join(", ")}
+                    {mark.positions.length > 2 ? ", …" : ""}){mark.text !== null ? ` · ${mark.text}` : ""}
+                  </Text>
+                ))
+              )}
+            </Card>
+
             {selected !== undefined ? (
               <Card title={`Feedback on ${selected.partPosition}`}>
                 <TextInput
@@ -392,4 +596,12 @@ const styles = StyleSheet.create({
   input: { minHeight: 72, fontSize: 15, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, textAlignVertical: "top" },
   buttons: { flexDirection: "row", gap: 8, marginTop: 10, marginBottom: 8 },
   button: { flex: 1 },
+  opacityRow: { flexDirection: "row", gap: 16 },
+  opacityHalf: { flex: 1 },
+  sliderLabel: { fontSize: 12, marginTop: 6 },
+  wholeButton: { marginTop: 8 },
+  kinds: { flexDirection: "row", gap: 6, marginTop: 6 },
+  kind: { flex: 1, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  kindText: { fontSize: 13, fontWeight: "600" },
+  markInput: { minHeight: 44, marginTop: 8 },
 });

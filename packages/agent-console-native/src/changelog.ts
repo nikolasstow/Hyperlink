@@ -23,6 +23,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 14,
+    date: "2026-11-22",
+    title: "Cut boxes, transparency, and painted failures in plan review",
+    commits: ["saturn-uploader 688a931", "rundb.py mark"],
+    lines: [
+      "Two range sliders set an X and a Y range. The 3D and the cut show only that box, and the view comes close to it.",
+      "Two sliders side by side set how see-through the model and the supports are.",
+      "Select a support, or choose the model, then Paint: one finger paints the failure, two fingers turn the view.",
+      "Pick the kind (break, separation, fusing, or other), add a few words if you like, and save. The painted points keep their position IDs.",
+      "Saved marks show again in 3D in their kind's colour, in the list under the plan, and in the head's notes.",
+    ],
+  },
+  {
     version: 13,
     date: "2026-11-21",
     title: "Plan review opens its 3D at once",

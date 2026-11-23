@@ -44,15 +44,32 @@ final class ModelViewerView: ExpoView {
   var modelColor: UIColor = UIColor(white: 0.85, alpha: 1) { didSet { material.diffuse.contents = modelColor } }
   var clipLowMm: Double? { didSet { if clipLowMm != oldValue { applyClip() } } }
   var clipHighMm: Double? { didSet { if clipHighMm != oldValue { applyClip() } } }
+  /// The cut box's x and y ranges (mm, the model's frame). With a range set, the view frames the box.
+  var clipMinX: Double? { didSet { if clipMinX != oldValue { applyClip() } } }
+  var clipMaxX: Double? { didSet { if clipMaxX != oldValue { applyClip() } } }
+  var clipMinY: Double? { didSet { if clipMinY != oldValue { applyClip() } } }
+  var clipMaxY: Double? { didSet { if clipMaxY != oldValue { applyClip() } } }
+  /// How opaque the model and the supports are, 0 to 1.
+  var modelOpacity: Double = 1 { didSet { if modelOpacity != oldValue { applyOpacity() } } }
+  var supportsOpacity: Double = 1 { didSet { if supportsOpacity != oldValue { applyOpacity() } } }
+  /// "support": one finger paints on the selected support (the highlight); "model": on the model; "off": no paint.
+  /// While painting, two fingers turn the view and a pinch zooms.
+  var paintMode: String = "off" { didSet { if paintMode != oldValue { applyPaintMode() } } }
+  var paintColor: UIColor = UIColor(red: 1, green: 0.23, blue: 0.19, alpha: 1)
+  let onPaintStroke = EventDispatcher()
 
-  /// Discards every fragment outside the crop, by its height in the model's own space, and darkens the back faces it shows.
+  /// Discards every fragment outside the cut box, in the node's own space (mm), and darkens the back faces it shows.
   private static let clipShader = """
   #pragma arguments
   float clipLow;
   float clipHigh;
+  float clipLowX;
+  float clipHighX;
+  float clipLowY;
+  float clipHighY;
   #pragma body
   float4 local = scn_node.inverseModelViewTransform * float4(_surface.position, 1.0);
-  if (local.z < clipLow || local.z > clipHigh) {
+  if (local.z < clipLow || local.z > clipHigh || local.x < clipLowX || local.x > clipHighX || local.y < clipLowY || local.y > clipHighY) {
     discard_fragment();
   }
   if (dot(_surface.normal, _surface.view) < 0.0) {
@@ -93,6 +110,7 @@ final class ModelViewerView: ExpoView {
     highlightMaterial.readsFromDepthBuffer = false
     frameNode.eulerAngles.x = -.pi / 2
     frameNode.addChildNode(markersNode)
+    frameNode.addChildNode(strokeNode)
     scene.rootNode.addChildNode(frameNode)
 
     let camera = SCNCamera()
@@ -165,6 +183,7 @@ final class ModelViewerView: ExpoView {
         let node = SCNNode(geometry: geometry)
         self.frameNode.addChildNode(node)
         self.supportsNode = node
+        self.applyOpacity()
       }
     }
   }
@@ -232,16 +251,156 @@ final class ModelViewerView: ExpoView {
     }
   }
 
+  private var hasBox: Bool { clipMinX != nil || clipMaxX != nil || clipMinY != nil || clipMaxY != nil }
+
   private func applyClip() {
-    guard clipLowMm != nil || clipHighMm != nil else {
-      material.shaderModifiers = nil
+    let materials = [material, supportsMaterial, highlightMaterial]
+    guard clipLowMm != nil || clipHighMm != nil || hasBox else {
+      for each in materials {
+        each.shaderModifiers = nil
+      }
       material.isDoubleSided = false
       return
     }
-    material.shaderModifiers = [.fragment: ModelViewerView.clipShader]
+    let far: Double = 1_000_000
+    for each in materials {
+      each.shaderModifiers = [.fragment: ModelViewerView.clipShader]
+      each.setValue(Float(clipLowMm ?? -far), forKey: "clipLow")
+      each.setValue(Float(clipHighMm ?? far), forKey: "clipHigh")
+      each.setValue(Float(clipMinX ?? -far), forKey: "clipLowX")
+      each.setValue(Float(clipMaxX ?? far), forKey: "clipHighX")
+      each.setValue(Float(clipMinY ?? -far), forKey: "clipLowY")
+      each.setValue(Float(clipMaxY ?? far), forKey: "clipHighY")
+    }
     material.isDoubleSided = true
-    material.setValue(Float(clipLowMm ?? -1_000_000), forKey: "clipLow")
-    material.setValue(Float(clipHighMm ?? 1_000_000), forKey: "clipHigh")
+    if hasBox { frameBox() }
+  }
+
+  /// Turns the view about the cut box's centre and brings the camera close enough that the box fills the view.
+  private func frameBox() {
+    guard let model = modelNode else { return }
+    let (low, high) = model.boundingBox
+    let x0 = Float(clipMinX ?? Double(low.x)), x1 = Float(clipMaxX ?? Double(high.x))
+    let y0 = Float(clipMinY ?? Double(low.y)), y1 = Float(clipMaxY ?? Double(high.y))
+    let z0 = Float(clipLowMm ?? Double(low.z)), z1 = Float(min(clipHighMm ?? Double(high.z), Double(high.z)))
+    guard x1 > x0, y1 > y0, z1 > z0 else { return }
+    let centre = frameNode.convertPosition(SCNVector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2), to: scene.rootNode)
+    let radius = sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0)) / 2
+    let distance = max(radius, 1) / tan(Float(20.0 * Double.pi / 180)) * 1.15
+    let eye = cameraNode.presentation.worldPosition
+    var direction = SIMD3<Float>(eye.x - centre.x, eye.y - centre.y, eye.z - centre.z)
+    if simd_length(direction) < 0.001 { direction = SIMD3<Float>(0, 0.4, 1) }
+    direction = simd_normalize(direction)
+    cameraNode.position = SCNVector3(centre.x + direction.x * distance, centre.y + direction.y * distance, centre.z + direction.z * distance)
+    cameraNode.look(at: centre)
+    cameraNode.camera?.zNear = Double(max(0.05, distance - radius * 2))
+    cameraNode.camera?.zFar = Double(distance + radius * 4 + 200)
+    scnView.defaultCameraController.target = centre
+  }
+
+  private func applyOpacity() {
+    for (each, opacity) in [(material, modelOpacity), (supportsMaterial, supportsOpacity)] {
+      let clamped = max(0, min(1, opacity))
+      each.transparency = CGFloat(clamped)
+      // A see-through part writes no depth, so what is behind it still draws.
+      each.writesToDepthBuffer = clamped >= 1
+      each.transparencyMode = .dualLayer
+    }
+    modelNode?.isHidden = modelOpacity <= 0
+    supportsNode?.isHidden = supportsOpacity <= 0
+  }
+
+  // MARK: Painting
+
+  private let strokeNode = SCNNode()
+  private var stroke: [SCNVector3] = []
+  private lazy var paintPan: UIPanGestureRecognizer = {
+    let pan = UIPanGestureRecognizer(target: self, action: #selector(painted(_:)))
+    pan.maximumNumberOfTouches = 1
+    return pan
+  }()
+  private lazy var orbitPan: UIPanGestureRecognizer = {
+    let pan = UIPanGestureRecognizer(target: self, action: #selector(orbited(_:)))
+    pan.minimumNumberOfTouches = 2
+    return pan
+  }()
+  private lazy var zoomPinch = UIPinchGestureRecognizer(target: self, action: #selector(zoomed(_:)))
+
+  private func applyPaintMode() {
+    let painting = paintMode == "support" || paintMode == "model"
+    if paintPan.view == nil {
+      for gesture in [paintPan, orbitPan, zoomPinch] as [UIGestureRecognizer] {
+        scnView.addGestureRecognizer(gesture)
+      }
+    }
+    for gesture in [paintPan, orbitPan, zoomPinch] as [UIGestureRecognizer] {
+      gesture.isEnabled = painting
+    }
+    scnView.allowsCameraControl = !painting
+    clearStroke()
+  }
+
+  private func clearStroke() {
+    stroke = []
+    strokeNode.childNodes.forEach { $0.removeFromParentNode() }
+  }
+
+  /// One finger: a stroke on the target's surface only. Each point is kept in the model's frame (mm); the stroke is sent when the finger lifts.
+  @objc private func painted(_ recognizer: UIPanGestureRecognizer) {
+    let target = paintMode == "support" ? highlightNode : paintMode == "model" ? modelNode : nil
+    if recognizer.state == .began { clearStroke() }
+    if let target, recognizer.state == .began || recognizer.state == .changed {
+      let location = recognizer.location(in: scnView)
+      let hits = scnView.hitTest(location, options: [.searchMode: SCNHitTestSearchMode.all.rawValue, .rootNode: target, .ignoreHiddenNodes: true])
+      for hit in hits where hit.node === target {
+        let point = hit.node.convertPosition(hit.localCoordinates, to: frameNode)
+        // Only what the cut box shows can be painted.
+        if !inBox(point) { continue }
+        if let last = stroke.last, simd_distance(SIMD3<Float>(last.x, last.y, last.z), SIMD3<Float>(point.x, point.y, point.z)) < 0.08 { break }
+        stroke.append(point)
+        let dot = SCNNode(geometry: strokeDot)
+        dot.position = point
+        dot.renderingOrder = 12
+        strokeNode.addChildNode(dot)
+        break
+      }
+    }
+    if recognizer.state == .ended || recognizer.state == .cancelled {
+      if !stroke.isEmpty {
+        onPaintStroke(["points": stroke.flatMap { [Double($0.x), Double($0.y), Double($0.z)] }])
+      }
+      clearStroke()
+    }
+  }
+
+  private lazy var strokeDot: SCNGeometry = {
+    let sphere = SCNSphere(radius: 0.18)
+    let paint = SCNMaterial()
+    paint.diffuse.contents = paintColor
+    paint.lightingModel = .constant
+    paint.readsFromDepthBuffer = false
+    sphere.materials = [paint]
+    return sphere
+  }()
+
+  private func inBox(_ point: SCNVector3) -> Bool {
+    let x = Double(point.x), y = Double(point.y), z = Double(point.z)
+    return x >= (clipMinX ?? -.infinity) && x <= (clipMaxX ?? .infinity) && y >= (clipMinY ?? -.infinity) && y <= (clipMaxY ?? .infinity)
+      && z >= (clipLowMm ?? -.infinity) && z <= (clipHighMm ?? .infinity)
+  }
+
+  /// Two fingers turn the view about its target while painting.
+  @objc private func orbited(_ recognizer: UIPanGestureRecognizer) {
+    let move = recognizer.translation(in: scnView)
+    recognizer.setTranslation(.zero, in: scnView)
+    scnView.defaultCameraController.rotateBy(x: Float(move.x) * 0.5, y: Float(-move.y) * 0.5)
+  }
+
+  /// A pinch zooms while painting.
+  @objc private func zoomed(_ recognizer: UIPinchGestureRecognizer) {
+    let scale = recognizer.scale
+    recognizer.scale = 1
+    scnView.defaultCameraController.dolly(by: Float(scale - 1) * 40, onScreenPoint: recognizer.location(in: scnView), viewport: scnView.bounds.size)
   }
 
   private func show(_ geometry: SCNGeometry) {
@@ -251,6 +410,7 @@ final class ModelViewerView: ExpoView {
     let node = SCNNode(geometry: geometry)
     frameNode.addChildNode(node)
     modelNode = node
+    applyOpacity()
 
     // A finer level of the same model has the same bounds: keep the owner's view.
     let (low, high) = geometry.boundingBox

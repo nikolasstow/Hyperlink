@@ -312,8 +312,71 @@ export const libraryRoute: CatalogRoute<LibraryReply> = { path: "/api/resin/libr
 export const historyRoute: CatalogRoute<HistoryReply> = { path: "/api/resin/history", schema: HistoryReply };
 export const planRoute = (runId: string): CatalogRoute<PlanReply> => ({ path: `/api/resin/runs/${encodeURIComponent(runId)}/plan`, schema: PlanReply });
 
-/** The plan's cut at height z, seen from above: the model grey, the supports orange. */
-export const sectionUrl = (relayBase: string, runId: string, z: number): string => `${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/section.png?z=${z.toFixed(2)}`;
+/** A cut box in the plan's frame (mm). */
+export interface CutBox {
+  readonly x0: number;
+  readonly x1: number;
+  readonly y0: number;
+  readonly y1: number;
+}
+
+/** The plan's cut at height z, seen from above: the model grey, the supports orange. With a box, only that area, finer. */
+export const sectionUrl = (relayBase: string, runId: string, z: number, box?: CutBox): string =>
+  `${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/section.png?z=${z.toFixed(2)}${box === undefined ? "" : `&x0=${box.x0.toFixed(2)}&x1=${box.x1.toFixed(2)}&y0=${box.y0.toFixed(2)}&y1=${box.y1.toFixed(2)}`}`;
+
+/** The longest side of a cut image, in pixels, and the finest scale of a box cut (the relay's PlanData). */
+export const CUT_MAX_PX = 1400;
+export const BOX_MAX_PX_PER_MM = 64;
+
+/** The frame the relay draws a box cut in: the same rule as its PlanData.boxFrame. */
+export const boxFrame = (box: CutBox): { readonly lowX: number; readonly highY: number; readonly pxPerMm: number; readonly width: number; readonly height: number } => {
+  const pxPerMm = Math.min(BOX_MAX_PX_PER_MM, CUT_MAX_PX / Math.max(box.x1 - box.x0, box.y1 - box.y0));
+  return { lowX: box.x0, highY: box.y1, pxPerMm, width: Math.max(1, Math.ceil((box.x1 - box.x0) * pxPerMm)), height: Math.max(1, Math.ceil((box.y1 - box.y0) * pxPerMm)) };
+};
+
+export const MarkKind = Schema.Literals(["break", "separation", "fusing", "other"]);
+export type MarkKind = typeof MarkKind.Type;
+
+/** A failure painted on a plan: on one support (tree and part) or on the model, with its points. */
+export const PaintedMark = Schema.Struct({
+  id: Schema.Number,
+  at: Schema.String,
+  run: Schema.String,
+  target: Schema.Literals(["support", "model"]),
+  tree: Schema.NullOr(Schema.String),
+  part: Schema.NullOr(Schema.String),
+  kind: MarkKind,
+  text: Schema.NullOr(Schema.String),
+  positions: Schema.Array(Schema.String),
+  points: Schema.Array(Schema.Tuple([Schema.Number, Schema.Number, Schema.Number])),
+  task: Schema.NullOr(Schema.String),
+});
+export type PaintedMark = typeof PaintedMark.Type;
+export const MarksReply = Schema.Struct({ marks: Schema.Array(PaintedMark) });
+export type MarksReply = typeof MarksReply.Type;
+export const marksRoute = (runId: string): CatalogRoute<MarksReply> => ({ path: `/api/resin/marks?run=${encodeURIComponent(runId)}`, schema: MarksReply });
+
+const MarkSaved = Schema.Struct({ id: Schema.Number, positions: Schema.Array(Schema.String) });
+
+/** Saves a painted failure in runs.db (rundb.py mark add). Resolves with its id and the position IDs of its points. */
+export const sendMark = async (
+  relayBase: string,
+  body: {
+    readonly run: string;
+    readonly target: { readonly kind: "support"; readonly tree: string; readonly part: string } | { readonly kind: "model" };
+    readonly kind: MarkKind;
+    readonly text: string | null;
+    readonly points: ReadonlyArray<readonly [number, number, number]>;
+  },
+): Promise<typeof MarkSaved.Type> => {
+  const response = await authedFetch(`${relayBase}/api/resin/marks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const reply: unknown = await response.json();
+  if (!response.ok) {
+    const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(reply));
+    throw new CatalogError(error?.error ?? `The relay answered HTTP ${response.status}`, error?.unreachable === true);
+  }
+  return Schema.decodeUnknownPromise(MarkSaved)(reply);
+};
 
 /** A plan's model or supports as a `model.mesh` file. */
 export const planMeshUrl = (relayBase: string, runId: string, part: "model" | "supports"): string => `${relayBase}/api/resin/runs/${encodeURIComponent(runId)}/mesh/${part}`;

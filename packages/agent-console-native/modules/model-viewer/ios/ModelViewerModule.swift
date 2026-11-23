@@ -55,7 +55,15 @@ public class ModelViewerModule: Module {
       Prop("highlightColor") { (view: ModelViewerView, hex: String?) in
         view.highlightColor = ModelViewerView.color(hex: hex ?? "#3399ff")
       }
-      Events("onRayTap")
+      Prop("clipMinX") { (view: ModelViewerView, mm: Double?) in view.clipMinX = mm }
+      Prop("clipMaxX") { (view: ModelViewerView, mm: Double?) in view.clipMaxX = mm }
+      Prop("clipMinY") { (view: ModelViewerView, mm: Double?) in view.clipMinY = mm }
+      Prop("clipMaxY") { (view: ModelViewerView, mm: Double?) in view.clipMaxY = mm }
+      Prop("modelOpacity") { (view: ModelViewerView, value: Double?) in view.modelOpacity = value ?? 1 }
+      Prop("supportsOpacity") { (view: ModelViewerView, value: Double?) in view.supportsOpacity = value ?? 1 }
+      Prop("paintMode") { (view: ModelViewerView, mode: String?) in view.paintMode = mode ?? "off" }
+      Prop("paintColor") { (view: ModelViewerView, hex: String?) in view.paintColor = ModelViewerView.color(hex: hex ?? "#ff3b30") }
+      Events("onRayTap", "onPaintStroke")
     }
   }
 }

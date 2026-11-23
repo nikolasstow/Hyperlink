@@ -29,6 +29,19 @@ export type ModelViewerProps = ViewProps & {
   /** One support tree's triangles (a `model.mesh` file), drawn over everything: the selected support, whole. */
   readonly highlightUri?: string | undefined;
   readonly highlightColor?: string | undefined;
+  /** The cut box's x and y ranges (mm, the model's frame). With a range set, the view frames the box. */
+  readonly clipMinX?: number | undefined;
+  readonly clipMaxX?: number | undefined;
+  readonly clipMinY?: number | undefined;
+  readonly clipMaxY?: number | undefined;
+  /** How opaque the model and the supports are, 0 to 1. */
+  readonly modelOpacity?: number | undefined;
+  readonly supportsOpacity?: number | undefined;
+  /** "support" paints on the highlighted support, "model" on the model: one finger paints, two fingers turn, a pinch zooms. */
+  readonly paintMode?: "off" | "support" | "model" | undefined;
+  readonly paintColor?: string | undefined;
+  /** A finished stroke: its points on the target's surface, x y z in mm, flat. */
+  readonly onPaintStroke?: ((points: ReadonlyArray<number>) => void) | undefined;
   /** A tap, as a ray in the model's frame (mm): it passes through the model and every support. */
   readonly onRayTap?: ((ray: ModelTapRay) => void) | undefined;
 };
@@ -52,8 +65,9 @@ export interface ModelTapRay {
   readonly spread: number;
 }
 
-type NativeProps = Omit<ModelViewerProps, "onRayTap"> & {
+type NativeProps = Omit<ModelViewerProps, "onRayTap" | "onPaintStroke"> & {
   readonly onRayTap?: (event: NativeSyntheticEvent<ModelTapRay>) => void;
+  readonly onPaintStroke?: (event: NativeSyntheticEvent<{ readonly points: ReadonlyArray<number> }>) => void;
 };
 
 const NativeView = Platform.OS === "ios" ? requireNativeView<NativeProps>("ModelViewer") : null;
@@ -80,6 +94,12 @@ export const presentModelAR = (options: {
     : nativeModule.presentAR(options.uri, options.color, options.clipLowMm ?? null, options.clipHighMm ?? null, options.title);
 
 export const ModelViewer = (props: ModelViewerProps): React.ReactElement | null => {
-  const { onRayTap, ...rest } = props;
-  return NativeView === null ? null : <NativeView {...rest} onRayTap={onRayTap === undefined ? undefined : (event) => onRayTap(event.nativeEvent)} />;
+  const { onRayTap, onPaintStroke, ...rest } = props;
+  return NativeView === null ? null : (
+    <NativeView
+      {...rest}
+      onRayTap={onRayTap === undefined ? undefined : (event) => onRayTap(event.nativeEvent)}
+      onPaintStroke={onPaintStroke === undefined ? undefined : (event) => onPaintStroke(event.nativeEvent.points)}
+    />
+  );
 };
