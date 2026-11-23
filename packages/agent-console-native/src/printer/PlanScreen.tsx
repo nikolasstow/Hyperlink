@@ -35,7 +35,7 @@ import { useScreenBackground, useTextColors, withAlpha } from "../theme";
 import { useLoadedUri } from "./PrinterStage";
 import { openModel, type PrintModel } from "./printModel";
 import { makeDownloads, type DownloadState } from "./relayDownload";
-import { boxFrame, fetchPicks, fetchRayPicks, loadCatalog, marksRoute, sendMark, type CutBox, type MarkKind, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
+import { allMarksRoute, boxFrame, fetchPicks, fetchRayPicks, loadCatalog, marksRoute, sendMark, type CutBox, type MarkKind, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
 import { choose, decodePosition, positionsIn } from "./resinFormat";
 import { relayBaseOf } from "./sdcp";
 import { Button, Card, CatalogProblem, ListRow, Note, Row, usePalette } from "./ui";
@@ -159,7 +159,17 @@ const RangeSlider = (props: { readonly width: number; readonly low: number; read
 };
 
 const MARK_KINDS: ReadonlyArray<MarkKind> = ["break", "separation", "fusing", "other"];
+
+/** Which marks and rings show in 3D and on the cut: this run's, every run's, or none. */
+type MarkScope = "run" | "all" | "off";
+const MARK_SCOPES: ReadonlyArray<{ readonly scope: MarkScope; readonly label: string }> = [
+  { scope: "run", label: "This run" },
+  { scope: "all", label: "All runs" },
+  { scope: "off", label: "Off" },
+];
 const MARK_COLOR: Readonly<Record<MarkKind, string>> = { break: "#ff3b30", separation: "#af52de", fusing: "#ff2d55", other: "#30b0c7" };
+
+const layerOf = (mm: number): number => Math.round(mm / LAYER_MM);
 
 const fmt = (value: number | null, digits = 2, unit = " mm"): string => (value === null ? "—" : `${value.toFixed(digits)}${unit}`);
 
@@ -179,8 +189,21 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   const model = useMesh("model", relayBase, runId, value !== undefined);
   const supports = useMesh("supports", relayBase, runId, value !== undefined);
 
+  // The Z range (mm); undefined: the plan's own bottom or top. The cut image is the top thumb's layer.
+  const [zLow, setZLow] = React.useState<number | undefined>(undefined);
   const [z, setZ] = React.useState<number | undefined>(undefined);
-  const height = z ?? (value === undefined ? 0 : (value.low[2] + value.high[2]) / 2);
+  const zBottom = zLow ?? (value === undefined ? 0 : value.low[2]);
+  const zTop = z ?? (value === undefined ? 0 : value.high[2]);
+  // The top layer is the plan's last: the cut is one layer below it, so it is never empty.
+  const height = value === undefined ? 0 : Math.min(zTop, value.high[2] - LAYER_MM);
+  const [markScope, setMarkScope] = React.useState<MarkScope>("run");
+  /** Both thumbs snap to whole layers; a thumb at the plan's end means "no cut" on that side. */
+  const setZRange = (from: number, to: number): void => {
+    if (value === undefined) return;
+    const snap = (mm: number): number => Math.round(mm / LAYER_MM) * LAYER_MM;
+    setZLow(from <= value.low[2] + LAYER_MM ? undefined : snap(from));
+    setZ(to >= value.high[2] - LAYER_MM ? undefined : snap(to));
+  };
   const [selected, setSelected] = React.useState<PlanPick | undefined>(undefined);
   const [choices, setChoices] = React.useState<ReadonlyArray<PlanPick> | undefined>(undefined);
   const [pickNote, setPickNote] = React.useState<{ readonly text: string; readonly bad: boolean } | undefined>(undefined);
@@ -201,6 +224,8 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   const [markNote, setMarkNote] = React.useState<{ readonly ok: boolean; readonly text: string } | undefined>(undefined);
   const [markSaving, setMarkSaving] = React.useState(false);
   const marks = useCatalog(relayBase, marksRoute(runId));
+  // Every run's marks are read only when the owner asks for them.
+  const otherMarks = useCatalog(relayBase, markScope === "all" ? allMarksRoute : undefined);
   const [draft, setDraft] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState<{ readonly ok: boolean; readonly text: string } | undefined>(undefined);
@@ -235,28 +260,36 @@ export const PlanScreen = (props: Props): React.ReactElement => {
 
   // Requirements and notes that name a position: marked in 3D and on the cut.
   const positioned = React.useMemo(() => {
-    const fromRequirements = (requirements.value?.requirements ?? []).flatMap((requirement) =>
+    if (markScope === "off") return [];
+    // A requirement or note from another run shows only when the owner asks for every run.
+    const shown = (run: string | null): boolean => markScope === "all" || run === runId;
+    const fromRequirements = (requirements.value?.requirements ?? []).filter((requirement) => shown(requirement.run)).flatMap((requirement) =>
       [...new Set([...(requirement.position === null ? [] : [requirement.position]), ...positionsIn(requirement.text)])].flatMap((position) => {
         const point = decodePosition(position);
         return point === undefined ? [] : [{ key: `${requirement.id}-${position}`, label: requirement.id, position, point, kind: "requirement" as const, text: requirement.text }];
       }),
     );
-    const fromNotes = (notes.value?.notes ?? []).flatMap((note) => {
+    // A painted mark is also a note ("mark:N"): it shows by its own painted points, not as a ring.
+    const fromNotes = (notes.value?.notes ?? []).filter((note) => shown(note.run) && !(note.source ?? "").startsWith("mark:")).flatMap((note) => {
       const point = note.position === null ? undefined : decodePosition(note.position);
       return point === undefined || note.position === null ? [] : [{ key: `note-${note.id}`, label: "Note", position: note.position, point, kind: "note" as const, text: note.text }];
     });
     return [...fromRequirements, ...fromNotes];
-  }, [requirements.value, notes.value]);
+  }, [requirements.value, notes.value, markScope, runId]);
+  const shownMarks = React.useMemo(
+    () => (markScope === "off" ? [] : markScope === "all" ? (otherMarks.value?.marks ?? marks.value?.marks ?? []) : (marks.value?.marks ?? [])),
+    [markScope, otherMarks.value, marks.value],
+  );
 
   const markers = React.useMemo(
     (): ReadonlyArray<ModelMarker> => [
       ...positioned.map((mark) => ({ x: mark.point[0], y: mark.point[1], z: mark.point[2], color: mark.kind === "requirement" ? palette.bad : palette.warn, radius: 0.7 })),
       // Saved failures: each painted point, in its kind's colour.
-      ...(marks.value?.marks ?? []).flatMap((mark) => mark.points.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[mark.kind], radius: 0.18 }))),
+      ...shownMarks.flatMap((mark) => mark.points.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[mark.kind], radius: 0.18 }))),
       // The strokes not saved yet.
       ...strokes.flatMap((stroke) => stroke.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.18 }))),
     ],
-    [positioned, palette, marks.value, strokes, markKind],
+    [positioned, palette, shownMarks, strokes, markKind],
   );
 
   const paintTarget = paintOn === "model" ? { kind: "model" as const } : paintOn === "support" && selected !== undefined ? { kind: "support" as const, tree: selected.tree, part: selected.part } : undefined;
@@ -271,6 +304,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
         setMarkText("");
         setPainting(false);
         loadCatalog(relayBase, marksRoute(runId));
+        if (markScope === "all") loadCatalog(relayBase, allMarksRoute);
         loadCatalog(relayBase, notesRoute);
       })
       .catch((cause: unknown) => {
@@ -290,7 +324,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
         // Only what the cut box and the height show can be picked: a clipped support is not on screen.
         const picks = all.filter((pick) => {
           const point = decodePosition(pick.partPosition);
-          return point === undefined || ((box === undefined || (point[0] >= box.x0 - PICK_SLACK_MM && point[0] <= box.x1 + PICK_SLACK_MM && point[1] >= box.y0 - PICK_SLACK_MM && point[1] <= box.y1 + PICK_SLACK_MM)) && (z === undefined || point[2] <= z + PICK_SLACK_MM));
+          return point === undefined || ((box === undefined || (point[0] >= box.x0 - PICK_SLACK_MM && point[0] <= box.x1 + PICK_SLACK_MM && point[1] >= box.y0 - PICK_SLACK_MM && point[1] <= box.y1 + PICK_SLACK_MM)) && point[2] >= zBottom - PICK_SLACK_MM && point[2] <= zTop + PICK_SLACK_MM);
         });
         const chosen = choose(picks);
         if (chosen.kind === "One") {
@@ -366,6 +400,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   onRayTap={(ray) => select(() => fetchRayPicks(relayBase, runId, ray))}
                   highlightUri={highlightUri}
                   highlightColor="#3399ff"
+                  clipLowMm={zLow}
                   clipHighMm={z}
                   clipMinX={box?.x0}
                   clipMaxX={box?.x1}
@@ -415,7 +450,32 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   to={box?.y1 ?? value.high[1]}
                   onChange={(y0, y1) => setBox({ x0: box?.x0 ?? value.low[0], x1: box?.x1 ?? value.high[0], y0, y1 })}
                 />
-                {box !== undefined ? <Button label="Whole plan" icon="arrow.up.left.and.arrow.down.right" onPress={() => setBox(undefined)} style={styles.wholeButton} /> : null}
+                <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>
+                  Z {zBottom.toFixed(2)} to {zTop.toFixed(2)} mm · layers {layerOf(zBottom).toLocaleString()} to {layerOf(zTop).toLocaleString()}
+                </Text>
+                <RangeSlider width={fullWidth} low={value.low[2]} high={value.high[2]} from={zBottom} to={zTop} onChange={setZRange} />
+                <View style={styles.scopeRow}>
+                  <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>Marks</Text>
+                  <View style={styles.kinds}>
+                    {MARK_SCOPES.map((option) => (
+                      <Pressable key={option.scope} onPress={() => setMarkScope(option.scope)} style={[styles.kind, { borderColor: palette.accent, backgroundColor: markScope === option.scope ? withAlpha(palette.accent, 0.25) : "transparent" }]} accessibilityRole="button" accessibilityState={{ selected: markScope === option.scope }}>
+                        <Text style={[styles.kindText, { color: text.label }]}>{option.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                {box !== undefined || zLow !== undefined || z !== undefined ? (
+                  <Button
+                    label="Whole plan"
+                    icon="arrow.up.left.and.arrow.down.right"
+                    onPress={() => {
+                      setBox(undefined);
+                      setZLow(undefined);
+                      setZ(undefined);
+                    }}
+                    style={styles.wholeButton}
+                  />
+                ) : null}
               </View>
               {[meshNote("model", model.state), meshNote("supports", supports.state)].filter((note): note is string => note !== undefined).map((note) => (
                 <View key={note} style={styles.pad}>
@@ -424,7 +484,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
               ))}
             </Card>
 
-            <Card title="Cut" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{`${height.toFixed(2)} mm · layer ${Math.round(height / LAYER_MM).toLocaleString()}`}</Text>}>
+            <Card title="Cut" right={<Text style={[styles.count, { color: text.tertiaryLabel }]}>{`top ${height.toFixed(2)} mm · layer ${layerOf(height).toLocaleString()}`}</Text>}>
               <Pressable onPress={onCutPress} style={[styles.cut, { width: cutWidth, height: cutHeight }]}>
                 {cutUri !== undefined ? <Image source={authedSource(cutUri)} style={{ width: cutWidth, height: cutHeight }} resizeMode="stretch" /> : null}
                 {positioned
@@ -438,8 +498,8 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   ))}
 
               </Pressable>
-              <HeightSlider width={cutWidth} low={value.low[2]} high={value.high[2]} value={height} onChange={(next) => setZ(Math.round(next / LAYER_MM) * LAYER_MM)} />
-              <Text style={[styles.legend, { color: text.tertiaryLabel }]}>Grey: the model. Orange: the supports. Red rings: requirements. Tap any part of a support to select it.</Text>
+              <RangeSlider width={cutWidth} low={value.low[2]} high={value.high[2]} from={zBottom} to={zTop} onChange={setZRange} />
+              <Text style={[styles.legend, { color: text.tertiaryLabel }]}>Grey: the model. Orange: the supports. Red rings: requirements. The cut is the top of the Z range. Tap any part of a support to select it.</Text>
             </Card>
 
             {choices !== undefined ? (
@@ -607,6 +667,7 @@ const styles = StyleSheet.create({
   opacityHalf: { flex: 1 },
   sliderLabel: { fontSize: 12, marginTop: 6 },
   wholeButton: { marginTop: 8 },
+  scopeRow: { marginTop: 4 },
   kinds: { flexDirection: "row", gap: 6, marginTop: 6 },
   kind: { flex: 1, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   kindText: { fontSize: 13, fontWeight: "600" },

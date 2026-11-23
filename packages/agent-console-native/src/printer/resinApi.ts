@@ -355,6 +355,8 @@ export type PaintedMark = typeof PaintedMark.Type;
 export const MarksReply = Schema.Struct({ marks: Schema.Array(PaintedMark) });
 export type MarksReply = typeof MarksReply.Type;
 export const marksRoute = (runId: string): CatalogRoute<MarksReply> => ({ path: `/api/resin/marks?run=${encodeURIComponent(runId)}`, schema: MarksReply });
+/** Every run's marks. */
+export const allMarksRoute: CatalogRoute<MarksReply> = { path: "/api/resin/marks", schema: MarksReply };
 
 const MarkSaved = Schema.Struct({ id: Schema.Number, positions: Schema.Array(Schema.String) });
 

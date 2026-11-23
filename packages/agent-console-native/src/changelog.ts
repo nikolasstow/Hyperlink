@@ -23,6 +23,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 15,
+    date: "2026-11-23",
+    title: "Plan review: marks from this run only, and a Z range",
+    commits: ["feat/elegoo-printer-plugin: marks scope and Z range"],
+    lines: [
+      "The 3D and the cut show only this run's notes, requirements, and marks.",
+      "The Marks row sets This run, All runs, or Off. Off hides every mark and ring.",
+      "Z is now a range with two thumbs, in mm and layers. The 3D shows only what is between them.",
+      "The cut image is the layer at the top thumb.",
+      "Whole plan resets X, Y, and Z.",
+    ],
+  },
+  {
     version: 14,
     date: "2026-11-22",
     title: "Cut boxes, transparency, and painted failures in plan review",
