@@ -337,7 +337,11 @@ export const boxFrame = (box: CutBox): { readonly lowX: number; readonly highY: 
 export const MarkKind = Schema.Literals(["break", "separation", "fusing", "other"]);
 export type MarkKind = typeof MarkKind.Type;
 
-/** A failure painted on a plan: on one support (tree and part) or on the model, with its points. */
+/**
+ * A failure painted on a plan: on one support (tree and part) or on the model. An area mark has its
+ * brush radius, area (mm²), centroid, and stroke paths, and its points are its 0.25 mm cells. A point
+ * mark (app version 14) has only its points; a relay before area marks sends none of the area fields.
+ */
 export const PaintedMark = Schema.Struct({
   id: Schema.Number,
   at: Schema.String,
@@ -348,8 +352,12 @@ export const PaintedMark = Schema.Struct({
   kind: MarkKind,
   text: Schema.NullOr(Schema.String),
   positions: Schema.Array(Schema.String),
-  points: Schema.Array(Schema.Tuple([Schema.Number, Schema.Number, Schema.Number])),
+  points: Schema.Array(Vec3),
   task: Schema.NullOr(Schema.String),
+  radius: Schema.optional(Schema.NullOr(Schema.Number)),
+  area: Schema.optional(Schema.NullOr(Schema.Number)),
+  centroid: Schema.optional(Schema.NullOr(Vec3)),
+  strokes: Schema.optional(Schema.NullOr(Schema.Array(Schema.Array(Vec3)))),
 });
 export type PaintedMark = typeof PaintedMark.Type;
 export const MarksReply = Schema.Struct({ marks: Schema.Array(PaintedMark) });
@@ -358,9 +366,13 @@ export const marksRoute = (runId: string): CatalogRoute<MarksReply> => ({ path: 
 /** Every run's marks. */
 export const allMarksRoute: CatalogRoute<MarksReply> = { path: "/api/resin/marks", schema: MarksReply };
 
-const MarkSaved = Schema.Struct({ id: Schema.Number, positions: Schema.Array(Schema.String) });
+const MarkSaved = Schema.Struct({ id: Schema.Number, positions: Schema.Array(Schema.String), area: Schema.optional(Schema.Number), centroid: Schema.optional(Vec3) });
 
-/** Saves a painted failure in runs.db (rundb.py mark add). Resolves with its id and the position IDs of its points. */
+/**
+ * Saves a painted failure in runs.db (rundb.py mark add). An area mark sends its stroke paths and the
+ * brush radius; the relay works out the region on the plan's surface. Resolves with its id, the position
+ * IDs of its cells, and its area.
+ */
 export const sendMark = async (
   relayBase: string,
   body: {
@@ -368,7 +380,8 @@ export const sendMark = async (
     readonly target: { readonly kind: "support"; readonly tree: string; readonly part: string } | { readonly kind: "model" };
     readonly kind: MarkKind;
     readonly text: string | null;
-    readonly points: ReadonlyArray<readonly [number, number, number]>;
+    readonly strokes: ReadonlyArray<ReadonlyArray<readonly [number, number, number]>>;
+    readonly radius: number;
   },
 ): Promise<typeof MarkSaved.Type> => {
   const response = await authedFetch(`${relayBase}/api/resin/marks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

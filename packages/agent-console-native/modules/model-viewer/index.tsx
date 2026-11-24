@@ -40,11 +40,28 @@ export type ModelViewerProps = ViewProps & {
   /** "support" paints on the highlighted support, "model" on the model: one finger paints, two fingers turn, a pinch zooms. */
   readonly paintMode?: "off" | "support" | "model" | undefined;
   readonly paintColor?: string | undefined;
-  /** A finished stroke: its points on the target's surface, x y z in mm, flat. */
-  readonly onPaintStroke?: ((points: ReadonlyArray<number>) => void) | undefined;
+  /** The brush radius in mm: the ring under the finger and the live band. */
+  readonly brushRadius?: number | undefined;
+  /** Painted regions drawn as filled, see-through patches: each the surface within its radius of its paths. */
+  readonly patches?: ReadonlyArray<PaintPatch> | undefined;
+  /**
+   * A finished stroke: its paths on the target's surface, each x y z in mm, flat. A new path starts
+   * where the finger left the target or the box. A build without patches sends one path.
+   */
+  readonly onPaintStroke?: ((paths: ReadonlyArray<ReadonlyArray<number>>) => void) | undefined;
   /** A tap, as a ray in the model's frame (mm): it passes through the model and every support. */
   readonly onRayTap?: ((ray: ModelTapRay) => void) | undefined;
 };
+
+/** A painted region: its stroke paths (each x y z in mm, flat), the brush radius, and the surface it lies on. */
+export interface PaintPatch {
+  readonly key: string;
+  readonly color: string;
+  readonly radius: number;
+  /** "model", "highlight" (the selected support's own triangles), or "supports" (every support). */
+  readonly surface: "model" | "highlight" | "supports";
+  readonly paths: ReadonlyArray<ReadonlyArray<number>>;
+}
 
 export interface ModelMarker {
   readonly x: number;
@@ -67,16 +84,20 @@ export interface ModelTapRay {
 
 type NativeProps = Omit<ModelViewerProps, "onRayTap" | "onPaintStroke"> & {
   readonly onRayTap?: (event: NativeSyntheticEvent<ModelTapRay>) => void;
-  readonly onPaintStroke?: (event: NativeSyntheticEvent<{ readonly points: ReadonlyArray<number> }>) => void;
+  readonly onPaintStroke?: (event: NativeSyntheticEvent<{ readonly points: ReadonlyArray<number>; readonly paths?: ReadonlyArray<ReadonlyArray<number>> }>) => void;
 };
 
 const NativeView = Platform.OS === "ios" ? requireNativeView<NativeProps>("ModelViewer") : null;
 
 interface ModelViewerNativeModule {
   readonly presentAR?: (uri: string, color: string, clipLowMm: number | null, clipHighMm: number | null, title: string) => Promise<void>;
+  readonly paintPatches?: boolean;
 }
 
 const nativeModule = Platform.OS === "ios" ? requireNativeModule<ModelViewerNativeModule>("ModelViewer") : undefined;
+
+/** Whether this build draws painted regions as patches, with a brush ring. Older builds draw painted points as dots. */
+export const canDrawPaintPatches = nativeModule?.paintPatches === true;
 
 /** Whether this build can show a model in AR. */
 export const canPresentModelAR = nativeModule?.presentAR !== undefined;
@@ -99,7 +120,7 @@ export const ModelViewer = (props: ModelViewerProps): React.ReactElement | null 
     <NativeView
       {...rest}
       onRayTap={onRayTap === undefined ? undefined : (event) => onRayTap(event.nativeEvent)}
-      onPaintStroke={onPaintStroke === undefined ? undefined : (event) => onPaintStroke(event.nativeEvent.points)}
+      onPaintStroke={onPaintStroke === undefined ? undefined : (event) => onPaintStroke(event.nativeEvent.paths ?? [event.nativeEvent.points])}
     />
   );
 };

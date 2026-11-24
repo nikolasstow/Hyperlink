@@ -4,6 +4,9 @@ public class ModelViewerModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ModelViewer")
 
+    // What this build of the view can do: the app keeps the old look on an older build.
+    Constants(["paintPatches": true])
+
     // The model in AR (ModelAR.swift). Resolves once AR Quick Look is on screen.
     AsyncFunction("presentAR") { (uri: String, hex: String, clipLowMm: Double?, clipHighMm: Double?, title: String, promise: Promise) in
       guard let file = URL(string: uri) else {
@@ -63,6 +66,8 @@ public class ModelViewerModule: Module {
       Prop("supportsOpacity") { (view: ModelViewerView, value: Double?) in view.supportsOpacity = value ?? 1 }
       Prop("paintMode") { (view: ModelViewerView, mode: String?) in view.paintMode = mode ?? "off" }
       Prop("paintColor") { (view: ModelViewerView, hex: String?) in view.paintColor = ModelViewerView.color(hex: hex ?? "#ff3b30") }
+      Prop("brushRadius") { (view: ModelViewerView, mm: Double?) in view.brushRadius = mm ?? 1 }
+      Prop("patches") { (view: ModelViewerView, patches: [PaintPatchRecord]?) in view.patches = patches ?? [] }
       Events("onRayTap", "onPaintStroke")
     }
   }

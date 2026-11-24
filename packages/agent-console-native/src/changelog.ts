@@ -23,6 +23,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 16,
+    date: "2026-11-23",
+    title: "Paint failures with a brush",
+    commits: ["saturn-uploader 7e131f7", "rundb.py mark area", "feat/elegoo-printer-plugin: the area brush"],
+    lines: [
+      "Paint now covers an area: everything on the surface within the brush of your finger's path, with no gaps on a fast drag.",
+      "Pick the brush size: S 0.5, M 1.0, or L 2.0 mm. A ring under your finger shows it.",
+      "The painted area shows as a see-through patch in the kind's colour. Undo stroke removes the last stroke.",
+      "A saved mark is one region: its area in mm², its centre, and the position IDs of its 0.25 mm cells.",
+      "Marks on this run shows each mark's area.",
+    ],
+  },
+  {
     version: 15,
     date: "2026-11-23",
     title: "Plan review: marks from this run only, and a Z range",

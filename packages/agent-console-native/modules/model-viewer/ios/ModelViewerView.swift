@@ -55,7 +55,11 @@ final class ModelViewerView: ExpoView {
   /// "support": one finger paints on the selected support (the highlight); "model": on the model; "off": no paint.
   /// While painting, two fingers turn the view and a pinch zooms.
   var paintMode: String = "off" { didSet { if paintMode != oldValue { applyPaintMode() } } }
-  var paintColor: UIColor = UIColor(red: 1, green: 0.23, blue: 0.19, alpha: 1)
+  var paintColor: UIColor = UIColor(red: 1, green: 0.23, blue: 0.19, alpha: 1) { didSet { liveMaterial.diffuse.contents = paintColor.withAlphaComponent(0.55) } }
+  /// The brush radius in mm: a stroke paints everything on the target's surface this close to its path.
+  var brushRadius: Double = 1
+  /// Painted regions to draw as filled patches: the strokes not saved yet and the saved marks.
+  var patches: [PaintPatchRecord] = [] { didSet { showPatches(redraw: nil) } }
   let onPaintStroke = EventDispatcher()
 
   /// Discards every fragment outside the cut box, in the node's own space (mm), and darkens the back faces it shows.
@@ -111,6 +115,8 @@ final class ModelViewerView: ExpoView {
     frameNode.eulerAngles.x = -.pi / 2
     frameNode.addChildNode(markersNode)
     frameNode.addChildNode(strokeNode)
+    frameNode.addChildNode(patchesNode)
+    frameNode.addChildNode(brushNode)
     scene.rootNode.addChildNode(frameNode)
 
     let camera = SCNCamera()
@@ -175,9 +181,12 @@ final class ModelViewerView: ExpoView {
       return
     }
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      let geometry = (try? Data(contentsOf: supportsUri, options: .mappedIfSafe)).flatMap(ModelViewerView.geometry(from:))
+      let parsed = (try? Data(contentsOf: supportsUri, options: .mappedIfSafe)).flatMap(ModelViewerView.parsed(from:))
       DispatchQueue.main.async {
-        guard let self, current == self.supportsGeneration, let geometry else { return }
+        guard let self, current == self.supportsGeneration, let parsed else { return }
+        let geometry = parsed.geometry
+        self.surfaces["supports"] = parsed.mesh
+        self.showPatches(redraw: "supports")
         geometry.materials = [self.supportsMaterial]
         self.supportsNode?.removeFromParentNode()
         let node = SCNNode(geometry: geometry)
@@ -194,15 +203,19 @@ final class ModelViewerView: ExpoView {
     guard let highlightUri else {
       highlightNode?.removeFromParentNode()
       highlightNode = nil
+      surfaces["highlight"] = nil
+      showPatches(redraw: "highlight")
       return
     }
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      let geometry = (try? Data(contentsOf: highlightUri, options: .mappedIfSafe)).flatMap(ModelViewerView.geometry(from:))
+      let parsed = (try? Data(contentsOf: highlightUri, options: .mappedIfSafe)).flatMap(ModelViewerView.parsed(from:))
       DispatchQueue.main.async {
         guard let self, current == self.highlightGeneration else { return }
         self.highlightNode?.removeFromParentNode()
         self.highlightNode = nil
-        guard let geometry else { return }
+        self.surfaces["highlight"] = parsed?.mesh
+        self.showPatches(redraw: "highlight")
+        guard let geometry = parsed?.geometry else { return }
         geometry.materials = [self.highlightMaterial]
         let node = SCNNode(geometry: geometry)
         node.renderingOrder = 5
@@ -243,36 +256,40 @@ final class ModelViewerView: ExpoView {
       return
     }
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-      let geometry = (try? Data(contentsOf: uri, options: .mappedIfSafe)).flatMap(ModelViewerView.geometry(from:))
+      let parsed = (try? Data(contentsOf: uri, options: .mappedIfSafe)).flatMap(ModelViewerView.parsed(from:))
       DispatchQueue.main.async {
-        guard let self, current == self.generation, let geometry else { return }
-        self.show(geometry)
+        guard let self, current == self.generation, let parsed else { return }
+        self.show(parsed.geometry)
+        self.surfaces["model"] = parsed.mesh
+        self.showPatches(redraw: "model")
       }
     }
   }
 
   private var hasBox: Bool { clipMinX != nil || clipMaxX != nil || clipMinY != nil || clipMaxY != nil }
 
-  private func applyClip() {
-    let materials = [material, supportsMaterial, highlightMaterial]
-    guard clipLowMm != nil || clipHighMm != nil || hasBox else {
-      for each in materials {
-        each.shaderModifiers = nil
-      }
-      material.isDoubleSided = false
+  private var hasClip: Bool { clipLowMm != nil || clipHighMm != nil || hasBox }
+
+  /// One material's crop: the shader and its bounds when a crop is set, nothing when not.
+  private func clip(_ each: SCNMaterial) {
+    guard hasClip else {
+      each.shaderModifiers = nil
       return
     }
     let far: Double = 1_000_000
-    for each in materials {
-      each.shaderModifiers = [.fragment: ModelViewerView.clipShader]
-      each.setValue(Float(clipLowMm ?? -far), forKey: "clipLow")
-      each.setValue(Float(clipHighMm ?? far), forKey: "clipHigh")
-      each.setValue(Float(clipMinX ?? -far), forKey: "clipLowX")
-      each.setValue(Float(clipMaxX ?? far), forKey: "clipHighX")
-      each.setValue(Float(clipMinY ?? -far), forKey: "clipLowY")
-      each.setValue(Float(clipMaxY ?? far), forKey: "clipHighY")
-    }
-    material.isDoubleSided = true
+    each.shaderModifiers = [.fragment: ModelViewerView.clipShader]
+    each.setValue(Float(clipLowMm ?? -far), forKey: "clipLow")
+    each.setValue(Float(clipHighMm ?? far), forKey: "clipHigh")
+    each.setValue(Float(clipMinX ?? -far), forKey: "clipLowX")
+    each.setValue(Float(clipMaxX ?? far), forKey: "clipHighX")
+    each.setValue(Float(clipMinY ?? -far), forKey: "clipLowY")
+    each.setValue(Float(clipMaxY ?? far), forKey: "clipHighY")
+  }
+
+  private func applyClip() {
+    let materials = [material, supportsMaterial, highlightMaterial, liveMaterial] + patchNodes.values.compactMap { $0.node.geometry?.firstMaterial }
+    materials.forEach(clip)
+    material.isDoubleSided = hasClip
     if hasBox { frameBox() }
   }
 
@@ -312,8 +329,27 @@ final class ModelViewerView: ExpoView {
 
   // MARK: Painting
 
+  /// The live band of the stroke under the finger: see-through discs on the surface, every half radius.
   private let strokeNode = SCNNode()
-  private var stroke: [SCNVector3] = []
+  /// The brush's ring under the finger, flat on the surface.
+  private let brushNode = SCNNode()
+  /// The stroke's paths: a new path starts where the finger leaves the target or the box.
+  private var strokePaths: [[SCNVector3]] = []
+  private var lastLocation: CGPoint?
+  private var lastHit = false
+  /// The most extra hit tests between two finger samples: a fast drag is filled in, and a path's segments fill the rest.
+  private static let fillSteps = 8
+  /// Screen points between two extra hit tests.
+  private static let fillPoints: CGFloat = 5
+  private lazy var liveMaterial: SCNMaterial = {
+    let paint = SCNMaterial()
+    paint.diffuse.contents = paintColor.withAlphaComponent(0.55)
+    paint.lightingModel = .constant
+    paint.isDoubleSided = true
+    paint.writesToDepthBuffer = false
+    paint.readsFromDepthBuffer = false
+    return paint
+  }()
   private lazy var paintPan: UIPanGestureRecognizer = {
     let pan = UIPanGestureRecognizer(target: self, action: #selector(painted(_:)))
     pan.maximumNumberOfTouches = 1
@@ -341,47 +377,149 @@ final class ModelViewerView: ExpoView {
   }
 
   private func clearStroke() {
-    stroke = []
+    strokePaths = []
+    lastLocation = nil
+    lastHit = false
     strokeNode.childNodes.forEach { $0.removeFromParentNode() }
+    brushNode.isHidden = true
   }
 
-  /// One finger: a stroke on the target's surface only. Each point is kept in the model's frame (mm); the stroke is sent when the finger lifts.
+  /// The first point of the target under a screen point that the cut box shows, with the surface's normal (the model's frame).
+  private func surfaceHit(at location: CGPoint, on target: SCNNode) -> (point: SCNVector3, normal: SCNVector3)? {
+    let hits = scnView.hitTest(location, options: [.searchMode: SCNHitTestSearchMode.all.rawValue, .rootNode: target, .ignoreHiddenNodes: true])
+    for hit in hits where hit.node === target {
+      let point = hit.node.convertPosition(hit.localCoordinates, to: frameNode)
+      // Only what the cut box shows can be painted.
+      if !inBox(point) { continue }
+      return (point, hit.node.convertVector(hit.localNormal, to: frameNode))
+    }
+    return nil
+  }
+
+  /// A flat disc (or ring) of the brush's radius at a point, turned to lie on the surface.
+  private func disc(at point: SCNVector3, normal: SCNVector3, ring: Bool) -> SCNNode {
+    let radius = CGFloat(max(0.05, brushRadius))
+    let shape: SCNGeometry = ring ? SCNTube(innerRadius: radius * 0.9, outerRadius: radius, height: 0.01) : SCNCylinder(radius: radius, height: 0.01)
+    shape.materials = [liveMaterial]
+    let node = SCNNode(geometry: shape)
+    node.position = point
+    // A cylinder stands along its Y axis: turn Y onto the surface normal.
+    let up = simd_normalize(SIMD3<Float>(normal.x, normal.y, normal.z))
+    let from = SIMD3<Float>(0, 1, 0)
+    let axis = simd_cross(from, up)
+    let angle = acos(max(-1, min(1, simd_dot(from, up))))
+    if simd_length(axis) > 0.0001 { node.simdOrientation = simd_quatf(angle: angle, axis: simd_normalize(axis)) } else if up.y < 0 { node.simdOrientation = simd_quatf(angle: .pi, axis: SIMD3<Float>(1, 0, 0)) }
+    node.renderingOrder = 12
+    return node
+  }
+
+  /// One finger: a stroke on the target's surface only. The finger's path is hit-tested densely,
+  /// a disc shows each step of the band, and the paths go to the app when the finger lifts.
   @objc private func painted(_ recognizer: UIPanGestureRecognizer) {
     let target = paintMode == "support" ? highlightNode : paintMode == "model" ? modelNode : nil
     if recognizer.state == .began { clearStroke() }
     if let target, recognizer.state == .began || recognizer.state == .changed {
       let location = recognizer.location(in: scnView)
-      let hits = scnView.hitTest(location, options: [.searchMode: SCNHitTestSearchMode.all.rawValue, .rootNode: target, .ignoreHiddenNodes: true])
-      for hit in hits where hit.node === target {
-        let point = hit.node.convertPosition(hit.localCoordinates, to: frameNode)
-        // Only what the cut box shows can be painted.
-        if !inBox(point) { continue }
-        if let last = stroke.last, simd_distance(SIMD3<Float>(last.x, last.y, last.z), SIMD3<Float>(point.x, point.y, point.z)) < 0.08 { break }
-        stroke.append(point)
-        let dot = SCNNode(geometry: strokeDot)
-        dot.position = point
-        dot.renderingOrder = 12
-        strokeNode.addChildNode(dot)
-        break
+      // The screen points since the last sample: a fast drag gets extra hit tests between them.
+      var steps: [CGPoint] = [location]
+      if let last = lastLocation {
+        let gap = hypot(location.x - last.x, location.y - last.y)
+        let extra = min(ModelViewerView.fillSteps, Int(gap / ModelViewerView.fillPoints))
+        if extra > 0 {
+          steps = (1...extra).map { n in
+            let t = CGFloat(n) / CGFloat(extra + 1)
+            return CGPoint(x: last.x + (location.x - last.x) * t, y: last.y + (location.y - last.y) * t)
+          } + [location]
+        }
+      }
+      lastLocation = location
+      var ring: (SCNVector3, SCNVector3)?
+      for step in steps {
+        guard let hit = surfaceHit(at: step, on: target) else {
+          lastHit = false
+          continue
+        }
+        ring = (hit.point, hit.normal)
+        if !lastHit || strokePaths.isEmpty { strokePaths.append([]) }
+        lastHit = true
+        let path = strokePaths.count - 1
+        let spacing = Float(max(0.05, brushRadius)) * 0.5
+        if let last = strokePaths[path].last {
+          let from = SIMD3<Float>(last.x, last.y, last.z), to = SIMD3<Float>(hit.point.x, hit.point.y, hit.point.z)
+          let length = simd_distance(from, to)
+          if length < spacing * 0.25 { continue }
+          // Discs between the samples, so the live band has no gaps.
+          let fill = Int(length / spacing)
+          if fill > 0 {
+            for n in 1...fill {
+              let p = from + (to - from) * (Float(n) / Float(fill + 1))
+              strokeNode.addChildNode(disc(at: SCNVector3(p.x, p.y, p.z), normal: hit.normal, ring: false))
+            }
+          }
+        }
+        strokePaths[path].append(hit.point)
+        strokeNode.addChildNode(disc(at: hit.point, normal: hit.normal, ring: false))
+      }
+      brushNode.childNodes.forEach { $0.removeFromParentNode() }
+      if let (point, normal) = ring {
+        brushNode.addChildNode(disc(at: point, normal: normal, ring: true))
+        brushNode.isHidden = false
+      } else {
+        brushNode.isHidden = true
       }
     }
     if recognizer.state == .ended || recognizer.state == .cancelled {
-      if !stroke.isEmpty {
-        onPaintStroke(["points": stroke.flatMap { [Double($0.x), Double($0.y), Double($0.z)] }])
+      let paths = strokePaths.filter { !$0.isEmpty }.map { path in path.flatMap { [Double($0.x), Double($0.y), Double($0.z)] } }
+      if !paths.isEmpty {
+        onPaintStroke(["paths": paths, "points": paths.flatMap { $0 }])
       }
       clearStroke()
     }
   }
 
-  private lazy var strokeDot: SCNGeometry = {
-    let sphere = SCNSphere(radius: 0.18)
-    let paint = SCNMaterial()
-    paint.diffuse.contents = paintColor
-    paint.lightingModel = .constant
-    paint.readsFromDepthBuffer = false
-    sphere.materials = [paint]
-    return sphere
-  }()
+  // MARK: Patches
+
+  private let patchesNode = SCNNode()
+  /// Each drawn patch by key, with the surface it was made on, so a new surface draws it again.
+  private var patchNodes: [String: (node: SCNNode, surface: String)] = [:]
+  /// The triangles of each surface the brush paints on: "model", "supports", and "highlight".
+  private var surfaces: [String: TriangleMesh] = [:]
+
+  /// Draws the patches that are new, drops the ones that are gone, and draws again the ones on `redraw` (a surface that changed).
+  private func showPatches(redraw: String?) {
+    let wanted = Dictionary(patches.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+    for (key, drawn) in patchNodes where wanted[key] == nil || drawn.surface == redraw {
+      drawn.node.removeFromParentNode()
+      patchNodes[key] = nil
+    }
+    for record in patches where patchNodes[record.key] == nil {
+      guard let mesh = surfaces[record.surface] else { continue }
+      let placeholder = SCNNode()
+      patchNodes[record.key] = (placeholder, record.surface)
+      patchesNode.addChildNode(placeholder)
+      let paths = PaintPatch.paths(of: record)
+      let radius = Float(record.radius)
+      let color = ModelViewerView.color(hex: record.color)
+      let throughModel = record.surface == "highlight"
+      DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        let geometry = PaintPatch.geometry(mesh: mesh, paths: paths, radius: radius)
+        DispatchQueue.main.async {
+          guard let self, let geometry, self.patchNodes[record.key]?.node === placeholder else { return }
+          let paint = SCNMaterial()
+          paint.diffuse.contents = color.withAlphaComponent(0.6)
+          paint.lightingModel = .lambert
+          paint.isDoubleSided = true
+          paint.writesToDepthBuffer = false
+          // On the selected support the patch shows through the model, as the support does.
+          paint.readsFromDepthBuffer = !throughModel
+          self.clip(paint)
+          geometry.materials = [paint]
+          placeholder.geometry = geometry
+          placeholder.renderingOrder = 8
+        }
+      }
+    }
+  }
 
   private func inBox(_ point: SCNVector3) -> Bool {
     let x = Double(point.x), y = Double(point.y), z = Double(point.z)
@@ -434,7 +572,10 @@ final class ModelViewerView: ExpoView {
   }
 
   /// The model as SceneKit geometry, with a normal per vertex from the triangles around it. Nil when the data is not a model.
-  static func geometry(from data: Data) -> SCNGeometry? {
+  static func geometry(from data: Data) -> SCNGeometry? { parsed(from: data)?.geometry }
+
+  /// The geometry and the triangles it came from: the brush paints on the triangles.
+  static func parsed(from data: Data) -> (geometry: SCNGeometry, mesh: TriangleMesh)? {
     let fixed = 48
     guard data.count >= fixed, data.prefix(4) == Data("SLMS".utf8) else { return nil }
     func u32(_ at: Int) -> UInt32 { data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: at, as: UInt32.self).littleEndian } }
@@ -496,7 +637,7 @@ final class ModelViewerView: ExpoView {
     let vertexSource = SCNGeometrySource(data: positionData, semantic: .vertex, vectorCount: vertexCount, usesFloatComponents: true, componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0, dataStride: stride)
     let normalSource = SCNGeometrySource(data: normalData, semantic: .normal, vectorCount: vertexCount, usesFloatComponents: true, componentsPerVector: 3, bytesPerComponent: 4, dataOffset: 0, dataStride: stride)
     let element = SCNGeometryElement(data: indices.withUnsafeBufferPointer { Data(buffer: $0) }, primitiveType: .triangles, primitiveCount: triangleCount, bytesPerIndex: 4)
-    return SCNGeometry(sources: [vertexSource, normalSource], elements: [element])
+    return (SCNGeometry(sources: [vertexSource, normalSource], elements: [element]), TriangleMesh(positions: positions, indices: indices))
   }
 
   /// A colour from `#rrggbb` or `#rrggbbaa`; light grey for anything else.

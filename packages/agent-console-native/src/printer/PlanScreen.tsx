@@ -27,7 +27,7 @@ import type { File } from "expo-file-system";
 import * as React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type GestureResponderEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { ModelViewer, type ModelMarker } from "../../modules/model-viewer";
+import { canDrawPaintPatches, ModelViewer, type ModelMarker, type PaintPatch } from "../../modules/model-viewer";
 import { authedSource } from "../auth/serverTokens";
 import { useOpenTiming } from "../perfMonitor";
 import type { RootStackParamList } from "../RootNavigator";
@@ -160,6 +160,19 @@ const RangeSlider = (props: { readonly width: number; readonly low: number; read
 
 const MARK_KINDS: ReadonlyArray<MarkKind> = ["break", "separation", "fusing", "other"];
 
+type Point = readonly [number, number, number];
+/** One finger stroke: its paths on the surface (a new path where the finger left the target) and the brush radius. */
+interface Stroke {
+  readonly paths: ReadonlyArray<ReadonlyArray<Point>>;
+  readonly radius: number;
+}
+/** The brush sizes: the radius in mm. */
+const BRUSHES: ReadonlyArray<{ readonly label: string; readonly radius: number }> = [
+  { label: "S 0.5", radius: 0.5 },
+  { label: "M 1.0", radius: 1 },
+  { label: "L 2.0", radius: 2 },
+];
+
 /** Which marks and rings show in 3D and on the cut: this run's, every run's, or none. */
 type MarkScope = "run" | "all" | "off";
 const MARK_SCOPES: ReadonlyArray<{ readonly scope: MarkScope; readonly label: string }> = [
@@ -219,7 +232,8 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   // Painting a failure: on the selected support, or on the model.
   const [paintOn, setPaintOn] = React.useState<"support" | "model" | undefined>(undefined);
   const [painting, setPainting] = React.useState(false);
-  const [strokes, setStrokes] = React.useState<ReadonlyArray<ReadonlyArray<readonly [number, number, number]>>>([]);
+  const [strokes, setStrokes] = React.useState<ReadonlyArray<Stroke>>([]);
+  const [brushRadius, setBrushRadius] = React.useState(1);
   const [markKind, setMarkKind] = React.useState<MarkKind>("break");
   const [markText, setMarkText] = React.useState("");
   const [markNote, setMarkNote] = React.useState<{ readonly ok: boolean; readonly text: string } | undefined>(undefined);
@@ -286,21 +300,39 @@ export const PlanScreen = (props: Props): React.ReactElement => {
     (): ReadonlyArray<ModelMarker> => [
       ...positioned.map((mark) => ({ x: mark.point[0], y: mark.point[1], z: mark.point[2], color: mark.kind === "requirement" ? palette.bad : palette.warn, radius: 0.7 })),
       // Saved failures: each painted point, in its kind's colour.
-      ...shownMarks.flatMap((mark) => mark.points.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[mark.kind], radius: 0.18 }))),
+      // A mark with strokes is a patch on a build that draws patches; otherwise its points are dots.
+      ...shownMarks.filter((mark) => !(canDrawPaintPatches && (mark.strokes ?? null) !== null)).flatMap((mark) => mark.points.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[mark.kind], radius: 0.18 }))),
       // The strokes not saved yet.
-      ...strokes.flatMap((stroke) => stroke.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.18 }))),
+      ...(canDrawPaintPatches ? [] : strokes.flatMap((stroke) => stroke.paths.flat().map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.18 })))),
     ],
     [positioned, palette, shownMarks, strokes, markKind],
   );
+
+  // Painted regions as filled patches: the strokes not saved yet, then the saved area marks that show.
+  const patches = React.useMemo((): ReadonlyArray<PaintPatch> => {
+    if (!canDrawPaintPatches) return [];
+    const flat = (paths: ReadonlyArray<ReadonlyArray<Point>>) => paths.map((path) => path.flatMap((point) => [point[0], point[1], point[2]]));
+    const saved = shownMarks.flatMap((mark): ReadonlyArray<PaintPatch> => {
+      const strokesOf = mark.strokes ?? null;
+      if (strokesOf === null || typeof mark.radius !== "number") return [];
+      // On the selected support, its own triangles; on another support, every support's (the region may reach a neighbour).
+      const surface = mark.target === "model" ? "model" : selected?.tree === mark.tree ? "highlight" : "supports";
+      return [{ key: `mark-${mark.id}-${surface}`, color: MARK_COLOR[mark.kind], radius: mark.radius, surface, paths: flat(strokesOf) }];
+    });
+    const pendingSurface = paintOn === "model" ? "model" : "highlight";
+    const pending = strokes.map((stroke, index): PaintPatch => ({ key: `pending-${index}-${pendingSurface}-${markKind}`, color: MARK_COLOR[markKind], radius: stroke.radius, surface: pendingSurface, paths: flat(stroke.paths) }));
+    return [...saved, ...pending];
+  }, [shownMarks, selected, strokes, paintOn, markKind]);
 
   const paintTarget = paintOn === "model" ? { kind: "model" as const } : paintOn === "support" && selected !== undefined ? { kind: "support" as const, tree: selected.tree, part: selected.part } : undefined;
 
   const saveMark = (): void => {
     if (paintTarget === undefined || strokes.length === 0) return;
     setMarkSaving(true);
-    sendMark(relayBase, { run: runId, target: paintTarget, kind: markKind, text: markText.trim() === "" ? null : markText.trim(), points: strokes.flat() })
+    // One mark has one brush radius: the size buttons are locked while strokes wait to be saved.
+    sendMark(relayBase, { run: runId, target: paintTarget, kind: markKind, text: markText.trim() === "" ? null : markText.trim(), strokes: strokes.flatMap((stroke) => stroke.paths), radius: strokes[0]?.radius ?? brushRadius })
       .then((saved) => {
-        setMarkNote({ ok: true, text: `Mark ${saved.id} saved: ${markKind} on ${paintTarget.kind === "model" ? "the model" : `tree ${paintTarget.tree} (${paintTarget.part})`}, ${saved.positions.length} position${saved.positions.length === 1 ? "" : "s"} (${saved.positions.slice(0, 3).join(", ")}${saved.positions.length > 3 ? ", …" : ""}).` });
+        setMarkNote({ ok: true, text: `Mark ${saved.id} saved: ${markKind} on ${paintTarget.kind === "model" ? "the model" : `tree ${paintTarget.tree} (${paintTarget.part})`}${saved.area === undefined ? "" : `, ${saved.area.toFixed(1)} mm²`}, ${saved.positions.length} position${saved.positions.length === 1 ? "" : "s"} (${saved.positions.slice(0, 3).join(", ")}${saved.positions.length > 3 ? ", …" : ""}).` });
         setStrokes([]);
         setMarkText("");
         setPainting(false);
@@ -411,10 +443,17 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                   supportsOpacity={supportsOpacity}
                   paintMode={painting && paintTarget !== undefined ? paintTarget.kind : "off"}
                   paintColor={MARK_COLOR[markKind]}
-                  onPaintStroke={(flat) => {
-                    const points: Array<readonly [number, number, number]> = [];
-                    for (let i = 0; i + 2 < flat.length; i += 3) points.push([flat[i] ?? 0, flat[i + 1] ?? 0, flat[i + 2] ?? 0]);
-                    if (points.length > 0) setStrokes((all) => [...all, points]);
+                  brushRadius={brushRadius}
+                  patches={patches}
+                  onPaintStroke={(flatPaths) => {
+                    const paths = flatPaths
+                      .map((flat) => {
+                        const points: Array<Point> = [];
+                        for (let i = 0; i + 2 < flat.length; i += 3) points.push([flat[i] ?? 0, flat[i + 1] ?? 0, flat[i + 2] ?? 0]);
+                        return points;
+                      })
+                      .filter((path) => path.length > 0);
+                    if (paths.length > 0) setStrokes((all) => [...all, { paths, radius: brushRadius }]);
                   }}
                 />
               </View>
@@ -587,7 +626,23 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                     kind={painting ? "destructive" : "primary"}
                     onPress={() => setPainting((on) => !on)}
                   />
-                  <Note text={painting ? "One finger paints in 3D; two fingers turn the view; a pinch zooms." : `${strokes.length} stroke${strokes.length === 1 ? "" : "s"}, ${strokes.flat().length} points.`} />
+                  <Note text={painting ? "One finger paints in 3D; two fingers turn the view; a pinch zooms." : `${strokes.length} stroke${strokes.length === 1 ? "" : "s"} not saved.`} />
+                  <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>Brush radius</Text>
+                  <View style={styles.kinds}>
+                    {BRUSHES.map((brush) => (
+                      <Pressable
+                        key={brush.label}
+                        disabled={strokes.length > 0}
+                        onPress={() => setBrushRadius(brush.radius)}
+                        style={[styles.kind, { opacity: strokes.length > 0 && brushRadius !== brush.radius ? 0.4 : 1, borderColor: palette.accent, backgroundColor: brushRadius === brush.radius ? withAlpha(palette.accent, 0.25) : "transparent" }]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: brushRadius === brush.radius, disabled: strokes.length > 0 }}
+                      >
+                        <Text style={[styles.kindText, { color: text.label }]}>{brush.label} mm</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {strokes.length > 0 ? <Note text="One mark has one brush size: save or undo the strokes to change it." /> : null}
                   <View style={styles.kinds}>
                     {MARK_KINDS.map((kind) => (
                       <Pressable key={kind} onPress={() => setMarkKind(kind)} style={[styles.kind, { borderColor: MARK_COLOR[kind], backgroundColor: markKind === kind ? withAlpha(MARK_COLOR[kind], 0.25) : "transparent" }]} accessibilityRole="button" accessibilityState={{ selected: markKind === kind }}>
@@ -616,7 +671,8 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                 marks.value.marks.map((mark) => (
                   <Text key={mark.id} style={[styles.about, { color: text.label }]}>
                     <Text style={{ color: MARK_COLOR[mark.kind] }}>{mark.kind} </Text>
-                    {mark.target === "model" ? "on the model" : `on tree ${mark.tree ?? ""} (${mark.part ?? ""})`} · {mark.positions.length} positions ({mark.positions.slice(0, 2).join(", ")}
+                    {mark.target === "model" ? "on the model" : `on tree ${mark.tree ?? ""} (${mark.part ?? ""})`}
+                    {typeof mark.area === "number" ? ` · ${mark.area.toFixed(1)} mm²` : ""} · {mark.positions.length} positions ({mark.positions.slice(0, 2).join(", ")}
                     {mark.positions.length > 2 ? ", …" : ""}){mark.text !== null ? ` · ${mark.text}` : ""}
                   </Text>
                 ))
