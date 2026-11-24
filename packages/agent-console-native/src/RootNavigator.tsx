@@ -454,7 +454,9 @@ export const RootNavigator = (): React.ReactElement => {
         <Stack.Screen name="ServerResinRun" component={RunScreen} options={({ route }) => ({ ...largeTitleHeader, title: `Run ${route.params.runId}` })} />
         <Stack.Screen name="ServerResinLibrary" component={LibraryScreen} options={{ ...largeTitleHeader, title: "Library" }} />
         <Stack.Screen name="ServerResinHistory" component={HistoryScreen} options={{ ...largeTitleHeader, title: "Print History" }} />
-        <Stack.Screen name="ServerResinPlan" component={PlanScreen} options={({ route }) => ({ ...largeTitleHeader, title: `Plan ${route.params.runId}` })} />
+        {/* The plan's 3D view is dark: under iOS 26's soft edge the bar's title on it was hard to read.
+         * The system's hard edge puts the bar's own material and a dividing line behind the title. */}
+        <Stack.Screen name="ServerResinPlan" component={PlanScreen} options={({ route }) => ({ ...largeTitleHeader, scrollEdgeEffects: { top: "hard" }, title: `Plan ${route.params.runId}` })} />
         <Stack.Screen name="ServerResinTask" component={TaskScreen} options={({ route }) => ({ ...largeTitleHeader, title: route.params.title })} />
         <Stack.Screen name="ServerPrinterFiles" component={PrinterFilesScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Local Files" /> }} />
         <Stack.Screen name="ServerPrinterHealth" component={PrinterHealthScreen} options={{ ...pageHeader, headerTitle: () => <HeaderTitlePill title="Details & Health" /> }} />
