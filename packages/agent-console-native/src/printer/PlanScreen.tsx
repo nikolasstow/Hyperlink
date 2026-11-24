@@ -169,7 +169,8 @@ const MARK_SCOPES: ReadonlyArray<{ readonly scope: MarkScope; readonly label: st
 ];
 const MARK_COLOR: Readonly<Record<MarkKind, string>> = { break: "#ff3b30", separation: "#af52de", fusing: "#ff2d55", other: "#30b0c7" };
 
-const layerOf = (mm: number): number => Math.round(mm / LAYER_MM);
+/** The layer at a height; below the plate is layer 0. */
+const layerOf = (mm: number): number => Math.max(0, Math.round(mm / LAYER_MM));
 
 const fmt = (value: number | null, digits = 2, unit = " mm"): string => (value === null ? "—" : `${value.toFixed(digits)}${unit}`);
 
