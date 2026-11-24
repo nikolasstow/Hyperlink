@@ -377,17 +377,11 @@ export const RootNavigator = (): React.ReactElement => {
       <PerfMonitor />
       <ChangelogSheet />
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: background } }}>
-        {/* `scrollEdgeEffects` is deliberately NOT set here — each screen
-         * applies it via `useScrollEdgeEffects` after mount instead. See
-         * that hook for why a static option silently does nothing. */}
-        {/* Native prop delivery is confirmed working — a `statusBarStyle`
-         * probe reached RNSScreen's native side and came back with its own
-         * Info.plist warning, so silent no-ops from `scrollEdgeEffects`
-         * are that feature's own problem, not a stale binary.
-         *
-         * `UIScrollEdgeEffect` draws into the scroll view's safe-area inset
-         * region, so the list also needs `contentInsetAdjustmentBehavior`
-         * set — see HomeScreen's own note. */}
+        {/* `scrollEdgeEffects` is not set here: each screen sets it in its own options
+         * (Chat, ServerResinPlan) or on its ScrollViewMarker (Projects, Archived).
+         * The effect needs a shown header, because it draws where scrolling content
+         * meets the bar. It draws into the scroll view's safe-area inset, so the
+         * scroll view also needs `contentInsetAdjustmentBehavior` (see HomeScreen's note). */}
         {/* An empty, fully transparent real UINavigationBar — no title, no
          * back button, nothing drawn. It exists only so iOS 26's scroll
          * edge effect has a bar edge to anchor against: that effect renders
