@@ -366,6 +366,28 @@ export const marksRoute = (runId: string): CatalogRoute<MarksReply> => ({ path: 
 /** Every run's marks. */
 export const allMarksRoute: CatalogRoute<MarksReply> = { path: "/api/resin/marks", schema: MarksReply };
 
+const MarkPreview = Schema.Struct({ area: Schema.Number, areas: Schema.Array(Schema.Number), points: Schema.Array(Vec3) });
+export type MarkPreview = typeof MarkPreview.Type;
+
+/** What strokes would paint, as the relay would save it: each stroke's area and the 0.25 mm cells. Writes nothing. */
+export const previewMark = async (
+  relayBase: string,
+  body: {
+    readonly run: string;
+    readonly target: { readonly kind: "support"; readonly tree: string; readonly part: string } | { readonly kind: "model" };
+    readonly strokes: ReadonlyArray<ReadonlyArray<readonly [number, number, number]>>;
+    readonly radius: number;
+  },
+): Promise<MarkPreview> => {
+  const response = await authedFetch(`${relayBase}/api/resin/marks/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const reply: unknown = await response.json();
+  if (!response.ok) {
+    const error = Option.getOrUndefined(Schema.decodeUnknownOption(ErrorBody)(reply));
+    throw new CatalogError(error?.error ?? `The relay answered HTTP ${response.status}`, error?.unreachable === true);
+  }
+  return Schema.decodeUnknownPromise(MarkPreview)(reply);
+};
+
 const MarkSaved = Schema.Struct({ id: Schema.Number, positions: Schema.Array(Schema.String), area: Schema.optional(Schema.Number), centroid: Schema.optional(Vec3) });
 
 /**

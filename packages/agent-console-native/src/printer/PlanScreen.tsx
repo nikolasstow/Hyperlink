@@ -35,7 +35,7 @@ import { useScreenBackground, useTextColors, withAlpha } from "../theme";
 import { useLoadedUri } from "./PrinterStage";
 import { openModel, type PrintModel } from "./printModel";
 import { makeDownloads, type DownloadState } from "./relayDownload";
-import { allMarksRoute, boxFrame, fetchPicks, fetchRayPicks, loadCatalog, marksRoute, sendMark, type CutBox, type MarkKind, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
+import { allMarksRoute, boxFrame, previewMark, type MarkPreview, fetchPicks, fetchRayPicks, loadCatalog, marksRoute, sendMark, type CutBox, type MarkKind, notesRoute, planMeshUrl, planRoute, requirementsRoute, sectionUrl, sendFeedback, treeMeshUrl, useCatalog, type PlanPick, type PlanReply } from "./resinApi";
 import { choose, decodePosition, positionsIn } from "./resinFormat";
 import { relayBaseOf } from "./sdcp";
 import { Button, Card, CatalogProblem, ListRow, Note, Row, usePalette } from "./ui";
@@ -233,7 +233,10 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   const [paintOn, setPaintOn] = React.useState<"support" | "model" | undefined>(undefined);
   const [painting, setPainting] = React.useState(false);
   const [strokes, setStrokes] = React.useState<ReadonlyArray<Stroke>>([]);
-  const [brushRadius, setBrushRadius] = React.useState(1);
+  // The smallest brush by default: a small failure stays small.
+  const [brushRadius, setBrushRadius] = React.useState(0.5);
+  // What the relay would save for the strokes not saved yet: shown before saving, so the two agree.
+  const [preview, setPreview] = React.useState<{ readonly value?: MarkPreview; readonly error?: string } | undefined>(undefined);
   const [markKind, setMarkKind] = React.useState<MarkKind>("break");
   const [markText, setMarkText] = React.useState("");
   const [markNote, setMarkNote] = React.useState<{ readonly ok: boolean; readonly text: string } | undefined>(undefined);
@@ -303,9 +306,10 @@ export const PlanScreen = (props: Props): React.ReactElement => {
       // A mark with strokes is a patch on a build that draws patches; otherwise its points are dots.
       ...shownMarks.filter((mark) => !(canDrawPaintPatches && (mark.strokes ?? null) !== null)).flatMap((mark) => mark.points.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[mark.kind], radius: 0.18 }))),
       // The strokes not saved yet.
-      ...(canDrawPaintPatches ? [] : strokes.flatMap((stroke) => stroke.paths.flat().map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.18 })))),
+      // A build without patches shows the region the relay would save, cell by cell.
+      ...(canDrawPaintPatches ? [] : (preview?.value?.points ?? []).map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.14 }))),
     ],
-    [positioned, palette, shownMarks, strokes, markKind],
+    [positioned, palette, shownMarks, preview, markKind],
   );
 
   // Painted regions as filled patches: the strokes not saved yet, then the saved area marks that show.
@@ -323,6 +327,25 @@ export const PlanScreen = (props: Props): React.ReactElement => {
     const pending = strokes.map((stroke, index): PaintPatch => ({ key: `pending-${index}-${pendingSurface}-${markKind}`, color: MARK_COLOR[markKind], radius: stroke.radius, surface: pendingSurface, paths: flat(stroke.paths) }));
     return [...saved, ...pending];
   }, [shownMarks, selected, strokes, paintOn, markKind]);
+
+  const paintTargetKey = paintOn === "model" ? "model" : paintOn === "support" && selected !== undefined ? `${selected.tree}/${selected.part}` : undefined;
+  React.useEffect(() => {
+    setPreview(undefined);
+    if (strokes.length === 0 || paintTargetKey === undefined) return;
+    const target = paintTargetKey === "model" ? { kind: "model" as const } : { kind: "support" as const, tree: paintTargetKey.split("/")[0] ?? "", part: paintTargetKey.split("/")[1] ?? "" };
+    let current = true;
+    previewMark(relayBase, { run: runId, target, strokes: strokes.flatMap((stroke) => stroke.paths), radius: strokes[0]?.radius ?? 0.5 })
+      .then((value) => {
+        if (current) setPreview({ value });
+      })
+      .catch((cause: unknown) => {
+        console.error("[plan] the mark preview failed", cause);
+        if (current) setPreview({ error: cause instanceof Error ? cause.message : String(cause) });
+      });
+    return () => {
+      current = false;
+    };
+  }, [strokes, paintTargetKey, relayBase, runId]);
 
   const paintTarget = paintOn === "model" ? { kind: "model" as const } : paintOn === "support" && selected !== undefined ? { kind: "support" as const, tree: selected.tree, part: selected.part } : undefined;
 
@@ -627,6 +650,18 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                     onPress={() => setPainting((on) => !on)}
                   />
                   <Note text={painting ? "One finger paints in 3D; two fingers turn the view; a pinch zooms." : `${strokes.length} stroke${strokes.length === 1 ? "" : "s"} not saved.`} />
+                  {strokes.length > 0 ? (
+                    <Note
+                      text={
+                        preview === undefined
+                          ? "Working out the painted area…"
+                          : preview.error !== undefined
+                            ? `No preview: ${preview.error}`
+                            : `To save: ${(preview.value?.areas ?? []).map((area) => `${area.toFixed(1)} mm²`).join(" + ")}${(preview.value?.areas.length ?? 0) > 1 ? ` = ${(preview.value?.area ?? 0).toFixed(1)} mm²` : ""}`
+                      }
+                      tone={preview?.error !== undefined ? "bad" : undefined}
+                    />
+                  ) : null}
                   <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>Brush radius</Text>
                   <View style={styles.kinds}>
                     {BRUSHES.map((brush) => (

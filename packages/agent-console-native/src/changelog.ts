@@ -29,7 +29,9 @@ export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
     commits: ["saturn-uploader 7e131f7", "rundb.py mark area", "feat/elegoo-printer-plugin: the area brush and the plan bar"],
     lines: [
       "Paint now covers an area: everything on the surface within the brush of your finger's path, with no gaps on a fast drag.",
-      "Pick the brush size: S 0.5, M 1.0, or L 2.0 mm. A ring under your finger shows it.",
+      "Pick the brush size: S 0.5 (the default), M 1.0, or L 2.0 mm. A ring under your finger shows it.",
+      "A stroke paints only the surface it is drawn on: not the far side of a thin part, and not a nearby part. Each stroke keeps its own area.",
+      "Before you save, the page shows each stroke's area, worked out as it will be saved.",
       "The painted area shows as a see-through patch in the kind's colour. Undo stroke removes the last stroke.",
       "A saved mark is one region: its area in mm², its centre, and the position IDs of its 0.25 mm cells.",
       "Marks on this run shows each mark's area.",
