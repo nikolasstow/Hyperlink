@@ -60,6 +60,7 @@ import { ServerScreen } from "./ServerScreen";
 import { ServerUpsScreen } from "./ServerUpsScreen";
 import { CameraRecordingsScreen } from "./CameraRecordingsScreen";
 import { ChangelogScreen, ChangelogSheet } from "./ChangelogScreen";
+import { A2uiPilotScreen } from "./A2uiPilotScreen";
 import { CamerasScreen } from "./CamerasScreen";
 import { GooViewerScreen } from "./printer/GooViewerScreen";
 import { PlanScreen } from "./printer/PlanScreen";
@@ -86,6 +87,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Extensions: undefined;
   Appearance: undefined;
+  A2uiPilot: undefined;
   Changelog: undefined;
   AgentButtonSettings: undefined;
   FontImport: undefined;
@@ -464,6 +466,7 @@ export const RootNavigator = (): React.ReactElement => {
           options={({ route }) => ({ ...pageHeader, headerTitle: () => <HeaderTitlePill title={route.params.name.replace(/\.goo$/i, "")} /> })}
         />
         <Stack.Screen name="Changelog" component={ChangelogScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Changelog" }} />
+        <Stack.Screen name="A2uiPilot" component={A2uiPilotScreen} options={{ headerShown: true, headerLargeTitle: true, title: "A2UI pilot" }} />
         <Stack.Screen name="Appearance" component={AppearanceScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Appearance" }} />
         <Stack.Screen name="AgentButtonSettings" component={AgentButtonSettingsScreen} options={{ headerShown: true, headerLargeTitle: true, title: "Dubz" }} />
         {/* The theme editor and the screens it pushes. Each draws the native

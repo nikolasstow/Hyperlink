@@ -80,7 +80,7 @@ const nearestStop = (value: number): number =>
 const SLIDER_HEIGHT = 34;
 
 /** The Customize card's pages, a row each. */
-const CUSTOMIZE_PAGES: ReadonlyArray<"Appearance" | "Extensions" | "Plugins" | "Changelog"> = ["Appearance", "Extensions", "Plugins", "Changelog"];
+const CUSTOMIZE_PAGES: ReadonlyArray<"Appearance" | "Extensions" | "Plugins" | "A2uiPilot" | "Changelog"> = ["Appearance", "Extensions", "Plugins", "A2uiPilot", "Changelog"];
 
 export const SettingsScreen = (props: Props): React.ReactElement => {
   const styles = useThemedStyles(makeStyles);
