@@ -306,10 +306,10 @@ export const PlanScreen = (props: Props): React.ReactElement => {
       // A mark with strokes is a patch on a build that draws patches; otherwise its points are dots.
       ...shownMarks.filter((mark) => !(canDrawPaintPatches && (mark.strokes ?? null) !== null)).flatMap((mark) => mark.points.map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[mark.kind], radius: 0.18 }))),
       // The strokes not saved yet.
-      // A build without patches shows the region the relay would save, cell by cell.
-      ...(canDrawPaintPatches ? [] : (preview?.value?.points ?? []).map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.14 }))),
+      // A build without the native brush shows the points it will save, as before.
+      ...(canDrawPaintPatches ? [] : strokes.flatMap((stroke) => stroke.paths.flat().map(([x, y, z]) => ({ x, y, z, color: MARK_COLOR[markKind], radius: 0.18 })))),
     ],
-    [positioned, palette, shownMarks, preview, markKind],
+    [positioned, palette, shownMarks, strokes, markKind],
   );
 
   // Painted regions as filled patches: the strokes not saved yet, then the saved area marks that show.
@@ -331,7 +331,8 @@ export const PlanScreen = (props: Props): React.ReactElement => {
   const paintTargetKey = paintOn === "model" ? "model" : paintOn === "support" && selected !== undefined ? `${selected.tree}/${selected.part}` : undefined;
   React.useEffect(() => {
     setPreview(undefined);
-    if (strokes.length === 0 || paintTargetKey === undefined) return;
+    // A build without the native brush saves point marks: there is no region to preview.
+    if (!canDrawPaintPatches || strokes.length === 0 || paintTargetKey === undefined) return;
     const target = paintTargetKey === "model" ? { kind: "model" as const } : { kind: "support" as const, tree: paintTargetKey.split("/")[0] ?? "", part: paintTargetKey.split("/")[1] ?? "" };
     let current = true;
     previewMark(relayBase, { run: runId, target, strokes: strokes.flatMap((stroke) => stroke.paths), radius: strokes[0]?.radius ?? 0.5 })
@@ -353,7 +354,9 @@ export const PlanScreen = (props: Props): React.ReactElement => {
     if (paintTarget === undefined || strokes.length === 0) return;
     setMarkSaving(true);
     // One mark has one brush radius: the size buttons are locked while strokes wait to be saved.
-    sendMark(relayBase, { run: runId, target: paintTarget, kind: markKind, text: markText.trim() === "" ? null : markText.trim(), strokes: strokes.flatMap((stroke) => stroke.paths), radius: strokes[0]?.radius ?? brushRadius })
+    // A build without the native brush saves as before: the painted points, which it shows as dots.
+    const painted = canDrawPaintPatches ? { strokes: strokes.flatMap((stroke) => stroke.paths), radius: strokes[0]?.radius ?? brushRadius } : { points: strokes.flatMap((stroke) => stroke.paths.flat()) };
+    sendMark(relayBase, { run: runId, target: paintTarget, kind: markKind, text: markText.trim() === "" ? null : markText.trim(), ...painted })
       .then((saved) => {
         setMarkNote({ ok: true, text: `Mark ${saved.id} saved: ${markKind} on ${paintTarget.kind === "model" ? "the model" : `tree ${paintTarget.tree} (${paintTarget.part})`}${saved.area === undefined ? "" : `, ${saved.area.toFixed(1)} mm²`}, ${saved.positions.length} position${saved.positions.length === 1 ? "" : "s"} (${saved.positions.slice(0, 3).join(", ")}${saved.positions.length > 3 ? ", …" : ""}).` });
         setStrokes([]);
@@ -650,7 +653,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                     onPress={() => setPainting((on) => !on)}
                   />
                   <Note text={painting ? "One finger paints in 3D; two fingers turn the view; a pinch zooms." : `${strokes.length} stroke${strokes.length === 1 ? "" : "s"} not saved.`} />
-                  {strokes.length > 0 ? (
+                  {canDrawPaintPatches && strokes.length > 0 ? (
                     <Note
                       text={
                         preview === undefined
@@ -662,8 +665,8 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                       tone={preview?.error !== undefined ? "bad" : undefined}
                     />
                   ) : null}
-                  <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>Brush radius</Text>
-                  <View style={styles.kinds}>
+                  {canDrawPaintPatches ? <Text style={[styles.sliderLabel, { color: text.secondaryLabel }]}>Brush radius</Text> : <Note text="This app build paints points. The brush comes with the next build." />}
+                  <View style={[styles.kinds, canDrawPaintPatches ? undefined : styles.hidden]}>
                     {BRUSHES.map((brush) => (
                       <Pressable
                         key={brush.label}
@@ -677,7 +680,7 @@ export const PlanScreen = (props: Props): React.ReactElement => {
                       </Pressable>
                     ))}
                   </View>
-                  {strokes.length > 0 ? <Note text="One mark has one brush size: save or undo the strokes to change it." /> : null}
+                  {canDrawPaintPatches && strokes.length > 0 ? <Note text="One mark has one brush size: save or undo the strokes to change it." /> : null}
                   <View style={styles.kinds}>
                     {MARK_KINDS.map((kind) => (
                       <Pressable key={kind} onPress={() => setMarkKind(kind)} style={[styles.kind, { borderColor: MARK_COLOR[kind], backgroundColor: markKind === kind ? withAlpha(MARK_COLOR[kind], 0.25) : "transparent" }]} accessibilityRole="button" accessibilityState={{ selected: markKind === kind }}>
@@ -760,6 +763,7 @@ const styles = StyleSheet.create({
   sliderLabel: { fontSize: 12, marginTop: 6 },
   wholeButton: { marginTop: 8 },
   scopeRow: { marginTop: 4 },
+  hidden: { display: "none" },
   kinds: { flexDirection: "row", gap: 6, marginTop: 6 },
   kind: { flex: 1, height: 32, borderRadius: 16, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
   kindText: { fontSize: 13, fontWeight: "600" },

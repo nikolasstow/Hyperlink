@@ -402,9 +402,11 @@ export const sendMark = async (
     readonly target: { readonly kind: "support"; readonly tree: string; readonly part: string } | { readonly kind: "model" };
     readonly kind: MarkKind;
     readonly text: string | null;
-    readonly strokes: ReadonlyArray<ReadonlyArray<readonly [number, number, number]>>;
-    readonly radius: number;
-  },
+  } & (
+    | { readonly strokes: ReadonlyArray<ReadonlyArray<readonly [number, number, number]>>; readonly radius: number }
+    // A point mark, as an app build without the native brush saves it: the painted points themselves.
+    | { readonly points: ReadonlyArray<readonly [number, number, number]> }
+  ),
 ): Promise<typeof MarkSaved.Type> => {
   const response = await authedFetch(`${relayBase}/api/resin/marks`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const reply: unknown = await response.json();
