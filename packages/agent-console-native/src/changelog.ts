@@ -23,6 +23,18 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ReadonlyArray<ChangelogEntry> = [
   {
+    version: 17,
+    date: "2026-11-26",
+    title: "Paint how a model is supported",
+    commits: ["saturn-uploader 7447459", "rundb.py mark kinds", "feat/elegoo-printer-plugin: paint kinds"],
+    lines: [
+      "The paint brush has two new kinds: Sacrificial (orange) and Detail (green).",
+      "Paint Sacrificial where support scars are allowed, such as a peg and the bottom it sits on.",
+      "Paint Detail where no scar is allowed.",
+      "Paint on the model, then save. The next plan of that part uses your paint.",
+    ],
+  },
+  {
     version: 16,
     date: "2026-11-23",
     title: "Paint failures with a brush",

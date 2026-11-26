@@ -334,7 +334,8 @@ export const boxFrame = (box: CutBox): { readonly lowX: number; readonly highY: 
   return { lowX: box.x0, highY: box.y1, pxPerMm, width: Math.max(1, Math.ceil((box.x1 - box.x0) * pxPerMm)), height: Math.max(1, Math.ceil((box.y1 - box.y0) * pxPerMm)) };
 };
 
-export const MarkKind = Schema.Literals(["break", "separation", "fusing", "other"]);
+/** A failure seen on a print (break, separation, fusing, other), or how the model is to be supported: sacrificial (scars allowed) or detail (no scars). */
+export const MarkKind = Schema.Literals(["break", "separation", "fusing", "other", "sacrificial", "detail"]);
 export type MarkKind = typeof MarkKind.Type;
 
 /**

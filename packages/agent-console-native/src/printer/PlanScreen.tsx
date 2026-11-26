@@ -158,7 +158,7 @@ const RangeSlider = (props: { readonly width: number; readonly low: number; read
   );
 };
 
-const MARK_KINDS: ReadonlyArray<MarkKind> = ["break", "separation", "fusing", "other"];
+const MARK_KINDS: ReadonlyArray<MarkKind> = ["break", "separation", "fusing", "other", "sacrificial", "detail"];
 
 type Point = readonly [number, number, number];
 /** One finger stroke: its paths on the surface (a new path where the finger left the target) and the brush radius. */
@@ -180,7 +180,14 @@ const MARK_SCOPES: ReadonlyArray<{ readonly scope: MarkScope; readonly label: st
   { scope: "all", label: "All runs" },
   { scope: "off", label: "Off" },
 ];
-const MARK_COLOR: Readonly<Record<MarkKind, string>> = { break: "#ff3b30", separation: "#af52de", fusing: "#ff2d55", other: "#30b0c7" };
+const MARK_COLOR: Readonly<Record<MarkKind, string>> = {
+  break: "#ff3b30",
+  separation: "#af52de",
+  fusing: "#ff2d55",
+  other: "#30b0c7",
+  sacrificial: "#ff9500",
+  detail: "#34c759",
+};
 
 /** The layer at a height; below the plate is layer 0. */
 const layerOf = (mm: number): number => Math.max(0, Math.round(mm / LAYER_MM));
