@@ -39,10 +39,13 @@ enum PrinterActivityTokens {
 
   static func observe() {
     guard #available(iOS 17.2, *) else { return }
+    // NSLock is not recursive: release it before rescan(), whose follow() takes it again.
+    // Holding it through rescan() deadlocked the main thread at launch when an activity was running.
     lock.lock()
-    defer { lock.unlock() }
-    if observing { return }
+    let first = !observing
     observing = true
+    lock.unlock()
+    guard first else { return }
 
     log("observing; \(Activity<PrinterActivityAttributes>.activities.count) printer activities running")
     Task {
